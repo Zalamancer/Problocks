@@ -1,26 +1,404 @@
 @import "tailwindcss";
 
+/* ── Raw semantic tokens (dark default) ── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Panel system */
+  --panel-bg: #18181b;
+  --panel-surface: #27272a;
+  --panel-surface-hover: #3f3f46;
+  --panel-border: rgba(255, 255, 255, 0.06);
+
+  /* Accent */
+  --accent: #22c55e;
+  --accent-hover: #16a34a;
+
+  /* Studio shell */
+  --studio-bg: #09090b;
+  --shell-bg: rgba(24, 24, 27, 0.8);
+  --shell-border: rgba(255, 255, 255, 0.06);
+
+  /* Node cards */
+  --node-bg: #18181b;
+  --node-text: #e4e4e7;
+  --node-text-muted: #71717a;
+  --node-field-bg: rgba(39, 39, 42, 0.8);
+  --node-field-border: rgba(255, 255, 255, 0.06);
+  --node-field-focus: rgba(255, 255, 255, 0.2);
+  --node-border-default: rgba(255, 255, 255, 0.07);
+  --node-border-hover: rgba(255, 255, 255, 0.14);
+  --node-border-selected: rgba(255, 255, 255, 0.22);
+  --node-divider: rgba(255, 255, 255, 0.05);
+  --node-handle: #3f3f46;
+  --node-handle-border: #71717a;
+
+  /* Canvas */
+  --canvas-dot: #3f3f46;
+  --rf-controls-bg: #18181b;
+  --rf-controls-border: rgba(255, 255, 255, 0.06);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(82, 82, 91, 0.5);
+  --scrollbar-thumb-hover: rgba(113, 113, 122, 0.8);
+
+  /* Glass */
+  --glass-bg: rgba(24, 24, 27, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.05);
 }
 
+/* ── Light theme: CSS var overrides ── */
+.light {
+  --panel-bg: #f4f4f5;
+  --panel-surface: #e4e4e7;
+  --panel-surface-hover: #d4d4d8;
+  --panel-border: rgba(0, 0, 0, 0.08);
+
+  --studio-bg: #f9fafb;
+  --shell-bg: rgba(255, 255, 255, 0.85);
+  --shell-border: rgba(0, 0, 0, 0.09);
+
+  --node-bg: #ffffff;
+  --node-text: #18181b;
+  --node-text-muted: #71717a;
+  --node-field-bg: rgba(228, 228, 231, 0.9);
+  --node-field-border: rgba(0, 0, 0, 0.1);
+  --node-field-focus: rgba(0, 0, 0, 0.2);
+  --node-border-default: rgba(0, 0, 0, 0.09);
+  --node-border-hover: rgba(0, 0, 0, 0.16);
+  --node-border-selected: rgba(0, 0, 0, 0.25);
+  --node-divider: rgba(0, 0, 0, 0.06);
+  --node-handle: #d4d4d8;
+  --node-handle-border: #a1a1aa;
+
+  --canvas-dot: #c4c4c4;
+  --rf-controls-bg: #ffffff;
+  --rf-controls-border: rgba(0, 0, 0, 0.08);
+
+  --scrollbar-thumb: rgba(156, 163, 175, 0.5);
+  --scrollbar-thumb-hover: rgba(107, 114, 128, 0.7);
+
+  --glass-bg: rgba(255, 255, 255, 0.80);
+  --glass-border: rgba(0, 0, 0, 0.06);
+
+  /* Light palette vars — used by Tailwind overrides below */
+  --t-white: 255 255 255;
+  --t-50: 249 250 251;
+  --t-100: 243 244 246;
+  --t-200: 229 231 235;
+  --t-300: 209 213 219;
+  --t-350: 196 200 207;
+  --t-400: 156 163 175;
+  --t-text-900: 17 24 39;
+  --t-text-800: 31 41 55;
+  --t-text-700: 55 65 81;
+  --t-text-600: 75 85 99;
+  --t-text-500: 107 114 128;
+  --t-text-400: 156 163 175;
+  --t-bdr-base: 0 0 0;
+}
+
+/* ── Tailwind theme registration (generates bg-panel-surface etc.) ── */
+@theme {
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-surface: var(--panel-surface);
+  --color-panel-surface-hover: var(--panel-surface-hover);
+  --color-panel-border: var(--panel-border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-studio-bg: var(--studio-bg);
+}
+
+/* ── Fixed Tailwind tokens (not theme-switchable) ── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --z-overlay: 10;
+  --z-panel: 20;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-dropdown: 9999;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--studio-bg);
+  color: var(--node-text);
+  font-family: var(--font-geist-sans, Arial, sans-serif);
 }
+
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* ── Glass morphism ── */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Shared structural helper classes ── */
+.panel-shell {
+  background: var(--shell-bg);
+  border: 1px solid var(--shell-border);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Light Theme Overrides — targets Tailwind utility classes so components
+   stay untouched. Uses --t-* palette vars defined in .light above.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Backgrounds: hex arbitraries ── */
+.light .bg-\[\#2a2a2a\]   { background-color: rgb(var(--t-200)) !important; }
+.light .bg-\[\#1e1e1e\]   { background-color: rgb(var(--t-100)) !important; }
+.light .bg-\[\#1a1a1a\]   { background-color: rgb(var(--t-50)) !important; }
+.light .bg-\[\#3a3a3a\]   { background-color: rgb(var(--t-300)) !important; }
+.light .bg-\[\#141414\]   { background-color: rgb(var(--t-50)) !important; }
+.light .bg-\[\#0a0a0a\]   { background-color: rgb(var(--t-white)) !important; }
+.light .bg-\[\#2a2a2f\]   { background-color: rgb(var(--t-200)) !important; }
+.light .bg-\[\#2a2a2a\]\/80 { background-color: rgb(var(--t-200) / 0.8) !important; }
+.light .bg-\[\#1e1e1e\]\/50 { background-color: rgb(var(--t-100) / 0.5) !important; }
+.light .bg-\[\#3a3a3a\]\/20 { background-color: rgb(var(--t-300) / 0.2) !important; }
+.light .bg-\[\#5a5a5a\]   { background-color: rgb(var(--t-300)) !important; }
+.light .bg-\[\#6a6a6a\]   { background-color: rgb(var(--t-300)) !important; }
+.light .bg-\[\#1e1e1e\]\/20 { background-color: rgb(var(--t-100) / 0.2) !important; }
+.light .bg-\[\#1e1e1e\]\/30 { background-color: rgb(var(--t-100) / 0.3) !important; }
+.light .bg-\[\#1e1e1e\]\/60 { background-color: rgb(var(--t-100) / 0.6) !important; }
+.light .bg-\[\#1e1e1e\]\/80 { background-color: rgb(var(--t-100) / 0.8) !important; }
+.light .bg-\[\#2a2a2a\]\/60 { background-color: rgb(var(--t-200) / 0.6) !important; }
+.light .bg-\[\#3a3a3a\]\/60 { background-color: rgb(var(--t-300) / 0.6) !important; }
+
+/* ── Backgrounds: zinc scale ── */
+.light .bg-zinc-950  { background-color: rgb(var(--t-white)) !important; }
+.light .bg-zinc-900  { background-color: rgb(var(--t-50)) !important; }
+.light .bg-zinc-800  { background-color: rgb(var(--t-100)) !important; }
+.light .bg-zinc-700  { background-color: rgb(var(--t-200)) !important; }
+.light .bg-zinc-600  { background-color: rgb(var(--t-300)) !important; }
+.light .bg-zinc-500  { background-color: rgb(var(--t-400)) !important; }
+.light .bg-zinc-300  { background-color: rgb(var(--t-300)) !important; }
+.light .bg-zinc-500\/10 { background-color: rgb(var(--t-400) / 0.1) !important; }
+
+/* ── Backgrounds: zinc with opacity ── */
+.light .bg-zinc-950\/95 { background-color: rgb(var(--t-white) / 0.95) !important; }
+.light .bg-zinc-900\/95 { background-color: rgb(var(--t-50) / 0.95) !important; }
+.light .bg-zinc-900\/80 { background-color: rgb(var(--t-50) / 0.85) !important; }
+.light .bg-zinc-900\/60 { background-color: rgb(var(--t-50) / 0.7) !important; }
+.light .bg-zinc-900\/50 { background-color: rgb(var(--t-50) / 0.6) !important; }
+.light .bg-zinc-900\/30 { background-color: rgb(var(--t-50) / 0.4) !important; }
+.light .bg-zinc-800\/80 { background-color: rgb(var(--t-100) / 0.85) !important; }
+.light .bg-zinc-800\/50 { background-color: rgb(var(--t-100) / 0.6) !important; }
+.light .bg-zinc-800\/30 { background-color: rgb(var(--t-100) / 0.4) !important; }
+.light .bg-zinc-700\/50 { background-color: rgb(var(--t-200) / 0.5) !important; }
+.light .bg-zinc-600\/50 { background-color: rgb(var(--t-300) / 0.5) !important; }
+.light .bg-zinc-800\/40 { background-color: rgb(var(--t-100) / 0.5) !important; }
+.light .bg-zinc-800\/60 { background-color: rgb(var(--t-100) / 0.7) !important; }
+.light .bg-zinc-800\/95 { background-color: rgb(var(--t-100) / 0.95) !important; }
+.light .bg-zinc-900\/40 { background-color: rgb(var(--t-50) / 0.5) !important; }
+.light .bg-zinc-900\/90 { background-color: rgb(var(--t-50) / 0.9) !important; }
+
+/* ── Backgrounds: black overlays ── */
+.light .bg-black\/80  { background-color: rgba(0, 0, 0, 0.5) !important; }
+.light .bg-black\/70  { background-color: rgba(0, 0, 0, 0.45) !important; }
+.light .bg-black\/60  { background-color: rgba(0, 0, 0, 0.35) !important; }
+.light .bg-black\/50  { background-color: rgba(0, 0, 0, 0.25) !important; }
+.light .bg-black\/30  { background-color: rgba(0, 0, 0, 0.12) !important; }
+.light .bg-black\/20  { background-color: rgba(0, 0, 0, 0.06) !important; }
+.light .bg-black\/10  { background-color: rgba(0, 0, 0, 0.04) !important; }
+.light .bg-black      { background-color: rgb(var(--t-100)) !important; }
+
+/* ── Backgrounds: white tints (invert to tints using --t-bdr-base) ── */
+.light .bg-white\/\[0\.03\]  { background-color: rgb(var(--t-bdr-base) / 0.03) !important; }
+.light .bg-white\/\[0\.06\]  { background-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+.light .bg-white\/5          { background-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+.light .bg-white\/10         { background-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .bg-white\/20         { background-color: rgb(var(--t-bdr-base) / 0.08) !important; }
+.light .bg-white\/90         { background-color: rgb(var(--t-white) / 0.9) !important; }
+.light .bg-white\/\[0\.01\]  { background-color: rgb(var(--t-bdr-base) / 0.01) !important; }
+.light .bg-white\/\[0\.015\] { background-color: rgb(var(--t-bdr-base) / 0.015) !important; }
+.light .bg-white\/\[0\.02\]  { background-color: rgb(var(--t-bdr-base) / 0.02) !important; }
+.light .bg-white\/\[0\.04\]  { background-color: rgb(var(--t-bdr-base) / 0.03) !important; }
+.light .bg-white\/\[0\.05\]  { background-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+
+/* ── Backgrounds: hover — hex arbitraries ── */
+.light .hover\:bg-\[\#3a3a3a\]:hover     { background-color: rgb(var(--t-300)) !important; }
+.light .hover\:bg-\[\#2a2a2a\]:hover     { background-color: rgb(var(--t-300)) !important; }
+.light .hover\:bg-\[\#333\]:hover        { background-color: rgb(var(--t-300)) !important; }
+.light .hover\:bg-\[\#2e2e2e\]:hover     { background-color: rgb(var(--t-300)) !important; }
+.light .hover\:bg-\[\#4a4a4a\]:hover     { background-color: rgb(var(--t-350)) !important; }
+.light .hover\:bg-\[\#1e1e1e\]:hover     { background-color: rgb(var(--t-200)) !important; }
+.light .hover\:bg-\[\#3a3a3a\]\/30:hover { background-color: rgb(var(--t-300) / 0.3) !important; }
+.light .hover\:bg-\[\#3a3a3a\]\/50:hover { background-color: rgb(var(--t-300) / 0.5) !important; }
+.light .hover\:bg-\[\#2a2a2a\]\/30:hover { background-color: rgb(var(--t-200) / 0.3) !important; }
+.light .hover\:bg-\[\#2a2a2a\]\/40:hover { background-color: rgb(var(--t-200) / 0.4) !important; }
+.light .hover\:bg-\[\#2a2a2a\]\/60:hover { background-color: rgb(var(--t-200) / 0.6) !important; }
+
+/* ── Backgrounds: hover — zinc scale ── */
+.light .hover\:bg-zinc-600:hover      { background-color: rgb(var(--t-300)) !important; }
+.light .hover\:bg-zinc-700:hover      { background-color: rgb(var(--t-300)) !important; }
+.light .hover\:bg-zinc-800:hover      { background-color: rgb(var(--t-200)) !important; }
+.light .hover\:bg-zinc-700\/40:hover  { background-color: rgb(var(--t-300) / 0.4) !important; }
+.light .hover\:bg-zinc-700\/50:hover  { background-color: rgb(var(--t-300) / 0.5) !important; }
+.light .hover\:bg-zinc-700\/60:hover  { background-color: rgb(var(--t-300) / 0.6) !important; }
+.light .hover\:bg-zinc-800\/50:hover  { background-color: rgb(var(--t-200) / 0.5) !important; }
+.light .hover\:bg-zinc-400\/20:hover  { background-color: rgb(var(--t-400) / 0.2) !important; }
+.light .hover\:bg-zinc-500:hover      { background-color: rgb(var(--t-400)) !important; }
+.light .hover\:bg-zinc-700\/20:hover  { background-color: rgb(var(--t-300) / 0.2) !important; }
+.light .hover\:bg-zinc-800\/40:hover  { background-color: rgb(var(--t-200) / 0.4) !important; }
+.light .hover\:bg-zinc-800\/60:hover  { background-color: rgb(var(--t-200) / 0.6) !important; }
+.light .hover\:bg-zinc-800\/90:hover  { background-color: rgb(var(--t-200) / 0.9) !important; }
+
+/* ── Backgrounds: hover — white tints ── */
+.light .hover\:bg-white:hover             { background-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .hover\:bg-white\/5:hover          { background-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+.light .hover\:bg-white\/10:hover         { background-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .hover\:bg-white\/20:hover         { background-color: rgb(var(--t-bdr-base) / 0.08) !important; }
+.light .hover\:bg-white\/\[0\.02\]:hover  { background-color: rgb(var(--t-bdr-base) / 0.02) !important; }
+.light .hover\:bg-white\/\[0\.03\]:hover  { background-color: rgb(var(--t-bdr-base) / 0.03) !important; }
+.light .hover\:bg-white\/\[0\.04\]:hover  { background-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+.light .hover\:bg-white\/\[0\.05\]:hover  { background-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+.light .hover\:bg-white\/\[0\.06\]:hover  { background-color: rgb(var(--t-bdr-base) / 0.05) !important; }
+
+/* ── Backgrounds: hover — black overlays ── */
+.light .hover\:bg-black\/10:hover  { background-color: rgba(0, 0, 0, 0.04) !important; }
+.light .hover\:bg-black\/20:hover  { background-color: rgba(0, 0, 0, 0.06) !important; }
+.light .hover\:bg-black\/30:hover  { background-color: rgba(0, 0, 0, 0.08) !important; }
+.light .hover\:bg-black\/80:hover  { background-color: rgba(0, 0, 0, 0.5) !important; }
+
+/* ── Text colors ── */
+.light .text-white     { color: rgb(var(--t-text-900)) !important; }
+.light .text-zinc-50   { color: rgb(var(--t-text-900)) !important; }
+.light .text-zinc-100  { color: rgb(var(--t-text-900)) !important; }
+.light .text-zinc-200  { color: rgb(var(--t-text-800)) !important; }
+.light .text-zinc-300  { color: rgb(var(--t-text-700)) !important; }
+.light .text-zinc-400  { color: rgb(var(--t-text-600)) !important; }
+.light .text-zinc-500  { color: rgb(var(--t-text-500)) !important; }
+.light .text-zinc-600  { color: rgb(var(--t-text-400)) !important; }
+.light .text-zinc-700  { color: rgb(var(--t-text-400)) !important; }
+.light .text-gray-300  { color: rgb(var(--t-text-700)) !important; }
+.light .text-gray-400  { color: rgb(var(--t-text-600)) !important; }
+.light .text-gray-500  { color: rgb(var(--t-text-500)) !important; }
+.light .text-gray-600  { color: rgb(var(--t-text-400)) !important; }
+.light .text-gray-700  { color: rgb(var(--t-text-400)) !important; }
+
+/* ── Text hover ── */
+.light .hover\:text-white:hover    { color: rgb(var(--t-text-900)) !important; }
+.light .hover\:text-zinc-50:hover  { color: rgb(var(--t-text-900)) !important; }
+.light .hover\:text-zinc-100:hover { color: rgb(var(--t-text-900)) !important; }
+.light .hover\:text-zinc-200:hover { color: rgb(var(--t-text-800)) !important; }
+.light .hover\:text-zinc-300:hover { color: rgb(var(--t-text-700)) !important; }
+.light .hover\:text-zinc-400:hover { color: rgb(var(--t-text-600)) !important; }
+.light .hover\:text-gray-200:hover { color: rgb(var(--t-text-800)) !important; }
+.light .hover\:text-gray-300:hover { color: rgb(var(--t-text-700)) !important; }
+.light .hover\:text-gray-400:hover { color: rgb(var(--t-text-600)) !important; }
+.light .hover\:text-gray-500:hover { color: rgb(var(--t-text-500)) !important; }
+
+/* ── group-hover text ── */
+.light .group:hover .group-hover\:text-white    { color: rgb(var(--t-text-900)) !important; }
+.light .group:hover .group-hover\:text-zinc-200 { color: rgb(var(--t-text-800)) !important; }
+.light .group:hover .group-hover\:text-zinc-300 { color: rgb(var(--t-text-700)) !important; }
+.light .group:hover .group-hover\:text-zinc-400 { color: rgb(var(--t-text-600)) !important; }
+.light .group:hover .group-hover\:text-gray-300 { color: rgb(var(--t-text-700)) !important; }
+.light .group:hover .group-hover\:text-gray-400 { color: rgb(var(--t-text-600)) !important; }
+.light .group:hover .group-hover\:text-gray-500 { color: rgb(var(--t-text-500)) !important; }
+
+/* ── group-hover background ── */
+.light .group:hover .group-hover\:bg-zinc-700   { background-color: rgb(var(--t-300)) !important; }
+
+/* ── group-hover border ── */
+.light .group:hover .group-hover\:border-zinc-500 { border-color: rgb(var(--t-400)) !important; }
+.light .group:hover .group-hover\:border-gray-500 { border-color: rgb(var(--t-400)) !important; }
+
+/* ── Placeholder ── */
+.light .placeholder-gray-600::placeholder         { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder-zinc-600::placeholder         { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder-gray-500::placeholder         { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder-zinc-500::placeholder         { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder\:text-gray-500::placeholder   { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder\:text-gray-600::placeholder   { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder\:text-zinc-500::placeholder   { color: rgb(var(--t-text-400)) !important; }
+.light .placeholder\:text-zinc-600::placeholder   { color: rgb(var(--t-text-400)) !important; }
+
+/* ── Border colors ── */
+.light .border-white\/5          { border-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .border-white\/\[0\.05\]  { border-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .border-white\/\[0\.06\]  { border-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .border-white\/\[0\.04\]  { border-color: rgb(var(--t-bdr-base) / 0.05) !important; }
+.light .border-white\/\[0\.03\]  { border-color: rgb(var(--t-bdr-base) / 0.04) !important; }
+.light .border-white\/10         { border-color: rgb(var(--t-bdr-base) / 0.10) !important; }
+.light .border-white\/20         { border-color: rgb(var(--t-bdr-base) / 0.12) !important; }
+.light .border-white\/30         { border-color: rgb(var(--t-bdr-base) / 0.15) !important; }
+.light .border-\[\#3a3a3a\]      { border-color: rgb(var(--t-300)) !important; }
+.light .border-\[\#3a3a3a\]\/40  { border-color: rgb(var(--t-300) / 0.4) !important; }
+.light .border-\[\#3a3a3a\]\/60  { border-color: rgb(var(--t-300) / 0.6) !important; }
+.light .border-\[\#2a2a2a\]      { border-color: rgb(var(--t-300)) !important; }
+.light .border-\[\#4a4a4a\]      { border-color: rgb(var(--t-300)) !important; }
+.light .border-\[\#555\]         { border-color: rgb(var(--t-400)) !important; }
+.light .border-zinc-700          { border-color: rgb(var(--t-300)) !important; }
+.light .border-zinc-700\/50      { border-color: rgb(var(--t-300) / 0.5) !important; }
+.light .border-zinc-700\/30      { border-color: rgb(var(--t-300) / 0.3) !important; }
+.light .border-zinc-700\/40      { border-color: rgb(var(--t-300) / 0.4) !important; }
+.light .border-zinc-800          { border-color: rgb(var(--t-200)) !important; }
+.light .border-zinc-600          { border-color: rgb(var(--t-300)) !important; }
+.light .border-zinc-600\/30      { border-color: rgb(var(--t-300) / 0.3) !important; }
+.light .border-zinc-500          { border-color: rgb(var(--t-400)) !important; }
+.light .border-zinc-500\/30      { border-color: rgb(var(--t-400) / 0.3) !important; }
+.light .border-zinc-900          { border-color: rgb(var(--t-200)) !important; }
+
+/* ── Border hover ── */
+.light .hover\:border-white\/5:hover          { border-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .hover\:border-white\/10:hover         { border-color: rgb(var(--t-bdr-base) / 0.10) !important; }
+.light .hover\:border-white\/20:hover         { border-color: rgb(var(--t-bdr-base) / 0.12) !important; }
+.light .hover\:border-white\/30:hover         { border-color: rgb(var(--t-bdr-base) / 0.15) !important; }
+.light .hover\:border-white\/40:hover         { border-color: rgb(var(--t-bdr-base) / 0.18) !important; }
+.light .hover\:border-white\/\[0\.06\]:hover  { border-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .hover\:border-white\/\[0\.1\]:hover   { border-color: rgb(var(--t-bdr-base) / 0.10) !important; }
+.light .hover\:border-white\/\[0\.12\]:hover  { border-color: rgb(var(--t-bdr-base) / 0.12) !important; }
+.light .hover\:border-zinc-400:hover          { border-color: rgb(var(--t-400)) !important; }
+.light .hover\:border-zinc-500:hover          { border-color: rgb(var(--t-400)) !important; }
+.light .hover\:border-zinc-500\/30:hover      { border-color: rgb(var(--t-400) / 0.3) !important; }
+.light .hover\:border-zinc-600:hover          { border-color: rgb(var(--t-400)) !important; }
+.light .hover\:border-gray-500:hover          { border-color: rgb(var(--t-400)) !important; }
+.light .hover\:border-gray-500\/60:hover      { border-color: rgb(var(--t-400) / 0.6) !important; }
+.light .hover\:border-gray-600:hover          { border-color: rgb(var(--t-400)) !important; }
+.light .hover\:border-\[\#3a3a3a\]:hover      { border-color: rgb(var(--t-300)) !important; }
+.light .hover\:border-\[\#3a3a3a\]\/60:hover  { border-color: rgb(var(--t-300) / 0.6) !important; }
+.light .hover\:border-\[\#4a4a4a\]:hover      { border-color: rgb(var(--t-300)) !important; }
+.light .hover\:border-\[\#555\]:hover         { border-color: rgb(var(--t-400)) !important; }
+
+/* ── Focus states ── */
+.light .focus\:border-zinc-600:focus   { border-color: var(--accent) !important; }
+.light .focus\:border-zinc-500:focus   { border-color: var(--accent) !important; }
+.light .focus\:ring-zinc-600\/50:focus { --tw-ring-color: rgb(var(--t-text-500) / 0.5) !important; }
+.light .focus\:ring-zinc-500\/50:focus { --tw-ring-color: rgb(var(--t-text-500) / 0.5) !important; }
+
+/* ── Ring / shadow ── */
+.light .ring-zinc-600\/50             { --tw-ring-color: rgb(var(--t-text-500) / 0.5) !important; }
+.light .hover\:ring-zinc-600\/50:hover { --tw-ring-color: rgb(var(--t-text-500) / 0.5) !important; }
+
+/* ── Divide colors ── */
+.light .divide-white\/5 > :not([hidden]) ~ :not([hidden])  { border-color: rgb(var(--t-bdr-base) / 0.06) !important; }
+.light .divide-zinc-800 > :not([hidden]) ~ :not([hidden])  { border-color: rgb(var(--t-200)) !important; }
+.light .divide-zinc-700 > :not([hidden]) ~ :not([hidden])  { border-color: rgb(var(--t-300)) !important; }
+
+/* ── Glass in light mode ── */
+.light .glass {
+  background: rgb(var(--t-white) / 0.80);
+  border-color: rgb(var(--t-bdr-base) / 0.06);
+  box-shadow: 0 4px 30px rgb(var(--t-bdr-base) / 0.08);
+}
+
+/* ── Gradient overrides ── */
+.light .from-zinc-950    { --tw-gradient-from: rgb(var(--t-white)) !important; }
+.light .from-zinc-900    { --tw-gradient-from: rgb(var(--t-50)) !important; }
+.light .from-zinc-800    { --tw-gradient-from: rgb(var(--t-100)) !important; }
+.light .from-black\/80   { --tw-gradient-from: rgba(0, 0, 0, 0.15) !important; }
+.light .from-black\/60   { --tw-gradient-from: rgba(0, 0, 0, 0.1) !important; }
+.light .via-zinc-900\/50 { --tw-gradient-via: rgb(var(--t-50) / 0.5) !important; }
+.light .to-zinc-900      { --tw-gradient-to: rgb(var(--t-50)) !important; }
+.light .to-zinc-950      { --tw-gradient-to: rgb(var(--t-white)) !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════ */

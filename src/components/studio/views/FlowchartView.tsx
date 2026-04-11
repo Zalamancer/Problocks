@@ -16,6 +16,7 @@ import dagre from '@dagrejs/dagre';
 import { Lock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjectBoard } from '@/store/project-board-store';
+import { useStudio } from '@/store/studio-store';
 import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -217,6 +218,9 @@ interface FlowchartViewProps {
 }
 
 export function FlowchartView({ template, board }: FlowchartViewProps) {
+  const theme = useStudio((s) => s.theme)
+  const isLight = theme === 'light'
+
   // Recompute only when board changes (topology hash)
   const { nodes, edges } = useMemo(
     () => buildFlowGraph(template, board),
@@ -232,13 +236,22 @@ export function FlowchartView({ template, board }: FlowchartViewProps) {
         nodeTypes={NODE_TYPES}
         fitView
         fitViewOptions={{ padding: 0.2 }}
-        colorMode="dark"
+        colorMode={theme}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#3f3f46" />
-        <Controls style={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1}
+          color={isLight ? '#c4c4c4' : '#3f3f46'}
+        />
+        <Controls style={{
+          background: isLight ? '#ffffff' : '#18181b',
+          border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 8,
+        }} />
       </ReactFlow>
     </div>
   )

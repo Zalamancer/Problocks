@@ -15,7 +15,6 @@ import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { Lock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useProjectBoard } from '@/store/project-board-store';
 import { useStudio } from '@/store/studio-store';
 import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
 
@@ -64,25 +63,11 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 
 function TaskNodeComponent({ data }: NodeProps) {
   const d = data as TaskNodeData
-  const { updateTaskStatus } = useProjectBoard()
   const isBlocked = d.status === 'blocked'
   const isDone = d.status === 'done'
 
-  const STATUS_CYCLE: TaskStatus[] = ['todo', 'in_progress', 'review', 'done']
-  function nextStatus(s: TaskStatus): TaskStatus {
-    if (s === 'blocked') return s
-    const idx = STATUS_CYCLE.indexOf(s)
-    return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
-  }
-
-  const handleClick = () => {
-    if (!d.isActiveColumn || isBlocked) return
-    updateTaskStatus(d.taskInstanceId, nextStatus(d.status))
-  }
-
   return (
     <div
-      onClick={handleClick}
       className={cn(
         'w-44 bg-zinc-900 border rounded-xl overflow-hidden shadow-xl transition-all duration-150',
         isBlocked ? 'border-white/[0.04] opacity-50' : 'border-white/[0.10]',
@@ -215,18 +200,22 @@ function buildFlowGraph(template: Template, board: ProjectBoard): { nodes: TaskN
 interface FlowchartViewProps {
   template: Template
   board: ProjectBoard
+  onTaskClick: (templateTaskId: string) => void
 }
 
-export function FlowchartView({ template, board }: FlowchartViewProps) {
+export function FlowchartView({ template, board, onTaskClick }: FlowchartViewProps) {
   const theme = useStudio((s) => s.theme)
   const isLight = theme === 'light'
 
-  // Recompute only when board changes (topology hash)
   const { nodes, edges } = useMemo(
     () => buildFlowGraph(template, board),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [template.id, board.activeMilestoneId, JSON.stringify(board.milestones.map((m) => m.tasks.map((t) => t.status)))],
   )
+
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    onTaskClick(node.id) // node.id === templateTaskId
+  }, [onTaskClick])
 
   return (
     <div className="w-full h-full">
@@ -234,12 +223,12 @@ export function FlowchartView({ template, board }: FlowchartViewProps) {
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         colorMode={theme}
         nodesDraggable={false}
         nodesConnectable={false}
-        elementsSelectable={false}
       >
         <Background
           variant={BackgroundVariant.Dots}

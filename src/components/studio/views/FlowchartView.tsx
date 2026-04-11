@@ -227,7 +227,6 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
         fitView
         fitViewOptions={{ padding: 0.2 }}
         colorMode={theme}
-        nodesDraggable={false}
         nodesConnectable={false}
       >
         <Background

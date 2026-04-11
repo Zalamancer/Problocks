@@ -13,7 +13,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjectBoard } from '@/store/project-board-store';
-import { PanelSection, PanelActionButton, PanelButtonGroup } from '@/components/ui/panel-controls';
+import {
+  PanelSection,
+  PanelActionButton,
+  PanelSelect,
+} from '@/components/ui/panel-controls';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DropdownSectionHeader, type SectionDef } from './DropdownSectionHeader';
 import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
@@ -43,7 +47,7 @@ const AI_TOOL_INFO: Record<AITool, { name: string; desc: string; iconColor: stri
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: 'todo',        label: 'To Do' },
-  { value: 'in_progress', label: 'Active' },
+  { value: 'in_progress', label: 'In Progress' },
   { value: 'review',      label: 'Review' },
   { value: 'done',        label: 'Done' },
 ];
@@ -81,67 +85,50 @@ function DetailsSection({
   role,
   estimatedHours,
   status,
-  canAdvance,
   onStatusChange,
-  onAdvance,
 }: {
   description: string;
   deliverable: string;
   role: string;
   estimatedHours: number;
   status: TaskStatus;
-  canAdvance: boolean;
   onStatusChange: (s: TaskStatus) => void;
-  onAdvance: () => void;
 }) {
   const isBlocked = status === 'blocked';
 
   return (
-    <div className="px-3 pt-3">
-      <PanelSection title="Status">
+    <div className="px-4 py-4 flex flex-col gap-4">
+      <PanelSection title="Status" collapsible>
         {isBlocked ? (
-          <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-2.5 py-2">
+          <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5">
             This task is blocked by unfinished dependencies.
           </div>
         ) : (
-          <>
-            <PanelButtonGroup
-              options={STATUS_OPTIONS}
-              value={status}
-              onChange={(v) => onStatusChange(v as TaskStatus)}
-            />
-            {canAdvance && status !== 'done' && (
-              <div className="mt-2">
-                <PanelActionButton
-                  variant="accent"
-                  fullWidth
-                  size="sm"
-                  onClick={onAdvance}
-                >
-                  Mark {STATUS_LABEL[nextStatus(status)]}
-                </PanelActionButton>
-              </div>
-            )}
-          </>
+          <PanelSelect
+            value={status}
+            onChange={(v) => onStatusChange(v as TaskStatus)}
+            options={STATUS_OPTIONS}
+            fullWidth
+          />
         )}
       </PanelSection>
 
-      <PanelSection title="Description">
+      <PanelSection title="Description" collapsible>
         <p className="text-xs text-zinc-400 leading-relaxed">{description}</p>
       </PanelSection>
 
-      <PanelSection title="Deliverable" icon={Package}>
+      <PanelSection title="Deliverable" icon={Package} collapsible>
         <p className="text-xs text-zinc-300 leading-relaxed">{deliverable}</p>
       </PanelSection>
 
-      <PanelSection title="Assignment" noBorder>
+      <PanelSection title="Assignment" collapsible noBorder>
         <div className="flex gap-4">
           <div className="flex items-center gap-1.5">
-            <User size={11} className="text-zinc-600" />
+            <User size={12} className="text-zinc-600" />
             <span className="text-xs text-zinc-400 capitalize">{role}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock size={11} className="text-zinc-600" />
+            <Clock size={12} className="text-zinc-600" />
             <span className="text-xs text-zinc-400">~{estimatedHours}h</span>
           </div>
         </div>
@@ -155,8 +142,8 @@ function DetailsSection({
 function ToolsSection({ tools }: { tools: AITool[] }) {
   if (tools.length === 0) {
     return (
-      <div className="px-3 pt-3">
-        <PanelSection title="AI Tools" noBorder>
+      <div className="px-4 py-4">
+        <PanelSection title="AI Tools" collapsible noBorder>
           <p className="text-xs text-zinc-500 italic">No AI tools required for this task.</p>
         </PanelSection>
       </div>
@@ -164,20 +151,20 @@ function ToolsSection({ tools }: { tools: AITool[] }) {
   }
 
   return (
-    <div className="px-3 pt-3">
-      <PanelSection title="AI Tools" badge={tools.length} noBorder>
-        <div className="space-y-1.5">
+    <div className="px-4 py-4">
+      <PanelSection title="AI Tools" badge={tools.length} collapsible noBorder>
+        <div className="space-y-2">
           {tools.map((tool) => {
             const info = AI_TOOL_INFO[tool];
             return (
               <div
                 key={tool}
-                className={cn('flex items-center gap-2.5 px-2.5 py-2 rounded-lg', info.bgColor)}
+                className={cn('flex items-center gap-3 px-3 py-2.5 rounded-lg', info.bgColor)}
               >
                 <span className={cn('text-xs font-semibold w-20 shrink-0', info.iconColor)}>
                   {info.name}
                 </span>
-                <span className="text-[10px] text-zinc-500 leading-tight">{info.desc}</span>
+                <span className="text-[11px] text-zinc-500 leading-tight">{info.desc}</span>
               </div>
             );
           })}
@@ -199,22 +186,27 @@ function ContextSection({
   blockedByTitles: string[];
 }) {
   return (
-    <div className="px-3 pt-3">
-      <PanelSection title="What is this?" icon={Lightbulb}>
+    <div className="px-4 py-4 flex flex-col gap-4">
+      <PanelSection title="What is this?" icon={Lightbulb} collapsible>
         <p className="text-xs text-zinc-400 leading-relaxed">{tip}</p>
       </PanelSection>
 
       {exampleFromIndustry && (
-        <PanelSection title="Real studio example" icon={BookOpen}>
+        <PanelSection title="Real studio example" icon={BookOpen} collapsible>
           <p className="text-xs text-zinc-500 leading-relaxed italic">{exampleFromIndustry}</p>
         </PanelSection>
       )}
 
       {blockedByTitles.length > 0 && (
-        <PanelSection title="Requires" badge={blockedByTitles.length} noBorder>
-          <div className="space-y-1">
+        <PanelSection
+          title="Requires"
+          badge={blockedByTitles.length}
+          collapsible
+          noBorder
+        >
+          <div className="space-y-1.5">
             {blockedByTitles.map((title) => (
-              <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+              <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
                 {title}
               </div>
@@ -253,7 +245,7 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
 
   const status = taskInstance?.status ?? 'blocked';
   const isBlocked = status === 'blocked';
-  const canAdvance = isActive && !isBlocked;
+  const canAdvance = isActive && !isBlocked && status !== 'done';
 
   const activeIndex = TASK_SECTIONS.findIndex((s) => s.id === activeSection);
 
@@ -268,15 +260,15 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
   return (
     <aside className="w-full md:w-[280px] flex-shrink-0 h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden">
       {/* Context row — milestone + task title + close */}
-      <div className="shrink-0 flex items-start gap-2 px-3 py-2 border-b border-white/5">
+      <div className="shrink-0 flex items-start gap-2 px-4 py-3 border-b border-white/5">
         <div className="flex-1 min-w-0">
           <div
-            className="text-[10px] font-medium uppercase tracking-wider mb-0.5"
+            className="text-[10px] font-medium uppercase tracking-wider mb-1"
             style={{ color: milestone.color }}
           >
             {milestone.name}
           </div>
-          <h3 className="text-[13px] font-semibold text-zinc-100 leading-snug truncate">
+          <h3 className="text-[13px] font-semibold text-zinc-100 leading-snug">
             {templateTask.title}
           </h3>
         </div>
@@ -298,8 +290,8 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
         />
       </div>
 
-      {/* Content area */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Content area — scrollable */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <PanelErrorBoundary key={activeSection} panelName={`Task ${activeSection}`}>
           {activeSection === 'details' && (
             <DetailsSection
@@ -308,9 +300,7 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
               role={templateTask.role}
               estimatedHours={templateTask.estimatedHours}
               status={status}
-              canAdvance={canAdvance}
               onStatusChange={handleStatusChange}
-              onAdvance={handleAdvance}
             />
           )}
           {activeSection === 'tools' && <ToolsSection tools={templateTask.aiTools} />}
@@ -322,6 +312,22 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
             />
           )}
         </PanelErrorBoundary>
+      </div>
+
+      {/* Sticky footer — primary action pinned to bottom */}
+      <div className="shrink-0 px-4 py-3 border-t border-white/5">
+        <PanelActionButton
+          variant="accent"
+          fullWidth
+          onClick={handleAdvance}
+          disabled={!canAdvance}
+        >
+          {isBlocked
+            ? 'Blocked'
+            : status === 'done'
+              ? 'Completed'
+              : `Mark ${STATUS_LABEL[nextStatus(status)]}`}
+        </PanelActionButton>
       </div>
     </aside>
   );

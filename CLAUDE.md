@@ -79,6 +79,37 @@ The studio shell (left panel, center, right panel, top bar) MUST mirror the stru
 
 When porting anything from AutoAnimation: **read the full source file, copy it, and swap only the data bindings** (Problocks stores/types). Do not rewrite the markup, do not "simplify", do not replace `PanelSection` with a hand-rolled div "for now". If a component name exists in `@/components/ui/panel-controls`, use it — otherwise copy the matching file from `AutoAnimation/src/components/ui/panel-controls/` before writing anything new. The animated flex-expand pill tab bar (`PanelIconTabs`), pointer-lock slider, portal dropdown, and `DropdownSectionHeader` all have non-obvious behavioral patterns that won't be visible from a style scan — copying styles alone is wrong.
 
+### Hard rule: property-to-control mapping (stricter than AutoAnimation's)
+
+Derived from `AutoAnimation/.claude/skills/ui-components/SKILL.md` "Property-to-Control Mapping" and `AutoAnimation/.claude/skills/standardize-properties/SKILL.md`, with a stricter override from the user:
+
+| Property type                | Canonical control                                          |
+|------------------------------|------------------------------------------------------------|
+| Numeric with unit            | `PanelSlider` (or `DraggableNumberInput` when it exists)   |
+| Boolean on/off               | `PanelToggle`                                              |
+| **Choice — 2 or more**       | **`PanelSelect` dropdown** (user override: never `PanelButtonGroup` for status-like lists) |
+| Multi-select                 | `PanelMultiSelect`                                         |
+| Short text                   | `PanelInput`                                               |
+| Long text / prompt           | `PanelTextarea`                                            |
+| Color                        | `ColorPicker` (port from AutoAnimation when needed)        |
+| File upload                  | `PanelDropZone`                                            |
+| Section with title           | `PanelSection` with `collapsible` — **every sub-section in the right panel must be collapsible** |
+
+### Hard rule: right-panel section + footer layout
+
+- **Every sub-section is collapsible.** Use `<PanelSection collapsible title="…">`. A title without a chevron is a bug.
+- **Between sections** use `gap-4`, content padding `px-4 py-4`. Between controls use `gap-2`. Header uses `px-4 py-3 border-b border-white/5`.
+- **Primary action button is always pinned to the bottom in a sticky footer**, not inline in scrollable content. Shell layout:
+  ```
+  <aside class="flex flex-col ...">
+    <header class="shrink-0 ...">            ← context row
+    <header class="shrink-0 ...">            ← DropdownSectionHeader
+    <div class="flex-1 min-h-0 overflow-y-auto"> ← scrollable sections
+    <footer class="shrink-0 px-4 py-3 border-t border-white/5"> ← sticky primary PanelActionButton
+  </aside>
+  ```
+  Even non-destructive primary actions ("Mark In Progress", "Publish", "Save") live in the sticky footer. Destructive actions also go in the footer, with `variant="destructive"`.
+
 Ported directly from ProAnimate. Import from `@/components/ui`:
 
 ```

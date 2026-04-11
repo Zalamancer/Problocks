@@ -1,10 +1,12 @@
 'use client';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
   Controls,
+  useNodesState,
+  useEdgesState,
   type Node,
   type Edge,
   type NodeProps,
@@ -207,14 +209,20 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
   const theme = useStudio((s) => s.theme)
   const isLight = theme === 'light'
 
-  const { nodes, edges } = useMemo(
+  const graph = useMemo(
     () => buildFlowGraph(template, board),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [template.id, board.activeMilestoneId, JSON.stringify(board.milestones.map((m) => m.tasks.map((t) => t.status)))],
   )
 
+  const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
+  const [edges, , onEdgesChange] = useEdgesState(graph.edges)
+
+  // Re-layout when board topology changes
+  useEffect(() => { setNodes(graph.nodes) }, [graph.nodes, setNodes])
+
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    onTaskClick(node.id) // node.id === templateTaskId
+    onTaskClick(node.id)
   }, [onTaskClick])
 
   return (
@@ -223,6 +231,8 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}

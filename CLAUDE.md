@@ -61,6 +61,24 @@ AI-powered game creation platform. Students describe a game → Claude orchestra
 
 **All UI is built from these components. Do not invent new buttons, inputs, selects, or toggles.**
 
+### Hard rule: mirror AutoAnimation's panel layout AND components
+
+The studio shell (left panel, center, right panel, top bar) MUST mirror the structure of `/Users/ihsanduru/autoStudio/AutoAnimation/src/components/layout/`. That means:
+
+- **Right panel** follows `AutoAnimation/src/components/layout/RightPanel/RightPanel.tsx`
+  - Root is an `<aside className="w-full md:w-[280px] flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden">`
+  - Context Header is a `DropdownSectionHeader` (ChevronLeft button → central icon+label dropdown button → ChevronRight button) — see `AutoAnimation/src/components/layout/RightPanel/SectionHeaders.tsx` lines 156–241
+  - Optional sub-tab row below the header uses `TabNavigation` animated pills (`size="sm"`, `animated`) — see `SectionHeaders.tsx` lines 273–284
+  - Content Area is `<div className="flex-1 overflow-y-auto">` wrapping `Suspense` + `PanelErrorBoundary`, with each properties view lazy-loaded
+  - Every section inside a properties panel uses `PanelSection` (collapsible, titled, bordered) — never raw `<div className="space-y-4">` clusters
+  - Every control is a `PanelSelect`, `PanelSlider`, `PanelButtonGroup`, `PanelActionButton`, `PanelToggle`, `PanelCheckbox`, `PanelInput`, `PanelTextarea`, etc. — never raw `<button>`, `<input>`, `<select>`
+- **Left panel** follows `AutoAnimation/src/components/layout/LeftPanel/LeftPanel.tsx` (TopNavigation + BottomNavigation shell with the same dropdown-arrow group header pattern)
+- **Shell** follows `AutoAnimation/src/components/layout/EditorLayout.tsx` — three columns separated by gaps, each column is its own rounded glass `<aside>` / `<main>` with the same backdrop + border tokens
+
+### Hard rule: copy, do not reinvent
+
+When porting anything from AutoAnimation: **read the full source file, copy it, and swap only the data bindings** (Problocks stores/types). Do not rewrite the markup, do not "simplify", do not replace `PanelSection` with a hand-rolled div "for now". If a component name exists in `@/components/ui/panel-controls`, use it — otherwise copy the matching file from `AutoAnimation/src/components/ui/panel-controls/` before writing anything new. The animated flex-expand pill tab bar (`PanelIconTabs`), pointer-lock slider, portal dropdown, and `DropdownSectionHeader` all have non-obvious behavioral patterns that won't be visible from a style scan — copying styles alone is wrong.
+
 Ported directly from ProAnimate. Import from `@/components/ui`:
 
 ```

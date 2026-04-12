@@ -111,11 +111,11 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --z-overlay: 10;
-  --z-panel: 20;
-  --z-modal: 40;
-  --z-toast: 50;
-  --z-dropdown: 999;
+  --z-index-overlay: 10;
+  --z-index-panel: 20;
+  --z-index-modal: 40;
+  --z-index-toast: 50;
+  --z-index-dropdown: 999;
 }
 
 body {

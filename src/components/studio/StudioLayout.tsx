@@ -67,8 +67,8 @@ export function StudioLayout() {
         <div className="h-full flex overflow-hidden gap-1.5">
           <LeftPanel />
 
-          {/* Center */}
-          <div className="flex-1 flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
+          {/* Center — relative container so the task panel can overlay */}
+          <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
 
             {/* View toggle — only when board exists */}
             {board && (
@@ -113,16 +113,18 @@ export function StudioLayout() {
                 onMilestoneClick={setActiveMilestoneId}
               />
             )}
-          </div>
 
-          {/* Task detail panel */}
-          {board && template && selectedTaskId && (
-            <TaskDetailPanel
-              templateTaskId={selectedTaskId}
-              template={template}
-              board={board}
-            />
-          )}
+            {/* Task detail panel — overlaps on top of the center canvas */}
+            {board && template && selectedTaskId && (
+              <div className="absolute top-0 right-0 bottom-0 z-30 w-[300px] shadow-2xl shadow-black/40">
+                <TaskDetailPanel
+                  templateTaskId={selectedTaskId}
+                  template={template}
+                  board={board}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         <LeftPanelToggle />

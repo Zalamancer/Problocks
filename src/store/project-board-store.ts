@@ -1,0 +1,273 @@
+import { create } from 'zustand';
+import type {
+  ProjectBoard,
+  MilestoneInstance,
+  TaskInstance,
+  TaskStatus,
+  TaskOverrides,
+  AIOutput,
+  TemplateId,
+  Template,
+} from '@/lib/templates/types';
+import { TEMPLATES } from '@/lib/templates/index';
+
+// ─── Selectors (pure functions, no store subscription needed) ─────────────────
+
+export function selectActiveMilestone(board: ProjectBoard): MilestoneInstance | null {
+  return board.milestones.find((m) => m.id === board.activeMilestoneId) ?? null;
+}
+
+export function selectTaskInstance(board: ProjectBoard, taskInstanceId: string): TaskInstance | null {
+  for (const m of board.milestones) {
+    const task = m.tasks.find((t) => t.id === taskInstanceId);
+    if (task) return task;
+  }
+  return null;
+}
+
+export function selectMilestoneProgress(milestone: MilestoneInstance): { done: number; total: number } {
+  const relevant = milestone.tasks.filter((t) => t.status !== 'blocked');
+  return { done: relevant.filter((t) => t.status === 'done').length, total: relevant.length };
+}
+
+export function selectBoardProgress(board: ProjectBoard): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  for (const m of board.milestones) {
+    const p = selectMilestoneProgress(m);
+    done += p.done;
+    total += p.total;
+  }
+  return { done, total };
+}
+
+export function selectCanCompleteMilestone(board: ProjectBoard, template: Template): boolean {
+  const active = selectActiveMilestone(board);
+  if (!active) return false;
+  const nonBlocked = active.tasks.filter((t) => t.status !== 'blocked');
+  return nonBlocked.length > 0 && nonBlocked.every((t) => t.status === 'done');
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
+interface ProjectBoardState {
+  board: ProjectBoard | null;
+  initBoard: (templateId: TemplateId, projectId: string) => void;
+  updateTaskStatus: (taskInstanceId: string, status: TaskStatus) => void;
+  completeCurrentMilestone: () => void;
+  assignTask: (taskInstanceId: string, userId: string) => void;
+  addAIOutput: (taskInstanceId: string, output: AIOutput) => void;
+  updateTaskNotes: (taskInstanceId: string, notes: string) => void;
+  /** Merge a partial overrides patch into the task instance. Writing a value
+   *  that matches the template default still stores the override — use
+   *  `clearTaskOverride` to remove a single field. */
+  setTaskOverride: (taskInstanceId: string, patch: Partial<TaskOverrides>) => void;
+  /** Remove a single override field so the task falls back to the template
+   *  default. */
+  clearTaskOverride: (taskInstanceId: string, field: keyof TaskOverrides) => void;
+  clearBoard: () => void;
+}
+
+// Helper: update a task inside the board's milestones immutably
+function mapTask(
+  milestones: MilestoneInstance[],
+  taskInstanceId: string,
+  updater: (task: TaskInstance) => TaskInstance,
+): MilestoneInstance[] {
+  return milestones.map((m) => ({
+    ...m,
+    tasks: m.tasks.map((t) => (t.id === taskInstanceId ? updater(t) : t)),
+  }));
+}
+
+export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
+  board: null,
+
+  initBoard(templateId, projectId) {
+    const template = TEMPLATES[templateId];
+    if (!template) return;
+
+    const now = new Date().toISOString();
+
+    const milestones: MilestoneInstance[] = template.milestones
+      .sort((a, b) => a.order - b.order)
+      .map((mt, milestoneIdx) => {
+        const milestoneInstanceId = `${mt.id}-${crypto.randomUUID().slice(0, 8)}`;
+        const isFirst = milestoneIdx === 0;
+        const status = isFirst ? 'active' : 'locked';
+
+        const tasks: TaskInstance[] = mt.tasks.map((tt) => {
+          let taskStatus: TaskStatus;
+          if (isFirst) {
+            taskStatus = tt.blockedBy.length === 0 ? 'todo' : 'blocked';
+          } else {
+            taskStatus = 'blocked';
+          }
+          return {
+            id: `${tt.id}-${crypto.randomUUID().slice(0, 8)}`,
+            templateTaskId: tt.id,
+            milestoneInstanceId,
+            status: taskStatus,
+            assigneeIds: [],
+            notes: '',
+            aiOutputs: [],
+          };
+        });
+
+        return {
+          id: milestoneInstanceId,
+          templateMilestoneId: mt.id,
+          status,
+          tasks,
+          unlockedAt: isFirst ? now : undefined,
+        };
+      });
+
+    const board: ProjectBoard = {
+      id: crypto.randomUUID(),
+      projectId,
+      templateId,
+      createdAt: now,
+      activeMilestoneId: milestones[0]?.id ?? null,
+      milestones,
+    };
+
+    set({ board });
+  },
+
+  updateTaskStatus(taskInstanceId, status) {
+    const { board } = get();
+    if (!board) return;
+
+    // Build a set of templateTaskIds that are 'done' after this update
+    const allTasks = board.milestones.flatMap((m) => m.tasks);
+    const doneTemplateIds = new Set(
+      allTasks
+        .filter((t) => (t.id === taskInstanceId ? status === 'done' : t.status === 'done'))
+        .map((t) => t.templateTaskId),
+    );
+
+    // For each task, check if it should be unblocked
+    const shouldUnblock = (task: TaskInstance): boolean => {
+      if (task.id === taskInstanceId) return false;
+      if (task.status !== 'blocked') return false;
+      // Find milestone to check if it's active
+      const milestone = board.milestones.find((m) => m.id === task.milestoneInstanceId);
+      if (!milestone || milestone.status !== 'active') return false;
+      // Find the template task to get blockedBy ids
+      const template = TEMPLATES[board.templateId];
+      const templateTask = template?.milestones
+        .flatMap((m) => m.tasks)
+        .find((t) => t.id === task.templateTaskId);
+      if (!templateTask || templateTask.blockedBy.length === 0) return false;
+      return templateTask.blockedBy.every((depId) => doneTemplateIds.has(depId));
+    };
+
+    const updatedMilestones = board.milestones.map((m) => ({
+      ...m,
+      tasks: m.tasks.map((t) => {
+        if (t.id === taskInstanceId) {
+          return {
+            ...t,
+            status,
+            startedAt: status === 'in_progress' && !t.startedAt ? new Date().toISOString() : t.startedAt,
+            completedAt: status === 'done' ? new Date().toISOString() : t.completedAt,
+          };
+        }
+        if (shouldUnblock(t)) return { ...t, status: 'todo' as TaskStatus };
+        return t;
+      }),
+    }));
+
+    set({ board: { ...board, milestones: updatedMilestones } });
+  },
+
+  completeCurrentMilestone() {
+    const { board } = get();
+    if (!board) return;
+    const now = new Date().toISOString();
+
+    const activeIdx = board.milestones.findIndex((m) => m.id === board.activeMilestoneId);
+    if (activeIdx === -1) return;
+    const nextIdx = activeIdx + 1;
+    const hasNext = nextIdx < board.milestones.length;
+
+    const template = TEMPLATES[board.templateId];
+
+    const updatedMilestones = board.milestones.map((m, idx) => {
+      if (idx === activeIdx) return { ...m, status: 'completed' as const, completedAt: now };
+      if (idx === nextIdx) {
+        const tasks = m.tasks.map((t) => {
+          const templateTask = template?.milestones
+            .flatMap((mt) => mt.tasks)
+            .find((tt) => tt.id === t.templateTaskId);
+          const isUnblocked = !templateTask || templateTask.blockedBy.length === 0;
+          return { ...t, status: (isUnblocked ? 'todo' : 'blocked') as TaskStatus };
+        });
+        return { ...m, status: 'active' as const, tasks, unlockedAt: now };
+      }
+      return m;
+    });
+
+    set({
+      board: {
+        ...board,
+        milestones: updatedMilestones,
+        activeMilestoneId: hasNext ? board.milestones[nextIdx].id : null,
+      },
+    });
+  },
+
+  assignTask(taskInstanceId, userId) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      assigneeIds: t.assigneeIds.includes(userId) ? t.assigneeIds : [...t.assigneeIds, userId],
+    }));
+    set({ board: { ...board, milestones } });
+  },
+
+  addAIOutput(taskInstanceId, output) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      aiOutputs: [...t.aiOutputs, output],
+    }));
+    set({ board: { ...board, milestones } });
+  },
+
+  updateTaskNotes(taskInstanceId, notes) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({ ...t, notes }));
+    set({ board: { ...board, milestones } });
+  },
+
+  setTaskOverride(taskInstanceId, patch) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      overrides: { ...(t.overrides ?? {}), ...patch },
+    }));
+    set({ board: { ...board, milestones } });
+  },
+
+  clearTaskOverride(taskInstanceId, field) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => {
+      if (!t.overrides) return t;
+      const next = { ...t.overrides };
+      delete next[field];
+      return { ...t, overrides: Object.keys(next).length > 0 ? next : undefined };
+    });
+    set({ board: { ...board, milestones } });
+  },
+
+  clearBoard() {
+    set({ board: null });
+  },
+}));

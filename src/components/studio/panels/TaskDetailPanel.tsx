@@ -1,8 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
 import {
-  Clock,
-  User,
   Lightbulb,
   BookOpen,
   Package,
@@ -16,10 +14,23 @@ import {
   PanelSection,
   PanelActionButton,
   PanelSelect,
+  PanelInput,
+  PanelTextarea,
+  PanelSlider,
+  PanelMultiSelect,
 } from '@/components/ui/panel-controls';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DropdownSectionHeader, type SectionDef } from './DropdownSectionHeader';
-import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
+import {
+  resolveEffectiveTask,
+  type Template,
+  type ProjectBoard,
+  type TaskStatus,
+  type TeamRole,
+  type AITool,
+  type TaskOverrides,
+  type EffectiveTask,
+} from '@/lib/templates/types';
 
 // ─── Task detail sections (mirrors AutoAnimation TEXT_SECTIONS shape) ────────
 
@@ -41,6 +52,24 @@ const AI_TOOL_INFO: Record<AITool, { name: string; desc: string; iconColor: stri
   elevenlabs: { name: 'ElevenLabs', desc: 'Voice & sound effects',      iconColor: 'text-blue-400',   bgColor: 'bg-blue-500/10'   },
   freepik:    { name: 'Freepik',    desc: 'Stock art & textures',       iconColor: 'text-yellow-400', bgColor: 'bg-yellow-500/10' },
 };
+
+const AI_TOOL_OPTIONS: { value: AITool; label: string }[] = [
+  { value: 'claude',     label: 'Claude — AI code, logic & narrative' },
+  { value: 'pixellab',   label: 'PixelLab — Pixel art & sprites' },
+  { value: 'meshy',      label: 'Meshy — 3D model generation' },
+  { value: 'suno',       label: 'Suno — Background music' },
+  { value: 'elevenlabs', label: 'ElevenLabs — Voice & sound effects' },
+  { value: 'freepik',    label: 'Freepik — Stock art & textures' },
+];
+
+const ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
+  { value: 'designer',   label: 'Designer' },
+  { value: 'artist',     label: 'Artist' },
+  { value: 'programmer', label: 'Programmer' },
+  { value: 'audio',      label: 'Audio' },
+  { value: 'producer',   label: 'Producer' },
+  { value: 'any',        label: 'Any' },
+];
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
@@ -75,27 +104,32 @@ interface TaskDetailPanelProps {
   board: ProjectBoard;
 }
 
-// ─── Section: Details ────────────────────────────────────────────────────────
+// ─── Section: Details — title, status, description, deliverable, role, hours ─
 
 function DetailsSection({
-  description,
-  deliverable,
-  role,
-  estimatedHours,
+  effective,
   status,
   onStatusChange,
+  onFieldChange,
 }: {
-  description: string;
-  deliverable: string;
-  role: string;
-  estimatedHours: number;
+  effective: EffectiveTask;
   status: TaskStatus;
   onStatusChange: (s: TaskStatus) => void;
+  onFieldChange: <K extends keyof TaskOverrides>(field: K, value: TaskOverrides[K]) => void;
 }) {
   const isBlocked = status === 'blocked';
 
   return (
     <div className="px-4 py-4 flex flex-col gap-4">
+      <PanelSection title="Title" collapsible>
+        <PanelInput
+          value={effective.title}
+          onChange={(v) => onFieldChange('title', v)}
+          placeholder="Task title"
+          fullWidth
+        />
+      </PanelSection>
+
       <PanelSection title="Status" collapsible>
         {isBlocked ? (
           <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5">
@@ -112,88 +146,124 @@ function DetailsSection({
       </PanelSection>
 
       <PanelSection title="Description" collapsible>
-        <p className="text-xs text-zinc-400 leading-relaxed">{description}</p>
+        <PanelTextarea
+          value={effective.description}
+          onChange={(v) => onFieldChange('description', v)}
+          placeholder="What is this task about?"
+          rows={4}
+          showCount
+        />
       </PanelSection>
 
       <PanelSection title="Deliverable" icon={Package} collapsible>
-        <p className="text-xs text-zinc-300 leading-relaxed">{deliverable}</p>
+        <PanelTextarea
+          value={effective.deliverable}
+          onChange={(v) => onFieldChange('deliverable', v)}
+          placeholder="What must exist when this task is done?"
+          rows={3}
+        />
       </PanelSection>
 
-      <PanelSection title="Assignment" collapsible noBorder>
-        <div className="flex gap-4">
-          <div className="flex items-center gap-1.5">
-            <User size={12} className="text-zinc-600" />
-            <span className="text-xs text-zinc-400 capitalize">{role}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Clock size={12} className="text-zinc-600" />
-            <span className="text-xs text-zinc-400">~{estimatedHours}h</span>
-          </div>
-        </div>
+      <PanelSection title="Role" collapsible>
+        <PanelSelect
+          value={effective.role}
+          onChange={(v) => onFieldChange('role', v as TeamRole)}
+          options={ROLE_OPTIONS}
+          fullWidth
+        />
+      </PanelSection>
+
+      <PanelSection title="Estimated hours" collapsible noBorder>
+        <PanelSlider
+          label="Hours"
+          value={effective.estimatedHours}
+          onChange={(v) => onFieldChange('estimatedHours', v)}
+          min={1}
+          max={100}
+          step={1}
+          suffix="h"
+        />
       </PanelSection>
     </div>
   );
 }
 
-// ─── Section: AI Tools ───────────────────────────────────────────────────────
+// ─── Section: AI Tools — multi-select picker + color-coded preview list ──────
 
-function ToolsSection({ tools }: { tools: AITool[] }) {
-  if (tools.length === 0) {
-    return (
-      <div className="px-4 py-4">
-        <PanelSection title="AI Tools" collapsible noBorder>
-          <p className="text-xs text-zinc-500 italic">No AI tools required for this task.</p>
-        </PanelSection>
-      </div>
-    );
-  }
-
+function ToolsSection({
+  tools,
+  onToolsChange,
+}: {
+  tools: AITool[];
+  onToolsChange: (next: AITool[]) => void;
+}) {
   return (
-    <div className="px-4 py-4">
-      <PanelSection title="AI Tools" badge={tools.length} collapsible noBorder>
-        <div className="space-y-2">
-          {tools.map((tool) => {
-            const info = AI_TOOL_INFO[tool];
-            return (
-              <div
-                key={tool}
-                className={cn('flex items-center gap-3 px-3 py-2.5 rounded-lg', info.bgColor)}
-              >
-                <span className={cn('text-xs font-semibold w-20 shrink-0', info.iconColor)}>
-                  {info.name}
-                </span>
-                <span className="text-[11px] text-zinc-500 leading-tight">{info.desc}</span>
-              </div>
-            );
-          })}
-        </div>
+    <div className="px-4 py-4 flex flex-col gap-4">
+      <PanelSection title="AI Tools" badge={tools.length} collapsible>
+        <PanelMultiSelect
+          options={AI_TOOL_OPTIONS}
+          value={tools}
+          onChange={(ids) => onToolsChange(ids as AITool[])}
+          placeholder="No tools selected"
+          emptyMessage="No tools available"
+        />
       </PanelSection>
+
+      {tools.length > 0 && (
+        <PanelSection title="Preview" collapsible noBorder>
+          <div className="space-y-2">
+            {tools.map((tool) => {
+              const info = AI_TOOL_INFO[tool];
+              return (
+                <div
+                  key={tool}
+                  className={cn('flex items-center gap-3 px-3 py-2.5 rounded-lg', info.bgColor)}
+                >
+                  <span className={cn('text-xs font-semibold w-20 shrink-0', info.iconColor)}>
+                    {info.name}
+                  </span>
+                  <span className="text-[11px] text-zinc-500 leading-tight">{info.desc}</span>
+                </div>
+              );
+            })}
+          </div>
+        </PanelSection>
+      )}
     </div>
   );
 }
 
-// ─── Section: Context ────────────────────────────────────────────────────────
+// ─── Section: Context — tip, industry example, dependencies ─────────────────
 
 function ContextSection({
-  tip,
-  exampleFromIndustry,
+  effective,
   blockedByTitles,
+  onFieldChange,
 }: {
-  tip: string;
-  exampleFromIndustry?: string;
+  effective: EffectiveTask;
   blockedByTitles: string[];
+  onFieldChange: <K extends keyof TaskOverrides>(field: K, value: TaskOverrides[K]) => void;
 }) {
   return (
     <div className="px-4 py-4 flex flex-col gap-4">
       <PanelSection title="What is this?" icon={Lightbulb} collapsible>
-        <p className="text-xs text-zinc-400 leading-relaxed">{tip}</p>
+        <PanelTextarea
+          value={effective.tip}
+          onChange={(v) => onFieldChange('tip', v)}
+          placeholder="Teaching note or explanation"
+          rows={4}
+          showCount
+        />
       </PanelSection>
 
-      {exampleFromIndustry && (
-        <PanelSection title="Real studio example" icon={BookOpen} collapsible>
-          <p className="text-xs text-zinc-500 leading-relaxed italic">{exampleFromIndustry}</p>
-        </PanelSection>
-      )}
+      <PanelSection title="Real studio example" icon={BookOpen} collapsible>
+        <PanelTextarea
+          value={effective.exampleFromIndustry ?? ''}
+          onChange={(v) => onFieldChange('exampleFromIndustry', v || undefined)}
+          placeholder="How a real studio would approach this"
+          rows={3}
+        />
+      </PanelSection>
 
       {blockedByTitles.length > 0 && (
         <PanelSection
@@ -219,27 +289,45 @@ function ContextSection({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailPanelProps) {
-  const { updateTaskStatus } = useProjectBoard();
+  const updateTaskStatus = useProjectBoard((s) => s.updateTaskStatus);
+  const setTaskOverride  = useProjectBoard((s) => s.setTaskOverride);
   const [activeSection, setActiveSection] = useState<TaskSectionId>('details');
 
   // Find template task
-  const templateTask = template.milestones.flatMap((m) => m.tasks).find((t) => t.id === templateTaskId);
-  const milestone = template.milestones.find((m) => m.tasks.some((t) => t.id === templateTaskId));
+  const templateTask = template.milestones
+    .flatMap((m) => m.tasks)
+    .find((t) => t.id === templateTaskId);
 
   // Find live instance
-  const taskInstance = board.milestones.flatMap((m) => m.tasks).find((t) => t.templateTaskId === templateTaskId);
+  const taskInstance = board.milestones
+    .flatMap((m) => m.tasks)
+    .find((t) => t.templateTaskId === templateTaskId);
   const milestoneInstance = board.milestones.find((m) => m.id === taskInstance?.milestoneInstanceId);
   const isActive = milestoneInstance?.id === board.activeMilestoneId;
 
-  // Resolve blockedBy titles before early return so hook order stays stable
+  // Merged template + overrides view — always use this for display fields
+  const effective = useMemo(
+    () => (templateTask ? resolveEffectiveTask(templateTask, taskInstance?.overrides) : null),
+    [templateTask, taskInstance?.overrides],
+  );
+
+  // Resolve blockedBy titles before early return so hook order stays stable.
+  // Also use each dependency's effective title so overrides flow through.
   const blockedByTitles = useMemo(() => {
     if (!templateTask) return [];
     return templateTask.blockedBy
-      .map((depId) => template.milestones.flatMap((m) => m.tasks).find((t) => t.id === depId)?.title)
+      .map((depId) => {
+        const dep = template.milestones.flatMap((m) => m.tasks).find((t) => t.id === depId);
+        if (!dep) return null;
+        const depInstance = board.milestones
+          .flatMap((m) => m.tasks)
+          .find((t) => t.templateTaskId === dep.id);
+        return resolveEffectiveTask(dep, depInstance?.overrides).title;
+      })
       .filter((v): v is string => typeof v === 'string');
-  }, [templateTask, template]);
+  }, [templateTask, template, board]);
 
-  if (!templateTask || !milestone) return null;
+  if (!templateTask || !effective) return null;
 
   const status = taskInstance?.status ?? 'blocked';
   const isBlocked = status === 'blocked';
@@ -253,6 +341,19 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
 
   const handleAdvance = () => {
     if (taskInstance) updateTaskStatus(taskInstance.id, nextStatus(status));
+  };
+
+  const handleFieldChange = <K extends keyof TaskOverrides>(
+    field: K,
+    value: TaskOverrides[K],
+  ) => {
+    if (taskInstance) {
+      setTaskOverride(taskInstance.id, { [field]: value } as Partial<TaskOverrides>);
+    }
+  };
+
+  const handleToolsChange = (next: AITool[]) => {
+    if (taskInstance) setTaskOverride(taskInstance.id, { aiTools: next });
   };
 
   return (
@@ -273,20 +374,20 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
         <PanelErrorBoundary key={activeSection} panelName={`Task ${activeSection}`}>
           {activeSection === 'details' && (
             <DetailsSection
-              description={templateTask.description}
-              deliverable={templateTask.deliverable}
-              role={templateTask.role}
-              estimatedHours={templateTask.estimatedHours}
+              effective={effective}
               status={status}
               onStatusChange={handleStatusChange}
+              onFieldChange={handleFieldChange}
             />
           )}
-          {activeSection === 'tools' && <ToolsSection tools={templateTask.aiTools} />}
+          {activeSection === 'tools' && (
+            <ToolsSection tools={effective.aiTools} onToolsChange={handleToolsChange} />
+          )}
           {activeSection === 'context' && (
             <ContextSection
-              tip={templateTask.tip}
-              exampleFromIndustry={templateTask.exampleFromIndustry}
+              effective={effective}
               blockedByTitles={blockedByTitles}
+              onFieldChange={handleFieldChange}
             />
           )}
         </PanelErrorBoundary>

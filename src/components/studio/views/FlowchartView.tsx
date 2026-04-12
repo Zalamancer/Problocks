@@ -18,7 +18,13 @@ import dagre from '@dagrejs/dagre';
 import { Lock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio } from '@/store/studio-store';
-import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
+import {
+  resolveEffectiveTask,
+  type Template,
+  type ProjectBoard,
+  type TaskStatus,
+  type AITool,
+} from '@/lib/templates/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,15 +166,19 @@ function buildFlowGraph(template: Template, board: ProjectBoard): { nodes: TaskN
       const taskInstance = instance?.tasks.find((t) => t.templateTaskId === tt.id)
       const status: TaskStatus = taskInstance?.status ?? 'blocked'
 
+      // Merge template defaults with per-instance overrides so edits in the
+      // right panel flow into the flowchart nodes.
+      const eff = resolveEffectiveTask(tt, taskInstance?.overrides)
+
       nodes.push({
         id: tt.id,
         type: 'task',
         position: { x: 0, y: 0 },
         data: {
-          title: tt.title,
+          title: eff.title,
           status,
-          role: tt.role,
-          aiTools: tt.aiTools,
+          role: eff.role,
+          aiTools: eff.aiTools,
           milestoneColor: mt.color,
           milestoneName: mt.name,
           taskInstanceId: taskInstance?.id ?? '',

@@ -6,13 +6,14 @@ import {
   selectMilestoneProgress,
   selectCanCompleteMilestone,
 } from '@/store/project-board-store'
-import type {
-  Template,
-  ProjectBoard,
-  MilestoneInstance,
-  TaskInstance,
-  TaskStatus,
-  AITool,
+import {
+  resolveEffectiveTask,
+  type Template,
+  type ProjectBoard,
+  type MilestoneInstance,
+  type TaskInstance,
+  type TaskStatus,
+  type AITool,
 } from '@/lib/templates/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -57,9 +58,10 @@ interface TaskCardProps {
   task: TaskInstance
   template: Template
   isActiveColumn: boolean
+  onTaskClick: (templateTaskId: string) => void
 }
 
-function TaskCard({ task, template, isActiveColumn }: TaskCardProps) {
+function TaskCard({ task, template, isActiveColumn, onTaskClick }: TaskCardProps) {
   const { updateTaskStatus } = useProjectBoard()
 
   const templateTask = template.milestones
@@ -68,11 +70,20 @@ function TaskCard({ task, template, isActiveColumn }: TaskCardProps) {
 
   if (!templateTask) return null
 
+  // Merge template defaults with any per-instance overrides so edits made
+  // in the right panel show up here immediately.
+  const effective = resolveEffectiveTask(templateTask, task.overrides)
+
   const isBlocked = task.status === 'blocked'
   const isDone = task.status === 'done'
   const canCycle = isActiveColumn && !isBlocked
 
   const handleClick = () => {
+    onTaskClick(task.templateTaskId)
+  }
+
+  const handleStatusClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (!canCycle) return
     updateTaskStatus(task.id, nextStatus(task.status))
   }
@@ -80,9 +91,9 @@ function TaskCard({ task, template, isActiveColumn }: TaskCardProps) {
   return (
     <div
       onClick={handleClick}
-      role={canCycle ? 'button' : undefined}
-      tabIndex={canCycle ? 0 : undefined}
-      onKeyDown={canCycle ? (e) => e.key === 'Enter' && handleClick() : undefined}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && handleClick()}
       className={cn(
         'bg-zinc-800/80 border border-white/[0.06] rounded-lg p-3 mb-2 select-none',
         canCycle && 'cursor-pointer hover:border-white/[0.12] hover:bg-zinc-800 transition-colors',
@@ -99,24 +110,27 @@ function TaskCard({ task, template, isActiveColumn }: TaskCardProps) {
             isDone && 'line-through text-zinc-500',
           )}
         >
-          {templateTask.title}
+          {effective.title}
         </span>
       </div>
 
       {/* Bottom row: status + role + ai tools */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {/* Status badge */}
-        <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full', STATUS_COLOR[task.status])}>
+        {/* Status badge — click cycles status */}
+        <span
+          onClick={handleStatusClick}
+          className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full', STATUS_COLOR[task.status], canCycle && 'cursor-pointer hover:opacity-80')}
+        >
           {STATUS_LABEL[task.status]}
         </span>
 
         {/* Role badge */}
-        <span className="text-[10px] text-zinc-500 capitalize">{templateTask.role}</span>
+        <span className="text-[10px] text-zinc-500 capitalize">{effective.role}</span>
 
         {/* AI tool dots */}
-        {templateTask.aiTools.length > 0 && (
+        {effective.aiTools.length > 0 && (
           <div className="flex items-center gap-1 ml-auto">
-            {templateTask.aiTools.map((tool) => (
+            {effective.aiTools.map((tool) => (
               <span
                 key={tool}
                 title={tool}
@@ -138,9 +152,10 @@ interface KanbanColumnProps {
   template: Template
   board: ProjectBoard
   isActive: boolean
+  onTaskClick: (templateTaskId: string) => void
 }
 
-function KanbanColumn({ milestoneTemplate: mt, instance, template, board, isActive }: KanbanColumnProps) {
+function KanbanColumn({ milestoneTemplate: mt, instance, template, board, isActive, onTaskClick }: KanbanColumnProps) {
   const { completeCurrentMilestone } = useProjectBoard()
 
   const status = instance?.status ?? 'locked'
@@ -189,6 +204,7 @@ function KanbanColumn({ milestoneTemplate: mt, instance, template, board, isActi
               task={task}
               template={template}
               isActiveColumn={isActive}
+              onTaskClick={onTaskClick}
             />
           ))
         )}
@@ -217,9 +233,10 @@ function KanbanColumn({ milestoneTemplate: mt, instance, template, board, isActi
 interface KanbanViewProps {
   template: Template
   board: ProjectBoard
+  onTaskClick: (templateTaskId: string) => void
 }
 
-export function KanbanView({ template, board }: KanbanViewProps) {
+export function KanbanView({ template, board, onTaskClick }: KanbanViewProps) {
   return (
     <div className="flex gap-3 h-full overflow-x-auto px-4 py-4 pb-5">
       {template.milestones.map((mt) => {
@@ -234,6 +251,7 @@ export function KanbanView({ template, board }: KanbanViewProps) {
             template={template}
             board={board}
             isActive={isActive}
+            onTaskClick={onTaskClick}
           />
         )
       })}

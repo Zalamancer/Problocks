@@ -57,6 +57,21 @@ export interface AIOutput {
   generatedAt: string       // ISO date string
 }
 
+/** Per-instance overrides of static TaskTemplate fields. Every field is
+ *  optional — an unset field falls back to the template's default. The
+ *  template is never mutated; all edits land here so other boards using
+ *  the same template are unaffected. */
+export interface TaskOverrides {
+  title?: string
+  description?: string
+  deliverable?: string
+  role?: TeamRole
+  aiTools?: AITool[]
+  estimatedHours?: number
+  tip?: string
+  exampleFromIndustry?: string
+}
+
 export interface TaskInstance {
   id: string
   templateTaskId: string
@@ -65,8 +80,44 @@ export interface TaskInstance {
   assigneeIds: string[]
   notes: string
   aiOutputs: AIOutput[]
+  /** Per-instance field overrides on top of the static template. */
+  overrides?: TaskOverrides
   startedAt?: string
   completedAt?: string
+}
+
+/** Merged view of a task: template defaults + instance overrides. Always use
+ *  this when reading display fields so both kanban cards and the right panel
+ *  stay in sync. */
+export interface EffectiveTask {
+  id: string
+  title: string
+  description: string
+  deliverable: string
+  role: TeamRole
+  aiTools: AITool[]
+  estimatedHours: number
+  tip: string
+  exampleFromIndustry?: string
+  blockedBy: string[]
+}
+
+export function resolveEffectiveTask(
+  template: TaskTemplate,
+  overrides?: TaskOverrides,
+): EffectiveTask {
+  return {
+    id: template.id,
+    title:               overrides?.title               ?? template.title,
+    description:         overrides?.description         ?? template.description,
+    deliverable:         overrides?.deliverable         ?? template.deliverable,
+    role:                overrides?.role                ?? template.role,
+    aiTools:             overrides?.aiTools             ?? template.aiTools,
+    estimatedHours:      overrides?.estimatedHours      ?? template.estimatedHours,
+    tip:                 overrides?.tip                 ?? template.tip,
+    exampleFromIndustry: overrides?.exampleFromIndustry ?? template.exampleFromIndustry,
+    blockedBy:           template.blockedBy,
+  }
 }
 
 export interface MilestoneInstance {

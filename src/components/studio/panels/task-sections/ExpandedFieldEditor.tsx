@@ -124,12 +124,23 @@ export function ExpandedFieldEditor({
                   Deliverable
                 </span>
                 {editingDeliverable ? (
-                  <div className="-mx-1">
-                    <LazyBlockNoteEditor
-                      initialBlocks={deliverableBlocks}
-                      onChange={onDeliverableBlocksChange}
-                      placeholder="What must exist when done?"
-                    />
+                  <div>
+                    {/* bg-transparent override so BlockNote matches the box tint */}
+                    <div className="[&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent -mx-1">
+                      <LazyBlockNoteEditor
+                        initialBlocks={deliverableBlocks}
+                        onChange={onDeliverableBlocksChange}
+                        placeholder="What must exist when done?"
+                      />
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={() => setEditingDeliverable(false)}
+                        className="px-3 py-1 rounded-lg text-[12px] font-medium bg-accent/90 hover:bg-accent text-white transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">

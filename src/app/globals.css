@@ -402,3 +402,8 @@ body {
 .light .to-zinc-950      { --tw-gradient-to: rgb(var(--t-white)) !important; }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Cursor reset (Tailwind v4 removed this from base) ── */
+button, [role="button"], a, label[for], select {
+  cursor: pointer;
+}

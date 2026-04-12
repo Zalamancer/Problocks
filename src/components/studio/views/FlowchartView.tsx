@@ -7,6 +7,7 @@ import {
   Controls,
   useNodesState,
   useEdgesState,
+  PanOnScrollMode,
   type Node,
   type Edge,
   type NodeProps,
@@ -265,6 +266,9 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
         fitViewOptions={{ padding: 0.2 }}
         colorMode={theme}
         nodesConnectable={false}
+        zoomOnScroll={false}
+        panOnScroll
+        panOnScrollMode={flowDirection === 'TB' ? PanOnScrollMode.Vertical : PanOnScrollMode.Horizontal}
       >
         <Background
           variant={BackgroundVariant.Dots}

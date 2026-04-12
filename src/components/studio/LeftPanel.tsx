@@ -118,7 +118,7 @@ export function LeftPanel() {
   return (
     <aside className={cn('flex-shrink-0 overflow-visible transition-all duration-300', leftPanelCollapsed ? 'w-0' : 'w-[300px]')}>
       <div className={cn(
-        'h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden transition-opacity duration-300',
+        'h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-visible transition-opacity duration-300',
         leftPanelCollapsed ? 'opacity-0 border-transparent' : '',
       )}>
         <MainGroupHeader />

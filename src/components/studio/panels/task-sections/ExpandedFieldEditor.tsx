@@ -125,8 +125,8 @@ export function ExpandedFieldEditor({
                 </span>
                 {editingDeliverable ? (
                   <div>
-                    {/* bg-transparent override so BlockNote matches the box tint */}
-                    <div className="[&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent -mx-1">
+                    {/* bg-transparent + flush-left overrides */}
+                    <div className="[&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent [&_.bn-editor]:!pl-0 [&_.bn-block-outer]:!pl-0 [&_.bn-block]:!pl-0">
                       <LazyBlockNoteEditor
                         initialBlocks={deliverableBlocks}
                         onChange={onDeliverableBlocksChange}

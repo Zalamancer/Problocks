@@ -2,6 +2,7 @@
 import { Package } from 'lucide-react';
 import {
   PanelSection,
+  PanelInput,
   PanelSelect,
   PanelSlider,
   DueDatePicker,

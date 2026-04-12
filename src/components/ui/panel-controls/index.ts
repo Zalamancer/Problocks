@@ -13,4 +13,5 @@ export { PanelCategoryTabs } from './PanelCategoryTabs'
 export { PanelDropZone } from './PanelDropZone'
 export { PanelMultiSelect } from './PanelMultiSelect'
 export { PanelIconTabs } from './PanelIconTabs'
+export { DueDatePicker } from './DueDatePicker'
 // PanelColorSwatches — requires ColorPicker, add when that component is ported

@@ -2,9 +2,9 @@
 import { Package } from 'lucide-react';
 import {
   PanelSection,
-  PanelInput,
   PanelSelect,
   PanelSlider,
+  DueDatePicker,
 } from '@/components/ui/panel-controls';
 import { AssigneesSection } from './AssigneesSection';
 import type {
@@ -74,11 +74,9 @@ export function DetailsSection({
       </PanelSection>
 
       <PanelSection title="Due Date" collapsible>
-        <PanelInput
-          value={dueDate ?? ''}
-          onChange={(v) => onDueDateChange(v || undefined)}
-          type="date"
-          fullWidth
+        <DueDatePicker
+          value={dueDate}
+          onChange={onDueDateChange}
         />
       </PanelSection>
 

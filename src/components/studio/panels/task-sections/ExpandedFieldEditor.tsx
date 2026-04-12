@@ -24,7 +24,7 @@ export function ExpandedFieldEditor({
   onClose,
 }: ExpandedFieldEditorProps) {
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-zinc-900/95 backdrop-blur-xl overflow-hidden">
+    <div className="absolute inset-0 z-30 flex flex-col bg-zinc-950 overflow-hidden">
       {/* Header */}
       <div className="shrink-0 flex items-center justify-end px-4 py-2">
         <IconButton

@@ -44,7 +44,7 @@ export default function BlockNoteEditor({
   }, []);
 
   return (
-    <div className="blocknote-wrapper rounded-lg overflow-hidden border border-white/5" data-theming="dark">
+    <div className="blocknote-wrapper" data-theming="dark">
       <BlockNoteView
         editor={editor}
         editable={editable}

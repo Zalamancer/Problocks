@@ -23,33 +23,43 @@ export async function POST(req: Request) {
         env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin' },
       });
 
+      let sentText = false;
+
       child.stdout.on('data', (chunk: Buffer) => {
         const lines = chunk.toString().split('\n').filter(Boolean);
         for (const line of lines) {
           try {
             const parsed = JSON.parse(line);
-            // stream-json emits objects with type "assistant" and content blocks
-            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: parsed.delta.text })}\n\n`));
+
+            // Skip system events (hooks, init, rate limits)
+            if (parsed.type === 'system' || parsed.type === 'rate_limit_event') continue;
+
+            // Assistant message — extract text from content blocks
+            if (parsed.type === 'assistant' && parsed.message?.content) {
+              for (const block of parsed.message.content) {
+                if (block.type === 'text' && block.text) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: block.text })}\n\n`));
+                  sentText = true;
+                }
+              }
+              continue;
             }
-            // Also handle the simpler text streaming format
-            if (parsed.type === 'assistant' && parsed.message) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: parsed.message })}\n\n`));
+
+            // Final result — use as fallback if no assistant text was sent
+            if (parsed.type === 'result' && parsed.result && !sentText) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: parsed.result })}\n\n`));
+              continue;
             }
           } catch {
-            // Raw text fallback — some versions just stream text
-            if (line.trim()) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: line })}\n\n`));
-            }
+            // Not JSON — skip
           }
         }
       });
 
       child.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString();
-        // Skip progress/status lines, only forward real errors
-        if (text.includes('Error') || text.includes('error')) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: `[Error] ${text.trim()}` })}\n\n`));
+        const text = chunk.toString().trim();
+        if (text && (text.includes('Error') || text.includes('error'))) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: `[Error] ${text}` })}\n\n`));
         }
       });
 

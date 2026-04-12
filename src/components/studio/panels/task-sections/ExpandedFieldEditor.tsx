@@ -125,8 +125,8 @@ export function ExpandedFieldEditor({
                 </span>
                 {editingDeliverable ? (
                   <div>
-                    {/* bg-transparent + flush-left overrides */}
-                    <div className="[&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent [&_.bn-editor]:!pl-0 [&_.bn-block-outer]:!pl-0 [&_.bn-block]:!pl-0">
+                    {/* bg-transparent + flush-left + hide overflowing side menu */}
+                    <div className="overflow-hidden [&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent [&_.bn-editor]:!pl-0 [&_.bn-block-outer]:!pl-0 [&_.bn-block]:!pl-0 [&_.bn-side-menu]:!hidden">
                       <LazyBlockNoteEditor
                         initialBlocks={deliverableBlocks}
                         onChange={onDeliverableBlocksChange}

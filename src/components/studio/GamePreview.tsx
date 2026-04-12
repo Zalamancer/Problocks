@@ -69,7 +69,7 @@ export function GamePreview({
         <iframe
           key={key}
           srcDoc={html}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin"
           className="w-full h-full border-0"
           title="Game Preview"
         />

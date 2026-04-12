@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { X, MessageSquare, Clock, Package, Pencil, Check } from 'lucide-react';
+import { X, MessageSquare, Clock, Package, Pencil } from 'lucide-react';
 import { IconButton } from '@/components/ui';
 import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
 import { CommentsSection } from './CommentsSection';
@@ -123,26 +123,34 @@ export function ExpandedFieldEditor({
                   Deliverable
                 </span>
                 {editingDeliverable ? (
-                  <input
+                  <textarea
                     autoFocus
                     value={deliverableDraft}
-                    onChange={(e) => setDeliverableDraft(e.target.value)}
+                    onChange={(e) => {
+                      setDeliverableDraft(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'Escape') {
                         onDeliverableChange(deliverableDraft);
                         setEditingDeliverable(false);
                       }
-                      if (e.key === 'Escape') setEditingDeliverable(false);
                     }}
                     onBlur={() => {
                       onDeliverableChange(deliverableDraft);
                       setEditingDeliverable(false);
                     }}
-                    className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
+                    rows={1}
+                    className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600 resize-none leading-relaxed"
                     placeholder="What must exist when done?"
+                    style={{ height: 'auto' }}
+                    ref={(el) => {
+                      if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+                    }}
                   />
                 ) : (
-                  <p className="text-sm text-zinc-300 leading-relaxed">
+                  <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
                     {deliverable || <span className="text-zinc-600 italic">What must exist when done?</span>}
                   </p>
                 )}
@@ -152,7 +160,7 @@ export function ExpandedFieldEditor({
                 className="shrink-0 mt-0.5 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
                 aria-label="Edit deliverable"
               >
-                {editingDeliverable ? <Check size={14} /> : <Pencil size={13} />}
+                <Pencil size={13} />
               </button>
             </div>
 

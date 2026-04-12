@@ -3,7 +3,6 @@ import { useState, useMemo } from 'react';
 import {
   Wrench,
   FileText,
-  Info,
   Paperclip,
 } from 'lucide-react';
 import { useProjectBoard } from '@/store/project-board-store';
@@ -13,7 +12,6 @@ import { DropdownSectionHeader, type SectionDef } from './DropdownSectionHeader'
 import {
   DetailsSection,
   ToolsSection,
-  ContextSection,
   AttachmentsSection,
 } from './task-sections';
 import {
@@ -30,7 +28,6 @@ import {
 const TASK_SECTIONS: readonly SectionDef[] = [
   { id: 'details',     icon: FileText,  label: 'Details' },
   { id: 'tools',       icon: Wrench,    label: 'AI Tools' },
-  { id: 'context',     icon: Info,      label: 'Context' },
   { id: 'attachments', icon: Paperclip, label: 'Resources' },
 ] as const;
 
@@ -128,6 +125,7 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
               dueDate={taskInstance.dueDate}
               assigneeIds={taskInstance.assigneeIds}
               teamMembers={teamMembers}
+              blockedByTitles={blockedByTitles}
               onStatusChange={(s) => updateTaskStatus(taskInstance.id, s)}
               onFieldChange={handleFieldChange}
               onDueDateChange={(d) => setTaskDueDate(taskInstance.id, d)}
@@ -138,13 +136,6 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
             <ToolsSection
               tools={effective.aiTools}
               onToolsChange={(next) => setTaskOverride(taskInstance.id, { aiTools: next })}
-            />
-          )}
-          {activeSection === 'context' && (
-            <ContextSection
-              effective={effective}
-              blockedByTitles={blockedByTitles}
-              onFieldChange={handleFieldChange}
             />
           )}
           {activeSection === 'attachments' && (

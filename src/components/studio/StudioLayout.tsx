@@ -114,25 +114,16 @@ export function StudioLayout() {
               />
             )}
 
-            {/* Task detail — centered card overlay on top of canvas */}
-            {board && template && selectedTaskId && (
-              <div
-                className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
-                onClick={() => handleTaskClick(selectedTaskId)}
-              >
-                <div
-                  className="w-[340px] max-h-[85%] shadow-2xl shadow-black/50"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <TaskDetailPanel
-                    templateTaskId={selectedTaskId}
-                    template={template}
-                    board={board}
-                  />
-                </div>
-              </div>
-            )}
           </div>
+
+          {/* Right panel — task detail, same glass shell as left panel */}
+          {board && template && selectedTaskId && (
+            <TaskDetailPanel
+              templateTaskId={selectedTaskId}
+              template={template}
+              board={board}
+            />
+          )}
         </div>
 
         <LeftPanelToggle />

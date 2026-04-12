@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { homedir } from 'os';
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
@@ -20,7 +21,11 @@ export async function POST(req: Request) {
         '--verbose',
         '--dangerously-skip-permissions',
       ], {
-        env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin' },
+        env: {
+          ...process.env,
+          HOME: process.env.HOME || homedir(),
+          PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
+        },
       });
 
       let sentText = false;

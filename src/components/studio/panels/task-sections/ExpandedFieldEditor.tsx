@@ -83,6 +83,8 @@ export function ExpandedFieldEditor({
 }: ExpandedFieldEditorProps) {
   const [tab, setTab] = useState<BottomTab>('comments');
   const [editingDeliverable, setEditingDeliverable] = useState(false);
+  // Local blocks tracked immediately (BlockNote's store onChange is debounced 300ms)
+  const [localDeliverableBlocks, setLocalDeliverableBlocks] = useState<unknown[]>(deliverableBlocks ?? []);
 
   const resolveName = (id: string) =>
     id === 'local-user' ? 'You' : (teamMembers.find((m) => m.id === id)?.name ?? 'Unknown');
@@ -125,22 +127,32 @@ export function ExpandedFieldEditor({
                 </span>
                 {editingDeliverable ? (
                   <div>
-                    {/* bg-transparent + flush-left + hide overflowing side menu */}
                     <div className="overflow-hidden [&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent [&_.bn-editor]:!pl-0 [&_.bn-block-outer]:!pl-0 [&_.bn-block]:!pl-0 [&_.bn-side-menu]:!hidden">
                       <LazyBlockNoteEditor
-                        initialBlocks={deliverableBlocks}
-                        onChange={onDeliverableBlocksChange}
+                        initialBlocks={localDeliverableBlocks.length ? localDeliverableBlocks : deliverableBlocks}
+                        onChange={(blocks) => setLocalDeliverableBlocks(blocks)}
                         placeholder="What must exist when done?"
                       />
                     </div>
                     <div className="flex justify-end mt-2">
                       <button
-                        onClick={() => setEditingDeliverable(false)}
+                        onClick={() => {
+                          onDeliverableBlocksChange(localDeliverableBlocks);
+                          setEditingDeliverable(false);
+                        }}
                         className="px-3 py-1 rounded-lg text-[12px] font-medium bg-accent/90 hover:bg-accent text-white transition-colors"
                       >
                         Save
                       </button>
                     </div>
+                  </div>
+                ) : localDeliverableBlocks.length > 0 ? (
+                  <div className="overflow-hidden [&_.bn-container]:!bg-transparent [&_.bn-editor]:!bg-transparent [&_.bn-editor]:!pl-0 [&_.bn-block-outer]:!pl-0 [&_.bn-block]:!pl-0 [&_.bn-side-menu]:!hidden">
+                    <LazyBlockNoteEditor
+                      initialBlocks={localDeliverableBlocks}
+                      onChange={() => {}}
+                      editable={false}
+                    />
                   </div>
                 ) : (
                   <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">

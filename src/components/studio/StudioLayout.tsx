@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { Sparkles, ArrowRight, ArrowDown } from 'lucide-react';
+import { Sparkles, ArrowRight, ArrowDown, Terminal } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
+import { StudioTerminal } from './Terminal';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
 import { TimelineBar } from './views/TimelineBar';
@@ -48,6 +49,8 @@ export function StudioLayout() {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMaximized, setTerminalMaximized] = useState(false);
 
   const flowDirection = useStudio((s) => s.flowDirection);
   const toggleFlowDirection = useStudio((s) => s.toggleFlowDirection);
@@ -86,6 +89,22 @@ export function StudioLayout() {
           {/* Center — relative container so the task panel can overlay */}
           <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
 
+            {/* Terminal toggle — always available */}
+            {!board && (
+              <div className="shrink-0 flex items-center justify-end px-3 py-2 border-b border-white/[0.05]">
+                <button
+                  onClick={() => setTerminalOpen(!terminalOpen)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    terminalOpen ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
+                  }`}
+                  title="Toggle AI Terminal"
+                >
+                  <Terminal size={12} />
+                  Terminal
+                </button>
+              </div>
+            )}
+
             {/* View toggle — only when board exists */}
             {board && (
               <div className="flex items-center gap-1 px-3 py-2 border-b border-white/[0.05] shrink-0">
@@ -120,7 +139,20 @@ export function StudioLayout() {
                   </>
                 )}
 
-                <span className="ml-auto text-xs text-zinc-600">{template?.name}</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-xs text-zinc-600">{template?.name}</span>
+                  <div className="w-px h-4 bg-white/[0.08]" />
+                  <button
+                    onClick={() => setTerminalOpen(!terminalOpen)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      terminalOpen ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
+                    }`}
+                    title="Toggle AI Terminal"
+                  >
+                    <Terminal size={12} />
+                    Terminal
+                  </button>
+                </div>
               </div>
             )}
 
@@ -134,6 +166,15 @@ export function StudioLayout() {
                 <KanbanView template={template!} board={board} onTaskClick={handleTaskClick} />
               )}
             </div>
+
+            {/* Terminal panel */}
+            {terminalOpen && (
+              <StudioTerminal
+                onClose={() => { setTerminalOpen(false); setTerminalMaximized(false); }}
+                isMaximized={terminalMaximized}
+                onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
+              />
+            )}
 
             {/* Timeline bar */}
             {board && template && (

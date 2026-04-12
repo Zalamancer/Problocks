@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Terminal as TerminalIcon, X, Minus, Maximize2, Minimize2, Send } from 'lucide-react';
+import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -8,7 +8,7 @@ interface Message {
 }
 
 interface TerminalLine {
-  type: 'input' | 'output' | 'system' | 'error';
+  type: 'input' | 'output' | 'system' | 'error' | 'status';
   text: string;
 }
 
@@ -101,7 +101,7 @@ export function StudioTerminal({
     setLines((prev) => [...prev, { type: 'input', text: `> ${trimmed}` }]);
     setIsStreaming(true);
 
-    // Add empty output line that we'll append to
+    // Streaming region tracking
     const streamLineIndex = { current: -1 };
 
     try {
@@ -129,13 +129,8 @@ export function StudioTerminal({
       if (!reader) return;
 
       const decoder = new TextDecoder();
-      let assistantText = '';
-
-      // Add initial output line
-      setLines((prev) => {
-        streamLineIndex.current = prev.length;
-        return [...prev, { type: 'output', text: '' }];
-      });
+      let assistantText = ''; // Full response (for message history + HTML extraction)
+      let displayText = ''; // Current streaming block (resets between tool rounds)
 
       while (true) {
         const { done, value } = await reader.read();
@@ -150,17 +145,44 @@ export function StudioTerminal({
 
           try {
             const parsed = JSON.parse(data);
+
+            // Status events — freeze current text block, show status line
+            if (parsed.status) {
+              if (streamLineIndex.current !== -1) {
+                // Freeze the current streaming text (it stays as-is in lines)
+                streamLineIndex.current = -1;
+                displayText = '';
+              }
+              setLines((prev) => [
+                ...prev,
+                { type: 'status', text: `  ${parsed.status}` },
+              ]);
+            }
+
+            // Text events — stream into current display block
             if (parsed.text) {
               assistantText += parsed.text;
-              // Update the streaming line
-              setLines((prev) => {
-                const updated = [...prev];
-                // Replace all output lines from this stream with the full formatted text
-                const startIdx = streamLineIndex.current;
-                const formatted = formatOutput(assistantText);
-                updated.splice(startIdx, updated.length - startIdx, ...formatted);
-                return updated;
-              });
+              displayText += parsed.text;
+
+              if (streamLineIndex.current === -1) {
+                // Start a new streaming region
+                setLines((prev) => {
+                  streamLineIndex.current = prev.length;
+                  return [...prev, ...formatOutput(displayText)];
+                });
+              } else {
+                // Update existing streaming region
+                setLines((prev) => {
+                  const updated = [...prev];
+                  const formatted = formatOutput(displayText);
+                  updated.splice(
+                    streamLineIndex.current,
+                    updated.length - streamLineIndex.current,
+                    ...formatted,
+                  );
+                  return updated;
+                });
+              }
             }
           } catch {
             // skip malformed chunks
@@ -168,7 +190,7 @@ export function StudioTerminal({
         }
       }
 
-      // Finalize: add trailing blank line
+      // Finalize
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }]);
       setLines((prev) => [...prev, { type: 'system', text: '' }]);
 
@@ -178,13 +200,17 @@ export function StudioTerminal({
         onGameGenerated(htmlMatch[1].trim());
         setLines((prev) => [
           ...prev,
-          { type: 'system', text: '  Game loaded in preview. Type changes to iterate.' },
+          { type: 'status', text: '  🎮 Game loaded in preview! Type changes to iterate.' },
           { type: 'system', text: '' },
         ]);
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        setLines((prev) => [...prev, { type: 'system', text: '  (cancelled)' }, { type: 'system', text: '' }]);
+        setLines((prev) => [
+          ...prev,
+          { type: 'system', text: '  (cancelled)' },
+          { type: 'system', text: '' },
+        ]);
       } else {
         setLines((prev) => [
           ...prev,
@@ -196,28 +222,31 @@ export function StudioTerminal({
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [input, isStreaming, messages]);
+  }, [input, isStreaming, messages, onGameGenerated]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
-    // Ctrl+C to cancel
     if (e.key === 'c' && e.ctrlKey && isStreaming) {
       abortRef.current?.abort();
     }
   };
 
   return (
-    <div className={`flex flex-col bg-[#0d0d0d] border-t border-white/[0.06] ${isMaximized ? 'h-full' : 'h-[280px]'}`}>
+    <div
+      className={`flex flex-col bg-[#0d0d0d] border-t border-white/[0.06] ${isMaximized ? 'h-full' : 'h-[280px]'}`}
+    >
       {/* Title bar */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#161616] border-b border-white/[0.06] shrink-0">
         <div className="flex items-center gap-2">
           <TerminalIcon size={13} className="text-green-400" />
           <span className="text-xs font-medium text-zinc-300">Terminal</span>
           {isStreaming && (
-            <span className="text-[10px] text-yellow-400/80 animate-pulse">streaming...</span>
+            <span className="text-[10px] text-yellow-400/80 animate-pulse">
+              generating...
+            </span>
           )}
         </div>
         <div className="flex items-center gap-0.5">
@@ -228,7 +257,10 @@ export function StudioTerminal({
             {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
           </button>
           <button
-            onClick={() => { setLines([]); onClose(); }}
+            onClick={() => {
+              setLines([]);
+              onClose();
+            }}
             className="p-1 rounded hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
           >
             <X size={12} />
@@ -260,7 +292,7 @@ export function StudioTerminal({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isStreaming ? 'Ctrl+C to cancel...' : 'Message Claude...'}
+          placeholder={isStreaming ? 'Ctrl+C to cancel...' : 'Describe a game...'}
           disabled={isStreaming}
           rows={1}
           className="flex-1 bg-transparent text-zinc-200 font-mono text-[13px] placeholder:text-zinc-600 outline-none resize-none min-h-[24px] max-h-[120px] leading-relaxed disabled:opacity-50"
@@ -300,5 +332,7 @@ function getLineClass(type: TerminalLine['type']): string {
       return 'text-zinc-500 whitespace-pre-wrap';
     case 'error':
       return 'text-red-400 whitespace-pre-wrap';
+    case 'status':
+      return 'text-emerald-400/90 whitespace-pre-wrap';
   }
 }

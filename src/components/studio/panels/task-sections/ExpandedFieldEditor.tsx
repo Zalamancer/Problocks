@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { X, MessageSquare, Clock, Package, Pencil } from 'lucide-react';
 import { IconButton } from '@/components/ui';
 import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
@@ -23,7 +23,8 @@ interface ExpandedFieldEditorProps {
   onDeleteComment: (commentId: string) => void;
   activityLog: ActivityEntry[];
   deliverable?: string;
-  onDeliverableChange: (v: string) => void;
+  deliverableBlocks?: unknown[];
+  onDeliverableBlocksChange: (blocks: unknown[]) => void;
 }
 
 type BottomTab = 'comments' | 'activity';
@@ -77,101 +78,11 @@ export function ExpandedFieldEditor({
   onDeleteComment,
   activityLog,
   deliverable,
-  onDeliverableChange,
+  deliverableBlocks,
+  onDeliverableBlocksChange,
 }: ExpandedFieldEditorProps) {
   const [tab, setTab] = useState<BottomTab>('comments');
   const [editingDeliverable, setEditingDeliverable] = useState(false);
-  const [deliverableDraft, setDeliverableDraft] = useState(deliverable ?? '');
-  const deliverableRef = useRef<HTMLTextAreaElement>(null);
-  const cursorPosRef = useRef<number | null>(null);
-
-  // Apply cursor position after React re-render (needed for list key insertions)
-  useEffect(() => {
-    if (cursorPosRef.current !== null && deliverableRef.current) {
-      deliverableRef.current.selectionStart = cursorPosRef.current;
-      deliverableRef.current.selectionEnd = cursorPosRef.current;
-      cursorPosRef.current = null;
-    }
-  });
-
-  function resizeDeliverable() {
-    const el = deliverableRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }
-
-  function handleDeliverableChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    let val = e.target.value;
-    const cursor = e.target.selectionStart;
-
-    // Convert "* " or "- " at line start to "• "
-    if (val[cursor - 1] === ' ') {
-      const lineStart = val.lastIndexOf('\n', cursor - 2) + 1;
-      const lineBeforeCursor = val.substring(lineStart, cursor);
-      const match = lineBeforeCursor.match(/^(\s*)[*\-] $/);
-      if (match) {
-        const replacement = `${match[1]}• `;
-        val = val.substring(0, lineStart) + replacement + val.substring(cursor);
-        cursorPosRef.current = lineStart + replacement.length;
-      }
-    }
-
-    setDeliverableDraft(val);
-    requestAnimationFrame(resizeDeliverable);
-  }
-
-  function handleDeliverableKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    const el = e.currentTarget;
-    const { value, selectionStart: cursor } = el;
-
-    if (e.key === 'Enter') {
-      const lineStart = value.lastIndexOf('\n', cursor - 1) + 1;
-      const currentLine = value.substring(lineStart, cursor);
-
-      // Continue bullet list
-      const bulletMatch = currentLine.match(/^(\s*)• /);
-      if (bulletMatch) {
-        e.preventDefault();
-        if (currentLine.trimEnd() === '•') {
-          // Empty bullet — exit list
-          const newVal = value.substring(0, lineStart) + '\n' + value.substring(cursor);
-          setDeliverableDraft(newVal);
-          cursorPosRef.current = lineStart + 1;
-        } else {
-          const insertion = `\n${bulletMatch[1]}• `;
-          setDeliverableDraft(value.substring(0, cursor) + insertion + value.substring(cursor));
-          cursorPosRef.current = cursor + insertion.length;
-        }
-        requestAnimationFrame(resizeDeliverable);
-        return;
-      }
-
-      // Continue numbered list
-      const numberMatch = currentLine.match(/^(\s*)(\d+)\. /);
-      if (numberMatch) {
-        e.preventDefault();
-        const num = parseInt(numberMatch[2]);
-        if (currentLine.trim() === `${num}.`) {
-          // Empty numbered item — exit list
-          const newVal = value.substring(0, lineStart) + '\n' + value.substring(cursor);
-          setDeliverableDraft(newVal);
-          cursorPosRef.current = lineStart + 1;
-        } else {
-          const insertion = `\n${numberMatch[1]}${num + 1}. `;
-          setDeliverableDraft(value.substring(0, cursor) + insertion + value.substring(cursor));
-          cursorPosRef.current = cursor + insertion.length;
-        }
-        requestAnimationFrame(resizeDeliverable);
-        return;
-      }
-    }
-
-    if (e.key === 'Escape') {
-      onDeliverableChange(deliverableDraft);
-      setEditingDeliverable(false);
-    }
-  }
 
   const resolveName = (id: string) =>
     id === 'local-user' ? 'You' : (teamMembers.find((m) => m.id === id)?.name ?? 'Unknown');
@@ -213,21 +124,13 @@ export function ExpandedFieldEditor({
                   Deliverable
                 </span>
                 {editingDeliverable ? (
-                  <textarea
-                    ref={deliverableRef}
-                    autoFocus
-                    value={deliverableDraft}
-                    onChange={handleDeliverableChange}
-                    onKeyDown={handleDeliverableKeyDown}
-                    onBlur={() => {
-                      onDeliverableChange(deliverableDraft);
-                      setEditingDeliverable(false);
-                    }}
-                    rows={1}
-                    className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600 resize-none leading-relaxed"
-                    placeholder="What must exist when done?"
-                    style={{ height: 'auto' }}
-                  />
+                  <div className="-mx-1">
+                    <LazyBlockNoteEditor
+                      initialBlocks={deliverableBlocks}
+                      onChange={onDeliverableBlocksChange}
+                      placeholder="What must exist when done?"
+                    />
+                  </div>
                 ) : (
                   <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
                     {deliverable || <span className="text-zinc-600 italic">What must exist when done?</span>}
@@ -235,7 +138,7 @@ export function ExpandedFieldEditor({
                 )}
               </div>
               <button
-                onClick={() => { setDeliverableDraft(deliverable ?? ''); setEditingDeliverable(true); }}
+                onClick={() => setEditingDeliverable((v) => !v)}
                 className="shrink-0 mt-0.5 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
                 aria-label="Edit deliverable"
               >

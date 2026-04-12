@@ -143,6 +143,8 @@ export interface TaskInstance {
   /** BlockNote block array for rich-text description. When set, takes
    *  precedence over the plain-text overrides.description / template.description. */
   descriptionBlocks?: unknown[]
+  /** BlockNote block array for the deliverable field. */
+  deliverableBlocks?: unknown[]
   /** BlockNote block array for the Notes section. */
   noteBlocks?: unknown[]
   startedAt?: string

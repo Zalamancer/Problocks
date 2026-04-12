@@ -75,6 +75,7 @@ interface ProjectBoardState {
   addAttachment: (taskInstanceId: string, attachment: ResourceAttachment) => void;
   removeAttachment: (taskInstanceId: string, attachmentId: string) => void;
   updateTaskDescriptionBlocks: (taskInstanceId: string, blocks: unknown[]) => void;
+  updateTaskDeliverableBlocks: (taskInstanceId: string, blocks: unknown[]) => void;
   updateTaskNoteBlocks: (taskInstanceId: string, blocks: unknown[]) => void;
   clearBoard: () => void;
 }
@@ -398,6 +399,16 @@ export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
     const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
       ...t,
       descriptionBlocks: blocks,
+    }));
+    set({ board: { ...board, milestones } });
+  },
+
+  updateTaskDeliverableBlocks(taskInstanceId, blocks) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      deliverableBlocks: blocks,
     }));
     set({ board: { ...board, milestones } });
   },

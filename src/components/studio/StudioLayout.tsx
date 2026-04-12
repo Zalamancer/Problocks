@@ -50,6 +50,7 @@ export function StudioLayout() {
 
   const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
   const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
+  const updateTaskDeliverableBlocks = useBoardStore((s) => s.updateTaskDeliverableBlocks);
   const addComment = useBoardStore((s) => s.addComment);
   const deleteComment = useBoardStore((s) => s.deleteComment);
   const teamMembers = useBoardStore((s) => s.teamMembers);
@@ -135,7 +136,8 @@ export function StudioLayout() {
                 <ExpandedFieldEditor
                   title={eff.title}
                   deliverable={eff.deliverable}
-                  onDeliverableChange={(v) => setTaskOverride(ti.id, { deliverable: v })}
+                  deliverableBlocks={ti.deliverableBlocks}
+                  onDeliverableBlocksChange={(blocks) => updateTaskDeliverableBlocks(ti.id, blocks)}
                   descriptionBlocks={ti.descriptionBlocks}
                   onTitleChange={(v) => setTaskOverride(ti.id, { title: v })}
                   onDescriptionBlocksChange={(blocks) => updateTaskDescriptionBlocks(ti.id, blocks)}

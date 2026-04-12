@@ -63,13 +63,16 @@ const CURRENT_USER_ID = 'local-user';
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
+export type { ExpandableField } from './task-sections';
+
 interface TaskDetailPanelProps {
   templateTaskId: string;
   template: Template;
   board: ProjectBoard;
+  onExpandField?: (field: 'title' | 'description') => void;
 }
 
-export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ templateTaskId, template, board, onExpandField }: TaskDetailPanelProps) {
   const updateTaskStatus          = useProjectBoard((s) => s.updateTaskStatus);
   const setTaskOverride           = useProjectBoard((s) => s.setTaskOverride);
   const setTaskAssignees          = useProjectBoard((s) => s.setTaskAssignees);
@@ -152,12 +155,11 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
               dueDate={taskInstance.dueDate}
               assigneeIds={taskInstance.assigneeIds}
               teamMembers={teamMembers}
-              descriptionBlocks={taskInstance.descriptionBlocks}
               onStatusChange={(s) => updateTaskStatus(taskInstance.id, s)}
               onFieldChange={handleFieldChange}
               onDueDateChange={(d) => setTaskDueDate(taskInstance.id, d)}
               onAssigneesChange={(ids) => setTaskAssignees(taskInstance.id, ids)}
-              onDescriptionBlocksChange={(blocks) => updateTaskDescriptionBlocks(taskInstance.id, blocks)}
+              onExpandField={(f) => onExpandField?.(f)}
             />
           )}
           {activeSection === 'tools' && (

@@ -10,7 +10,10 @@ import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
 import { useProjectBoard } from '@/store/project-board-store';
 import { getTemplate } from '@/lib/templates';
-import { TaskDetailPanel } from './panels/TaskDetailPanel';
+import { TaskDetailPanel, type ExpandableField } from './panels/TaskDetailPanel';
+import { ExpandedFieldEditor } from './panels/task-sections';
+import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
+import { resolveEffectiveTask } from '@/lib/templates/types';
 import type { TemplateId } from '@/lib/templates/types';
 
 type ViewMode = 'canvas' | 'kanban';
@@ -44,6 +47,10 @@ export function StudioLayout() {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [expandedField, setExpandedField] = useState<ExpandableField | null>(null);
+
+  const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
+  const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
 
   const template = board ? getTemplate(board.templateId) : null;
 
@@ -57,6 +64,7 @@ export function StudioLayout() {
   // elsewhere or re-clicking the selected item).
   function handleTaskClick(templateTaskId: string) {
     setSelectedTaskId((prev) => (prev === templateTaskId ? null : templateTaskId));
+    setExpandedField(null);
   }
 
   return (
@@ -114,6 +122,24 @@ export function StudioLayout() {
               />
             )}
 
+            {/* Expanded title/description editor — covers the canvas */}
+            {expandedField && selectedTaskId && board && template && (() => {
+              const tt = template.milestones.flatMap((m) => m.tasks).find((t) => t.id === selectedTaskId);
+              const ti = board.milestones.flatMap((m) => m.tasks).find((t) => t.templateTaskId === selectedTaskId);
+              if (!tt || !ti) return null;
+              const eff = resolveEffectiveTask(tt, ti.overrides);
+              return (
+                <ExpandedFieldEditor
+                  field={expandedField}
+                  title={eff.title}
+                  descriptionBlocks={ti.descriptionBlocks}
+                  onTitleChange={(v) => setTaskOverride(ti.id, { title: v })}
+                  onDescriptionBlocksChange={(blocks) => updateTaskDescriptionBlocks(ti.id, blocks)}
+                  onClose={() => setExpandedField(null)}
+                />
+              );
+            })()}
+
           </div>
 
           {/* Right panel — task detail, same glass shell as left panel */}
@@ -122,6 +148,7 @@ export function StudioLayout() {
               templateTaskId={selectedTaskId}
               template={template}
               board={board}
+              onExpandField={setExpandedField}
             />
           )}
         </div>

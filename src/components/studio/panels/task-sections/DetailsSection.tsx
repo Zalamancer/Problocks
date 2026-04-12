@@ -1,5 +1,5 @@
 'use client';
-import { Package } from 'lucide-react';
+import { Maximize2, Package } from 'lucide-react';
 import {
   PanelSection,
   PanelInput,
@@ -7,7 +7,7 @@ import {
   PanelSlider,
 } from '@/components/ui/panel-controls';
 import { AssigneesSection } from './AssigneesSection';
-import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
+import type { ExpandableField } from './ExpandedFieldEditor';
 import type {
   TaskStatus,
   TeamRole,
@@ -38,12 +38,11 @@ interface DetailsSectionProps {
   dueDate?: string;
   assigneeIds: string[];
   teamMembers: TeamMember[];
-  descriptionBlocks?: unknown[];
   onStatusChange: (s: TaskStatus) => void;
   onFieldChange: <K extends keyof TaskOverrides>(field: K, value: TaskOverrides[K]) => void;
   onDueDateChange: (date: string | undefined) => void;
   onAssigneesChange: (ids: string[]) => void;
-  onDescriptionBlocksChange: (blocks: unknown[]) => void;
+  onExpandField: (field: ExpandableField) => void;
 }
 
 export function DetailsSection({
@@ -52,24 +51,26 @@ export function DetailsSection({
   dueDate,
   assigneeIds,
   teamMembers,
-  descriptionBlocks,
   onStatusChange,
   onFieldChange,
   onDueDateChange,
   onAssigneesChange,
-  onDescriptionBlocksChange,
+  onExpandField,
 }: DetailsSectionProps) {
   const isBlocked = status === 'blocked';
 
   return (
     <div className="px-4 py-4 flex flex-col gap-4">
       <PanelSection title="Title" collapsible>
-        <PanelInput
-          value={effective.title}
-          onChange={(v) => onFieldChange('title', v)}
-          placeholder="Task title"
-          fullWidth
-        />
+        <button
+          onClick={() => onExpandField('title')}
+          className="w-full flex items-center gap-2 bg-panel-surface hover:bg-panel-surface-hover rounded-lg px-3 py-2 transition-colors text-left group"
+        >
+          <span className="flex-1 text-sm text-zinc-200 truncate">
+            {effective.title || 'Untitled task'}
+          </span>
+          <Maximize2 size={12} className="shrink-0 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+        </button>
       </PanelSection>
 
       <PanelSection title="Status" collapsible>
@@ -103,13 +104,15 @@ export function DetailsSection({
       />
 
       <PanelSection title="Description" collapsible>
-        <LazyBlockNoteEditor
-          initialBlocks={descriptionBlocks}
-          onChange={(blocks) => {
-            onDescriptionBlocksChange(blocks);
-          }}
-          placeholder="What is this task about?"
-        />
+        <button
+          onClick={() => onExpandField('description')}
+          className="w-full flex items-center gap-2 bg-panel-surface hover:bg-panel-surface-hover rounded-lg px-3 py-2 transition-colors text-left group"
+        >
+          <span className="flex-1 text-xs text-zinc-400 truncate">
+            {effective.description || 'Click to add description...'}
+          </span>
+          <Maximize2 size={12} className="shrink-0 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+        </button>
       </PanelSection>
 
       <PanelSection title="Deliverable" icon={Package} collapsible>

@@ -1,19 +1,45 @@
 import { spawn } from 'child_process';
 import { homedir } from 'os';
+import Anthropic from '@anthropic-ai/sdk';
 
-export async function POST(req: Request) {
-  const { messages } = await req.json();
+const USE_CLI = !process.env.ANTHROPIC_API_KEY;
 
-  // Build the prompt — include conversation history for context
+// --- API mode (production: uses your API key) ---
+
+async function handleWithAPI(messages: { role: string; content: string }[]) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const encoder = new TextEncoder();
+
+  const stream = await anthropic.messages.stream({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4096,
+    system: 'You are a helpful AI assistant embedded in Problocks, an AI-powered game creation studio. Help the user with their game development questions, code, and creative ideas. Be concise and direct.',
+    messages: messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+  });
+
+  return new ReadableStream({
+    async start(controller) {
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`));
+        }
+      }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+}
+
+// --- CLI mode (local dev: uses user's Claude subscription) ---
+
+function handleWithCLI(messages: { role: string; content: string }[]) {
   const prompt = messages
-    .map((m: { role: string; content: string }) =>
-      m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`
-    )
+    .map((m) => (m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`))
     .join('\n\n');
 
   const encoder = new TextEncoder();
 
-  const readable = new ReadableStream({
+  return new ReadableStream({
     start(controller) {
       const child = spawn('claude', [
         '-p', prompt,
@@ -37,11 +63,8 @@ export async function POST(req: Request) {
         for (const line of lines) {
           try {
             const parsed = JSON.parse(line);
-
-            // Skip system events (hooks, init, rate limits)
             if (parsed.type === 'system' || parsed.type === 'rate_limit_event') continue;
 
-            // Assistant message — extract text from content blocks
             if (parsed.type === 'assistant' && parsed.message?.content) {
               for (const block of parsed.message.content) {
                 if (block.type === 'text' && block.text) {
@@ -52,10 +75,8 @@ export async function POST(req: Request) {
               continue;
             }
 
-            // Final result — use as fallback if no assistant text was sent
             if (parsed.type === 'result' && parsed.result && !sentText) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: parsed.result })}\n\n`));
-              continue;
             }
           } catch {
             // Not JSON — skip
@@ -82,6 +103,13 @@ export async function POST(req: Request) {
       });
     },
   });
+}
+
+// --- Route handler ---
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  const readable = USE_CLI ? handleWithCLI(messages) : await handleWithAPI(messages);
 
   return new Response(readable, {
     headers: {

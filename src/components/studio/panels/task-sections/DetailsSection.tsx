@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { Lightbulb, BookOpen } from 'lucide-react';
+import { Lightbulb, BookOpen, Info } from 'lucide-react';
 import {
   PanelSection,
   PanelSelect,
@@ -47,11 +47,12 @@ function AutoTextarea({
   );
 }
 
-type ContextTab = 'tip' | 'example';
+type ActiveTab = 'tip' | 'example' | 'details';
 
-const CONTEXT_TABS = [
+const TABS = [
   { id: 'tip',     label: 'Guide',   icon: Lightbulb },
   { id: 'example', label: 'Example', icon: BookOpen  },
+  { id: 'details', label: 'Details', icon: Info      },
 ];
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
@@ -96,101 +97,103 @@ export function DetailsSection({
   onAssigneesChange,
 }: DetailsSectionProps) {
   const isBlocked = status === 'blocked';
-  const [contextTab, setContextTab] = useState<ContextTab>('tip');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('tip');
 
   return (
     <div className="flex flex-col gap-4">
       <PanelIconTabs
-        tabs={CONTEXT_TABS}
-        activeTab={contextTab}
-        onChange={(id) => setContextTab(id as ContextTab)}
+        tabs={TABS}
+        activeTab={activeTab}
+        onChange={(id) => setActiveTab(id as ActiveTab)}
       />
 
-      <div className="px-4 pb-2">
-        {contextTab === 'tip' && (
+      <div className="px-4 pb-4">
+        {activeTab === 'tip' && (
           <AutoTextarea
             value={effective.tip}
             onChange={(v) => onFieldChange('tip', v)}
             placeholder="Teaching note or explanation..."
           />
         )}
-        {contextTab === 'example' && (
+
+        {activeTab === 'example' && (
           <AutoTextarea
             value={effective.exampleFromIndustry ?? ''}
             onChange={(v) => onFieldChange('exampleFromIndustry', v || undefined)}
             placeholder="How a real studio would approach this..."
           />
         )}
-        {blockedByTitles.length > 0 && (
-          <div className="mt-4">
-            <PanelSection
-              title="Requires"
-              badge={blockedByTitles.length}
-              collapsible
-              noBorder
-            >
-              <div className="space-y-1.5">
-                {blockedByTitles.map((title) => (
-                  <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
-                    {title}
-                  </div>
-                ))}
-              </div>
+
+        {activeTab === 'details' && (
+          <div className="flex flex-col gap-4">
+            <PanelSection title="Status" collapsible>
+              {isBlocked ? (
+                <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5">
+                  This task is blocked by unfinished dependencies.
+                </div>
+              ) : (
+                <PanelSelect
+                  value={status}
+                  onChange={(v) => onStatusChange(v as TaskStatus)}
+                  options={STATUS_OPTIONS}
+                  fullWidth
+                />
+              )}
             </PanelSection>
+
+            <PanelSection title="Due Date" collapsible>
+              <DueDatePicker
+                value={dueDate}
+                onChange={onDueDateChange}
+              />
+            </PanelSection>
+
+            <AssigneesSection
+              assigneeIds={assigneeIds}
+              teamMembers={teamMembers}
+              onAssigneesChange={onAssigneesChange}
+            />
+
+            <PanelSection title="Role" collapsible>
+              <PanelSelect
+                value={effective.role}
+                onChange={(v) => onFieldChange('role', v as TeamRole)}
+                options={ROLE_OPTIONS}
+                fullWidth
+              />
+            </PanelSection>
+
+            <PanelSection title="Estimated hours" collapsible noBorder>
+              <PanelSlider
+                label="Hours"
+                value={effective.estimatedHours}
+                onChange={(v) => onFieldChange('estimatedHours', v)}
+                min={1}
+                max={100}
+                step={1}
+                suffix="h"
+              />
+            </PanelSection>
+
+            {blockedByTitles.length > 0 && (
+              <PanelSection
+                title="Requires"
+                badge={blockedByTitles.length}
+                collapsible
+                noBorder
+              >
+                <div className="space-y-1.5">
+                  {blockedByTitles.map((title) => (
+                    <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
+                      {title}
+                    </div>
+                  ))}
+                </div>
+              </PanelSection>
+            )}
           </div>
         )}
-      </div>
-
-      <div className="px-4 pb-4 flex flex-col gap-4 border-t border-white/5 pt-4">
-      <PanelSection title="Status" collapsible>
-        {isBlocked ? (
-          <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5">
-            This task is blocked by unfinished dependencies.
-          </div>
-        ) : (
-          <PanelSelect
-            value={status}
-            onChange={(v) => onStatusChange(v as TaskStatus)}
-            options={STATUS_OPTIONS}
-            fullWidth
-          />
-        )}
-      </PanelSection>
-
-      <PanelSection title="Due Date" collapsible>
-        <DueDatePicker
-          value={dueDate}
-          onChange={onDueDateChange}
-        />
-      </PanelSection>
-
-      <AssigneesSection
-        assigneeIds={assigneeIds}
-        teamMembers={teamMembers}
-        onAssigneesChange={onAssigneesChange}
-      />
-
-      <PanelSection title="Role" collapsible>
-        <PanelSelect
-          value={effective.role}
-          onChange={(v) => onFieldChange('role', v as TeamRole)}
-          options={ROLE_OPTIONS}
-          fullWidth
-        />
-      </PanelSection>
-
-      <PanelSection title="Estimated hours" collapsible noBorder>
-        <PanelSlider
-          label="Hours"
-          value={effective.estimatedHours}
-          onChange={(v) => onFieldChange('estimatedHours', v)}
-          min={1}
-          max={100}
-          step={1}
-          suffix="h"
-        />
-      </PanelSection>
       </div>
     </div>
   );

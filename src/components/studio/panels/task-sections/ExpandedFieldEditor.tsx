@@ -99,24 +99,26 @@ export function ExpandedFieldEditor({
       {/* Single scroll area: editor + comments/activity naturally below */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-8 pt-4 pb-20">
-          {/* Title */}
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => onTitleChange(e.target.value)}
-            className="w-full bg-transparent text-2xl font-bold text-zinc-100 border-none outline-none placeholder:text-zinc-700 mb-6"
-            placeholder="Untitled"
-          />
+          {/* Title + description occupy at least 3/4 of visible height before comments */}
+          <div className="min-h-[72vh]">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => onTitleChange(e.target.value)}
+              className="w-full bg-transparent text-2xl font-bold text-zinc-100 border-none outline-none placeholder:text-zinc-700 mb-6"
+              placeholder="Untitled"
+            />
 
-          {/* Description — BlockNote */}
-          <LazyBlockNoteEditor
-            initialBlocks={descriptionBlocks}
-            onChange={onDescriptionBlocksChange}
-            placeholder="Start writing..."
-          />
+            {/* Description — BlockNote */}
+            <LazyBlockNoteEditor
+              initialBlocks={descriptionBlocks}
+              onChange={onDescriptionBlocksChange}
+              placeholder="Start writing..."
+            />
+          </div>
 
           {/* Divider */}
-          <div className="mt-12 border-t border-white/[0.06]" />
+          <div className="border-t border-white/[0.06]" />
 
           {/* Tab bar */}
           <div className="flex items-center gap-1 py-5">

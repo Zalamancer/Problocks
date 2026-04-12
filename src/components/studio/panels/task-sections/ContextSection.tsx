@@ -38,8 +38,8 @@ function AutoTextarea({
 type ContextTab = 'tip' | 'example';
 
 const CONTEXT_TABS = [
-  { id: 'tip',     label: 'What is this?',       icon: Lightbulb },
-  { id: 'example', label: 'Real studio example', icon: BookOpen  },
+  { id: 'tip',     label: 'Guide',   icon: Lightbulb },
+  { id: 'example', label: 'Example', icon: BookOpen  },
 ];
 
 interface ContextSectionProps {

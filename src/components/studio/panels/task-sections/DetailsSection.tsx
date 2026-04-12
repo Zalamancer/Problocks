@@ -50,9 +50,9 @@ function AutoTextarea({
 type ActiveTab = 'tip' | 'example' | 'details';
 
 const TABS = [
+  { id: 'details', label: 'Details', icon: Info      },
   { id: 'tip',     label: 'Guide',   icon: Lightbulb },
   { id: 'example', label: 'Example', icon: BookOpen  },
-  { id: 'details', label: 'Details', icon: Info      },
 ];
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
@@ -97,7 +97,7 @@ export function DetailsSection({
   onAssigneesChange,
 }: DetailsSectionProps) {
   const isBlocked = status === 'blocked';
-  const [activeTab, setActiveTab] = useState<ActiveTab>('tip');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('details');
 
   return (
     <div className="flex flex-col gap-4">

@@ -175,10 +175,13 @@ src/lib/          ← pure utilities, no React
 
 ## Design System
 
+**Full styling guide:** `docs/styling-guide.md` — color tokens, z-index hierarchy, spacing, popover pattern, theming rules. Read it before touching layout or z-index.
+
 - Background: `bg-zinc-950`
 - Panels: `bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl`
 - Text primary: `text-zinc-200`, secondary: `text-zinc-400`, muted: `text-zinc-600`
 - Accent: green-500 (brand), purple-400 (AI nodes), pink-400 (art nodes), green-400 (audio nodes)
+- **All dropdowns / popovers / tooltips: `z-dropdown` (999) — no raw z-index numbers**
 
 ## What's Next (Phase 1)
 

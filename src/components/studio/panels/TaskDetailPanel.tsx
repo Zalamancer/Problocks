@@ -5,7 +5,6 @@ import {
   FileText,
   Info,
   Paperclip,
-  BookOpen,
 } from 'lucide-react';
 import { useProjectBoard } from '@/store/project-board-store';
 import { PanelActionButton } from '@/components/ui/panel-controls';
@@ -16,7 +15,6 @@ import {
   ToolsSection,
   ContextSection,
   AttachmentsSection,
-  NotesSection,
 } from './task-sections';
 import {
   resolveEffectiveTask,
@@ -34,7 +32,6 @@ const TASK_SECTIONS: readonly SectionDef[] = [
   { id: 'tools',       icon: Wrench,    label: 'AI Tools' },
   { id: 'context',     icon: Info,      label: 'Context' },
   { id: 'attachments', icon: Paperclip, label: 'Resources' },
-  { id: 'notes',       icon: BookOpen,  label: 'Notes' },
 ] as const;
 
 type TaskSectionId = (typeof TASK_SECTIONS)[number]['id'];
@@ -69,7 +66,7 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
   const addAttachment             = useProjectBoard((s) => s.addAttachment);
   const removeAttachment          = useProjectBoard((s) => s.removeAttachment);
   const updateTaskDescriptionBlocks = useProjectBoard((s) => s.updateTaskDescriptionBlocks);
-  const updateTaskNoteBlocks      = useProjectBoard((s) => s.updateTaskNoteBlocks);
+
   const teamMembers               = useProjectBoard((s) => s.teamMembers);
 
   const [activeSection, setActiveSection] = useState<TaskSectionId>('details');
@@ -160,14 +157,7 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
               />
             </div>
           )}
-          {activeSection === 'notes' && (
-            <div className="px-4 py-4">
-              <NotesSection
-                noteBlocks={taskInstance.noteBlocks}
-                onNoteBlocksChange={(blocks) => updateTaskNoteBlocks(taskInstance.id, blocks)}
-              />
-            </div>
-          )}
+
         </PanelErrorBoundary>
       </div>
 

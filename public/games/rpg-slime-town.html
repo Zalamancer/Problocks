@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slime Town RPG</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  canvas { display: block; image-rendering: pixelated; }
+  body { display: flex; justify-content: center; align-items: center; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+// [STATUS] Planning game...
+// ============================================================
+// SLIME TOWN RPG
+// Overworld with jumping slimes, 3 shops, interior maps, buying
+// ============================================================
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// --- Constants ---
+const TILE = 32;
+const COLS = 20;
+const ROWS = 15;
+const W = COLS * TILE;
+const H = ROWS * TILE;
+const HUD_H = 48;
+
+let scale = 1;
+function resize() {
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight;
+  scale = Math.min(maxW / W, maxH / (H + HUD_H));
+  scale = Math.max(0.5, Math.floor(scale * 2) / 2); // snap to 0.5
+  canvas.width = W;
+  canvas.height = H + HUD_H;
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = ((H + HUD_H) * scale) + 'px';
+  ctx.imageSmoothingEnabled = false;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Game State ---
+const STATE = { TITLE: 0, PLAY: 1, SHOP: 2, GAMEOVER: 3 };
+let state = STATE.TITLE;
+let currentMap = 'overworld';
+let transitionTimer = 0;
+let transitionTarget = null;
+let transitionPlayerPos = null;
+
+// --- Player ---
+const player = {
+  x: 9, y: 12,  // tile coords
+  px: 0, py: 0, // pixel offset for smooth movement
+  hp: 10, maxHp: 10,
+  gold: 50,
+  attack: 2,
+  defense: 0,
+  speed: 3,
+  dir: 0, // 0=down,1=left,2=right,3=up
+  animFrame: 0,
+  animTimer: 0,
+  moving: false,
+  attackTimer: 0,
+  invincible: 0,
+  inventory: [],
+  equipped: { weapon: null, armor: null },
+};
+
+// --- Input ---
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault(); });
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// Touch controls
+let touchDir = null;
+let touchAction = null;
+canvas.addEventListener('touchstart', handleTouch, { passive: false });
+canvas.addEventListener('touchmove', handleTouch, { passive: false });
+canvas.addEventListener('touchend', () => { touchDir = null; touchAction = null; });
+
+function handleTouch(e) {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const tx = (e.touches[0].clientX - r.left) / scale;
+  const ty = (e.touches[0].clientY - r.top) / scale;
+
+  // Bottom quarter = dpad area
+  if (ty > H * 0.6) {
+    const cx = W / 4, cy = H * 0.8;
+    const dx = tx - cx, dy = ty - cy;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      touchDir = dx > 0 ? 'right' : 'left';
+    } else {
+      touchDir = dy > 0 ? 'down' : 'up';
+    }
+  }
+  // Right side = action
+  if (tx > W * 0.6) {
+    touchAction = 'action';
+  }
+}
+
+// --- Sound System ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type, freqS, freqE, dur, vol, curve) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freqS, audioCtx.currentTime);
+  if (curve === 'exponential') {
+    osc.frequency.exponentialRampToValueAtTime(Math.max(freqE, 1), audioCtx.currentTime + dur);
+  } else {
+    osc.frequency.linearRampToValueAtTime(freqE, audioCtx.currentTime + dur);
+  }
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+// [STATUS] Drawing sprites...
+const SND = {
+  jump: () => playSound('sine', 200, 600, 0.15, 0.2, 'exponential'),
+  hit: () => playSound('sawtooth', 400, 100, 0.2, 0.25, 'linear'),
+  coin: () => playSound('sine', 500, 1000, 0.1, 0.15, 'linear'),
+  buy: () => playSound('sine', 400, 800, 0.3, 0.2, 'linear'),
+  door: () => playSound('sine', 300, 500, 0.2, 0.15, 'linear'),
+  attack: () => playSound('sawtooth', 300, 600, 0.12, 0.15, 'exponential'),
+  hurt: () => playSound('sawtooth', 500, 100, 0.3, 0.3, 'linear'),
+  death: () => playSound('sine', 500, 80, 0.8, 0.3, 'exponential'),
+  select: () => playSound('sine', 600, 800, 0.05, 0.1, 'linear'),
+};
+
+// --- Sprite Drawing Functions ---
+function drawPlayer(x, y, dir, frame, attacking) {
+  ctx.save();
+  ctx.translate(x + TILE/2, y + TILE/2);
+
+  // Body
+  const bodyColor = '#4a90d9';
+  const skinColor = '#ffd5b0';
+  const hairColor = '#5c3317';
+
+  // Legs with walk animation
+  const legOff = player.moving ? Math.sin(frame * 0.3) * 4 : 0;
+  ctx.fillStyle = '#2a5080';
+  ctx.fillRect(-6, 4, 5, 12 + legOff);
+  ctx.fillRect(1, 4, 5, 12 - legOff);
+
+  // Body
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(-8, -6, 16, 12);
+
+  // Head
+  ctx.fillStyle = skinColor;
+  ctx.beginPath();
+  ctx.arc(0, -10, 7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hair
+  ctx.fillStyle = hairColor;
+  ctx.fillRect(-7, -17, 14, 5);
+
+  // Eyes based on direction
+  ctx.fillStyle = '#222';
+  if (dir === 0) { // down
+    ctx.fillRect(-4, -11, 2, 2);
+    ctx.fillRect(2, -11, 2, 2);
+  } else if (dir === 3) { // up
+    // back of head, no eyes
+  } else {
+    const ex = dir === 2 ? 3 : -5;
+    ctx.fillRect(ex, -11, 2, 2);
+  }
+
+  // Attack swing
+  if (attacking) {
+    ctx.fillStyle = '#aaa';
+    ctx.save();
+    const angle = [Math.PI/2, Math.PI, 0, -Math.PI/2][dir];
+    ctx.rotate(angle + Math.sin(player.attackTimer * 0.5) * 0.8);
+    ctx.fillRect(8, -2, 14, 3);
+    ctx.fillStyle = '#ccc';
+    ctx.fillRect(18, -3, 5, 5);
+    ctx.restore();
+  }
+
+  // Invincibility flash
+  if (player.invincible > 0 && Math.floor(player.invincible / 4) % 2) {
+    ctx.globalAlpha = 0.3;
+  }
+
+  ctx.restore();
+}
+
+function drawSlime(x, y, color, jumpY, frame, hp, maxHp) {
+  ctx.save();
+  ctx.translate(x + TILE/2, y + TILE/2 + jumpY);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(0, 14 - jumpY, 10, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body (squish when landing)
+  const squish = jumpY === 0 ? 1.2 : 0.9;
+  const stretch = jumpY === 0 ? 0.85 : 1.1;
+
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 11 * squish, 10 * stretch, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Shine
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(-4, -3, 4, 3, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(-4, 0, 3, 0, Math.PI * 2);
+  ctx.arc(4, 0, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(-3, 1, 1.5, 0, Math.PI * 2);
+  ctx.arc(5, 1, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mouth
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 4, 3, 0.1, Math.PI - 0.1);
+  ctx.stroke();
+
+  // HP bar if damaged
+  if (hp < maxHp) {
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-12, -18, 24, 4);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(-12, -18, 24 * (hp / maxHp), 4);
+  }
+
+  ctx.restore();
+}
+
+function drawTree(x, y) {
+  // Trunk
+  ctx.fillStyle = '#5c3317';
+  ctx.fillRect(x + 12, y + 16, 8, 16);
+  // Leaves
+  ctx.fillStyle = '#228b22';
+  ctx.beginPath();
+  ctx.arc(x + 16, y + 12, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2ecc40';
+  ctx.beginPath();
+  ctx.arc(x + 14, y + 8, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawShopExterior(x, y, color, name) {
+  // Building
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, TILE * 3, TILE * 2);
+  // Roof
+  ctx.fillStyle = '#8B4513';
+  ctx.beginPath();
+  ctx.moveTo(x - 4, y);
+  ctx.lineTo(x + TILE * 1.5, y - 16);
+  ctx.lineTo(x + TILE * 3 + 4, y);
+  ctx.closePath();
+  ctx.fill();
+  // Door
+  ctx.fillStyle = '#5c3317';
+  ctx.fillRect(x + TILE + 4, y + TILE, TILE - 8, TILE);
+  // Door knob
+  ctx.fillStyle = '#ffd700';
+  ctx.beginPath();
+  ctx.arc(x + TILE + TILE - 12, y + TILE + 16, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Sign
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(name, x + TILE * 1.5, y + 14);
+  ctx.textAlign = 'left';
+  // Windows
+  ctx.fillStyle = 'rgba(135,206,235,0.5)';
+  ctx.fillRect(x + 6, y + 8, 16, 12);
+  ctx.fillRect(x + TILE * 2 + 10, y + 8, 16, 12);
+}
+
+function drawShelf(x, y, items) {
+  // Shelf unit
+  ctx.fillStyle = '#8B6914';
+  ctx.fillRect(x, y, TILE * 2, TILE);
+  // Shelves
+  ctx.fillStyle = '#a0782c';
+  ctx.fillRect(x, y + 10, TILE * 2, 3);
+  ctx.fillRect(x, y + 22, TILE * 2, 3);
+  // Items on shelves
+  items.forEach((item, i) => {
+    const ix = x + 8 + (i % 3) * 18;
+    const iy = y + (i < 3 ? 2 : 14);
+    ctx.fillStyle = item.color;
+    if (item.shape === 'potion') {
+      ctx.beginPath();
+      ctx.arc(ix + 4, iy + 5, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ccc';
+      ctx.fillRect(ix + 2, iy, 4, 3);
+    } else if (item.shape === 'sword') {
+      ctx.fillRect(ix + 3, iy, 2, 10);
+      ctx.fillStyle = '#a0782c';
+      ctx.fillRect(ix, iy + 7, 8, 2);
+    } else if (item.shape === 'shield') {
+      ctx.beginPath();
+      ctx.moveTo(ix + 4, iy);
+      ctx.lineTo(ix + 9, iy + 3);
+      ctx.lineTo(ix + 4, iy + 10);
+      ctx.lineTo(ix - 1, iy + 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+}
+
+function drawNPC(x, y, color, hatColor) {
+  ctx.save();
+  ctx.translate(x + TILE/2, y + TILE/2);
+  // Body
+  ctx.fillStyle = color;
+  ctx.fillRect(-7, -4, 14, 12);
+  // Head
+  ctx.fillStyle = '#ffd5b0';
+  ctx.beginPath();
+  ctx.arc(0, -8, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // Hat
+  ctx.fillStyle = hatColor;
+  ctx.fillRect(-8, -15, 16, 5);
+  ctx.fillRect(-5, -18, 10, 5);
+  // Eyes
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-3, -9, 2, 2);
+  ctx.fillRect(2, -9, 2, 2);
+  // Legs
+  ctx.fillStyle = '#333';
+  ctx.fillRect(-5, 8, 4, 8);
+  ctx.fillRect(1, 8, 4, 8);
+  ctx.restore();
+}
+
+// --- Map Data ---
+// Tile types: 0=grass, 1=path, 2=wall, 3=tree, 4=water, 5=door, 6=flowers
+// 10=floor, 11=shop_wall, 12=counter, 13=shelf, 14=exit_door, 15=rug
+
+// [STATUS] Building maps...
+const MAPS = {
+  overworld: {
+    tiles: [
+      [3,3,3,0,0,0,0,3,3,3,3,3,0,0,0,0,3,3,3,3],
+      [3,0,0,0,6,0,0,0,0,1,1,0,0,0,6,0,0,0,0,3],
+      [0,0,6,0,0,0,0,0,0,1,1,0,0,0,0,0,0,6,0,0],
+      [0,0,0,2,2,2,0,0,0,1,1,0,0,2,2,2,0,0,0,0],
+      [0,0,0,2,2,2,0,0,1,1,1,1,0,2,2,2,0,0,0,0],
+      [0,0,0,2,5,2,0,0,1,1,1,1,0,2,5,2,0,0,0,0],
+      [0,0,0,0,1,0,0,1,1,0,0,1,1,0,1,0,0,0,0,0],
+      [0,6,0,0,1,1,1,1,0,0,0,0,1,1,1,0,0,6,0,0],
+      [0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0],
+      [0,0,0,0,0,0,1,0,0,2,2,2,0,1,0,0,0,0,0,0],
+      [0,0,6,0,0,0,1,0,0,2,2,2,0,1,0,0,0,6,0,0],
+      [0,0,0,0,0,0,1,1,0,2,5,2,0,1,1,0,0,0,0,0],
+      [3,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,3],
+      [3,0,0,0,6,0,0,0,0,1,1,0,0,0,0,0,6,0,0,3],
+      [3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3],
+    ],
+    shops: [
+      { x: 3, y: 3, w: 3, h: 3, name: 'WEAPONS', color: '#7a3b3b', doorX: 4, doorY: 5, target: 'weapon_shop' },
+      { x: 13, y: 3, w: 3, h: 3, name: 'POTIONS', color: '#3b5a7a', doorX: 14, doorY: 5, target: 'potion_shop' },
+      { x: 9, y: 9, w: 3, h: 3, name: 'ARMOR', color: '#4a6a3b', doorX: 10, doorY: 11, target: 'armor_shop' },
+    ],
+    slimeSpawns: [
+      { x: 1, y: 7 }, { x: 17, y: 2 }, { x: 6, y: 13 }, { x: 15, y: 12 },
+      { x: 2, y: 10 }, { x: 18, y: 8 }, { x: 7, y: 1 }, { x: 12, y: 13 },
+    ],
+    npcs: [
+      { x: 8, y: 7, color: '#d35400', hat: '#c0392b', lines: ['Welcome to Slime Town!', 'Watch out for slimes!', 'Visit the shops nearby.'] },
+      { x: 11, y: 7, color: '#8e44ad', hat: '#2c3e50', lines: ['Kill slimes for gold!', 'Press SPACE to attack.', 'E to interact with shops.'] },
+    ],
+  },
+  weapon_shop: {
+    tiles: [
+      [11,11,11,11,11,11,11,11,11,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,10,13,13,10,10,13,13,10,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,10,10,10,15,15,10,10,10,11],
+      [11,10,10,10,15,15,10,10,10,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,11,11,11,14,14,11,11,11,11],
+    ],
+    shopkeeper: { x: 4, y: 3, color: '#c0392b', hat: '#e74c3c' },
+    items: [
+      { name: 'Iron Sword', price: 30, stat: 'attack', value: 2, color: '#aaa', shape: 'sword' },
+      { name: 'Steel Sword', price: 80, stat: 'attack', value: 4, color: '#ccc', shape: 'sword' },
+      { name: 'Fire Blade', price: 200, stat: 'attack', value: 7, color: '#e74c3c', shape: 'sword' },
+    ],
+    exitDoor: { x: 4, y: 7, target: 'overworld', px: 4, py: 6 },
+    exitDoor2: { x: 5, y: 7, target: 'overworld', px: 4, py: 6 },
+    cols: 10, rows: 8,
+  },
+  potion_shop: {
+    tiles: [
+      [11,11,11,11,11,11,11,11,11,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,10,13,13,10,10,13,13,10,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,10,10,10,15,15,10,10,10,11],
+      [11,10,10,10,15,15,10,10,10,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,11,11,11,14,14,11,11,11,11],
+    ],
+    shopkeeper: { x: 5, y: 3, color: '#2980b9', hat: '#3498db' },
+    items: [
+      { name: 'Small Potion', price: 15, stat: 'heal', value: 3, color: '#e74c3c', shape: 'potion' },
+      { name: 'Med Potion', price: 40, stat: 'heal', value: 6, color: '#e67e22', shape: 'potion' },
+      { name: 'Max Potion', price: 100, stat: 'heal', value: 10, color: '#f1c40f', shape: 'potion' },
+    ],
+    exitDoor: { x: 4, y: 7, target: 'overworld', px: 14, py: 6 },
+    exitDoor2: { x: 5, y: 7, target: 'overworld', px: 14, py: 6 },
+    cols: 10, rows: 8,
+  },
+  armor_shop: {
+    tiles: [
+      [11,11,11,11,11,11,11,11,11,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,10,13,13,10,10,13,13,10,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,10,10,10,15,15,10,10,10,11],
+      [11,10,10,10,15,15,10,10,10,11],
+      [11,10,10,10,10,10,10,10,10,11],
+      [11,11,11,11,14,14,11,11,11,11],
+    ],
+    shopkeeper: { x: 4, y: 3, color: '#27ae60', hat: '#2ecc71' },
+    items: [
+      { name: 'Leather Vest', price: 25, stat: 'defense', value: 1, color: '#8B6914', shape: 'shield' },
+      { name: 'Chain Mail', price: 70, stat: 'defense', value: 3, color: '#aaa', shape: 'shield' },
+      { name: 'Plate Armor', price: 180, stat: 'defense', value: 6, color: '#ccc', shape: 'shield' },
+    ],
+    exitDoor: { x: 4, y: 7, target: 'overworld', px: 10, py: 12 },
+    exitDoor2: { x: 5, y: 7, target: 'overworld', px: 10, py: 12 },
+    cols: 10, rows: 8,
+  },
+};
+
+// --- Slimes ---
+let slimes = [];
+let particles = [];
+let goldPickups = [];
+let floatingTexts = [];
+let dialogBox = null;
+let shopMenu = null;
+
+function spawnSlimes() {
+  slimes = [];
+  const spawns = MAPS.overworld.slimeSpawns;
+  const colors = ['#32cd32', '#9b59b6', '#e74c3c', '#3498db', '#f39c12'];
+  spawns.forEach((s, i) => {
+    slimes.push({
+      x: s.x, y: s.y,
+      px: 0, py: 0,
+      color: colors[i % colors.length],
+      hp: 3 + Math.floor(i / 3) * 2,
+      maxHp: 3 + Math.floor(i / 3) * 2,
+      jumpTimer: Math.random() * 60,
+      jumpY: 0,
+      moveTimer: Math.random() * 120,
+      dir: Math.floor(Math.random() * 4),
+      goldDrop: 5 + Math.floor(Math.random() * 10),
+      alive: true,
+      frame: 0,
+    });
+  });
+}
+
+function resetGame() {
+  player.x = 9; player.y = 12;
+  player.px = 0; player.py = 0;
+  player.hp = 10; player.maxHp = 10;
+  player.gold = 50;
+  player.attack = 2; player.defense = 0;
+  player.speed = 3;
+  player.inventory = [];
+  player.equipped = { weapon: null, armor: null };
+  player.invincible = 0;
+  player.attackTimer = 0;
+  currentMap = 'overworld';
+  spawnSlimes();
+  particles = [];
+  goldPickups = [];
+  floatingTexts = [];
+  dialogBox = null;
+  shopMenu = null;
+  slimeRespawnTimer = 0;
+}
+
+let slimeRespawnTimer = 0;
+
+// --- Tile rendering ---
+function drawTile(type, x, y) {
+  const px = x * TILE;
+  const py = y * TILE;
+
+  switch (type) {
+    case 0: // grass
+      ctx.fillStyle = '#4a8c3f';
+      ctx.fillRect(px, py, TILE, TILE);
+      // Grass detail
+      ctx.fillStyle = '#5a9c4f';
+      for (let i = 0; i < 3; i++) {
+        const gx = px + ((x * 7 + y * 13 + i * 17) % 24) + 4;
+        const gy = py + ((x * 11 + y * 7 + i * 23) % 24) + 4;
+        ctx.fillRect(gx, gy, 2, 4);
+      }
+      break;
+    case 1: // path
+      ctx.fillStyle = '#c4a46c';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#b89860';
+      ctx.fillRect(px + 2, py + 2, 6, 4);
+      ctx.fillRect(px + 18, py + 16, 8, 6);
+      break;
+    case 2: // wall
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.strokeStyle = '#6B5335';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+      break;
+    case 3: // tree (drawn separately)
+      ctx.fillStyle = '#4a8c3f';
+      ctx.fillRect(px, py, TILE, TILE);
+      break;
+    case 4: // water
+      ctx.fillStyle = '#2980b9';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#3498db';
+      const waveOff = Math.sin(Date.now() / 500 + x) * 3;
+      ctx.fillRect(px, py + 12 + waveOff, TILE, 4);
+      break;
+    case 5: // door (overworld)
+      ctx.fillStyle = '#c4a46c';
+      ctx.fillRect(px, py, TILE, TILE);
+      break;
+    case 6: // flowers
+      ctx.fillStyle = '#4a8c3f';
+      ctx.fillRect(px, py, TILE, TILE);
+      const flowerColors = ['#e74c3c', '#f1c40f', '#e67e22', '#9b59b6'];
+      for (let i = 0; i < 4; i++) {
+        ctx.fillStyle = flowerColors[(x + y + i) % 4];
+        const fx = px + ((x * 7 + i * 11) % 24) + 4;
+        const fy = py + ((y * 9 + i * 13) % 24) + 4;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    case 10: // floor
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#7B6345';
+      ctx.fillRect(px, py, TILE, 1);
+      ctx.fillRect(px, py, 1, TILE);
+      break;
+    case 11: // shop wall
+      ctx.fillStyle = '#5a4a3a';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.strokeStyle = '#4a3a2a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+      break;
+    case 12: // counter
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#a0782c';
+      ctx.fillRect(px, py + 8, TILE, TILE - 8);
+      break;
+    case 13: // shelf
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(px, py, TILE, TILE);
+      break;
+    case 14: // exit door
+      ctx.fillStyle = '#5c3317';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText('EXIT', px + 4, py + 20);
+      break;
+    case 15: // rug
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.fillStyle = '#9b3b3b';
+      ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+      ctx.fillStyle = '#b84c4c';
+      ctx.fillRect(px + 6, py + 6, TILE - 12, TILE - 12);
+      break;
+  }
+}
+
+function isSolid(map, tx, ty) {
+  const mapData = MAPS[map];
+  const tiles = mapData.tiles;
+  const cols = mapData.cols || COLS;
+  const rows = mapData.rows || ROWS;
+
+  if (tx < 0 || ty < 0 || tx >= cols || ty >= rows) return true;
+
+  const tile = tiles[ty][tx];
+  // Solid: wall, tree, shop_wall, shelf, water
+  return [2, 3, 4, 11, 13].includes(tile);
+}
+
+// --- Shop system ---
+function getShopAtDoor() {
+  if (currentMap !== 'overworld') return null;
+  for (const shop of MAPS.overworld.shops) {
+    if (player.x === shop.doorX && player.y === shop.doorY + 1) {
+      return shop;
+    }
+  }
+  return null;
+}
+
+function checkExitDoor() {
+  const mapData = MAPS[currentMap];
+  if (!mapData.exitDoor) return null;
+
+  const ed = mapData.exitDoor;
+  const ed2 = mapData.exitDoor2;
+  if ((player.x === ed.x && player.y === ed.y) ||
+      (ed2 && player.x === ed2.x && player.y === ed2.y)) {
+    return ed;
+  }
+  return null;
+}
+
+function openShopMenu() {
+  const mapData = MAPS[currentMap];
+  if (!mapData.items) return;
+
+  shopMenu = {
+    items: mapData.items,
+    selected: 0,
+    justOpened: true,
+  };
+}
+
+function buyItem(item) {
+  if (player.gold < item.price) {
+    addFloatingText(W/2, H/2, 'Not enough gold!', '#e74c3c');
+    SND.hurt();
+    return;
+  }
+
+  player.gold -= item.price;
+  SND.buy();
+
+  if (item.stat === 'heal') {
+    player.hp = Math.min(player.maxHp, player.hp + item.value);
+    addFloatingText(W/2, H/2, `+${item.value} HP!`, '#2ecc71');
+  } else if (item.stat === 'attack') {
+    player.attack = Math.max(player.attack, item.value);
+    player.equipped.weapon = item.name;
+    addFloatingText(W/2, H/2, `ATK = ${item.value}!`, '#e74c3c');
+  } else if (item.stat === 'defense') {
+    player.defense = Math.max(player.defense, item.value);
+    player.equipped.armor = item.name;
+    addFloatingText(W/2, H/2, `DEF = ${item.value}!`, '#3498db');
+  }
+
+  player.inventory.push(item.name);
+}
+
+function addFloatingText(x, y, text, color) {
+  floatingTexts.push({ x, y, text, color, timer: 60 });
+}
+
+function addParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4 - 2,
+      life: 20 + Math.random() * 20,
+      color,
+      size: 2 + Math.random() * 3,
+    });
+  }
+}
+
+// --- Update ---
+let lastTime = 0;
+let frame = 0;
+
+function update(dt) {
+  frame++;
+
+  if (state === STATE.TITLE || state === STATE.GAMEOVER) {
+    if (keys[' '] || keys['Enter'] || touchAction) {
+      if (state === STATE.GAMEOVER) resetGame();
+      state = STATE.PLAY;
+      touchAction = null;
+    }
+    return;
+  }
+
+  if (state !== STATE.PLAY) return;
+
+  // Transition
+  if (transitionTimer > 0) {
+    transitionTimer--;
+    if (transitionTimer === 15) {
+      // Switch map at midpoint
+      currentMap = transitionTarget;
+      player.x = transitionPlayerPos.x;
+      player.y = transitionPlayerPos.y;
+      player.px = 0; player.py = 0;
+      dialogBox = null;
+      shopMenu = null;
+    }
+    return;
+  }
+
+  // Dialog
+  if (dialogBox) {
+    if (keys[' '] || keys['e'] || keys['E'] || keys['Enter'] || touchAction) {
+      dialogBox.lineIndex++;
+      if (dialogBox.lineIndex >= dialogBox.lines.length) {
+        dialogBox = null;
+      }
+      keys[' '] = false;
+      keys['e'] = false;
+      keys['E'] = false;
+      keys['Enter'] = false;
+      touchAction = null;
+      SND.select();
+    }
+    return;
+  }
+
+  // Shop menu
+  if (shopMenu) {
+    if (shopMenu.justOpened) {
+      shopMenu.justOpened = false;
+      keys['e'] = false;
+      keys['E'] = false;
+      keys[' '] = false;
+      return;
+    }
+
+    if (keys['ArrowUp'] || keys['w'] || keys['W'] || touchDir === 'up') {
+      shopMenu.selected = (shopMenu.selected - 1 + shopMenu.items.length + 1) % (shopMenu.items.length + 1);
+      keys['ArrowUp'] = false; keys['w'] = false; keys['W'] = false;
+      touchDir = null;
+      SND.select();
+    }
+    if (keys['ArrowDown'] || keys['s'] || keys['S'] || touchDir === 'down') {
+      shopMenu.selected = (shopMenu.selected + 1) % (shopMenu.items.length + 1);
+      keys['ArrowDown'] = false; keys['s'] = false; keys['S'] = false;
+      touchDir = null;
+      SND.select();
+    }
+    if (keys[' '] || keys['e'] || keys['E'] || keys['Enter'] || touchAction) {
+      if (shopMenu.selected < shopMenu.items.length) {
+        buyItem(shopMenu.items[shopMenu.selected]);
+      } else {
+        shopMenu = null;
+      }
+      keys[' '] = false; keys['e'] = false; keys['E'] = false; keys['Enter'] = false;
+      touchAction = null;
+    }
+    if (keys['Escape'] || keys['q'] || keys['Q']) {
+      shopMenu = null;
+      keys['Escape'] = false;
+    }
+    return;
+  }
+
+  // Player attack
+  if (player.attackTimer > 0) {
+    player.attackTimer--;
+  }
+
+  if ((keys[' '] || touchAction === 'action') && player.attackTimer === 0 && currentMap === 'overworld') {
+    player.attackTimer = 12;
+    SND.attack();
+
+    // Check slime hits
+    const dirs = [[0,1],[-1,0],[1,0],[0,-1]];
+    const d = dirs[player.dir];
+    const ax = player.x + d[0];
+    const ay = player.y + d[1];
+
+    slimes.forEach(s => {
+      if (s.alive && s.x === ax && s.y === ay) {
+        const dmg = player.attack;
+        s.hp -= dmg;
+        addFloatingText(s.x * TILE + TILE/2, s.y * TILE, `-${dmg}`, '#ff6b6b');
+        addParticles(s.x * TILE + TILE/2, s.y * TILE + TILE/2, s.color, 8);
+        SND.hit();
+
+        if (s.hp <= 0) {
+          s.alive = false;
+          addParticles(s.x * TILE + TILE/2, s.y * TILE + TILE/2, s.color, 15);
+          addFloatingText(s.x * TILE + TILE/2, s.y * TILE - 10, `+${s.goldDrop}g`, '#ffd700');
+          player.gold += s.goldDrop;
+          SND.coin();
+        }
+      }
+    });
+
+    keys[' '] = false;
+    touchAction = null;
+  }
+
+  // Interact (E key)
+  if (keys['e'] || keys['E']) {
+    keys['e'] = false;
+    keys['E'] = false;
+
+    if (currentMap === 'overworld') {
+      // Check NPCs
+      const dirs = [[0,1],[-1,0],[1,0],[0,-1]];
+      const d = dirs[player.dir];
+      const ix = player.x + d[0];
+      const iy = player.y + d[1];
+
+      for (const npc of MAPS.overworld.npcs) {
+        if (npc.x === ix && npc.y === iy) {
+          dialogBox = { lines: npc.lines, lineIndex: 0 };
+          SND.select();
+          break;
+        }
+      }
+
+      // Check shop doors
+      const shop = getShopAtDoor();
+      if (shop) {
+        transitionTimer = 30;
+        transitionTarget = shop.target;
+        transitionPlayerPos = { x: 4, y: 6 };
+        SND.door();
+      }
+    } else {
+      // In shop - check if near shopkeeper
+      const mapData = MAPS[currentMap];
+      if (mapData.shopkeeper) {
+        const sk = mapData.shopkeeper;
+        const dx = Math.abs(player.x - sk.x);
+        const dy = Math.abs(player.y - sk.y);
+        if (dx + dy <= 2) {
+          openShopMenu();
+          SND.select();
+        }
+      }
+
+      // Check exit
+      const exit = checkExitDoor();
+      if (exit) {
+        transitionTimer = 30;
+        transitionTarget = exit.target;
+        transitionPlayerPos = { x: exit.px, y: exit.py };
+        SND.door();
+      }
+    }
+  }
+
+  // Player movement
+  player.invincible = Math.max(0, player.invincible - 1);
+  player.animTimer++;
+
+  let dx = 0, dy = 0;
+  if (keys['ArrowLeft'] || keys['a'] || keys['A'] || touchDir === 'left') { dx = -1; player.dir = 1; }
+  if (keys['ArrowRight'] || keys['d'] || keys['D'] || touchDir === 'right') { dx = 1; player.dir = 2; }
+  if (keys['ArrowUp'] || keys['w'] || keys['W'] || touchDir === 'up') { dy = -1; player.dir = 3; }
+  if (keys['ArrowDown'] || keys['s'] || keys['S'] || touchDir === 'down') { dy = 1; player.dir = 0; }
+
+  if (dx !== 0 || dy !== 0) {
+    player.moving = true;
+    player.animFrame++;
+    const nx = player.x + dx;
+    const ny = player.y + dy;
+
+    // Check slime collision for movement blocking
+    const slimeBlocking = slimes.some(s => s.alive && s.x === nx && s.y === ny);
+
+    if (!isSolid(currentMap, nx, ny) && !slimeBlocking) {
+      // Auto-enter door when stepping on it (overworld)
+      if (currentMap === 'overworld') {
+        for (const shop of MAPS.overworld.shops) {
+          if (nx === shop.doorX && ny === shop.doorY) {
+            transitionTimer = 30;
+            transitionTarget = shop.target;
+            transitionPlayerPos = { x: 4, y: 6 };
+            SND.door();
+            return;
+          }
+        }
+      }
+
+      // Auto-exit when stepping on exit door
+      if (currentMap !== 'overworld') {
+        const mapData = MAPS[currentMap];
+        const ed = mapData.exitDoor;
+        const ed2 = mapData.exitDoor2;
+        if ((nx === ed.x && ny === ed.y) || (ed2 && nx === ed2.x && ny === ed2.y)) {
+          transitionTimer = 30;
+          transitionTarget = ed.target;
+          transitionPlayerPos = { x: ed.px, y: ed.py };
+          SND.door();
+          return;
+        }
+      }
+
+      player.x = nx;
+      player.y = ny;
+    }
+  } else {
+    player.moving = false;
+  }
+
+  // Update slimes (only on overworld)
+  if (currentMap === 'overworld') {
+    slimes.forEach(s => {
+      if (!s.alive) return;
+      s.frame++;
+
+      // Jump animation
+      s.jumpTimer++;
+      if (s.jumpTimer > 40 + Math.random() * 20) {
+        s.jumpTimer = 0;
+        SND.jump();
+      }
+      if (s.jumpTimer < 15) {
+        s.jumpY = -Math.sin(s.jumpTimer / 15 * Math.PI) * 12;
+      } else {
+        s.jumpY = 0;
+      }
+
+      // Movement
+      s.moveTimer++;
+      if (s.moveTimer > 60 + Math.random() * 60) {
+        s.moveTimer = 0;
+        s.dir = Math.floor(Math.random() * 4);
+        const dirs = [[0,1],[-1,0],[1,0],[0,-1]];
+        const d = dirs[s.dir];
+        const nx = s.x + d[0];
+        const ny = s.y + d[1];
+        const slimeBlocking = slimes.some(o => o !== s && o.alive && o.x === nx && o.y === ny);
+        if (!isSolid('overworld', nx, ny) && !(nx === player.x && ny === player.y) && !slimeBlocking) {
+          s.x = nx;
+          s.y = ny;
+        }
+      }
+
+      // Damage player
+      if (s.x === player.x && s.y === player.y && player.invincible === 0) {
+        const dmg = Math.max(1, 2 - player.defense);
+        player.hp -= dmg;
+        player.invincible = 45;
+        addFloatingText(player.x * TILE + TILE/2, player.y * TILE, `-${dmg}`, '#e74c3c');
+        addParticles(player.x * TILE + TILE/2, player.y * TILE + TILE/2, '#e74c3c', 6);
+        SND.hurt();
+
+        if (player.hp <= 0) {
+          player.hp = 0;
+          state = STATE.GAMEOVER;
+          SND.death();
+        }
+      }
+    });
+
+    // Respawn slimes
+    slimeRespawnTimer++;
+    if (slimeRespawnTimer > 600) {
+      slimeRespawnTimer = 0;
+      const dead = slimes.filter(s => !s.alive);
+      if (dead.length > 0) {
+        const s = dead[0];
+        const spawn = MAPS.overworld.slimeSpawns[Math.floor(Math.random() * MAPS.overworld.slimeSpawns.length)];
+        s.x = spawn.x;
+        s.y = spawn.y;
+        s.hp = s.maxHp;
+        s.alive = true;
+      }
+    }
+  }
+
+  // Update particles
+  particles = particles.filter(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15;
+    p.life--;
+    p.size *= 0.97;
+    return p.life > 0;
+  });
+
+  // Update floating texts
+  floatingTexts = floatingTexts.filter(t => {
+    t.y -= 1;
+    t.timer--;
+    return t.timer > 0;
+  });
+}
+
+// --- Render ---
+// [STATUS] Assembling final game...
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (state === STATE.TITLE) {
+    renderTitle();
+    return;
+  }
+
+  if (state === STATE.GAMEOVER) {
+    renderGameOver();
+    return;
+  }
+
+  // --- HUD ---
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, W, HUD_H);
+
+  // HP bar
+  ctx.fillStyle = '#333';
+  ctx.fillRect(8, 8, 100, 12);
+  ctx.fillStyle = player.hp > 3 ? '#e74c3c' : '#ff0000';
+  ctx.fillRect(8, 8, 100 * (player.hp / player.maxHp), 12);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(8, 8, 100, 12);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px monospace';
+  ctx.fillText(`HP ${player.hp}/${player.maxHp}`, 12, 17);
+
+  // Gold
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(`💰 ${player.gold}`, 120, 17);
+
+  // Stats
+  ctx.fillStyle = '#aaa';
+  ctx.font = '9px monospace';
+  ctx.fillText(`ATK:${player.attack} DEF:${player.defense}`, 8, 36);
+
+  // Location
+  ctx.fillStyle = '#888';
+  ctx.font = '9px monospace';
+  const locNames = { overworld: 'Slime Town', weapon_shop: 'Weapon Shop', potion_shop: 'Potion Shop', armor_shop: 'Armor Shop' };
+  ctx.textAlign = 'right';
+  ctx.fillText(locNames[currentMap], W - 8, 17);
+  ctx.textAlign = 'left';
+
+  // Equipped
+  ctx.fillStyle = '#777';
+  if (player.equipped.weapon) ctx.fillText(`⚔ ${player.equipped.weapon}`, 120, 36);
+  if (player.equipped.armor) ctx.fillText(`🛡 ${player.equipped.armor}`, 250, 36);
+
+  ctx.save();
+  ctx.translate(0, HUD_H);
+
+  const mapData = MAPS[currentMap];
+  const tiles = mapData.tiles;
+  const cols = mapData.cols || COLS;
+  const rows = mapData.rows || ROWS;
+
+  // Camera offset for shop interiors (center them)
+  let camX = 0, camY = 0;
+  if (currentMap !== 'overworld') {
+    camX = (W - cols * TILE) / 2;
+    camY = (H - rows * TILE) / 2;
+    ctx.translate(camX, camY);
+  }
+
+  // Draw tiles
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      drawTile(tiles[y][x], x, y);
+    }
+  }
+
+  // Draw trees (overworld only, on top of grass)
+  if (currentMap === 'overworld') {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (tiles[y][x] === 3) drawTree(x * TILE, y * TILE);
+      }
+    }
+
+    // Draw shops
+    for (const shop of MAPS.overworld.shops) {
+      drawShopExterior(shop.x * TILE, shop.y * TILE, shop.color, shop.name);
+    }
+
+    // Draw NPCs
+    for (const npc of MAPS.overworld.npcs) {
+      drawNPC(npc.x * TILE, npc.y * TILE, npc.color, npc.hat);
+    }
+
+    // Draw slimes
+    slimes.forEach(s => {
+      if (s.alive) {
+        drawSlime(s.x * TILE, s.y * TILE, s.color, s.jumpY, s.frame, s.hp, s.maxHp);
+      }
+    });
+  } else {
+    // Shop interiors
+    // Draw shelves with items
+    if (mapData.items) {
+      // Left shelves
+      drawShelf(2 * TILE, 2 * TILE, mapData.items.slice(0, 2));
+      // Right shelves
+      drawShelf(6 * TILE, 2 * TILE, mapData.items.slice(1));
+    }
+
+    // Shopkeeper
+    if (mapData.shopkeeper) {
+      const sk = mapData.shopkeeper;
+      drawNPC(sk.x * TILE, sk.y * TILE, sk.color, sk.hat);
+      // Speech bubble hint
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Press E to buy', sk.x * TILE + TILE/2, sk.y * TILE - 8);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  // Draw player
+  const attacking = player.attackTimer > 0;
+  if (player.invincible === 0 || Math.floor(player.invincible / 3) % 2 === 0) {
+    drawPlayer(player.x * TILE, player.y * TILE, player.dir, player.animFrame, attacking);
+  }
+
+  // Draw interaction hint
+  if (currentMap === 'overworld') {
+    const shop = getShopAtDoor();
+    if (shop) {
+      ctx.fillStyle = 'rgba(255,255,200,0.9)';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Press E or walk in', player.x * TILE + TILE/2, player.y * TILE - 8);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  // Particles
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+
+  // Floating texts
+  floatingTexts.forEach(t => {
+    ctx.globalAlpha = t.timer / 60;
+    ctx.fillStyle = t.color;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(t.text, t.x, t.y);
+    ctx.textAlign = 'left';
+  });
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+
+  // Dialog box
+  if (dialogBox && dialogBox.lineIndex < dialogBox.lines.length) {
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(20, H + HUD_H - 70, W - 40, 60);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, H + HUD_H - 70, W - 40, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px monospace';
+    ctx.fillText(dialogBox.lines[dialogBox.lineIndex], 36, H + HUD_H - 42);
+    ctx.fillStyle = '#888';
+    ctx.font = '9px monospace';
+    ctx.fillText('[SPACE/E to continue]', 36, H + HUD_H - 20);
+  }
+
+  // Shop menu
+  if (shopMenu) {
+    const menuW = 260;
+    const menuH = 40 + shopMenu.items.length * 36 + 36;
+    const mx = (W - menuW) / 2;
+    const my = HUD_H + (H - menuH) / 2;
+
+    ctx.fillStyle = 'rgba(20,15,30,0.95)';
+    ctx.fillRect(mx, my, menuW, menuH);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mx, my, menuW, menuH);
+
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('~ SHOP ~', mx + menuW/2, my + 22);
+    ctx.textAlign = 'left';
+
+    shopMenu.items.forEach((item, i) => {
+      const iy = my + 36 + i * 36;
+      const selected = shopMenu.selected === i;
+
+      if (selected) {
+        ctx.fillStyle = 'rgba(255,215,0,0.15)';
+        ctx.fillRect(mx + 8, iy - 2, menuW - 16, 30);
+      }
+
+      ctx.fillStyle = selected ? '#fff' : '#aaa';
+      ctx.font = '11px monospace';
+      ctx.fillText(`${selected ? '▶ ' : '  '}${item.name}`, mx + 14, iy + 14);
+
+      ctx.fillStyle = player.gold >= item.price ? '#ffd700' : '#e74c3c';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${item.price}g`, mx + menuW - 14, iy + 14);
+      ctx.textAlign = 'left';
+
+      // Stat preview
+      ctx.fillStyle = '#888';
+      ctx.font = '9px monospace';
+      if (item.stat === 'heal') {
+        ctx.fillText(`+${item.value} HP`, mx + 140, iy + 14);
+      } else if (item.stat === 'attack') {
+        ctx.fillText(`ATK ${item.value}`, mx + 140, iy + 14);
+      } else if (item.stat === 'defense') {
+        ctx.fillText(`DEF ${item.value}`, mx + 140, iy + 14);
+      }
+    });
+
+    // Leave option
+    const leaveY = my + 36 + shopMenu.items.length * 36;
+    const leaveSelected = shopMenu.selected === shopMenu.items.length;
+    if (leaveSelected) {
+      ctx.fillStyle = 'rgba(255,215,0,0.15)';
+      ctx.fillRect(mx + 8, leaveY - 2, menuW - 16, 30);
+    }
+    ctx.fillStyle = leaveSelected ? '#fff' : '#888';
+    ctx.font = '11px monospace';
+    ctx.fillText(`${leaveSelected ? '▶ ' : '  '}Leave`, mx + 14, leaveY + 14);
+
+    // Gold display
+    ctx.fillStyle = '#ffd700';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Your gold: ${player.gold}`, mx + menuW/2, my + menuH - 6);
+    ctx.textAlign = 'left';
+  }
+
+  // Transition effect
+  if (transitionTimer > 0) {
+    const alpha = transitionTimer > 15
+      ? (30 - transitionTimer) / 15
+      : transitionTimer / 15;
+    ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+    ctx.fillRect(0, 0, W, H + HUD_H);
+  }
+}
+
+function renderTitle() {
+  // Background
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, W, H + HUD_H);
+
+  // Stars
+  for (let i = 0; i < 50; i++) {
+    const sx = ((i * 73 + 17) % W);
+    const sy = ((i * 41 + 29) % (H + HUD_H));
+    const bright = 0.3 + Math.sin(frame * 0.02 + i) * 0.3;
+    ctx.fillStyle = `rgba(255,255,255,${bright})`;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+
+  // Title
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 32px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('SLIME TOWN', W/2, 120);
+
+  ctx.fillStyle = '#4a8c3f';
+  ctx.font = '14px monospace';
+  ctx.fillText('~ An RPG Adventure ~', W/2, 155);
+
+  // Draw decorative slimes
+  const t = frame * 0.05;
+  drawSlime(W/2 - 80, 180, '#32cd32', -Math.abs(Math.sin(t)) * 15, frame, 3, 3);
+  drawSlime(W/2 + 40, 190, '#9b59b6', -Math.abs(Math.sin(t + 1)) * 15, frame, 3, 3);
+  drawSlime(W/2 - 20, 185, '#e74c3c', -Math.abs(Math.sin(t + 2)) * 15, frame, 3, 3);
+
+  // Controls
+  ctx.fillStyle = '#aaa';
+  ctx.font = '11px monospace';
+  const controls = [
+    'WASD / Arrows — Move',
+    'SPACE — Attack slimes',
+    'E — Talk / Enter shops / Buy',
+    'ESC — Close shop menu',
+  ];
+  controls.forEach((line, i) => {
+    ctx.fillText(line, W/2, 270 + i * 20);
+  });
+
+  // Start prompt
+  ctx.fillStyle = `rgba(255,255,255,${0.5 + Math.sin(frame * 0.08) * 0.5})`;
+  ctx.font = 'bold 14px monospace';
+  ctx.fillText('Press SPACE or ENTER to start', W/2, H + HUD_H - 40);
+
+  ctx.textAlign = 'left';
+}
+
+function renderGameOver() {
+  ctx.fillStyle = 'rgba(20,0,0,0.9)';
+  ctx.fillRect(0, 0, W, H + HUD_H);
+
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 28px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('GAME OVER', W/2, (H + HUD_H)/2 - 30);
+
+  ctx.fillStyle = '#ffd700';
+  ctx.font = '13px monospace';
+  ctx.fillText(`Gold collected: ${player.gold}`, W/2, (H + HUD_H)/2 + 10);
+  ctx.fillText(`Items bought: ${player.inventory.length}`, W/2, (H + HUD_H)/2 + 30);
+
+  ctx.fillStyle = `rgba(255,255,255,${0.5 + Math.sin(frame * 0.08) * 0.5})`;
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText('Press SPACE to restart', W/2, (H + HUD_H)/2 + 70);
+
+  ctx.textAlign = 'left';
+}
+
+// --- Game Loop ---
+resetGame();
+
+function gameLoop(time) {
+  const dt = Math.min((time - lastTime) / 16.67, 3);
+  lastTime = time;
+
+  update(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

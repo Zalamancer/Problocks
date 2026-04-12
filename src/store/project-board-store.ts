@@ -6,6 +6,11 @@ import type {
   TaskStatus,
   TaskOverrides,
   AIOutput,
+  ActivityEntry,
+  ActivityEntryType,
+  Comment,
+  ResourceAttachment,
+  TeamMember,
   TemplateId,
   Template,
 } from '@/lib/templates/types';
@@ -52,19 +57,25 @@ export function selectCanCompleteMilestone(board: ProjectBoard, template: Templa
 
 interface ProjectBoardState {
   board: ProjectBoard | null;
+  teamMembers: TeamMember[];
+  setTeamMembers: (members: TeamMember[]) => void;
   initBoard: (templateId: TemplateId, projectId: string) => void;
   updateTaskStatus: (taskInstanceId: string, status: TaskStatus) => void;
   completeCurrentMilestone: () => void;
   assignTask: (taskInstanceId: string, userId: string) => void;
+  unassignTask: (taskInstanceId: string, userId: string) => void;
+  setTaskAssignees: (taskInstanceId: string, assigneeIds: string[]) => void;
   addAIOutput: (taskInstanceId: string, output: AIOutput) => void;
   updateTaskNotes: (taskInstanceId: string, notes: string) => void;
-  /** Merge a partial overrides patch into the task instance. Writing a value
-   *  that matches the template default still stores the override — use
-   *  `clearTaskOverride` to remove a single field. */
   setTaskOverride: (taskInstanceId: string, patch: Partial<TaskOverrides>) => void;
-  /** Remove a single override field so the task falls back to the template
-   *  default. */
   clearTaskOverride: (taskInstanceId: string, field: keyof TaskOverrides) => void;
+  setTaskDueDate: (taskInstanceId: string, dueDate: string | undefined) => void;
+  addComment: (taskInstanceId: string, comment: Comment) => void;
+  deleteComment: (taskInstanceId: string, commentId: string) => void;
+  addAttachment: (taskInstanceId: string, attachment: ResourceAttachment) => void;
+  removeAttachment: (taskInstanceId: string, attachmentId: string) => void;
+  updateTaskDescriptionBlocks: (taskInstanceId: string, blocks: unknown[]) => void;
+  updateTaskNoteBlocks: (taskInstanceId: string, blocks: unknown[]) => void;
   clearBoard: () => void;
 }
 
@@ -80,8 +91,32 @@ function mapTask(
   }));
 }
 
+// Private helper — append an activity entry to a task. Called internally
+// by the public actions so the activity log is populated automatically.
+function appendActivity(
+  milestones: MilestoneInstance[],
+  taskInstanceId: string,
+  type: ActivityEntryType,
+  details: Record<string, string>,
+  authorId = 'system',
+): MilestoneInstance[] {
+  const entry: ActivityEntry = {
+    id: crypto.randomUUID().slice(0, 12),
+    type,
+    authorId,
+    timestamp: new Date().toISOString(),
+    details,
+  };
+  return mapTask(milestones, taskInstanceId, (t) => ({
+    ...t,
+    activityLog: [...t.activityLog, entry],
+  }));
+}
+
 export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
   board: null,
+  teamMembers: [],
+  setTeamMembers: (members) => set({ teamMembers: members }),
 
   initBoard(templateId, projectId) {
     const template = TEMPLATES[templateId];
@@ -111,6 +146,9 @@ export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
             assigneeIds: [],
             notes: '',
             aiOutputs: [],
+            comments: [],
+            activityLog: [],
+            attachments: [],
           };
         });
 
@@ -179,7 +217,12 @@ export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
       }),
     }));
 
-    set({ board: { ...board, milestones: updatedMilestones } });
+    // Log activity for the status change
+    const withLog = appendActivity(updatedMilestones, taskInstanceId, 'status_change', {
+      from: board.milestones.flatMap((m) => m.tasks).find((t) => t.id === taskInstanceId)?.status ?? '',
+      to: status,
+    });
+    set({ board: { ...board, milestones: withLog } });
   },
 
   completeCurrentMilestone() {
@@ -264,6 +307,108 @@ export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
       delete next[field];
       return { ...t, overrides: Object.keys(next).length > 0 ? next : undefined };
     });
+    set({ board: { ...board, milestones } });
+  },
+
+  unassignTask(taskInstanceId, userId) {
+    const { board } = get();
+    if (!board) return;
+    let milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      assigneeIds: t.assigneeIds.filter((id) => id !== userId),
+    }));
+    milestones = appendActivity(milestones, taskInstanceId, 'assignee_removed', { userId });
+    set({ board: { ...board, milestones } });
+  },
+
+  setTaskAssignees(taskInstanceId, assigneeIds) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      assigneeIds,
+    }));
+    set({ board: { ...board, milestones } });
+  },
+
+  setTaskDueDate(taskInstanceId, dueDate) {
+    const { board } = get();
+    if (!board) return;
+    let milestones = mapTask(board.milestones, taskInstanceId, (t) => ({ ...t, dueDate }));
+    milestones = appendActivity(milestones, taskInstanceId, 'due_date_set', {
+      date: dueDate ?? 'cleared',
+    });
+    set({ board: { ...board, milestones } });
+  },
+
+  addComment(taskInstanceId, comment) {
+    const { board } = get();
+    if (!board) return;
+    let milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      comments: [...t.comments, comment],
+    }));
+    milestones = appendActivity(milestones, taskInstanceId, 'comment_added', {
+      commentId: comment.id,
+      authorId: comment.authorId,
+    });
+    set({ board: { ...board, milestones } });
+  },
+
+  deleteComment(taskInstanceId, commentId) {
+    const { board } = get();
+    if (!board) return;
+    let milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      comments: t.comments.filter((c) => c.id !== commentId),
+    }));
+    milestones = appendActivity(milestones, taskInstanceId, 'comment_deleted', { commentId });
+    set({ board: { ...board, milestones } });
+  },
+
+  addAttachment(taskInstanceId, attachment) {
+    const { board } = get();
+    if (!board) return;
+    let milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      attachments: [...t.attachments, attachment],
+    }));
+    milestones = appendActivity(milestones, taskInstanceId, 'attachment_added', {
+      attachmentId: attachment.id,
+      type: attachment.type,
+      title: attachment.title,
+    });
+    set({ board: { ...board, milestones } });
+  },
+
+  removeAttachment(taskInstanceId, attachmentId) {
+    const { board } = get();
+    if (!board) return;
+    let milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      attachments: t.attachments.filter((a) => a.id !== attachmentId),
+    }));
+    milestones = appendActivity(milestones, taskInstanceId, 'attachment_removed', { attachmentId });
+    set({ board: { ...board, milestones } });
+  },
+
+  updateTaskDescriptionBlocks(taskInstanceId, blocks) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      descriptionBlocks: blocks,
+    }));
+    set({ board: { ...board, milestones } });
+  },
+
+  updateTaskNoteBlocks(taskInstanceId, blocks) {
+    const { board } = get();
+    if (!board) return;
+    const milestones = mapTask(board.milestones, taskInstanceId, (t) => ({
+      ...t,
+      noteBlocks: blocks,
+    }));
     set({ board: { ...board, milestones } });
   },
 

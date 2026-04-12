@@ -57,6 +57,60 @@ export interface AIOutput {
   generatedAt: string       // ISO date string
 }
 
+// ─── Team members ────────────────────────────────────────────────────────────
+
+export interface TeamMember {
+  id: string
+  name: string
+  avatarUrl?: string
+  role: TeamRole
+}
+
+// ─── Comments ────────────────────────────────────────────────────────────────
+
+export interface Comment {
+  id: string
+  authorId: string
+  body: string
+  createdAt: string          // ISO date string
+  parentId?: string          // enables one-level threading
+}
+
+// ─── Activity log ────────────────────────────────────────────────────────────
+
+export type ActivityEntryType =
+  | 'status_change'
+  | 'field_edit'
+  | 'comment_added'
+  | 'comment_deleted'
+  | 'attachment_added'
+  | 'attachment_removed'
+  | 'assignee_added'
+  | 'assignee_removed'
+  | 'due_date_set'
+
+export interface ActivityEntry {
+  id: string
+  type: ActivityEntryType
+  authorId: string
+  timestamp: string          // ISO date string
+  details: Record<string, string>
+}
+
+// ─── Resource attachments ────────────────────────────────────────────────────
+
+export type ResourceType = 'youtube' | 'article' | 'note' | 'pdf' | 'file'
+
+export interface ResourceAttachment {
+  id: string
+  type: ResourceType
+  url: string
+  title: string
+  description?: string
+  addedAt: string            // ISO date string
+  addedBy: string            // authorId
+}
+
 /** Per-instance overrides of static TaskTemplate fields. Every field is
  *  optional — an unset field falls back to the template's default. The
  *  template is never mutated; all edits land here so other boards using
@@ -82,6 +136,15 @@ export interface TaskInstance {
   aiOutputs: AIOutput[]
   /** Per-instance field overrides on top of the static template. */
   overrides?: TaskOverrides
+  dueDate?: string                   // ISO date string (date-only "2026-05-01")
+  comments: Comment[]
+  activityLog: ActivityEntry[]
+  attachments: ResourceAttachment[]
+  /** BlockNote block array for rich-text description. When set, takes
+   *  precedence over the plain-text overrides.description / template.description. */
+  descriptionBlocks?: unknown[]
+  /** BlockNote block array for the Notes section. */
+  noteBlocks?: unknown[]
   startedAt?: string
   completedAt?: string
 }

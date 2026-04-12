@@ -1,5 +1,5 @@
 'use client';
-import { Maximize2, Package } from 'lucide-react';
+import { Package } from 'lucide-react';
 import {
   PanelSection,
   PanelInput,
@@ -7,7 +7,6 @@ import {
   PanelSlider,
 } from '@/components/ui/panel-controls';
 import { AssigneesSection } from './AssigneesSection';
-import type { ExpandableField } from './ExpandedFieldEditor';
 import type {
   TaskStatus,
   TeamRole,
@@ -42,7 +41,6 @@ interface DetailsSectionProps {
   onFieldChange: <K extends keyof TaskOverrides>(field: K, value: TaskOverrides[K]) => void;
   onDueDateChange: (date: string | undefined) => void;
   onAssigneesChange: (ids: string[]) => void;
-  onExpandField: (field: ExpandableField) => void;
 }
 
 export function DetailsSection({
@@ -55,24 +53,11 @@ export function DetailsSection({
   onFieldChange,
   onDueDateChange,
   onAssigneesChange,
-  onExpandField,
 }: DetailsSectionProps) {
   const isBlocked = status === 'blocked';
 
   return (
     <div className="px-4 py-4 flex flex-col gap-4">
-      <PanelSection title="Title" collapsible>
-        <button
-          onClick={() => onExpandField('title')}
-          className="w-full flex items-center gap-2 bg-panel-surface hover:bg-panel-surface-hover rounded-lg px-3 py-2 transition-colors text-left group"
-        >
-          <span className="flex-1 text-sm text-zinc-200 truncate">
-            {effective.title || 'Untitled task'}
-          </span>
-          <Maximize2 size={12} className="shrink-0 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
-        </button>
-      </PanelSection>
-
       <PanelSection title="Status" collapsible>
         {isBlocked ? (
           <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5">
@@ -102,18 +87,6 @@ export function DetailsSection({
         teamMembers={teamMembers}
         onAssigneesChange={onAssigneesChange}
       />
-
-      <PanelSection title="Description" collapsible>
-        <button
-          onClick={() => onExpandField('description')}
-          className="w-full flex items-center gap-2 bg-panel-surface hover:bg-panel-surface-hover rounded-lg px-3 py-2 transition-colors text-left group"
-        >
-          <span className="flex-1 text-xs text-zinc-400 truncate">
-            {effective.description || 'Click to add description...'}
-          </span>
-          <Maximize2 size={12} className="shrink-0 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
-        </button>
-      </PanelSection>
 
       <PanelSection title="Deliverable" icon={Package} collapsible>
         <PanelInput

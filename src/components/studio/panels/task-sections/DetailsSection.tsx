@@ -99,7 +99,50 @@ export function DetailsSection({
   const [contextTab, setContextTab] = useState<ContextTab>('tip');
 
   return (
-    <div className="px-4 py-4 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
+      <PanelIconTabs
+        tabs={CONTEXT_TABS}
+        activeTab={contextTab}
+        onChange={(id) => setContextTab(id as ContextTab)}
+      />
+
+      <div className="px-4 pb-2">
+        {contextTab === 'tip' && (
+          <AutoTextarea
+            value={effective.tip}
+            onChange={(v) => onFieldChange('tip', v)}
+            placeholder="Teaching note or explanation..."
+          />
+        )}
+        {contextTab === 'example' && (
+          <AutoTextarea
+            value={effective.exampleFromIndustry ?? ''}
+            onChange={(v) => onFieldChange('exampleFromIndustry', v || undefined)}
+            placeholder="How a real studio would approach this..."
+          />
+        )}
+        {blockedByTitles.length > 0 && (
+          <div className="mt-4">
+            <PanelSection
+              title="Requires"
+              badge={blockedByTitles.length}
+              collapsible
+              noBorder
+            >
+              <div className="space-y-1.5">
+                {blockedByTitles.map((title) => (
+                  <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
+                    {title}
+                  </div>
+                ))}
+              </div>
+            </PanelSection>
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pb-4 flex flex-col gap-4 border-t border-white/5 pt-4">
       <PanelSection title="Status" collapsible>
         {isBlocked ? (
           <div className="text-[11px] text-zinc-500 bg-zinc-800/60 rounded-lg px-3 py-2.5">
@@ -137,7 +180,7 @@ export function DetailsSection({
         />
       </PanelSection>
 
-      <PanelSection title="Estimated hours" collapsible>
+      <PanelSection title="Estimated hours" collapsible noBorder>
         <PanelSlider
           label="Hours"
           value={effective.estimatedHours}
@@ -148,49 +191,7 @@ export function DetailsSection({
           suffix="h"
         />
       </PanelSection>
-
-      <PanelSection title="Guide / Example" collapsible noBorder>
-        <PanelIconTabs
-          tabs={CONTEXT_TABS}
-          activeTab={contextTab}
-          onChange={(id) => setContextTab(id as ContextTab)}
-        />
-        <div className="mt-3">
-          {contextTab === 'tip' && (
-            <AutoTextarea
-              value={effective.tip}
-              onChange={(v) => onFieldChange('tip', v)}
-              placeholder="Teaching note or explanation..."
-            />
-          )}
-          {contextTab === 'example' && (
-            <AutoTextarea
-              value={effective.exampleFromIndustry ?? ''}
-              onChange={(v) => onFieldChange('exampleFromIndustry', v || undefined)}
-              placeholder="How a real studio would approach this..."
-            />
-          )}
-        </div>
-        {blockedByTitles.length > 0 && (
-          <div className="mt-4">
-            <PanelSection
-              title="Requires"
-              badge={blockedByTitles.length}
-              collapsible
-              noBorder
-            >
-              <div className="space-y-1.5">
-                {blockedByTitles.map((title) => (
-                  <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
-                    {title}
-                  </div>
-                ))}
-              </div>
-            </PanelSection>
-          </div>
-        )}
-      </PanelSection>
+      </div>
     </div>
   );
 }

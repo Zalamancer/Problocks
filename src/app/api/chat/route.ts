@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       const child = spawn('claude', [
         '-p', prompt,
         '--output-format', 'stream-json',
+        '--verbose',
         '--dangerously-skip-permissions',
       ], {
         env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin' },

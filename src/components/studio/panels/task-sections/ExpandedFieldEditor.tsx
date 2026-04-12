@@ -170,11 +170,13 @@ export function ExpandedFieldEditor({
             </div>
 
             {/* Description — BlockNote */}
-            <LazyBlockNoteEditor
-              initialBlocks={descriptionBlocks}
-              onChange={onDescriptionBlocksChange}
-              placeholder="Start writing..."
-            />
+            <div className="[&_.bn-editor]:!pl-0 [&_.bn-block-outer]:!pl-0 [&_.bn-block]:!pl-0">
+              <LazyBlockNoteEditor
+                initialBlocks={descriptionBlocks}
+                onChange={onDescriptionBlocksChange}
+                placeholder="Start writing..."
+              />
+            </div>
           </div>
 
           {/* Divider */}

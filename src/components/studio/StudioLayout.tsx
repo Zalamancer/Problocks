@@ -50,6 +50,11 @@ export function StudioLayout() {
 
   const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
   const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
+  const addComment = useBoardStore((s) => s.addComment);
+  const deleteComment = useBoardStore((s) => s.deleteComment);
+  const teamMembers = useBoardStore((s) => s.teamMembers);
+
+  const CURRENT_USER_ID = 'local-user';
 
   const template = board ? getTemplate(board.templateId) : null;
 
@@ -133,6 +138,19 @@ export function StudioLayout() {
                   onTitleChange={(v) => setTaskOverride(ti.id, { title: v })}
                   onDescriptionBlocksChange={(blocks) => updateTaskDescriptionBlocks(ti.id, blocks)}
                   onClose={() => setSelectedTaskId(null)}
+                  comments={ti.comments ?? []}
+                  currentUserId={CURRENT_USER_ID}
+                  teamMembers={teamMembers}
+                  onAddComment={(body, parentId) => {
+                    addComment(ti.id, {
+                      id: crypto.randomUUID().slice(0, 12),
+                      authorId: CURRENT_USER_ID,
+                      body,
+                      createdAt: new Date().toISOString(),
+                      parentId,
+                    });
+                  }}
+                  onDeleteComment={(cId) => deleteComment(ti.id, cId)}
                 />
               );
             })()}

@@ -4,7 +4,6 @@ import {
   Wrench,
   FileText,
   Info,
-  MessageSquare,
   Clock,
   Paperclip,
   BookOpen,
@@ -17,7 +16,6 @@ import {
   DetailsSection,
   ToolsSection,
   ContextSection,
-  CommentsSection,
   ActivitySection,
   AttachmentsSection,
   NotesSection,
@@ -27,22 +25,19 @@ import {
   type Template,
   type ProjectBoard,
   type TaskStatus,
-  type AITool,
   type TaskOverrides,
-  type Comment,
   type ResourceAttachment,
 } from '@/lib/templates/types';
 
 // ─── Sections for DropdownSectionHeader ──────────────────────────────────────
 
 const TASK_SECTIONS: readonly SectionDef[] = [
-  { id: 'details',     icon: FileText,       label: 'Details' },
-  { id: 'tools',       icon: Wrench,         label: 'AI Tools' },
-  { id: 'context',     icon: Info,           label: 'Context' },
-  { id: 'comments',    icon: MessageSquare,  label: 'Comments' },
-  { id: 'activity',    icon: Clock,          label: 'Activity' },
-  { id: 'attachments', icon: Paperclip,      label: 'Resources' },
-  { id: 'notes',       icon: BookOpen,       label: 'Notes' },
+  { id: 'details',     icon: FileText,  label: 'Details' },
+  { id: 'tools',       icon: Wrench,    label: 'AI Tools' },
+  { id: 'context',     icon: Info,      label: 'Context' },
+  { id: 'activity',    icon: Clock,     label: 'Activity' },
+  { id: 'attachments', icon: Paperclip, label: 'Resources' },
+  { id: 'notes',       icon: BookOpen,  label: 'Notes' },
 ] as const;
 
 type TaskSectionId = (typeof TASK_SECTIONS)[number]['id'];
@@ -74,8 +69,6 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
   const setTaskOverride           = useProjectBoard((s) => s.setTaskOverride);
   const setTaskAssignees          = useProjectBoard((s) => s.setTaskAssignees);
   const setTaskDueDate            = useProjectBoard((s) => s.setTaskDueDate);
-  const addComment                = useProjectBoard((s) => s.addComment);
-  const deleteComment             = useProjectBoard((s) => s.deleteComment);
   const addAttachment             = useProjectBoard((s) => s.addAttachment);
   const removeAttachment          = useProjectBoard((s) => s.removeAttachment);
   const updateTaskDescriptionBlocks = useProjectBoard((s) => s.updateTaskDescriptionBlocks);
@@ -119,17 +112,6 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
   const handleFieldChange = <K extends keyof TaskOverrides>(field: K, value: TaskOverrides[K]) =>
     setTaskOverride(taskInstance.id, { [field]: value } as Partial<TaskOverrides>);
 
-  const handleAddComment = (body: string, parentId?: string) => {
-    const comment: Comment = {
-      id: crypto.randomUUID().slice(0, 12),
-      authorId: CURRENT_USER_ID,
-      body,
-      createdAt: new Date().toISOString(),
-      parentId,
-    };
-    addComment(taskInstance.id, comment);
-  };
-
   const handleAddAttachment = (attachment: ResourceAttachment) =>
     addAttachment(taskInstance.id, attachment);
 
@@ -170,17 +152,6 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
               blockedByTitles={blockedByTitles}
               onFieldChange={handleFieldChange}
             />
-          )}
-          {activeSection === 'comments' && (
-            <div className="px-4 py-4">
-              <CommentsSection
-                comments={taskInstance.comments}
-                currentUserId={CURRENT_USER_ID}
-                teamMembers={teamMembers}
-                onAddComment={handleAddComment}
-                onDeleteComment={(cId) => deleteComment(taskInstance.id, cId)}
-              />
-            </div>
           )}
           {activeSection === 'activity' && (
             <div className="px-4 py-4">

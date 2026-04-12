@@ -2,6 +2,8 @@
 import { X } from 'lucide-react';
 import { IconButton } from '@/components/ui';
 import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
+import { CommentsSection } from './CommentsSection';
+import type { Comment, TeamMember } from '@/lib/templates/types';
 
 export type ExpandableField = 'title' | 'description';
 
@@ -12,16 +14,26 @@ interface ExpandedFieldEditorProps {
   onTitleChange: (v: string) => void;
   onDescriptionBlocksChange: (blocks: unknown[]) => void;
   onClose: () => void;
+  comments: Comment[];
+  currentUserId: string;
+  teamMembers: TeamMember[];
+  onAddComment: (body: string, parentId?: string) => void;
+  onDeleteComment: (commentId: string) => void;
 }
 
-/** Full-canvas document view — title + description editor. Opens over
- *  the center canvas when a task is selected. */
+/** Full-canvas document view — title + description editor, with comments below.
+ *  Opens over the center canvas when a task is selected. */
 export function ExpandedFieldEditor({
   title,
   descriptionBlocks,
   onTitleChange,
   onDescriptionBlocksChange,
   onClose,
+  comments,
+  currentUserId,
+  teamMembers,
+  onAddComment,
+  onDeleteComment,
 }: ExpandedFieldEditorProps) {
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-[#1f1f1f] overflow-hidden">
@@ -56,6 +68,17 @@ export function ExpandedFieldEditor({
             placeholder="Start writing..."
           />
         </div>
+      </div>
+
+      {/* Comments — below the editor */}
+      <div className="shrink-0 border-t border-white/5 max-h-72 overflow-y-auto px-4 py-4">
+        <CommentsSection
+          comments={comments}
+          currentUserId={currentUserId}
+          teamMembers={teamMembers}
+          onAddComment={onAddComment}
+          onDeleteComment={onDeleteComment}
+        />
       </div>
     </div>
   );

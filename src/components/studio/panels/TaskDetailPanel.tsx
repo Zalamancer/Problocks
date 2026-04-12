@@ -18,6 +18,7 @@ import {
   PanelActionButton,
   PanelSelect,
 } from '@/components/ui/panel-controls';
+import { IconButton } from '@/components/ui';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DropdownSectionHeader, type SectionDef } from './DropdownSectionHeader';
 import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
@@ -259,35 +260,25 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
 
   return (
     <aside className="w-full md:w-[280px] flex-shrink-0 h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden">
-      {/* Context row — milestone + task title + close */}
-      <div className="shrink-0 flex items-start gap-2 px-4 py-3 border-b border-white/5">
+      {/* Header row: DropdownSectionHeader + systematic close IconButton */}
+      <div className="shrink-0 flex items-center border-b border-white/5">
         <div className="flex-1 min-w-0">
-          <div
-            className="text-[10px] font-medium uppercase tracking-wider mb-1"
-            style={{ color: milestone.color }}
-          >
-            {milestone.name}
-          </div>
-          <h3 className="text-[13px] font-semibold text-zinc-100 leading-snug">
-            {templateTask.title}
-          </h3>
+          <DropdownSectionHeader
+            sections={TASK_SECTIONS}
+            activeIndex={activeIndex}
+            onSelect={(i) => setActiveSection(TASK_SECTIONS[i].id as TaskSectionId)}
+          />
         </div>
-        <button
-          onClick={onClose}
-          className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
-          aria-label="Close task details"
-        >
-          <X size={14} />
-        </button>
-      </div>
-
-      {/* Dropdown section header — mirrors AutoAnimation DropdownSectionHeader */}
-      <div className="shrink-0 border-b border-white/5">
-        <DropdownSectionHeader
-          sections={TASK_SECTIONS}
-          activeIndex={activeIndex}
-          onSelect={(i) => setActiveSection(TASK_SECTIONS[i].id as TaskSectionId)}
-        />
+        <div className="shrink-0 pr-2">
+          <IconButton
+            icon={X}
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close task details"
+            tooltip="Close"
+          />
+        </div>
       </div>
 
       {/* Content area — scrollable */}

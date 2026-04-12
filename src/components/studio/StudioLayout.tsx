@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Sparkles, ArrowRight, ArrowDown, Terminal } from 'lucide-react';
+import { Sparkles, ArrowRight, ArrowDown, Terminal, Gamepad2 } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { StudioTerminal } from './Terminal';
+import { GamePreview } from './GamePreview';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
 import { TimelineBar } from './views/TimelineBar';
@@ -49,8 +50,9 @@ export function StudioLayout() {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(true);
   const [terminalMaximized, setTerminalMaximized] = useState(false);
+  const [gameHtml, setGameHtml] = useState<string | null>(null);
 
   const flowDirection = useStudio((s) => s.flowDirection);
   const toggleFlowDirection = useStudio((s) => s.toggleFlowDirection);
@@ -89,9 +91,21 @@ export function StudioLayout() {
           {/* Center — relative container so the task panel can overlay */}
           <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
 
-            {/* Terminal toggle — always available */}
+            {/* Terminal + Game toggle — always available */}
             {!board && (
-              <div className="shrink-0 flex items-center justify-end px-3 py-2 border-b border-white/[0.05]">
+              <div className="shrink-0 flex items-center justify-end gap-1 px-3 py-2 border-b border-white/[0.05]">
+                {gameHtml && (
+                  <button
+                    onClick={() => setGameHtml(gameHtml ? null : gameHtml)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      gameHtml ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
+                    }`}
+                    title="Toggle Game Preview"
+                  >
+                    <Gamepad2 size={12} />
+                    Game
+                  </button>
+                )}
                 <button
                   onClick={() => setTerminalOpen(!terminalOpen)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
@@ -157,13 +171,22 @@ export function StudioLayout() {
             )}
 
             {/* Main view */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {!board ? (
-                <EmptyState onStart={() => setWizardOpen(true)} />
-              ) : viewMode === 'canvas' ? (
-                <FlowchartView template={template!} board={board} onTaskClick={handleTaskClick} />
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              {/* Game preview — replaces main view when active */}
+              {gameHtml && !terminalMaximized ? (
+                <GamePreview html={gameHtml} onClose={() => setGameHtml(null)} />
+              ) : !board ? (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <EmptyState onStart={() => setWizardOpen(true)} />
+                </div>
               ) : (
-                <KanbanView template={template!} board={board} onTaskClick={handleTaskClick} />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  {viewMode === 'canvas' ? (
+                    <FlowchartView template={template!} board={board} onTaskClick={handleTaskClick} />
+                  ) : (
+                    <KanbanView template={template!} board={board} onTaskClick={handleTaskClick} />
+                  )}
+                </div>
               )}
             </div>
 
@@ -173,6 +196,7 @@ export function StudioLayout() {
                 onClose={() => { setTerminalOpen(false); setTerminalMaximized(false); }}
                 isMaximized={terminalMaximized}
                 onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
+                onGameGenerated={setGameHtml}
               />
             )}
 

@@ -16,14 +16,17 @@ export function StudioTerminal({
   onClose,
   isMaximized,
   onToggleMaximize,
+  onGameGenerated,
 }: {
   onClose: () => void;
   isMaximized: boolean;
   onToggleMaximize: () => void;
+  onGameGenerated?: (html: string) => void;
 }) {
   const [lines, setLines] = useState<TerminalLine[]>([
-    { type: 'system', text: '  Problocks AI Terminal' },
-    { type: 'system', text: '  Connected to Claude. Type a message and press Enter.' },
+    { type: 'system', text: '  Problocks Game Engine' },
+    { type: 'system', text: '  Describe a game and I\'ll build it instantly.' },
+    { type: 'system', text: '  Example: "make a space shooter with power-ups"' },
     { type: 'system', text: '' },
   ]);
   const [input, setInput] = useState('');
@@ -71,7 +74,10 @@ export function StudioTerminal({
         { type: 'system', text: '  /help     — Show this help' },
         { type: 'system', text: '  /model    — Show current model' },
         { type: 'system', text: '' },
-        { type: 'system', text: '  Type anything else to chat with Claude.' },
+        { type: 'system', text: '  Describe a game to generate it. Follow up to iterate.' },
+        { type: 'system', text: '  Examples:' },
+        { type: 'system', text: '    "make a flappy bird clone"' },
+        { type: 'system', text: '    "make the bird faster and add pipes"' },
         { type: 'system', text: '' },
       ]);
       setInput('');
@@ -101,7 +107,7 @@ export function StudioTerminal({
     try {
       abortRef.current = new AbortController();
 
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newMessages }),
@@ -165,6 +171,17 @@ export function StudioTerminal({
       // Finalize: add trailing blank line
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }]);
       setLines((prev) => [...prev, { type: 'system', text: '' }]);
+
+      // Extract HTML game code and send to preview
+      const htmlMatch = assistantText.match(/```html\s*([\s\S]*?)```/);
+      if (htmlMatch && onGameGenerated) {
+        onGameGenerated(htmlMatch[1].trim());
+        setLines((prev) => [
+          ...prev,
+          { type: 'system', text: '  Game loaded in preview. Type changes to iterate.' },
+          { type: 'system', text: '' },
+        ]);
+      }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
         setLines((prev) => [...prev, { type: 'system', text: '  (cancelled)' }, { type: 'system', text: '' }]);

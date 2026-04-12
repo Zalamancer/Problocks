@@ -1,9 +1,11 @@
 'use client';
-import { X } from 'lucide-react';
+import { useState } from 'react';
+import { X, MessageSquare, Clock } from 'lucide-react';
 import { IconButton } from '@/components/ui';
 import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
 import { CommentsSection } from './CommentsSection';
-import type { Comment, TeamMember } from '@/lib/templates/types';
+import { formatRelativeTime } from '@/lib/format-time';
+import type { Comment, TeamMember, ActivityEntry } from '@/lib/templates/types';
 
 export type ExpandableField = 'title' | 'description';
 
@@ -19,10 +21,47 @@ interface ExpandedFieldEditorProps {
   teamMembers: TeamMember[];
   onAddComment: (body: string, parentId?: string) => void;
   onDeleteComment: (commentId: string) => void;
+  activityLog: ActivityEntry[];
 }
 
-/** Full-canvas document view — title + description editor, with comments below.
- *  Opens over the center canvas when a task is selected. */
+type BottomTab = 'comments' | 'activity';
+
+// ─── Activity helpers (mirrors ActivitySection logic, without PanelSection wrapper) ───
+
+const DOT_COLOR: Record<string, string> = {
+  status_change:      'bg-green-400',
+  field_edit:         'bg-blue-400',
+  comment_added:      'bg-purple-400',
+  comment_deleted:    'bg-purple-400/50',
+  attachment_added:   'bg-orange-400',
+  attachment_removed: 'bg-orange-400/50',
+  assignee_added:     'bg-cyan-400',
+  assignee_removed:   'bg-cyan-400/50',
+  due_date_set:       'bg-yellow-400',
+};
+
+function describeEntry(entry: ActivityEntry, resolveName: (id: string) => string): string {
+  const who = resolveName(entry.authorId);
+  switch (entry.type) {
+    case 'status_change':      return `${who} changed status from ${entry.details.from} to ${entry.details.to}`;
+    case 'field_edit':         return `${who} edited ${entry.details.field ?? 'a field'}`;
+    case 'comment_added':      return `${who} posted a comment`;
+    case 'comment_deleted':    return `${who} deleted a comment`;
+    case 'attachment_added':   return `${who} attached ${entry.details.type}: ${entry.details.title}`;
+    case 'attachment_removed': return `${who} removed an attachment`;
+    case 'assignee_added':     return `${who} assigned ${resolveName(entry.details.userId)}`;
+    case 'assignee_removed':   return `${who} unassigned ${resolveName(entry.details.userId)}`;
+    case 'due_date_set':
+      return entry.details.date === 'cleared'
+        ? `${who} cleared the due date`
+        : `${who} set due date to ${entry.details.date}`;
+    default:                   return `${who} performed an action`;
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+/** Full-canvas document view — title + description editor, with Comments/Activity tabs below. */
 export function ExpandedFieldEditor({
   title,
   descriptionBlocks,
@@ -34,7 +73,15 @@ export function ExpandedFieldEditor({
   teamMembers,
   onAddComment,
   onDeleteComment,
+  activityLog,
 }: ExpandedFieldEditorProps) {
+  const [tab, setTab] = useState<BottomTab>('comments');
+
+  const resolveName = (id: string) =>
+    id === 'local-user' ? 'You' : (teamMembers.find((m) => m.id === id)?.name ?? 'Unknown');
+
+  const entries = [...activityLog].reverse().slice(0, 50);
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-[#1f1f1f] overflow-hidden">
       {/* Header */}
@@ -49,9 +96,9 @@ export function ExpandedFieldEditor({
         />
       </div>
 
-      {/* Document body */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
-        <div className="max-w-3xl mx-auto">
+      {/* Single scroll area: editor + comments/activity naturally below */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-8 pt-4 pb-20">
           {/* Title */}
           <input
             type="text"
@@ -67,18 +114,82 @@ export function ExpandedFieldEditor({
             onChange={onDescriptionBlocksChange}
             placeholder="Start writing..."
           />
-        </div>
-      </div>
 
-      {/* Comments — below the editor */}
-      <div className="shrink-0 border-t border-white/5 max-h-72 overflow-y-auto px-4 py-4">
-        <CommentsSection
-          comments={comments}
-          currentUserId={currentUserId}
-          teamMembers={teamMembers}
-          onAddComment={onAddComment}
-          onDeleteComment={onDeleteComment}
-        />
+          {/* Divider */}
+          <div className="mt-12 border-t border-white/[0.06]" />
+
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 py-5">
+            <button
+              onClick={() => setTab('comments')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                tab === 'comments'
+                  ? 'bg-white/10 text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <MessageSquare size={13} />
+              Comments
+              {comments.length > 0 && (
+                <span className="ml-0.5 text-[10px] bg-white/10 rounded-full px-1.5 py-0.5 text-zinc-400">
+                  {comments.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setTab('activity')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                tab === 'activity'
+                  ? 'bg-white/10 text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Clock size={13} />
+              Activity
+              {activityLog.length > 0 && (
+                <span className="ml-0.5 text-[10px] bg-white/10 rounded-full px-1.5 py-0.5 text-zinc-400">
+                  {activityLog.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Comments tab */}
+          {tab === 'comments' && (
+            <CommentsSection
+              comments={comments}
+              currentUserId={currentUserId}
+              teamMembers={teamMembers}
+              onAddComment={onAddComment}
+              onDeleteComment={onDeleteComment}
+            />
+          )}
+
+          {/* Activity tab */}
+          {tab === 'activity' && (
+            <div className="flex flex-col gap-4">
+              {entries.length === 0 ? (
+                <p className="text-sm text-zinc-600 italic">No activity yet.</p>
+              ) : (
+                entries.map((e) => (
+                  <div key={e.id} className="flex items-start gap-3">
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${DOT_COLOR[e.type] ?? 'bg-zinc-500'}`}
+                    />
+                    <div>
+                      <p className="text-[13px] text-zinc-400 leading-relaxed">
+                        {describeEntry(e, resolveName)}
+                      </p>
+                      <span className="text-[11px] text-zinc-600">
+                        {formatRelativeTime(e.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

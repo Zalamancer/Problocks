@@ -139,6 +139,7 @@ export function StudioLayout() {
                   onDescriptionBlocksChange={(blocks) => updateTaskDescriptionBlocks(ti.id, blocks)}
                   onClose={() => setSelectedTaskId(null)}
                   comments={ti.comments ?? []}
+                  activityLog={ti.activityLog ?? []}
                   currentUserId={CURRENT_USER_ID}
                   teamMembers={teamMembers}
                   onAddComment={(body, parentId) => {

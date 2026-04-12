@@ -4,7 +4,6 @@ import {
   Wrench,
   FileText,
   Info,
-  Clock,
   Paperclip,
   BookOpen,
 } from 'lucide-react';
@@ -16,7 +15,6 @@ import {
   DetailsSection,
   ToolsSection,
   ContextSection,
-  ActivitySection,
   AttachmentsSection,
   NotesSection,
 } from './task-sections';
@@ -35,7 +33,6 @@ const TASK_SECTIONS: readonly SectionDef[] = [
   { id: 'details',     icon: FileText,  label: 'Details' },
   { id: 'tools',       icon: Wrench,    label: 'AI Tools' },
   { id: 'context',     icon: Info,      label: 'Context' },
-  { id: 'activity',    icon: Clock,     label: 'Activity' },
   { id: 'attachments', icon: Paperclip, label: 'Resources' },
   { id: 'notes',       icon: BookOpen,  label: 'Notes' },
 ] as const;
@@ -152,14 +149,6 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
               blockedByTitles={blockedByTitles}
               onFieldChange={handleFieldChange}
             />
-          )}
-          {activeSection === 'activity' && (
-            <div className="px-4 py-4">
-              <ActivitySection
-                activityLog={taskInstance.activityLog}
-                teamMembers={teamMembers}
-              />
-            </div>
           )}
           {activeSection === 'attachments' && (
             <div className="px-4 py-4 flex flex-col gap-4">

@@ -145,7 +145,6 @@ export function StudioLayout() {
               templateTaskId={selectedTaskId}
               template={template}
               board={board}
-              onExpandField={setExpandedField}
             />
           )}
         </div>

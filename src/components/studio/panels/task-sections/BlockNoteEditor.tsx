@@ -1,8 +1,8 @@
 'use client';
-import { useMemo, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { useCreateBlockNote } from '@blocknote/react';
-import { BlockNoteView } from '@blocknote/shadcn';
-import '@blocknote/shadcn/style.css';
+import { BlockNoteView } from '@blocknote/mantine';
+import '@blocknote/mantine/style.css';
 
 interface BlockNoteEditorProps {
   initialBlocks?: unknown[];
@@ -44,13 +44,11 @@ export default function BlockNoteEditor({
   }, []);
 
   return (
-    <div className="blocknote-wrapper" data-theming="dark">
-      <BlockNoteView
-        editor={editor}
-        editable={editable}
-        onChange={handleChange}
-        theme="dark"
-      />
-    </div>
+    <BlockNoteView
+      editor={editor}
+      editable={editable}
+      onChange={handleChange}
+      theme="dark"
+    />
   );
 }

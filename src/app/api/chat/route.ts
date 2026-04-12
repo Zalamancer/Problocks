@@ -22,9 +22,11 @@ export async function POST(req: Request) {
         '--dangerously-skip-permissions',
       ], {
         env: {
-          ...process.env,
           HOME: process.env.HOME || homedir(),
-          PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin',
+          PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+          USER: process.env.USER || '',
+          SHELL: process.env.SHELL || '/bin/zsh',
+          TERM: 'xterm-256color',
         },
       });
 

@@ -17,7 +17,7 @@ import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { Lock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useStudio } from '@/store/studio-store';
+import { useStudio, type FlowDirection } from '@/store/studio-store';
 import {
   resolveEffectiveTask,
   type Template,
@@ -37,6 +37,7 @@ interface TaskNodeData {
   milestoneName: string
   taskInstanceId: string
   isActiveColumn: boolean
+  flowDirection: FlowDirection
   [key: string]: unknown
 }
 
@@ -121,8 +122,22 @@ function TaskNodeComponent({ data }: NodeProps) {
         )}
       </div>
 
-      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-zinc-700 !border-zinc-500 !-left-1" />
-      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-zinc-700 !border-zinc-500 !-right-1" />
+      <Handle
+        type="target"
+        position={d.flowDirection === 'TB' ? Position.Top : Position.Left}
+        className={cn(
+          '!w-2 !h-2 !bg-zinc-700 !border-zinc-500',
+          d.flowDirection === 'TB' ? '!-top-1' : '!-left-1',
+        )}
+      />
+      <Handle
+        type="source"
+        position={d.flowDirection === 'TB' ? Position.Bottom : Position.Right}
+        className={cn(
+          '!w-2 !h-2 !bg-zinc-700 !border-zinc-500',
+          d.flowDirection === 'TB' ? '!-bottom-1' : '!-right-1',
+        )}
+      />
     </div>
   )
 }
@@ -134,10 +149,10 @@ const NODE_TYPES = { task: TaskNodeComponent }
 const NODE_W = 176
 const NODE_H = 110
 
-function applyDagreLayout(nodes: TaskNode[], edges: Edge[]): TaskNode[] {
+function applyDagreLayout(nodes: TaskNode[], edges: Edge[], direction: FlowDirection): TaskNode[] {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', nodesep: 40, ranksep: 80 })
+  g.setGraph({ rankdir: direction, nodesep: 40, ranksep: 80 })
 
   nodes.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }))
   edges.forEach((e) => g.setEdge(e.source, e.target))
@@ -152,7 +167,7 @@ function applyDagreLayout(nodes: TaskNode[], edges: Edge[]): TaskNode[] {
 
 // ─── Adapter: template + board → nodes + edges ────────────────────────────────
 
-function buildFlowGraph(template: Template, board: ProjectBoard): { nodes: TaskNode[]; edges: Edge[] } {
+function buildFlowGraph(template: Template, board: ProjectBoard, direction: FlowDirection): { nodes: TaskNode[]; edges: Edge[] } {
   const nodes: TaskNode[] = []
   const edges: Edge[] = []
 
@@ -183,6 +198,7 @@ function buildFlowGraph(template: Template, board: ProjectBoard): { nodes: TaskN
           milestoneName: mt.name,
           taskInstanceId: taskInstance?.id ?? '',
           isActiveColumn: isActive,
+          flowDirection: direction,
         },
       })
 
@@ -204,7 +220,7 @@ function buildFlowGraph(template: Template, board: ProjectBoard): { nodes: TaskN
     }
   }
 
-  return { nodes: applyDagreLayout(nodes, edges), edges }
+  return { nodes: applyDagreLayout(nodes, edges, direction), edges }
 }
 
 // ─── FlowchartView ────────────────────────────────────────────────────────────
@@ -217,12 +233,13 @@ interface FlowchartViewProps {
 
 export function FlowchartView({ template, board, onTaskClick }: FlowchartViewProps) {
   const theme = useStudio((s) => s.theme)
+  const flowDirection = useStudio((s) => s.flowDirection)
   const isLight = theme === 'light'
 
   const graph = useMemo(
-    () => buildFlowGraph(template, board),
+    () => buildFlowGraph(template, board, flowDirection),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [template.id, board.activeMilestoneId, JSON.stringify(board.milestones.map((m) => m.tasks.map((t) => t.status)))],
+    [template.id, board.activeMilestoneId, flowDirection, JSON.stringify(board.milestones.map((m) => m.tasks.map((t) => t.status)))],
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)

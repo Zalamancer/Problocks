@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ArrowRight, ArrowDown } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
@@ -8,6 +8,7 @@ import { TimelineBar } from './views/TimelineBar';
 import { KanbanView } from './views/KanbanView';
 import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
+import { useStudio } from '@/store/studio-store';
 import { useProjectBoard } from '@/store/project-board-store';
 import { getTemplate } from '@/lib/templates';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
@@ -47,6 +48,9 @@ export function StudioLayout() {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  const flowDirection = useStudio((s) => s.flowDirection);
+  const toggleFlowDirection = useStudio((s) => s.toggleFlowDirection);
 
   const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
   const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
@@ -101,6 +105,21 @@ export function StudioLayout() {
                 >
                   Graph
                 </button>
+
+                {viewMode === 'canvas' && (
+                  <>
+                    <div className="w-px h-4 bg-white/[0.08] mx-1" />
+                    <button
+                      onClick={toggleFlowDirection}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
+                      title={flowDirection === 'LR' ? 'Switch to vertical layout' : 'Switch to horizontal layout'}
+                    >
+                      {flowDirection === 'LR' ? <ArrowRight size={12} /> : <ArrowDown size={12} />}
+                      {flowDirection === 'LR' ? 'Horizontal' : 'Vertical'}
+                    </button>
+                  </>
+                )}
+
                 <span className="ml-auto text-xs text-zinc-600">{template?.name}</span>
               </div>
             )}

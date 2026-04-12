@@ -1,8 +1,10 @@
 'use client';
+import { useRouter } from 'next/navigation';
 import { GraduationCap, Zap } from 'lucide-react';
 import { PanelSection, PanelToggle, PanelActionButton } from '@/components/ui';
 
 export function SettingsPanel() {
+  const router = useRouter();
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
       <PanelSection title="Project">
@@ -22,12 +24,12 @@ export function SettingsPanel() {
 
       <PanelSection title="Integrations" noBorder>
         <PanelActionButton
-          onClick={() => {}}
+          onClick={() => router.push('/classroom')}
           variant="secondary"
           icon={GraduationCap}
           fullWidth
         >
-          Connect Google Classroom
+          Open Google Classroom
         </PanelActionButton>
         <div className="mt-3">
           <PanelActionButton

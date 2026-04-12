@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { X, MessageSquare, Clock, Package } from 'lucide-react';
+import { X, MessageSquare, Clock, Package, Pencil, Check } from 'lucide-react';
 import { IconButton } from '@/components/ui';
 import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
 import { CommentsSection } from './CommentsSection';
@@ -23,6 +23,7 @@ interface ExpandedFieldEditorProps {
   onDeleteComment: (commentId: string) => void;
   activityLog: ActivityEntry[];
   deliverable?: string;
+  onDeliverableChange: (v: string) => void;
 }
 
 type BottomTab = 'comments' | 'activity';
@@ -76,8 +77,11 @@ export function ExpandedFieldEditor({
   onDeleteComment,
   activityLog,
   deliverable,
+  onDeliverableChange,
 }: ExpandedFieldEditorProps) {
   const [tab, setTab] = useState<BottomTab>('comments');
+  const [editingDeliverable, setEditingDeliverable] = useState(false);
+  const [deliverableDraft, setDeliverableDraft] = useState(deliverable ?? '');
 
   const resolveName = (id: string) =>
     id === 'local-user' ? 'You' : (teamMembers.find((m) => m.id === id)?.name ?? 'Unknown');
@@ -112,17 +116,45 @@ export function ExpandedFieldEditor({
             />
 
             {/* Deliverable info box */}
-            {deliverable && (
-              <div className="flex items-start gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3 mb-8">
-                <Package size={14} className="text-zinc-500 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1">
-                    Deliverable
-                  </span>
-                  <p className="text-sm text-zinc-300 leading-relaxed">{deliverable}</p>
-                </div>
+            <div className="flex items-start gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3 mb-8 group">
+              <Package size={14} className="text-zinc-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1">
+                  Deliverable
+                </span>
+                {editingDeliverable ? (
+                  <input
+                    autoFocus
+                    value={deliverableDraft}
+                    onChange={(e) => setDeliverableDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        onDeliverableChange(deliverableDraft);
+                        setEditingDeliverable(false);
+                      }
+                      if (e.key === 'Escape') setEditingDeliverable(false);
+                    }}
+                    onBlur={() => {
+                      onDeliverableChange(deliverableDraft);
+                      setEditingDeliverable(false);
+                    }}
+                    className="w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
+                    placeholder="What must exist when done?"
+                  />
+                ) : (
+                  <p className="text-sm text-zinc-300 leading-relaxed">
+                    {deliverable || <span className="text-zinc-600 italic">What must exist when done?</span>}
+                  </p>
+                )}
               </div>
-            )}
+              <button
+                onClick={() => { setDeliverableDraft(deliverable ?? ''); setEditingDeliverable(true); }}
+                className="shrink-0 mt-0.5 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                aria-label="Edit deliverable"
+              >
+                {editingDeliverable ? <Check size={14} /> : <Pencil size={13} />}
+              </button>
+            </div>
 
             {/* Description — BlockNote */}
             <LazyBlockNoteEditor

@@ -114,14 +114,22 @@ export function StudioLayout() {
               />
             )}
 
-            {/* Task detail panel — overlaps on top of the center canvas */}
+            {/* Task detail — centered card overlay on top of canvas */}
             {board && template && selectedTaskId && (
-              <div className="absolute top-0 right-0 bottom-0 z-30 w-[300px] shadow-2xl shadow-black/40">
-                <TaskDetailPanel
-                  templateTaskId={selectedTaskId}
-                  template={template}
-                  board={board}
-                />
+              <div
+                className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
+                onClick={() => handleTaskClick(selectedTaskId)}
+              >
+                <div
+                  className="w-[340px] max-h-[85%] shadow-2xl shadow-black/50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <TaskDetailPanel
+                    templateTaskId={selectedTaskId}
+                    template={template}
+                    board={board}
+                  />
+                </div>
               </div>
             )}
           </div>

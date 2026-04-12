@@ -134,7 +134,7 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
     addAttachment(taskInstance.id, attachment);
 
   return (
-    <aside className="w-full h-full flex flex-col bg-zinc-900/95 backdrop-blur-xl border-l border-white/[0.06] overflow-hidden">
+    <aside className="w-full h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden">
       <div className="shrink-0 border-b border-white/5">
         <DropdownSectionHeader
           sections={TASK_SECTIONS}

@@ -1,8 +1,6 @@
 'use client';
-import { Package } from 'lucide-react';
 import {
   PanelSection,
-  PanelInput,
   PanelSelect,
   PanelSlider,
   DueDatePicker,
@@ -86,15 +84,6 @@ export function DetailsSection({
         teamMembers={teamMembers}
         onAssigneesChange={onAssigneesChange}
       />
-
-      <PanelSection title="Deliverable" icon={Package} collapsible>
-        <PanelInput
-          value={effective.deliverable}
-          onChange={(v) => onFieldChange('deliverable', v)}
-          placeholder="What must exist when done?"
-          fullWidth
-        />
-      </PanelSection>
 
       <PanelSection title="Role" collapsible>
         <PanelSelect

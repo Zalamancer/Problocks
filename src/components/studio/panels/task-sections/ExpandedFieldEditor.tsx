@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { X, MessageSquare, Clock } from 'lucide-react';
+import { X, MessageSquare, Clock, Package } from 'lucide-react';
 import { IconButton } from '@/components/ui';
 import { LazyBlockNoteEditor } from './LazyBlockNoteEditor';
 import { CommentsSection } from './CommentsSection';
@@ -22,6 +22,7 @@ interface ExpandedFieldEditorProps {
   onAddComment: (body: string, parentId?: string) => void;
   onDeleteComment: (commentId: string) => void;
   activityLog: ActivityEntry[];
+  deliverable?: string;
 }
 
 type BottomTab = 'comments' | 'activity';
@@ -74,6 +75,7 @@ export function ExpandedFieldEditor({
   onAddComment,
   onDeleteComment,
   activityLog,
+  deliverable,
 }: ExpandedFieldEditorProps) {
   const [tab, setTab] = useState<BottomTab>('comments');
 
@@ -108,6 +110,19 @@ export function ExpandedFieldEditor({
               className="w-full bg-transparent text-2xl font-bold text-zinc-100 border-none outline-none placeholder:text-zinc-700 mb-6"
               placeholder="Untitled"
             />
+
+            {/* Deliverable info box */}
+            {deliverable && (
+              <div className="flex items-start gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3 mb-8">
+                <Package size={14} className="text-zinc-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1">
+                    Deliverable
+                  </span>
+                  <p className="text-sm text-zinc-300 leading-relaxed">{deliverable}</p>
+                </div>
+              </div>
+            )}
 
             {/* Description — BlockNote */}
             <LazyBlockNoteEditor

@@ -134,6 +134,7 @@ export function StudioLayout() {
               return (
                 <ExpandedFieldEditor
                   title={eff.title}
+                  deliverable={eff.deliverable}
                   descriptionBlocks={ti.descriptionBlocks}
                   onTitleChange={(v) => setTaskOverride(ti.id, { title: v })}
                   onDescriptionBlocksChange={(blocks) => updateTaskDescriptionBlocks(ti.id, blocks)}

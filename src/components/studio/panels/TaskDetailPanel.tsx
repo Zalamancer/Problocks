@@ -1,7 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
 import {
-  X,
   Clock,
   User,
   Lightbulb,
@@ -18,7 +17,6 @@ import {
   PanelActionButton,
   PanelSelect,
 } from '@/components/ui/panel-controls';
-import { IconButton } from '@/components/ui';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DropdownSectionHeader, type SectionDef } from './DropdownSectionHeader';
 import type { Template, ProjectBoard, TaskStatus, AITool } from '@/lib/templates/types';
@@ -75,7 +73,6 @@ interface TaskDetailPanelProps {
   templateTaskId: string;
   template: Template;
   board: ProjectBoard;
-  onClose: () => void;
 }
 
 // ─── Section: Details ────────────────────────────────────────────────────────
@@ -221,7 +218,7 @@ function ContextSection({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TaskDetailPanel({ templateTaskId, template, board, onClose }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailPanelProps) {
   const { updateTaskStatus } = useProjectBoard();
   const [activeSection, setActiveSection] = useState<TaskSectionId>('details');
 
@@ -260,25 +257,15 @@ export function TaskDetailPanel({ templateTaskId, template, board, onClose }: Ta
 
   return (
     <aside className="w-full md:w-[280px] flex-shrink-0 h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden">
-      {/* Header row: DropdownSectionHeader + systematic close IconButton */}
-      <div className="shrink-0 flex items-center border-b border-white/5">
-        <div className="flex-1 min-w-0">
-          <DropdownSectionHeader
-            sections={TASK_SECTIONS}
-            activeIndex={activeIndex}
-            onSelect={(i) => setActiveSection(TASK_SECTIONS[i].id as TaskSectionId)}
-          />
-        </div>
-        <div className="shrink-0 pr-2">
-          <IconButton
-            icon={X}
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            aria-label="Close task details"
-            tooltip="Close"
-          />
-        </div>
+      {/* Header — DropdownSectionHeader only. No close button; re-click the
+          kanban card to deselect (matches AutoAnimation's implicit-selection
+          pattern — the right panel never has its own close affordance). */}
+      <div className="shrink-0 border-b border-white/5">
+        <DropdownSectionHeader
+          sections={TASK_SECTIONS}
+          activeIndex={activeIndex}
+          onSelect={(i) => setActiveSection(TASK_SECTIONS[i].id as TaskSectionId)}
+        />
       </div>
 
       {/* Content area — scrollable */}

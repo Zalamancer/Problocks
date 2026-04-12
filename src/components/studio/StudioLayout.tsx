@@ -10,6 +10,7 @@ import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
 import { useProjectBoard } from '@/store/project-board-store';
 import { getTemplate } from '@/lib/templates';
+import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import type { TemplateId } from '@/lib/templates/types';
 
 type ViewMode = 'canvas' | 'kanban';
@@ -42,12 +43,20 @@ export function StudioLayout() {
   const [wizardOpen, setWizardOpen] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const template = board ? getTemplate(board.templateId) : null;
 
   function handleWizardComplete(_templateId: TemplateId) {
     setWizardOpen(false);
     setViewMode('kanban');
+  }
+
+  // Clicking the same task again deselects it — matches AutoAnimation's
+  // implicit-selection pattern (no close button; you "close" by clicking
+  // elsewhere or re-clicking the selected item).
+  function handleTaskClick(templateTaskId: string) {
+    setSelectedTaskId((prev) => (prev === templateTaskId ? null : templateTaskId));
   }
 
   return (
@@ -89,9 +98,9 @@ export function StudioLayout() {
               {!board ? (
                 <EmptyState onStart={() => setWizardOpen(true)} />
               ) : viewMode === 'canvas' ? (
-                <FlowchartView template={template!} board={board} />
+                <FlowchartView template={template!} board={board} onTaskClick={handleTaskClick} />
               ) : (
-                <KanbanView template={template!} board={board} />
+                <KanbanView template={template!} board={board} onTaskClick={handleTaskClick} />
               )}
             </div>
 
@@ -105,6 +114,15 @@ export function StudioLayout() {
               />
             )}
           </div>
+
+          {/* Task detail panel */}
+          {board && template && selectedTaskId && (
+            <TaskDetailPanel
+              templateTaskId={selectedTaskId}
+              template={template}
+              board={board}
+            />
+          )}
         </div>
 
         <LeftPanelToggle />

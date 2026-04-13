@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Sparkles, ArrowRight, ArrowDown, Terminal, Gamepad2 } from 'lucide-react';
+import { Sparkles, ArrowRight, ArrowDown, Terminal, Gamepad2, Box } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { StudioTerminal } from './Terminal';
 import { GamePreview } from './GamePreview';
@@ -10,6 +10,8 @@ import { TimelineBar } from './views/TimelineBar';
 import { KanbanView } from './views/KanbanView';
 import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
+import { useHotkeys } from '@/hooks/useHotkeys';
+import { LivePreview } from './views/LivePreview';
 import { useStudio } from '@/store/studio-store';
 import { useProjectBoard } from '@/store/project-board-store';
 import { getTemplate } from '@/lib/templates';
@@ -19,7 +21,7 @@ import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
 import { resolveEffectiveTask } from '@/lib/templates/types';
 import type { TemplateId } from '@/lib/templates/types';
 
-type ViewMode = 'canvas' | 'kanban';
+type ViewMode = 'canvas' | 'kanban' | '3d';
 
 function EmptyState({ onStart }: { onStart: () => void }) {
   return (
@@ -53,6 +55,14 @@ export function StudioLayout() {
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [terminalMaximized, setTerminalMaximized] = useState(false);
   const [gameHtml, setGameHtml] = useState<string | null>(null);
+
+  // Keyboard shortcuts
+  useHotkeys({
+    'mod+1': () => setViewMode('kanban'),
+    'mod+2': () => setViewMode('canvas'),
+    'mod+3': () => setViewMode('3d'),
+    'mod+j': () => setTerminalOpen((o) => !o),
+  });
 
   const flowDirection = useStudio((s) => s.flowDirection);
   const toggleFlowDirection = useStudio((s) => s.toggleFlowDirection);
@@ -94,6 +104,16 @@ export function StudioLayout() {
             {/* Terminal + Game toggle — always available */}
             {!board && (
               <div className="shrink-0 flex items-center justify-end gap-1 px-3 py-2 border-b border-white/[0.05]">
+                <button
+                  onClick={() => setViewMode(viewMode === '3d' ? 'kanban' : '3d')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === '3d' ? 'bg-blue-500/10 text-blue-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
+                  }`}
+                  title="Toggle 3D Preview"
+                >
+                  <Box size={12} />
+                  3D
+                </button>
                 {gameHtml && (
                   <button
                     onClick={() => setGameHtml(gameHtml ? null : gameHtml)}
@@ -138,6 +158,15 @@ export function StudioLayout() {
                 >
                   Graph
                 </button>
+                <button
+                  onClick={() => setViewMode('3d')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === '3d' ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  <Box size={12} />
+                  3D
+                </button>
 
                 {viewMode === 'canvas' && (
                   <>
@@ -175,6 +204,10 @@ export function StudioLayout() {
               {/* Game preview — replaces main view when active */}
               {gameHtml && !terminalMaximized ? (
                 <GamePreview html={gameHtml} onClose={() => setGameHtml(null)} />
+              ) : viewMode === '3d' ? (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <LivePreview />
+                </div>
               ) : !board ? (
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <EmptyState onStart={() => setWizardOpen(true)} />

@@ -1,307 +1,320 @@
+/**
+ * Game generation agent — two-pass architecture:
+ *   Pass 1: Claude CLI plans the game + lists sprites needed (JSON)
+ *   Assets: PixelLab generates real pixel art for each sprite
+ *   Pass 2: Claude CLI builds the game HTML using the real assets
+ *
+ * No ANTHROPIC_API_KEY needed — uses the user's Claude CLI subscription.
+ * Needs PIXELLAB_API_KEY for sprite generation (falls back to inline canvas art).
+ */
 import { spawn } from 'child_process';
 import { homedir } from 'os';
-import Anthropic from '@anthropic-ai/sdk';
-import { GAME_TOOLS, executeTool, getToolStatusMessage } from '@/lib/game-tools';
+import { generateSprite, isAvailable as pixelLabAvailable } from '@/lib/pixellab';
 
-const USE_CLI = !process.env.ANTHROPIC_API_KEY;
+// --- Claude CLI helpers ---
 
-const SYSTEM_PROMPT = `You are Problocks Game Engine — an AI that creates complete, playable HTML5 games.
-
-You have tools to generate game assets:
-- generate_sprite: Creates sprite images (returns data URLs for Canvas drawImage or <img>)
-- generate_sound: Creates Web Audio API sound parameters
-
-WORKFLOW — follow this order:
-1. Plan what sprites and sounds the game needs
-2. Call generate_sprite for each visual element (player, enemies, items, backgrounds, etc.)
-3. Call generate_sound for each sound effect (jump, shoot, collect, explosion, etc.)
-4. Output the complete HTML game in a single \`\`\`html code fence, using the asset data URLs
-
-GAME RULES:
-- Single self-contained HTML file, all CSS/JS inline
-- Use sprite data URLs from tool results: const img = new Image(); img.src = "<data url from tool>";
-- Implement sounds using Web Audio API with the params from generate_sound results
-- May load CDN libraries (Phaser 3, p5.js) but prefer vanilla Canvas for simple games
-- html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000 }
-- Include: title screen → gameplay → game over → restart loop
-- Show controls on title screen (keyboard + touch/click)
-- 60fps requestAnimationFrame, handle window resize
-- Score display, particles, smooth animations
-
-When modifying an existing game, call tools for any NEW assets needed, then output the COMPLETE updated HTML.
-Keep text explanations to one sentence before and after the code block.`;
-
-// CLI-only prompt — no tools available, generate everything inline
-const CLI_SYSTEM_PROMPT = `You are Problocks Game Engine — an AI that creates complete, playable HTML5 games from descriptions.
-
-RULES:
-1. ALWAYS output a complete, self-contained HTML file inside a single \`\`\`html code fence
-2. ALL CSS and JavaScript must be inline (<style> and <script> tags)
-3. You may load libraries from CDNs (Phaser 3, p5.js) but prefer vanilla Canvas for simple games
-4. Game MUST fill its container: html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000 }
-5. Include: title screen → gameplay → game over → restart
-6. Show keyboard/touch controls on the title screen
-7. Use requestAnimationFrame for smooth 60fps animation
-8. Handle window resize gracefully
-9. Add simple sound effects via Web Audio API (short synth beeps/boops, no external files)
-10. Draw all sprites using canvas shapes, gradients, and paths — make them look polished
-
-STYLE:
-- Colorful, polished visuals (canvas shapes, gradients, geometric art)
-- Smooth animations, screen transitions
-- Score display, particles, juice effects for game feel
-- Dark background (#000 or #111)
-
-When modifying an existing game, output the COMPLETE updated HTML file (not a diff).
-Keep explanations brief — one sentence before and after the code block.`;
-
-// --- Shared SSE helpers ---
-
-function makeEmitter(controller: ReadableStreamDefaultController, encoder: TextEncoder) {
-  return (data: Record<string, unknown>) => {
-    try {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-    } catch {
-      // Controller already closed — ignore
-    }
+function cliEnv() {
+  return {
+    HOME: process.env.HOME || homedir(),
+    PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+    USER: process.env.USER || '',
+    SHELL: process.env.SHELL || '/bin/zsh',
+    TERM: 'xterm-256color',
   };
 }
 
-function closeStream(controller: ReadableStreamDefaultController, encoder: TextEncoder) {
+/** Call Claude CLI and return the full text response. */
+function callClaude(prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let text = '';
+    const child = spawn(
+      'claude',
+      ['-p', prompt, '--output-format', 'stream-json', '--dangerously-skip-permissions'],
+      { env: cliEnv() },
+    );
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        try {
+          const p = JSON.parse(line);
+          if (p.type === 'assistant' && p.message?.content) {
+            for (const b of p.message.content) {
+              if (b.type === 'text') text += b.text;
+            }
+          }
+          if (p.type === 'result' && p.result && !text) {
+            text = p.result;
+          }
+        } catch { /* skip */ }
+      }
+    });
+
+    child.on('close', () => resolve(text));
+    child.on('error', reject);
+  });
+}
+
+/** Call Claude CLI and stream text chunks via callback. */
+function streamClaude(
+  prompt: string,
+  onText: (text: string) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let sent = false;
+    const child = spawn(
+      'claude',
+      ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
+      { env: cliEnv() },
+    );
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        try {
+          const p = JSON.parse(line);
+          if (p.type === 'system' || p.type === 'rate_limit_event') continue;
+          if (p.type === 'assistant' && p.message?.content) {
+            for (const b of p.message.content) {
+              if (b.type === 'text' && b.text) {
+                onText(b.text);
+                sent = true;
+              }
+            }
+          }
+          if (p.type === 'result' && p.result && !sent) {
+            onText(p.result);
+          }
+        } catch { /* skip */ }
+      }
+    });
+
+    child.on('close', () => resolve());
+    child.on('error', reject);
+  });
+}
+
+// --- Sprite planning ---
+
+interface SpritePlan {
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+}
+
+const PLAN_PROMPT = (userMsg: string) => `You are planning sprites for an HTML5 game.
+
+Game request: "${userMsg}"
+
+List all visual sprites the game needs. Output ONLY valid JSON, no other text:
+{"sprites":[{"name":"player","description":"pixel art blue spaceship facing up, dark background","width":32,"height":32}]}
+
+Rules:
+- Maximum 6 sprites (keep it fast)
+- Sizes: 16, 24, 32, 48, or 64 pixels
+- Each description MUST start with "pixel art" and include colors and style
+- Include at minimum: player character, 1-2 enemies, collectibles/items
+- Descriptions should be vivid and specific for good AI art generation
+- Use square dimensions for most sprites`;
+
+function parseSprites(output: string): SpritePlan[] {
+  // Find JSON in output (Claude may wrap in markdown fences or add text)
+  const match = output.match(/\{[\s\S]*"sprites"[\s\S]*\}/);
+  if (!match) return [];
   try {
-    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-    controller.close();
+    const data = JSON.parse(match[0]);
+    const sprites = data.sprites as SpritePlan[];
+    // Validate and cap
+    return sprites
+      .filter((s) => s.name && s.description && s.width && s.height)
+      .slice(0, 8);
   } catch {
-    // Already closed — ignore
+    return [];
   }
 }
 
-// --- API mode: full tool_use loop with streaming ---
+// --- Game generation prompt ---
 
-async function handleWithAPI(clientMessages: { role: string; content: string }[]) {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const encoder = new TextEncoder();
+const GAME_PROMPT = (
+  userMsg: string,
+  assets: Record<string, string>,
+  conversation: { role: string; content: string }[],
+) => {
+  const assetLines = Object.entries(assets)
+    .map(([name, url]) => `  ${name}: "${url}"`)
+    .join('\n');
 
-  return new ReadableStream({
-    async start(controller) {
-      const emit = makeEmitter(controller, encoder);
+  const history = conversation
+    .slice(0, -1) // Exclude the latest message (already in userMsg)
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .join('\n\n');
 
-      try {
-        emit({ status: '⏳ Planning game...' });
+  return `You are Problocks Game Engine — an AI that creates complete, playable HTML5 games.
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const conv: any[] = clientMessages.map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }));
+${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${userMsg}"
 
-        for (let round = 0; round < 10; round++) {
-          emit({ status: round === 0 ? '🤖 Calling Claude...' : '🎮 Assembling game...' });
+SPRITE ASSETS — use these EXACT data URLs as image sources:
+${assetLines || '  (no sprites generated — draw everything with canvas shapes)'}
 
-          const stream = await anthropic.messages.stream({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 16384,
-            system: SYSTEM_PROMPT,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tools: GAME_TOOLS as any,
-            messages: conv,
-          });
+Load sprites like this:
+  const img = new Image();
+  img.src = "<paste the full data URL here>";
+  // Wait for img.onload before drawing
 
-          const toolBlocks: { id: string; name: string; inputJson: string }[] = [];
-          let activeToolId = '';
-          let activeInput = '';
-          let activeToolName = '';
+GAME RULES:
+- Single self-contained HTML file in a \`\`\`html code fence
+- ALL CSS/JS inline, may use CDN libs (Phaser 3, p5.js) but prefer vanilla Canvas
+- html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000 }
+- Include: title screen → gameplay → game over → restart
+- Show keyboard/touch controls on title screen
+- 60fps requestAnimationFrame, handle window resize
+- Add sound effects via Web Audio API (short synth beeps)
+- Score display, particles, smooth animations, polished feel
 
-          for await (const event of stream) {
-            if (
-              event.type === 'content_block_start' &&
-              event.content_block.type === 'tool_use'
-            ) {
-              activeToolId = event.content_block.id;
-              activeToolName = event.content_block.name;
-              activeInput = '';
-            }
+When modifying an existing game, output the COMPLETE updated HTML file.
+Keep text to one sentence before and after the code block.`;
+};
 
-            if (event.type === 'content_block_delta') {
-              if (event.delta.type === 'text_delta') {
-                emit({ text: event.delta.text });
-              } else if (event.delta.type === 'input_json_delta') {
-                activeInput += event.delta.partial_json;
-              }
-            }
+const INLINE_PROMPT = (
+  userMsg: string,
+  conversation: { role: string; content: string }[],
+) => {
+  const history = conversation
+    .slice(0, -1)
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .join('\n\n');
 
-            if (event.type === 'content_block_stop' && activeToolId) {
-              toolBlocks.push({
-                id: activeToolId,
-                name: activeToolName,
-                inputJson: activeInput,
-              });
-              activeToolId = '';
-              activeInput = '';
-            }
-          }
+  return `You are Problocks Game Engine — an AI that creates complete, playable HTML5 games.
 
-          const finalMsg = await stream.finalMessage();
+${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${userMsg}"
 
-          if (finalMsg.stop_reason !== 'tool_use' || toolBlocks.length === 0) {
-            break;
-          }
+RULES:
+- Single HTML file in a \`\`\`html code fence, all CSS/JS inline
+- Prefer vanilla Canvas, may use CDN libs (Phaser 3, p5.js) for complex games
+- html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000 }
+- Draw all sprites with canvas shapes, gradients, and paths — make them polished
+- Include: title screen → gameplay → game over → restart
+- Show controls on title screen, 60fps animation, handle resize
+- Web Audio API sound effects, score display, particles
+- When modifying, output the COMPLETE updated HTML
 
-          // Add assistant message to conversation
-          conv.push({ role: 'assistant', content: finalMsg.content });
+Keep text to one sentence before and after the code block.`;
+};
 
-          // Execute each tool
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const toolResults: any[] = [];
+// --- SSE helpers ---
 
-          for (const tb of toolBlocks) {
-            let input: Record<string, unknown>;
-            try {
-              input = JSON.parse(tb.inputJson);
-            } catch {
-              input = {};
-            }
-
-            emit({ status: getToolStatusMessage(tb.name, input) });
-
-            try {
-              const result = await executeTool(tb.name, input);
-              emit({ status: `✅ ${(input.name as string) || tb.name} ready` });
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: tb.id,
-                content: JSON.stringify(result),
-              });
-            } catch (toolErr) {
-              const msg = toolErr instanceof Error ? toolErr.message : 'Tool failed';
-              emit({ status: `⚠️ ${tb.name} failed: ${msg}` });
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: tb.id,
-                content: JSON.stringify({ error: msg }),
-                is_error: true,
-              });
-            }
-          }
-
-          conv.push({ role: 'user', content: toolResults });
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        emit({ status: `❌ Error: ${msg}` });
-        console.error('[agent/api]', err);
-      } finally {
-        closeStream(controller, encoder);
-      }
-    },
-  });
-}
-
-// --- CLI mode: no tool support, streams text directly ---
-
-function handleWithCLI(messages: { role: string; content: string }[]) {
-  const prompt = [
-    `System instructions: ${CLI_SYSTEM_PROMPT}`,
-    '',
-    ...messages.map((m) =>
-      m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`,
-    ),
-  ].join('\n\n');
-
-  const encoder = new TextEncoder();
-
-  return new ReadableStream({
-    start(controller) {
-      const emit = makeEmitter(controller, encoder);
-
-      emit({ status: '⏳ Planning game...' });
-      emit({ status: '🎨 Generating everything inline (no API key — CLI mode)...' });
-
-      const child = spawn(
-        'claude',
-        [
-          '-p',
-          prompt,
-          '--output-format',
-          'stream-json',
-          '--verbose',
-          '--dangerously-skip-permissions',
-        ],
-        {
-          env: {
-            HOME: process.env.HOME || homedir(),
-            PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-            USER: process.env.USER || '',
-            SHELL: process.env.SHELL || '/bin/zsh',
-            TERM: 'xterm-256color',
-          },
-        },
+function makeEmitter(
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+) {
+  return (data: Record<string, unknown>) => {
+    try {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
       );
-
-      let sentText = false;
-      let firstChunk = true;
-
-      child.stdout.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.type === 'system' || parsed.type === 'rate_limit_event')
-              continue;
-
-            if (parsed.type === 'assistant' && parsed.message?.content) {
-              for (const block of parsed.message.content) {
-                if (block.type === 'text' && block.text) {
-                  if (firstChunk) {
-                    emit({ status: '✍️ Writing game code...' });
-                    firstChunk = false;
-                  }
-                  emit({ text: block.text });
-                  sentText = true;
-                }
-              }
-              continue;
-            }
-
-            if (parsed.type === 'result' && parsed.result && !sentText) {
-              emit({ text: parsed.result });
-            }
-          } catch {
-            // Not JSON — skip
-          }
-        }
-      });
-
-      child.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString().trim();
-        if (text && (text.includes('Error') || text.includes('error'))) {
-          emit({ status: `❌ ${text.slice(0, 200)}` });
-        }
-      });
-
-      child.on('close', (code: number | null) => {
-        if (code !== 0 && !sentText) {
-          emit({ status: `❌ Claude process exited with code ${code}` });
-        }
-        closeStream(controller, encoder);
-      });
-
-      child.on('error', (err: Error) => {
-        emit({ status: `❌ Could not start claude: ${err.message}` });
-        closeStream(controller, encoder);
-      });
-    },
-  });
+    } catch { /* controller closed */ }
+  };
 }
 
-// --- Route handler ---
+function closeStream(
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+) {
+  try {
+    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+    controller.close();
+  } catch { /* already closed */ }
+}
+
+// --- Main handler ---
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
-    const readable = USE_CLI
-      ? handleWithCLI(messages)
-      : await handleWithAPI(messages);
+    const { messages } = (await req.json()) as {
+      messages: { role: string; content: string }[];
+    };
+    const encoder = new TextEncoder();
+    const userMsg = messages[messages.length - 1]?.content || '';
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        const emit = makeEmitter(controller, encoder);
+
+        try {
+          if (pixelLabAvailable()) {
+            // === Two-pass: plan → PixelLab sprites → build game ===
+            emit({ status: '⏳ Planning game assets...' });
+
+            const planOutput = await callClaude(PLAN_PROMPT(userMsg));
+            const sprites = parseSprites(planOutput);
+
+            if (sprites.length > 0) {
+              emit({
+                status: `📋 Need ${sprites.length} sprites: ${sprites.map((s) => s.name).join(', ')}`,
+              });
+
+              // Generate sprites via PixelLab (in parallel, max 3 concurrent)
+              const assets: Record<string, string> = {};
+              const batches: SpritePlan[][] = [];
+              for (let i = 0; i < sprites.length; i += 3) {
+                batches.push(sprites.slice(i, i + 3));
+              }
+
+              for (const batch of batches) {
+                const results = await Promise.allSettled(
+                  batch.map(async (sprite) => {
+                    emit({
+                      status: `🎨 PixelLab: generating ${sprite.name}...`,
+                    });
+                    try {
+                      const url = await generateSprite(
+                        sprite.description,
+                        sprite.width,
+                        sprite.height,
+                      );
+                      assets[sprite.name] = url;
+                      emit({ status: `✅ ${sprite.name} ready` });
+                    } catch (err) {
+                      const msg =
+                        err instanceof Error ? err.message : String(err);
+                      emit({ status: `⚠️ ${sprite.name} failed: ${msg}` });
+                    }
+                  }),
+                );
+                // Ignore settled status — failures are already reported
+                void results;
+              }
+
+              emit({ status: '🎮 Building game with assets...' });
+              await streamClaude(
+                GAME_PROMPT(userMsg, assets, messages),
+                (text) => emit({ text }),
+              );
+            } else {
+              // Planning failed to extract sprites — build game inline
+              emit({ status: '⚠️ No sprites planned — generating inline...' });
+              await streamClaude(
+                INLINE_PROMPT(userMsg, messages),
+                (text) => emit({ text }),
+              );
+            }
+          } else {
+            // === Single-pass: no PixelLab — all inline ===
+            emit({ status: '⏳ Generating game (no PixelLab key)...' });
+            emit({ status: '✍️ Drawing sprites with canvas...' });
+            await streamClaude(
+              INLINE_PROMPT(userMsg, messages),
+              (text) => emit({ text }),
+            );
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          emit({ status: `❌ Error: ${msg}` });
+          console.error('[agent]', err);
+        } finally {
+          closeStream(controller, encoder);
+        }
+      },
+    });
 
     return new Response(readable, {
       headers: {
@@ -312,9 +325,9 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error('[agent/route]', err);
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    return Response.json(
+      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { status: 500 },
     );
   }
 }

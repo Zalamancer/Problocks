@@ -1,15 +1,15 @@
 /**
  * Game generation agent — two-pass architecture:
- *   Pass 1: Claude CLI plans the game + lists sprites needed (JSON)
- *   Assets: PixelLab generates real pixel art for each sprite
- *   Pass 2: Claude CLI builds the game HTML using the real assets
+ *   Pass 1: Claude CLI plans sprites + sounds needed (JSON)
+ *   Assets: PixelLab → pixel art sprites, Freesound → sound effects
+ *   Pass 2: Claude CLI builds the game HTML using real assets
  *
  * No ANTHROPIC_API_KEY needed — uses the user's Claude CLI subscription.
- * Needs PIXELLAB_API_KEY for sprite generation (falls back to inline canvas art).
  */
 import { spawn } from 'child_process';
 import { homedir } from 'os';
 import { generateSprite, isAvailable as pixelLabAvailable } from '@/lib/pixellab';
+import { findSound, isAvailable as freesoundAvailable } from '@/lib/freesound';
 
 // --- Claude CLI helpers ---
 
@@ -92,7 +92,7 @@ function streamClaude(
   });
 }
 
-// --- Sprite planning ---
+// --- Asset planning ---
 
 interface SpritePlan {
   name: string;
@@ -101,34 +101,48 @@ interface SpritePlan {
   height: number;
 }
 
-const PLAN_PROMPT = (userMsg: string) => `You are planning sprites for an HTML5 game.
+interface SoundPlan {
+  name: string;
+  description: string;
+}
+
+interface GamePlan {
+  sprites: SpritePlan[];
+  sounds: SoundPlan[];
+}
+
+const PLAN_PROMPT = (userMsg: string) => `You are planning assets for an HTML5 game.
 
 Game request: "${userMsg}"
 
-List all visual sprites the game needs. Output ONLY valid JSON, no other text:
-{"sprites":[{"name":"player","description":"pixel art blue spaceship facing up, dark background","width":32,"height":32}]}
+List all visual sprites AND sound effects the game needs. Output ONLY valid JSON, no other text:
+{"sprites":[{"name":"player","description":"pixel art blue spaceship facing up, dark background","width":32,"height":32}],"sounds":[{"name":"shoot","description":"laser shoot"},{"name":"explosion","description":"explosion boom"}]}
 
-Rules:
-- Maximum 6 sprites (keep it fast)
-- Sizes: 16, 24, 32, 48, or 64 pixels
-- Each description MUST start with "pixel art" and include colors and style
-- Include at minimum: player character, 1-2 enemies, collectibles/items
-- Descriptions should be vivid and specific for good AI art generation
-- Use square dimensions for most sprites`;
+Sprite rules:
+- Maximum 6 sprites
+- Sizes: 16, 24, 32, 48, or 64 pixels (square)
+- Description MUST start with "pixel art" and include colors and style
+- Include: player, enemies, collectibles, projectiles
 
-function parseSprites(output: string): SpritePlan[] {
-  // Find JSON in output (Claude may wrap in markdown fences or add text)
+Sound rules:
+- Maximum 5 sounds
+- Short descriptive names: jump, coin, shoot, explosion, hit, powerup, death, victory
+- Description should describe the sound character (e.g., "coin collect chime", "8bit jump")`;
+
+function parsePlan(output: string): GamePlan {
   const match = output.match(/\{[\s\S]*"sprites"[\s\S]*\}/);
-  if (!match) return [];
+  if (!match) return { sprites: [], sounds: [] };
   try {
     const data = JSON.parse(match[0]);
-    const sprites = data.sprites as SpritePlan[];
-    // Validate and cap
-    return sprites
+    const sprites = ((data.sprites || []) as SpritePlan[])
       .filter((s) => s.name && s.description && s.width && s.height)
       .slice(0, 8);
+    const sounds = ((data.sounds || []) as SoundPlan[])
+      .filter((s) => s.name && s.description)
+      .slice(0, 6);
+    return { sprites, sounds };
   } catch {
-    return [];
+    return { sprites: [], sounds: [] };
   }
 }
 
@@ -136,15 +150,20 @@ function parseSprites(output: string): SpritePlan[] {
 
 const GAME_PROMPT = (
   userMsg: string,
-  assets: Record<string, string>,
+  spriteAssets: Record<string, string>,
+  soundAssets: Record<string, string>,
   conversation: { role: string; content: string }[],
 ) => {
-  const assetLines = Object.entries(assets)
+  const spriteLines = Object.entries(spriteAssets)
+    .map(([name, url]) => `  ${name}: "${url}"`)
+    .join('\n');
+
+  const soundLines = Object.entries(soundAssets)
     .map(([name, url]) => `  ${name}: "${url}"`)
     .join('\n');
 
   const history = conversation
-    .slice(0, -1) // Exclude the latest message (already in userMsg)
+    .slice(0, -1)
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n\n');
 
@@ -153,12 +172,21 @@ const GAME_PROMPT = (
 ${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${userMsg}"
 
 SPRITE ASSETS — use these EXACT data URLs as image sources:
-${assetLines || '  (no sprites generated — draw everything with canvas shapes)'}
+${spriteLines || '  (no sprites generated — draw everything with canvas shapes)'}
 
 Load sprites like this:
   const img = new Image();
   img.src = "<paste the full data URL here>";
   // Wait for img.onload before drawing
+
+SOUND ASSETS — use these EXACT data URLs for sound effects:
+${soundLines || '  (no sounds loaded — use Web Audio API synth beeps instead)'}
+
+Play sounds like this:
+  const snd = new Audio("<paste the full data URL here>");
+  snd.volume = 0.5;
+  snd.play().catch(() => {}); // catch for autoplay policy
+  // Create new Audio() each time to allow overlapping plays
 
 GAME RULES:
 - Single self-contained HTML file in a \`\`\`html code fence
@@ -167,7 +195,7 @@ GAME RULES:
 - Include: title screen → gameplay → game over → restart
 - Show keyboard/touch controls on title screen
 - 60fps requestAnimationFrame, handle window resize
-- Add sound effects via Web Audio API (short synth beeps)
+- For any sounds NOT in the assets above, use Web Audio API synth beeps as fallback
 - Score display, particles, smooth animations, polished feel
 
 When modifying an existing game, output the COMPLETE updated HTML file.
@@ -240,67 +268,95 @@ export async function POST(req: Request) {
         const emit = makeEmitter(controller, encoder);
 
         try {
-          if (pixelLabAvailable()) {
-            // === Two-pass: plan → PixelLab sprites → build game ===
+          const hasPixelLab = pixelLabAvailable();
+          const hasFreesound = freesoundAvailable();
+
+          if (hasPixelLab || hasFreesound) {
+            // === Two-pass: plan → generate assets → build game ===
             emit({ status: '⏳ Planning game assets...' });
 
             const planOutput = await callClaude(PLAN_PROMPT(userMsg));
-            const sprites = parseSprites(planOutput);
+            const plan = parsePlan(planOutput);
 
-            if (sprites.length > 0) {
+            const spriteAssets: Record<string, string> = {};
+            const soundAssets: Record<string, string> = {};
+
+            // --- Sprites via PixelLab ---
+            if (hasPixelLab && plan.sprites.length > 0) {
               emit({
-                status: `📋 Need ${sprites.length} sprites: ${sprites.map((s) => s.name).join(', ')}`,
+                status: `📋 ${plan.sprites.length} sprites: ${plan.sprites.map((s) => s.name).join(', ')}`,
               });
 
-              // Generate sprites via PixelLab (in parallel, max 3 concurrent)
-              const assets: Record<string, string> = {};
               const batches: SpritePlan[][] = [];
-              for (let i = 0; i < sprites.length; i += 3) {
-                batches.push(sprites.slice(i, i + 3));
+              for (let i = 0; i < plan.sprites.length; i += 3) {
+                batches.push(plan.sprites.slice(i, i + 3));
               }
 
               for (const batch of batches) {
-                const results = await Promise.allSettled(
+                await Promise.allSettled(
                   batch.map(async (sprite) => {
-                    emit({
-                      status: `🎨 PixelLab: generating ${sprite.name}...`,
-                    });
+                    emit({ status: `🎨 PixelLab: ${sprite.name}...` });
                     try {
-                      const url = await generateSprite(
+                      spriteAssets[sprite.name] = await generateSprite(
                         sprite.description,
                         sprite.width,
                         sprite.height,
                       );
-                      assets[sprite.name] = url;
                       emit({ status: `✅ ${sprite.name} ready` });
                     } catch (err) {
-                      const msg =
-                        err instanceof Error ? err.message : String(err);
+                      const msg = err instanceof Error ? err.message : String(err);
                       emit({ status: `⚠️ ${sprite.name} failed: ${msg}` });
                     }
                   }),
                 );
-                // Ignore settled status — failures are already reported
-                void results;
               }
+            }
 
-              emit({ status: '🎮 Building game with assets...' });
+            // --- Sounds via Freesound ---
+            if (hasFreesound && plan.sounds.length > 0) {
+              emit({
+                status: `🔊 ${plan.sounds.length} sounds: ${plan.sounds.map((s) => s.name).join(', ')}`,
+              });
+
+              // Fetch sounds in parallel (all at once — they're just searches)
+              await Promise.allSettled(
+                plan.sounds.map(async (sound) => {
+                  emit({ status: `🔊 Freesound: ${sound.name}...` });
+                  try {
+                    const result = await findSound(sound.description);
+                    if (result) {
+                      soundAssets[sound.name] = result.url;
+                      emit({ status: `✅ ${sound.name} ready` });
+                    } else {
+                      emit({ status: `⚠️ ${sound.name}: no match (will use synth)` });
+                    }
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    emit({ status: `⚠️ ${sound.name} failed: ${msg}` });
+                  }
+                }),
+              );
+            }
+
+            // --- Build game ---
+            const totalAssets = Object.keys(spriteAssets).length + Object.keys(soundAssets).length;
+            if (totalAssets > 0) {
+              emit({ status: `🎮 Building game with ${totalAssets} assets...` });
               await streamClaude(
-                GAME_PROMPT(userMsg, assets, messages),
+                GAME_PROMPT(userMsg, spriteAssets, soundAssets, messages),
                 (text) => emit({ text }),
               );
             } else {
-              // Planning failed to extract sprites — build game inline
-              emit({ status: '⚠️ No sprites planned — generating inline...' });
+              emit({ status: '⚠️ No assets generated — building inline...' });
               await streamClaude(
                 INLINE_PROMPT(userMsg, messages),
                 (text) => emit({ text }),
               );
             }
           } else {
-            // === Single-pass: no PixelLab — all inline ===
-            emit({ status: '⏳ Generating game (no PixelLab key)...' });
-            emit({ status: '✍️ Drawing sprites with canvas...' });
+            // === Single-pass: no service keys — all inline ===
+            emit({ status: '⏳ Generating game (no service keys)...' });
+            emit({ status: '✍️ Drawing sprites + synth sounds inline...' });
             await streamClaude(
               INLINE_PROMPT(userMsg, messages),
               (text) => emit({ text }),

@@ -202,7 +202,7 @@ When modifying an existing game, output the COMPLETE updated HTML file.
 Keep text to one sentence before and after the code block.`;
 };
 
-const INLINE_PROMPT = (
+const MODULAR_PROMPT = (
   userMsg: string,
   conversation: { role: string; content: string }[],
 ) => {
@@ -211,85 +211,176 @@ const INLINE_PROMPT = (
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n\n');
 
-  return `You are Problocks Game Engine — an AI that creates complete, playable HTML5 games.
+  return `You are Problocks Game Engine — you create games as modular script files.
 
 ${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${userMsg}"
 
-RULES:
-- Single HTML file in a \`\`\`html code fence, all CSS/JS inline
-- Prefer vanilla Canvas, may use CDN libs (Phaser 3, p5.js) for complex games
-- html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000 }
-- Draw all sprites with canvas shapes, gradients, and paths — make them polished
-- Include: title screen → gameplay → game over → restart
-- Show controls on title screen, 60fps animation, handle resize
-- Web Audio API sound effects, score display, particles
-- When modifying, output the COMPLETE updated HTML
+A game framework handles: game loop, input, physics, rendering, entities, audio, particles, scenes.
+You ONLY write game-specific logic as separate files.
 
-Keep text to one sentence before and after the code block.`;
+Output ONLY a JSON object with this structure (no other text before or after):
+
+\`\`\`json
+{
+  "title": "Game Title",
+  "files": {
+    "config.js": "const CONFIG = { renderer: '2d', bgColor: '#111', world: { width: 800, height: 600 }, gravity: 0, startScene: 'title' };",
+    "player.js": "const PLAYER = { type: 'player', width: 32, height: 32, speed: 200, ... };",
+    "enemies.js": "const ENEMIES = [{ type: 'slime', ... }, { type: 'goblin', ... }];",
+    "scenes.js": "const SCENES = { title: { enter(game) {...}, update(game,dt) {...}, draw(game,ctx) {...} }, gameplay: {...}, gameover: {...} };",
+    "sounds.js": "const SOUNDS = { hit: { freq: 200, type: 'sawtooth', duration: 0.15 }, ... };",
+    "setup.js": "const SETUP = function(game) { game.physics.addCollisionPair('player','enemy'); game.entities.spawn('player', {x:400,y:300}); };"
+  }
+}
+\`\`\`
+
+## Framework API available to your scripts:
+
+### Entity definitions (each file exports a const):
+const PLAYER = {
+  type: 'player',           // required unique type name
+  tags: ['friendly'],        // optional tags for querying
+  width: 32, height: 32,    // size
+  // any custom properties...
+  speed: 200, hp: 100,
+
+  init(entity, game) {},           // called on spawn
+  update(entity, game, dt) {       // called every frame
+    // game.input.isDown('KeyW')   — held check
+    // game.input.justPressed('Space') — single press
+    // game.input.mouse            — {x, y, dx, dy, buttons}
+    // entity.x, entity.y, entity.vx, entity.vy — position/velocity
+    // game.entities.query('enemy') — find entities by type
+    // game.entities.first('player') — get single entity
+    // game.physics.distance(a, b)
+    // game.particles.emit(x, y, { count, color, speed })
+    // game.audio.play('hit')
+    // game.scenes.switch('gameover')
+    // game.time.dt, game.time.elapsed
+    // game.state.score = 10  — shared state
+    // game.camera.follow(entity)
+    // entity.destroy()
+  },
+  onCollide(entity, other, game) {},  // called on AABB overlap
+  onDestroy(entity) {},
+  draw(entity, game, ctx) {          // custom 2D drawing (optional)
+    ctx.fillStyle = '#3af';
+    ctx.fillRect(entity.x - entity.width/2, entity.y - entity.height/2, entity.width, entity.height);
+  },
 };
 
-const EDIT_PROMPT = (userMsg: string, currentHtml: string) => `You are editing an existing HTML5 game. Apply the user's requested changes.
+### For 3D games (config.renderer = '3d'):
+- Set CONFIG.renderer = '3d'
+- Three.js is auto-loaded via CDN
+- Access via game.three.scene, game.three.camera, game.three.renderer
+- In SETUP function: create Three.js scene, camera, lights, add meshes
+- In entity update: manipulate Three.js objects stored on entity (entity.mesh = ...)
+- The canvas is shared — framework handles the render call
 
-Current game code:
-\`\`\`html
-${currentHtml}
-\`\`\`
+### Scenes:
+const SCENES = {
+  title: {
+    enter(game) { /* spawn title entities, show UI */ },
+    update(game, dt) { if (game.input.justPressed('Space')) game.scenes.switch('gameplay'); },
+    draw(game, ctx) { /* draw title screen overlay */ },
+    exit(game) { /* cleanup */ },
+  },
+  gameplay: { enter(game) {}, update(game, dt) {} },
+  gameover: { enter(game) {}, update(game, dt) {}, draw(game, ctx) {} },
+};
+
+### Sounds (synth):
+const SOUNDS = {
+  hit: { freq: 200, type: 'sawtooth', duration: 0.15, vol: 0.12 },
+  pickup: { notes: [{ freq: 523, type: 'sine', duration: 0.1 }, { freq: 784, type: 'sine', duration: 0.15, delay: 0.08 }] },
+};
+
+### Collisions (registered in SETUP):
+const COLLISIONS = [['player', 'enemy'], ['player', 'item'], ['bullet', 'enemy']];
+
+### UI (called in update/draw):
+game.ui.text('Score: ' + game.state.score, 20, 30, { color: '#fff', font: '20px sans-serif' });
+game.ui.bar(20, 40, 100, 8, player.hp, player.maxHp, '#e74c3c');
+
+RULES:
+- Each file defines ONE const (PLAYER, ENEMIES, SCENES, SOUNDS, CONFIG, SETUP, COLLISIONS)
+- Arrays for multiple entity types: const ENEMIES = [{type:'slime',...}, {type:'goblin',...}]
+- config.js is ALWAYS required
+- scenes.js is ALWAYS required (must have at least 'title' and 'gameplay')
+- setup.js is ALWAYS required (spawns initial entities, registers collisions)
+- Keep each file focused on one concern
+- For 3D games: put Three.js setup in setup.js, mesh creation in entity init/setup3d
+- All positions in pixels, speeds in pixels/sec, time in seconds`;
+};
+
+const MODULAR_EDIT_PROMPT = (userMsg: string, currentFiles: Record<string, string>) => {
+  const filesListing = Object.entries(currentFiles)
+    .map(([name, content]) => `// ── ${name} ──\n${content}`)
+    .join('\n\n');
+
+  return `You are editing an existing game. Here are the current files:
+
+${filesListing}
 
 User request: "${userMsg}"
 
-Output ONLY SEARCH/REPLACE blocks. Each block replaces one section of code:
+Output ONLY a JSON object with the files that need to change (omit unchanged files):
 
-<<<SEARCH
-exact lines from the current code to find
-===
-replacement lines
->>>REPLACE
+\`\`\`json
+{
+  "files": {
+    "player.js": "...updated content..."
+  }
+}
+\`\`\`
 
 Rules:
-- SEARCH text must EXACTLY match lines in the current code (including whitespace/indentation)
-- Make the MINIMUM changes needed to fulfill the request
-- Use multiple blocks if changes span different parts of the file
-- Do NOT output the full file
-- After all SEARCH/REPLACE blocks, write one sentence summarizing what you changed
-- If the change requires adding entirely new code (not replacing existing), use an empty SEARCH with a <<<INSERT_AFTER marker:
+- Only include files that actually change
+- Output the COMPLETE file content for changed files (not diffs)
+- Do not change the framework API calls — only change game logic
+- Keep the same const name conventions (PLAYER, ENEMIES, SCENES, etc.)`;
+};
 
-<<<INSERT_AFTER
-the line after which to insert
-===
-new lines to insert
->>>END_INSERT`;
+/** Parse a JSON game response (```json block) into title + files */
+function parseGameJson(text: string): { title: string; files: Record<string, string> } | null {
+  // Try to extract from ```json code fence first
+  const fenceMatch = text.match(/```json\s*([\s\S]*?)```/);
+  const jsonStr = fenceMatch ? fenceMatch[1].trim() : text.trim();
 
-function applyEdits(html: string, response: string): { html: string; summary: string } {
-  let result = html;
-
-  // Extract SEARCH/REPLACE blocks
-  const replacePattern = /<<<SEARCH\n([\s\S]*?)\n===\n([\s\S]*?)\n>>>REPLACE/g;
-  let match;
-  while ((match = replacePattern.exec(response)) !== null) {
-    const [, search, replace] = match;
-    if (result.includes(search)) {
-      result = result.replace(search, replace);
+  try {
+    const data = JSON.parse(jsonStr);
+    if (data.files && typeof data.files === 'object') {
+      return { title: data.title || 'Untitled Game', files: data.files };
     }
-  }
-
-  // Extract INSERT_AFTER blocks
-  const insertPattern = /<<<INSERT_AFTER\n([\s\S]*?)\n===\n([\s\S]*?)\n>>>END_INSERT/g;
-  while ((match = insertPattern.exec(response)) !== null) {
-    const [, after, insert] = match;
-    if (result.includes(after)) {
-      result = result.replace(after, after + '\n' + insert);
+    return null;
+  } catch {
+    // Try to find a JSON object with "files" key anywhere in the text
+    const match = text.match(/\{[\s\S]*"files"\s*:\s*\{[\s\S]*\}\s*\}/);
+    if (match) {
+      try {
+        const data = JSON.parse(match[0]);
+        if (data.files && typeof data.files === 'object') {
+          return { title: data.title || 'Untitled Game', files: data.files };
+        }
+      } catch { /* fall through */ }
     }
+    return null;
   }
-
-  // Extract summary (text after the last block)
-  const lastBlock = response.lastIndexOf('>>>REPLACE');
-  const lastInsert = response.lastIndexOf('>>>END_INSERT');
-  const lastEnd = Math.max(lastBlock, lastInsert);
-  const summary = lastEnd > -1 ? response.slice(lastEnd + 10).trim() : '';
-
-  return { html: result, summary };
 }
 
+/** Extract game files from the last assistant message in conversation history */
+function extractLastGameFiles(messages: { role: string; content: string }[]): Record<string, string> | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === 'assistant') {
+      const parsed = parseGameJson(m.content);
+      if (parsed) return parsed.files;
+    }
+  }
+  return null;
+}
+
+/** Legacy: extract HTML from old-format assistant messages (backward compat) */
 function extractLastGameHtml(messages: { role: string; content: string }[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -342,10 +433,12 @@ export async function POST(req: Request) {
 
         try {
           // Check if this is a follow-up edit (has existing game in history)
-          const existingHtml = extractLastGameHtml(messages);
-          const isFollowUp = existingHtml && messages.length > 2; // At least one prior exchange
+          const existingFiles = extractLastGameFiles(messages);
+          const existingHtml = !existingFiles ? extractLastGameHtml(messages) : null;
+          const isFollowUp = (existingFiles || existingHtml) && messages.length > 2;
 
-          if (isFollowUp) {
+          if (isFollowUp && existingFiles) {
+            // === Modular edit path ===
             emit({ status: '⚡ Applying changes...' });
 
             const progressMsgs = ['🔍 Analyzing changes needed...', '✏️ Editing game code...', '🔧 Applying modifications...'];
@@ -358,25 +451,26 @@ export async function POST(req: Request) {
             try {
               let editResponse = '';
               await streamClaude(
-                EDIT_PROMPT(userMsg, existingHtml),
-                (text) => { editResponse += text; }
+                MODULAR_EDIT_PROMPT(userMsg, existingFiles),
+                (text) => { editResponse += text; },
               );
 
               clearInterval(pInterval);
 
-              const { html: updatedHtml, summary } = applyEdits(existingHtml, editResponse);
-
-              // Check if edits were actually applied
-              if (updatedHtml !== existingHtml) {
+              const parsed = parseGameJson(editResponse);
+              if (parsed && Object.keys(parsed.files).length > 0) {
+                // Merge changed files into existing files
+                const mergedFiles = { ...existingFiles, ...parsed.files };
                 emit({ status: '✅ Changes applied' });
-                // Emit the full updated HTML wrapped in code fence (Terminal will extract it)
-                emit({ text: summary + '\n\n```html\n' + updatedHtml + '\n```\n' });
+                emit({ game: { title: parsed.title || 'Updated Game', files: mergedFiles } });
+                // Also emit the raw JSON as text so it's stored in conversation history
+                const gameJson = JSON.stringify({ title: parsed.title || 'Updated Game', files: mergedFiles });
+                emit({ text: '```json\n' + gameJson + '\n```\n' });
               } else {
-                // Fallback: edits didn't match, do full regeneration
-                emit({ status: '⚠️ Diff failed, regenerating full game...' });
+                emit({ status: '⚠️ Edit parse failed, regenerating full game...' });
                 editFailed = true;
               }
-            } catch (err) {
+            } catch {
               clearInterval(pInterval);
               emit({ status: '⚠️ Edit failed, regenerating...' });
               editFailed = true;
@@ -387,6 +481,10 @@ export async function POST(req: Request) {
               return;
             }
             // If editFailed, fall through to full generation below
+          } else if (isFollowUp && existingHtml) {
+            // === Legacy HTML edit path (backward compat for old conversations) ===
+            emit({ status: '⚡ Regenerating game with changes...' });
+            // Fall through to full generation — legacy conversations get regenerated
           }
 
           const hasPixelLab = pixelLabAvailable();
@@ -394,6 +492,7 @@ export async function POST(req: Request) {
 
           if (hasPixelLab || hasFreesound) {
             // === Two-pass: plan → generate assets → build game ===
+            // Asset pipeline still uses GAME_PROMPT (monolithic HTML) for now
             emit({ status: '⏳ Planning game assets...' });
 
             const planOutput = await callClaude(PLAN_PROMPT(userMsg));
@@ -439,7 +538,6 @@ export async function POST(req: Request) {
                 status: `🔊 ${plan.sounds.length} sounds: ${plan.sounds.map((s) => s.name).join(', ')}`,
               });
 
-              // Fetch sounds in parallel (all at once — they're just searches)
               await Promise.allSettled(
                 plan.sounds.map(async (sound) => {
                   emit({ status: `🔊 Freesound: ${sound.name}...` });
@@ -459,7 +557,7 @@ export async function POST(req: Request) {
               );
             }
 
-            // --- Build game ---
+            // --- Build game with assets (still monolithic HTML for asset path) ---
             const totalAssets = Object.keys(spriteAssets).length + Object.keys(soundAssets).length;
             const progressMsgs = [
               '🎮 Building game...',
@@ -472,43 +570,29 @@ export async function POST(req: Request) {
 
             if (totalAssets > 0) {
               emit({ status: `🎮 Building game with ${totalAssets} assets...` });
-              let progressIdx = 0;
-              const progressInterval = setInterval(() => {
-                if (progressIdx < progressMsgs.length) {
-                  emit({ status: progressMsgs[progressIdx] });
-                  progressIdx++;
-                }
-              }, 4000);
-              try {
-                await streamClaude(
-                  GAME_PROMPT(userMsg, spriteAssets, soundAssets, messages),
-                  (text) => emit({ text }),
-                );
-              } finally {
-                clearInterval(progressInterval);
-              }
             } else {
               emit({ status: '⚠️ No assets generated — building inline...' });
-              let progressIdx = 0;
-              const progressInterval = setInterval(() => {
-                if (progressIdx < progressMsgs.length) {
-                  emit({ status: progressMsgs[progressIdx] });
-                  progressIdx++;
-                }
-              }, 4000);
-              try {
-                await streamClaude(
-                  INLINE_PROMPT(userMsg, messages),
-                  (text) => emit({ text }),
-                );
-              } finally {
-                clearInterval(progressInterval);
+            }
+
+            let progressIdx = 0;
+            const progressInterval = setInterval(() => {
+              if (progressIdx < progressMsgs.length) {
+                emit({ status: progressMsgs[progressIdx] });
+                progressIdx++;
               }
+            }, 4000);
+            try {
+              await streamClaude(
+                GAME_PROMPT(userMsg, spriteAssets, soundAssets, messages),
+                (text) => emit({ text }),
+              );
+            } finally {
+              clearInterval(progressInterval);
             }
           } else {
-            // === Single-pass: no service keys — all inline ===
-            emit({ status: '⏳ Generating game (no service keys)...' });
-            emit({ status: '✍️ Drawing sprites + synth sounds inline...' });
+            // === Single-pass modular: no service keys — use framework ===
+            emit({ status: '⏳ Generating modular game...' });
+            emit({ status: '✍️ Writing game scripts for Problocks engine...' });
             const progressMsgs = [
               '🎮 Building game...',
               '⚙️ Designing game logic...',
@@ -524,13 +608,24 @@ export async function POST(req: Request) {
                 progressIdx++;
               }
             }, 4000);
+
+            let fullResponse = '';
             try {
               await streamClaude(
-                INLINE_PROMPT(userMsg, messages),
-                (text) => emit({ text }),
+                MODULAR_PROMPT(userMsg, messages),
+                (text) => {
+                  fullResponse += text;
+                  emit({ text });
+                },
               );
             } finally {
               clearInterval(progressInterval);
+            }
+
+            // Parse the completed response and emit the game event
+            const parsed = parseGameJson(fullResponse);
+            if (parsed) {
+              emit({ game: { title: parsed.title, files: parsed.files } });
             }
           }
         } catch (err) {

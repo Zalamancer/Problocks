@@ -9,7 +9,8 @@ export interface GeneratedGame {
   id: string;
   name: string;
   prompt: string;
-  html: string;
+  html: string;                          // kept for backward compat with old games
+  files: Record<string, string> | null;  // multi-file games
   createdAt: number;
   updatedAt: number;
 }
@@ -33,10 +34,16 @@ export interface StudioStore {
 
   games: GeneratedGame[];
   activeGameId: string | null;
-  addGame: (game: { name: string; prompt: string; html: string }) => void;
+  addGame: (game: { name: string; prompt: string; html: string; files?: Record<string, string> }) => void;
   updateGame: (id: string, html: string) => void;
+  updateGameFiles: (id: string, files: Record<string, string>) => void;
+  updateGameFile: (gameId: string, fileName: string, content: string) => void;
   removeGame: (id: string) => void;
   setActiveGameId: (id: string | null) => void;
+
+  /** Which virtual file is open in the center code viewer (null = game preview) */
+  openFileName: string | null;
+  setOpenFileName: (name: string | null) => void;
 }
 
 export const useStudio = create<StudioStore>()(persist((set) => ({
@@ -61,19 +68,33 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   addGame: (game) => {
     const id = crypto.randomUUID();
     const now = Date.now();
+    const files = game.files ?? null;
+    const html = files ? '' : game.html;
     set((s) => ({
-      games: [...s.games, { ...game, id, createdAt: now, updatedAt: now }],
+      games: [...s.games, { name: game.name, prompt: game.prompt, html, files, id, createdAt: now, updatedAt: now }],
       activeGameId: id,
     }));
   },
   updateGame: (id, html) => set((s) => ({
     games: s.games.map((g) => g.id === id ? { ...g, html, updatedAt: Date.now() } : g),
   })),
+  updateGameFiles: (id, files) => set((s) => ({
+    games: s.games.map((g) => g.id === id ? { ...g, files, updatedAt: Date.now() } : g),
+  })),
+  updateGameFile: (gameId, fileName, content) => set((s) => ({
+    games: s.games.map((g) => {
+      if (g.id !== gameId || !g.files) return g;
+      return { ...g, files: { ...g.files, [fileName]: content }, updatedAt: Date.now() };
+    }),
+  })),
   removeGame: (id) => set((s) => ({
     games: s.games.filter((g) => g.id !== id),
     activeGameId: s.activeGameId === id ? null : s.activeGameId,
   })),
   setActiveGameId: (id) => set({ activeGameId: id }),
+
+  openFileName: null,
+  setOpenFileName: (name) => set({ openFileName: name }),
 }), {
   name: 'problocks-studio-v2',
   partialize: (state) => ({

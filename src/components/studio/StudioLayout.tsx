@@ -13,8 +13,10 @@ import { useThemeEffect } from '@/hooks/useThemeEffect';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { LivePreview } from './views/LivePreview';
 import { useStudio } from '@/store/studio-store';
+import { CodeView } from './CodeView';
 import { useProjectBoard } from '@/store/project-board-store';
 import { getTemplate } from '@/lib/templates';
+import { getGameHtml } from '@/lib/game-engine';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
@@ -71,6 +73,8 @@ export function StudioLayout() {
   const activeGameId = useStudio((s) => s.activeGameId);
   const setActiveGameId = useStudio((s) => s.setActiveGameId);
   const games = useStudio((s) => s.games);
+  const openFileName = useStudio((s) => s.openFileName);
+  const setOpenFileName = useStudio((s) => s.setOpenFileName);
 
   const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
   const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
@@ -88,17 +92,32 @@ export function StudioLayout() {
     setViewMode('kanban');
   }
 
+  const updateGameFiles = useStudio((s) => s.updateGameFiles);
+
   /** When a game is generated from Terminal, save/update it in the store */
-  function handleGameGenerated(html: string) {
-    setGameHtml(html);
-    if (activeGameId) {
-      // Follow-up edit — update existing game
-      updateGame(activeGameId, html);
+  function handleGameGenerated(html: string, files?: Record<string, string>) {
+    if (files) {
+      // Multi-file game — store files, generate HTML from bundler for preview
+      const bundledHtml = getGameHtml({ files });
+      setGameHtml(bundledHtml);
+      if (activeGameId) {
+        updateGame(activeGameId, bundledHtml);
+        updateGameFiles(activeGameId, files);
+      } else {
+        const titleMatch = bundledHtml.match(/<title>(.*?)<\/title>/i);
+        const name = titleMatch?.[1]?.slice(0, 30) || `Game ${games.length + 1}`;
+        addGame({ name, prompt: '', html: bundledHtml, files });
+      }
     } else {
-      // New game — derive a name from the HTML <title> tag if present, else use counter
-      const titleMatch = html.match(/<title>(.*?)<\/title>/i);
-      const name = titleMatch?.[1]?.slice(0, 30) || `Game ${games.length + 1}`;
-      addGame({ name, prompt: '', html });
+      // Legacy single-file game
+      setGameHtml(html);
+      if (activeGameId) {
+        updateGame(activeGameId, html);
+      } else {
+        const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+        const name = titleMatch?.[1]?.slice(0, 30) || `Game ${games.length + 1}`;
+        addGame({ name, prompt: '', html });
+      }
     }
   }
 
@@ -106,7 +125,13 @@ export function StudioLayout() {
   useEffect(() => {
     if (activeGameId) {
       const active = games.find((g) => g.id === activeGameId);
-      if (active) setGameHtml(active.html);
+      if (active) {
+        if (active.files && Object.keys(active.files).length > 0) {
+          setGameHtml(getGameHtml({ files: active.files }));
+        } else {
+          setGameHtml(active.html);
+        }
+      }
     }
   }, [activeGameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -228,8 +253,20 @@ export function StudioLayout() {
 
             {/* Main view */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              {/* Game preview — replaces main view when active */}
-              {gameHtml && !terminalMaximized ? (
+              {/* Code view — opened from file tree */}
+              {openFileName && gameHtml && !terminalMaximized ? (() => {
+                const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+                const directContent = activeGame?.files?.[openFileName] ?? undefined;
+                return (
+                  <CodeView
+                    html={gameHtml}
+                    fileName={openFileName}
+                    fileContent={directContent}
+                    onClose={() => setOpenFileName(null)}
+                    onSwitchToPreview={() => setOpenFileName(null)}
+                  />
+                );
+              })() : gameHtml && !terminalMaximized ? (
                 <GamePreview html={gameHtml} onClose={() => setGameHtml(null)} />
               ) : viewMode === '3d' ? (
                 <div className="flex-1 min-h-0 overflow-hidden">
@@ -257,6 +294,7 @@ export function StudioLayout() {
                 isMaximized={terminalMaximized}
                 onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
                 onGameGenerated={handleGameGenerated}
+                activeGameName={activeGameId ? games.find((g) => g.id === activeGameId)?.name ?? null : null}
               />
             )}
 

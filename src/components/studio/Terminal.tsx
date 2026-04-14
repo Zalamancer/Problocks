@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send } from 'lucide-react';
+import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send, Copy, Check } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -32,9 +32,12 @@ export function StudioTerminal({
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const inCodeFenceRef = useRef<boolean>(false);
+  const lastResponseRef = useRef<string>('');
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -162,27 +165,54 @@ export function StudioTerminal({
             // Text events — stream into current display block
             if (parsed.text) {
               assistantText += parsed.text;
-              displayText += parsed.text;
 
-              if (streamLineIndex.current === -1) {
-                // Start a new streaming region
-                setLines((prev) => {
-                  streamLineIndex.current = prev.length;
-                  return [...prev, ...formatOutput(displayText)];
-                });
-              } else {
-                // Update existing streaming region
-                setLines((prev) => {
-                  const updated = [...prev];
-                  const formatted = formatOutput(displayText);
-                  updated.splice(
-                    streamLineIndex.current,
-                    updated.length - streamLineIndex.current,
-                    ...formatted,
-                  );
-                  return updated;
-                });
+              // Count triple-backtick occurrences to detect code fences
+              const fenceCount = (assistantText.match(/```/g) || []).length;
+              const wasInFence = inCodeFenceRef.current;
+              const nowInFence = fenceCount % 2 === 1;
+              inCodeFenceRef.current = nowInFence;
+
+              if (!wasInFence && nowInFence) {
+                // Just entered a code fence — show status line, don't append text
+                streamLineIndex.current = -1;
+                displayText = '';
+                setLines((prev) => [
+                  ...prev,
+                  { type: 'status', text: '  📝 Writing game code...' },
+                ]);
+              } else if (wasInFence && !nowInFence) {
+                // Just exited a code fence — show ready status, reset display
+                streamLineIndex.current = -1;
+                displayText = '';
+                setLines((prev) => [
+                  ...prev,
+                  { type: 'status', text: '  ✅ Game code ready' },
+                ]);
+              } else if (!nowInFence) {
+                // Outside any fence — display text normally
+                displayText += parsed.text;
+
+                if (streamLineIndex.current === -1) {
+                  // Start a new streaming region
+                  setLines((prev) => {
+                    streamLineIndex.current = prev.length;
+                    return [...prev, ...formatOutput(displayText)];
+                  });
+                } else {
+                  // Update existing streaming region
+                  setLines((prev) => {
+                    const updated = [...prev];
+                    const formatted = formatOutput(displayText);
+                    updated.splice(
+                      streamLineIndex.current,
+                      updated.length - streamLineIndex.current,
+                      ...formatted,
+                    );
+                    return updated;
+                  });
+                }
               }
+              // If nowInFence && wasInFence — inside fence, skip display
             }
           } catch {
             // skip malformed chunks
@@ -192,6 +222,9 @@ export function StudioTerminal({
 
       // Finalize
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }]);
+      // Store the response text without code fences for the copy button
+      lastResponseRef.current = assistantText.replace(/```[\w]*\s*[\s\S]*?```/g, '').trim();
+      inCodeFenceRef.current = false;
       setLines((prev) => [...prev, { type: 'system', text: '' }]);
 
       // Extract HTML game code and send to preview
@@ -236,10 +269,10 @@ export function StudioTerminal({
 
   return (
     <div
-      className={`flex flex-col bg-[#0d0d0d] border-t border-white/[0.06] ${isMaximized ? 'h-full' : 'h-[280px]'}`}
+      className={`flex flex-col bg-panel-bg border-t border-panel-border ${isMaximized ? 'h-full' : 'h-[280px]'}`}
     >
       {/* Title bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#161616] border-b border-white/[0.06] shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-panel-surface border-b border-panel-border shrink-0">
         <div className="flex items-center gap-2">
           <TerminalIcon size={13} className="text-green-400" />
           <span className="text-xs font-medium text-zinc-300">Terminal</span>
@@ -250,6 +283,18 @@ export function StudioTerminal({
           )}
         </div>
         <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => {
+              if (!lastResponseRef.current) return;
+              navigator.clipboard.writeText(lastResponseRef.current);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+            className="p-1 rounded hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Copy last response"
+          >
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+          </button>
           <button
             onClick={onToggleMaximize}
             className="p-1 rounded hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -285,7 +330,7 @@ export function StudioTerminal({
       </div>
 
       {/* Input area */}
-      <div className="shrink-0 flex items-end gap-2 px-3 py-2 border-t border-white/[0.08] bg-[#111]">
+      <div className="shrink-0 flex items-end gap-2 px-3 py-2 border-t border-panel-border bg-panel-surface">
         <span className="text-green-400 font-mono text-sm mt-1.5">{'>'}</span>
         <textarea
           ref={inputRef}

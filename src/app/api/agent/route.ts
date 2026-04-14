@@ -228,6 +228,79 @@ RULES:
 Keep text to one sentence before and after the code block.`;
 };
 
+const EDIT_PROMPT = (userMsg: string, currentHtml: string) => `You are editing an existing HTML5 game. Apply the user's requested changes.
+
+Current game code:
+\`\`\`html
+${currentHtml}
+\`\`\`
+
+User request: "${userMsg}"
+
+Output ONLY SEARCH/REPLACE blocks. Each block replaces one section of code:
+
+<<<SEARCH
+exact lines from the current code to find
+===
+replacement lines
+>>>REPLACE
+
+Rules:
+- SEARCH text must EXACTLY match lines in the current code (including whitespace/indentation)
+- Make the MINIMUM changes needed to fulfill the request
+- Use multiple blocks if changes span different parts of the file
+- Do NOT output the full file
+- After all SEARCH/REPLACE blocks, write one sentence summarizing what you changed
+- If the change requires adding entirely new code (not replacing existing), use an empty SEARCH with a <<<INSERT_AFTER marker:
+
+<<<INSERT_AFTER
+the line after which to insert
+===
+new lines to insert
+>>>END_INSERT`;
+
+function applyEdits(html: string, response: string): { html: string; summary: string } {
+  let result = html;
+
+  // Extract SEARCH/REPLACE blocks
+  const replacePattern = /<<<SEARCH\n([\s\S]*?)\n===\n([\s\S]*?)\n>>>REPLACE/g;
+  let match;
+  while ((match = replacePattern.exec(response)) !== null) {
+    const [, search, replace] = match;
+    if (result.includes(search)) {
+      result = result.replace(search, replace);
+    }
+  }
+
+  // Extract INSERT_AFTER blocks
+  const insertPattern = /<<<INSERT_AFTER\n([\s\S]*?)\n===\n([\s\S]*?)\n>>>END_INSERT/g;
+  while ((match = insertPattern.exec(response)) !== null) {
+    const [, after, insert] = match;
+    if (result.includes(after)) {
+      result = result.replace(after, after + '\n' + insert);
+    }
+  }
+
+  // Extract summary (text after the last block)
+  const lastBlock = response.lastIndexOf('>>>REPLACE');
+  const lastInsert = response.lastIndexOf('>>>END_INSERT');
+  const lastEnd = Math.max(lastBlock, lastInsert);
+  const summary = lastEnd > -1 ? response.slice(lastEnd + 10).trim() : '';
+
+  return { html: result, summary };
+}
+
+function extractLastGameHtml(messages: { role: string; content: string }[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === 'assistant') {
+      const match = m.content.match(/```html\s*([\s\S]*?)```/);
+      if (match) return match[1].trim();
+    }
+  }
+  return null;
+}
+
 // --- SSE helpers ---
 
 function makeEmitter(
@@ -268,6 +341,54 @@ export async function POST(req: Request) {
         const emit = makeEmitter(controller, encoder);
 
         try {
+          // Check if this is a follow-up edit (has existing game in history)
+          const existingHtml = extractLastGameHtml(messages);
+          const isFollowUp = existingHtml && messages.length > 2; // At least one prior exchange
+
+          if (isFollowUp) {
+            emit({ status: '⚡ Applying changes...' });
+
+            const progressMsgs = ['🔍 Analyzing changes needed...', '✏️ Editing game code...', '🔧 Applying modifications...'];
+            let pIdx = 0;
+            const pInterval = setInterval(() => {
+              if (pIdx < progressMsgs.length) { emit({ status: progressMsgs[pIdx] }); pIdx++; }
+            }, 3000);
+
+            let editFailed = false;
+            try {
+              let editResponse = '';
+              await streamClaude(
+                EDIT_PROMPT(userMsg, existingHtml),
+                (text) => { editResponse += text; }
+              );
+
+              clearInterval(pInterval);
+
+              const { html: updatedHtml, summary } = applyEdits(existingHtml, editResponse);
+
+              // Check if edits were actually applied
+              if (updatedHtml !== existingHtml) {
+                emit({ status: '✅ Changes applied' });
+                // Emit the full updated HTML wrapped in code fence (Terminal will extract it)
+                emit({ text: summary + '\n\n```html\n' + updatedHtml + '\n```\n' });
+              } else {
+                // Fallback: edits didn't match, do full regeneration
+                emit({ status: '⚠️ Diff failed, regenerating full game...' });
+                editFailed = true;
+              }
+            } catch (err) {
+              clearInterval(pInterval);
+              emit({ status: '⚠️ Edit failed, regenerating...' });
+              editFailed = true;
+            }
+
+            if (!editFailed) {
+              closeStream(controller, encoder);
+              return;
+            }
+            // If editFailed, fall through to full generation below
+          }
+
           const hasPixelLab = pixelLabAvailable();
           const hasFreesound = freesoundAvailable();
 
@@ -340,27 +461,77 @@ export async function POST(req: Request) {
 
             // --- Build game ---
             const totalAssets = Object.keys(spriteAssets).length + Object.keys(soundAssets).length;
+            const progressMsgs = [
+              '🎮 Building game...',
+              '⚙️ Designing game logic...',
+              '🎨 Creating visuals...',
+              '🔧 Adding interactions...',
+              '✨ Polishing gameplay...',
+              '📦 Finalizing...',
+            ];
+
             if (totalAssets > 0) {
               emit({ status: `🎮 Building game with ${totalAssets} assets...` });
-              await streamClaude(
-                GAME_PROMPT(userMsg, spriteAssets, soundAssets, messages),
-                (text) => emit({ text }),
-              );
+              let progressIdx = 0;
+              const progressInterval = setInterval(() => {
+                if (progressIdx < progressMsgs.length) {
+                  emit({ status: progressMsgs[progressIdx] });
+                  progressIdx++;
+                }
+              }, 4000);
+              try {
+                await streamClaude(
+                  GAME_PROMPT(userMsg, spriteAssets, soundAssets, messages),
+                  (text) => emit({ text }),
+                );
+              } finally {
+                clearInterval(progressInterval);
+              }
             } else {
               emit({ status: '⚠️ No assets generated — building inline...' });
-              await streamClaude(
-                INLINE_PROMPT(userMsg, messages),
-                (text) => emit({ text }),
-              );
+              let progressIdx = 0;
+              const progressInterval = setInterval(() => {
+                if (progressIdx < progressMsgs.length) {
+                  emit({ status: progressMsgs[progressIdx] });
+                  progressIdx++;
+                }
+              }, 4000);
+              try {
+                await streamClaude(
+                  INLINE_PROMPT(userMsg, messages),
+                  (text) => emit({ text }),
+                );
+              } finally {
+                clearInterval(progressInterval);
+              }
             }
           } else {
             // === Single-pass: no service keys — all inline ===
             emit({ status: '⏳ Generating game (no service keys)...' });
             emit({ status: '✍️ Drawing sprites + synth sounds inline...' });
-            await streamClaude(
-              INLINE_PROMPT(userMsg, messages),
-              (text) => emit({ text }),
-            );
+            const progressMsgs = [
+              '🎮 Building game...',
+              '⚙️ Designing game logic...',
+              '🎨 Creating visuals...',
+              '🔧 Adding interactions...',
+              '✨ Polishing gameplay...',
+              '📦 Finalizing...',
+            ];
+            let progressIdx = 0;
+            const progressInterval = setInterval(() => {
+              if (progressIdx < progressMsgs.length) {
+                emit({ status: progressMsgs[progressIdx] });
+                progressIdx++;
+              }
+            }, 4000);
+            try {
+              await streamClaude(
+                INLINE_PROMPT(userMsg, messages),
+                (text) => emit({ text }),
+              );
+            } finally {
+              clearInterval(progressInterval);
+            }
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

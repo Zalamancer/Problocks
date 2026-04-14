@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send, Copy, Check } from 'lucide-react';
+import { getGameHtml } from '@/lib/game-engine';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -17,11 +18,13 @@ export function StudioTerminal({
   isMaximized,
   onToggleMaximize,
   onGameGenerated,
+  activeGameName,
 }: {
   onClose: () => void;
   isMaximized: boolean;
   onToggleMaximize: () => void;
-  onGameGenerated?: (html: string) => void;
+  onGameGenerated?: (html: string, files?: Record<string, string>) => void;
+  activeGameName?: string | null;
 }) {
   const [lines, setLines] = useState<TerminalLine[]>([
     { type: 'system', text: '  Problocks Game Engine' },
@@ -38,6 +41,21 @@ export function StudioTerminal({
   const abortRef = useRef<AbortController | null>(null);
   const inCodeFenceRef = useRef<boolean>(false);
   const lastResponseRef = useRef<string>('');
+  const hasShownResume = useRef(false);
+  const receivedGameEventRef = useRef(false);
+
+  // Show "continue working on" message once store hydrates and activeGameName arrives
+  useEffect(() => {
+    if (activeGameName && !hasShownResume.current && !isStreaming) {
+      hasShownResume.current = true;
+      setLines([
+        { type: 'system', text: '  Problocks Game Engine' },
+        { type: 'status', text: `  🎮 Continue working on: ${activeGameName}` },
+        { type: 'system', text: '  Describe changes to update your game.' },
+        { type: 'system', text: '' },
+      ]);
+    }
+  }, [activeGameName, isStreaming]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -106,6 +124,7 @@ export function StudioTerminal({
 
     // Streaming region tracking
     const streamLineIndex = { current: -1 };
+    receivedGameEventRef.current = false;
 
     try {
       abortRef.current = new AbortController();
@@ -162,44 +181,61 @@ export function StudioTerminal({
               ]);
             }
 
+            // Multi-file game event — bundle files into HTML
+            if (parsed.game) {
+              const { title, files } = parsed.game as { title: string; files: Record<string, string> };
+              const html = getGameHtml({ files });
+              receivedGameEventRef.current = true;
+
+              if (onGameGenerated) {
+                onGameGenerated(html, files);
+              }
+
+              setLines(prev => [
+                ...prev,
+                { type: 'status', text: `  🎮 ${title} loaded! (${Object.keys(files).length} modules)` },
+                { type: 'status', text: `  📁 ${Object.keys(files).join(', ')}` },
+                { type: 'system', text: '' },
+              ]);
+            }
+
             // Text events — stream into current display block
+            // Split each chunk on ``` boundaries so we handle cases where
+            // both the opening and closing fence arrive in a single event.
             if (parsed.text) {
               assistantText += parsed.text;
 
-              // Count triple-backtick occurrences to detect code fences
-              const fenceCount = (assistantText.match(/```/g) || []).length;
-              const wasInFence = inCodeFenceRef.current;
-              const nowInFence = fenceCount % 2 === 1;
-              inCodeFenceRef.current = nowInFence;
+              const segments = parsed.text.split('```');
+              for (let si = 0; si < segments.length; si++) {
+                // Each split boundary means we crossed a ``` marker
+                if (si > 0) {
+                  inCodeFenceRef.current = !inCodeFenceRef.current;
+                  streamLineIndex.current = -1;
+                  displayText = '';
+                  if (inCodeFenceRef.current) {
+                    setLines((prev) => [
+                      ...prev,
+                      { type: 'status', text: '  📝 Writing game code...' },
+                    ]);
+                  } else {
+                    setLines((prev) => [
+                      ...prev,
+                      { type: 'status', text: '  ✅ Game code ready' },
+                    ]);
+                  }
+                }
 
-              if (!wasInFence && nowInFence) {
-                // Just entered a code fence — show status line, don't append text
-                streamLineIndex.current = -1;
-                displayText = '';
-                setLines((prev) => [
-                  ...prev,
-                  { type: 'status', text: '  📝 Writing game code...' },
-                ]);
-              } else if (wasInFence && !nowInFence) {
-                // Just exited a code fence — show ready status, reset display
-                streamLineIndex.current = -1;
-                displayText = '';
-                setLines((prev) => [
-                  ...prev,
-                  { type: 'status', text: '  ✅ Game code ready' },
-                ]);
-              } else if (!nowInFence) {
-                // Outside any fence — display text normally
-                displayText += parsed.text;
+                const seg = segments[si];
+                if (!seg || inCodeFenceRef.current) continue;
 
+                // Outside fence — display text normally
+                displayText += seg;
                 if (streamLineIndex.current === -1) {
-                  // Start a new streaming region
                   setLines((prev) => {
                     streamLineIndex.current = prev.length;
                     return [...prev, ...formatOutput(displayText)];
                   });
                 } else {
-                  // Update existing streaming region
                   setLines((prev) => {
                     const updated = [...prev];
                     const formatted = formatOutput(displayText);
@@ -212,7 +248,6 @@ export function StudioTerminal({
                   });
                 }
               }
-              // If nowInFence && wasInFence — inside fence, skip display
             }
           } catch {
             // skip malformed chunks
@@ -227,15 +262,17 @@ export function StudioTerminal({
       inCodeFenceRef.current = false;
       setLines((prev) => [...prev, { type: 'system', text: '' }]);
 
-      // Extract HTML game code and send to preview
-      const htmlMatch = assistantText.match(/```html\s*([\s\S]*?)```/);
-      if (htmlMatch && onGameGenerated) {
-        onGameGenerated(htmlMatch[1].trim());
-        setLines((prev) => [
-          ...prev,
-          { type: 'status', text: '  🎮 Game loaded in preview! Type changes to iterate.' },
-          { type: 'system', text: '' },
-        ]);
+      // Extract HTML game code and send to preview (legacy fallback)
+      if (!receivedGameEventRef.current) {
+        const htmlMatch = assistantText.match(/```html\s*([\s\S]*?)```/);
+        if (htmlMatch && onGameGenerated) {
+          onGameGenerated(htmlMatch[1].trim());
+          setLines((prev) => [
+            ...prev,
+            { type: 'status', text: '  🎮 Game loaded in preview! Type changes to iterate.' },
+            { type: 'system', text: '' },
+          ]);
+        }
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {

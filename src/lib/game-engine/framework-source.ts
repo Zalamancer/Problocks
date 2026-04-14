@@ -255,7 +255,7 @@ function createPhysics() {
  */
 function createAudio() {
   let ctx = null;
-  const sounds = {}; // name → { type: 'synth' | 'file', ... }
+  const sounds = {}; // name → { _kind: 'synth' | 'multi' | 'file', ... }
 
   function getCtx() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -270,7 +270,7 @@ function createAudio() {
      * @param {object} opts - { freq, type, duration, vol }
      */
     registerSynth(name, opts) {
-      sounds[name] = { type: 'synth', ...opts };
+      sounds[name] = { _kind: 'synth', ...opts };
     },
 
     /**
@@ -279,12 +279,12 @@ function createAudio() {
      * @param {Array} notes - [{ freq, type, duration, vol, delay }]
      */
     registerMultiSynth(name, notes) {
-      sounds[name] = { type: 'multi', notes };
+      sounds[name] = { _kind: 'multi', notes };
     },
 
     /** Register an audio file URL */
     registerFile(name, url) {
-      sounds[name] = { type: 'file', url };
+      sounds[name] = { _kind: 'file', url };
     },
 
     /** Play a registered sound */
@@ -293,7 +293,7 @@ function createAudio() {
       if (!s) return;
       const c = getCtx();
 
-      if (s.type === 'synth') {
+      if (s._kind === 'synth') {
         const o = c.createOscillator();
         const g = c.createGain();
         o.type = s.type || 'sine';
@@ -303,7 +303,7 @@ function createAudio() {
         o.connect(g); g.connect(c.destination);
         o.start(); o.stop(c.currentTime + (s.duration || 0.2));
       }
-      else if (s.type === 'multi') {
+      else if (s._kind === 'multi') {
         for (const n of s.notes) {
           setTimeout(() => {
             const o = c.createOscillator();
@@ -317,7 +317,7 @@ function createAudio() {
           }, (n.delay || 0) * 1000);
         }
       }
-      else if (s.type === 'file') {
+      else if (s._kind === 'file') {
         const a = new Audio(s.url);
         a.volume = Math.min(1, 0.5 * volumeScale);
         a.play().catch(() => {});
@@ -545,6 +545,7 @@ function createEngine(canvas, config = {}) {
 
   function tick(timestamp) {
     if (!running) return;
+    try {
     animFrameId = requestAnimationFrame(tick);
 
     // Delta time (capped at 50ms to avoid spiral of death)
@@ -623,6 +624,19 @@ function createEngine(canvas, config = {}) {
     // Cleanup
     entities._sweep();
     input._endFrame();
+    } catch(err) {
+      running = false;
+      console.error('[Problocks tick error]', err);
+      // Show error on canvas
+      if (ctx2d) {
+        canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+        ctx2d.fillStyle = '#111'; ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+        ctx2d.fillStyle = '#e74c3c'; ctx2d.font = '16px monospace';
+        ctx2d.fillText('Runtime Error: ' + err.message, 20, 40);
+        ctx2d.fillStyle = '#888'; ctx2d.font = '12px monospace';
+        ctx2d.fillText('Check console for details', 20, 65);
+      }
+    }
   }
 
   game.start = function (sceneName) {

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, ArrowRight, ArrowDown, Terminal, Gamepad2, Box } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { StudioTerminal } from './Terminal';
@@ -66,6 +66,11 @@ export function StudioLayout() {
 
   const flowDirection = useStudio((s) => s.flowDirection);
   const toggleFlowDirection = useStudio((s) => s.toggleFlowDirection);
+  const addGame = useStudio((s) => s.addGame);
+  const updateGame = useStudio((s) => s.updateGame);
+  const activeGameId = useStudio((s) => s.activeGameId);
+  const setActiveGameId = useStudio((s) => s.setActiveGameId);
+  const games = useStudio((s) => s.games);
 
   const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
   const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
@@ -82,6 +87,28 @@ export function StudioLayout() {
     setWizardOpen(false);
     setViewMode('kanban');
   }
+
+  /** When a game is generated from Terminal, save/update it in the store */
+  function handleGameGenerated(html: string) {
+    setGameHtml(html);
+    if (activeGameId) {
+      // Follow-up edit — update existing game
+      updateGame(activeGameId, html);
+    } else {
+      // New game — derive a name from the HTML <title> tag if present, else use counter
+      const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+      const name = titleMatch?.[1]?.slice(0, 30) || `Game ${games.length + 1}`;
+      addGame({ name, prompt: '', html });
+    }
+  }
+
+  // When activeGameId changes (e.g. user clicks a game in AssetsPanel), load it into preview
+  useEffect(() => {
+    if (activeGameId) {
+      const active = games.find((g) => g.id === activeGameId);
+      if (active) setGameHtml(active.html);
+    }
+  }, [activeGameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clicking the same task again deselects it — matches AutoAnimation's
   // implicit-selection pattern (no close button; you "close" by clicking
@@ -229,7 +256,7 @@ export function StudioLayout() {
                 onClose={() => { setTerminalOpen(false); setTerminalMaximized(false); }}
                 isMaximized={terminalMaximized}
                 onToggleMaximize={() => setTerminalMaximized(!terminalMaximized)}
-                onGameGenerated={setGameHtml}
+                onGameGenerated={handleGameGenerated}
               />
             )}
 

@@ -5,6 +5,15 @@ export type LeftPanelGroup = 'assets' | 'chat' | 'settings';
 export type Theme = 'dark' | 'light';
 export type FlowDirection = 'LR' | 'TB';
 
+export interface GeneratedGame {
+  id: string;
+  name: string;
+  prompt: string;
+  html: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface StudioStore {
   leftPanelCollapsed: boolean;
   leftPanelActiveGroup: LeftPanelGroup;
@@ -21,6 +30,13 @@ export interface StudioStore {
   flowDirection: FlowDirection;
   setFlowDirection: (dir: FlowDirection) => void;
   toggleFlowDirection: () => void;
+
+  games: GeneratedGame[];
+  activeGameId: string | null;
+  addGame: (game: { name: string; prompt: string; html: string }) => void;
+  updateGame: (id: string, html: string) => void;
+  removeGame: (id: string) => void;
+  setActiveGameId: (id: string | null) => void;
 }
 
 export const useStudio = create<StudioStore>()(persist((set) => ({
@@ -39,7 +55,31 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   flowDirection: 'LR',
   setFlowDirection: (dir) => set({ flowDirection: dir }),
   toggleFlowDirection: () => set((s) => ({ flowDirection: s.flowDirection === 'LR' ? 'TB' : 'LR' })),
+
+  games: [],
+  activeGameId: null,
+  addGame: (game) => {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    set((s) => ({
+      games: [...s.games, { ...game, id, createdAt: now, updatedAt: now }],
+      activeGameId: id,
+    }));
+  },
+  updateGame: (id, html) => set((s) => ({
+    games: s.games.map((g) => g.id === id ? { ...g, html, updatedAt: Date.now() } : g),
+  })),
+  removeGame: (id) => set((s) => ({
+    games: s.games.filter((g) => g.id !== id),
+    activeGameId: s.activeGameId === id ? null : s.activeGameId,
+  })),
+  setActiveGameId: (id) => set({ activeGameId: id }),
 }), {
   name: 'problocks-studio-v2',
-  partialize: (state) => ({ projectName: state.projectName, flowDirection: state.flowDirection }),
+  partialize: (state) => ({
+    projectName: state.projectName,
+    flowDirection: state.flowDirection,
+    games: state.games,
+    activeGameId: state.activeGameId,
+  }),
 }));

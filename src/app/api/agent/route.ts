@@ -249,6 +249,9 @@ const PLAYER = {
     // game.input.isDown('KeyW')   — held check
     // game.input.justPressed('Space') — single press
     // game.input.mouse            — {x, y, dx, dy, buttons}
+    // game.input.mouseDown(0)     — held check (0=left)
+    // game.input.mouseJustPressed(0) — single click
+    // game.input.mouseJustReleased(0) — single release
     // entity.x, entity.y, entity.vx, entity.vy — position/velocity
     // game.entities.query('enemy') — find entities by type
     // game.entities.first('player') — get single entity
@@ -487,146 +490,43 @@ export async function POST(req: Request) {
             // Fall through to full generation — legacy conversations get regenerated
           }
 
-          const hasPixelLab = pixelLabAvailable();
-          const hasFreesound = freesoundAvailable();
-
-          if (hasPixelLab || hasFreesound) {
-            // === Two-pass: plan → generate assets → build game ===
-            // Asset pipeline still uses GAME_PROMPT (monolithic HTML) for now
-            emit({ status: '⏳ Planning game assets...' });
-
-            const planOutput = await callClaude(PLAN_PROMPT(userMsg));
-            const plan = parsePlan(planOutput);
-
-            const spriteAssets: Record<string, string> = {};
-            const soundAssets: Record<string, string> = {};
-
-            // --- Sprites via PixelLab ---
-            if (hasPixelLab && plan.sprites.length > 0) {
-              emit({
-                status: `📋 ${plan.sprites.length} sprites: ${plan.sprites.map((s) => s.name).join(', ')}`,
-              });
-
-              const batches: SpritePlan[][] = [];
-              for (let i = 0; i < plan.sprites.length; i += 3) {
-                batches.push(plan.sprites.slice(i, i + 3));
-              }
-
-              for (const batch of batches) {
-                await Promise.allSettled(
-                  batch.map(async (sprite) => {
-                    emit({ status: `🎨 PixelLab: ${sprite.name}...` });
-                    try {
-                      spriteAssets[sprite.name] = await generateSprite(
-                        sprite.description,
-                        sprite.width,
-                        sprite.height,
-                      );
-                      emit({ status: `✅ ${sprite.name} ready` });
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : String(err);
-                      emit({ status: `⚠️ ${sprite.name} failed: ${msg}` });
-                    }
-                  }),
-                );
-              }
+          // === Always use modular generation with the framework ===
+          emit({ status: '⏳ Generating modular game...' });
+          const progressMsgs = [
+            '🎮 Building game...',
+            '⚙️ Designing game logic...',
+            '🎨 Creating visuals...',
+            '🔧 Adding interactions...',
+            '✨ Polishing gameplay...',
+            '📦 Finalizing...',
+          ];
+          let progressIdx = 0;
+          const progressInterval = setInterval(() => {
+            if (progressIdx < progressMsgs.length) {
+              emit({ status: progressMsgs[progressIdx] });
+              progressIdx++;
             }
+          }, 4000);
 
-            // --- Sounds via Freesound ---
-            if (hasFreesound && plan.sounds.length > 0) {
-              emit({
-                status: `🔊 ${plan.sounds.length} sounds: ${plan.sounds.map((s) => s.name).join(', ')}`,
-              });
+          let fullResponse = '';
+          try {
+            await streamClaude(
+              MODULAR_PROMPT(userMsg, messages),
+              (text) => { fullResponse += text; },
+            );
+          } finally {
+            clearInterval(progressInterval);
+          }
 
-              await Promise.allSettled(
-                plan.sounds.map(async (sound) => {
-                  emit({ status: `🔊 Freesound: ${sound.name}...` });
-                  try {
-                    const result = await findSound(sound.description);
-                    if (result) {
-                      soundAssets[sound.name] = result.url;
-                      emit({ status: `✅ ${sound.name} ready` });
-                    } else {
-                      emit({ status: `⚠️ ${sound.name}: no match (will use synth)` });
-                    }
-                  } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    emit({ status: `⚠️ ${sound.name} failed: ${msg}` });
-                  }
-                }),
-              );
-            }
-
-            // --- Build game with assets (still monolithic HTML for asset path) ---
-            const totalAssets = Object.keys(spriteAssets).length + Object.keys(soundAssets).length;
-            const progressMsgs = [
-              '🎮 Building game...',
-              '⚙️ Designing game logic...',
-              '🎨 Creating visuals...',
-              '🔧 Adding interactions...',
-              '✨ Polishing gameplay...',
-              '📦 Finalizing...',
-            ];
-
-            if (totalAssets > 0) {
-              emit({ status: `🎮 Building game with ${totalAssets} assets...` });
-            } else {
-              emit({ status: '⚠️ No assets generated — building inline...' });
-            }
-
-            let progressIdx = 0;
-            const progressInterval = setInterval(() => {
-              if (progressIdx < progressMsgs.length) {
-                emit({ status: progressMsgs[progressIdx] });
-                progressIdx++;
-              }
-            }, 4000);
-            try {
-              await streamClaude(
-                GAME_PROMPT(userMsg, spriteAssets, soundAssets, messages),
-                (text) => emit({ text }),
-              );
-            } finally {
-              clearInterval(progressInterval);
-            }
+          // Parse the completed JSON response and emit the game event
+          const parsed = parseGameJson(fullResponse);
+          if (parsed) {
+            emit({ status: `✅ Game ready — ${Object.keys(parsed.files).length} modules` });
+            emit({ game: { title: parsed.title, files: parsed.files } });
           } else {
-            // === Single-pass modular: no service keys — use framework ===
-            emit({ status: '⏳ Generating modular game...' });
-            emit({ status: '✍️ Writing game scripts for Problocks engine...' });
-            const progressMsgs = [
-              '🎮 Building game...',
-              '⚙️ Designing game logic...',
-              '🎨 Creating visuals...',
-              '🔧 Adding interactions...',
-              '✨ Polishing gameplay...',
-              '📦 Finalizing...',
-            ];
-            let progressIdx = 0;
-            const progressInterval = setInterval(() => {
-              if (progressIdx < progressMsgs.length) {
-                emit({ status: progressMsgs[progressIdx] });
-                progressIdx++;
-              }
-            }, 4000);
-
-            let fullResponse = '';
-            try {
-              await streamClaude(
-                MODULAR_PROMPT(userMsg, messages),
-                (text) => {
-                  fullResponse += text;
-                  emit({ text });
-                },
-              );
-            } finally {
-              clearInterval(progressInterval);
-            }
-
-            // Parse the completed response and emit the game event
-            const parsed = parseGameJson(fullResponse);
-            if (parsed) {
-              emit({ game: { title: parsed.title, files: parsed.files } });
-            }
+            // Fallback: Claude returned something other than JSON — try HTML extraction
+            emit({ status: '⚠️ Unexpected format — trying fallback...' });
+            emit({ text: fullResponse });
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

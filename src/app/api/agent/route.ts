@@ -218,21 +218,29 @@ ${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${us
 A game framework handles: game loop, input, physics, rendering, entities, audio, particles, scenes.
 You ONLY write game-specific logic as separate files.
 
-Output ONLY a JSON object with this structure (no other text before or after):
+Output each file with markers. First line is the game title, then each file:
 
-\`\`\`json
-{
-  "title": "Game Title",
-  "files": {
-    "config.js": "const CONFIG = { renderer: '2d', bgColor: '#111', world: { width: 800, height: 600 }, gravity: 0, startScene: 'title' };",
-    "player.js": "const PLAYER = { type: 'player', width: 32, height: 32, speed: 200, ... };",
-    "enemies.js": "const ENEMIES = [{ type: 'slime', ... }, { type: 'goblin', ... }];",
-    "scenes.js": "const SCENES = { title: { enter(game) {...}, update(game,dt) {...}, draw(game,ctx) {...} }, gameplay: {...}, gameover: {...} };",
-    "sounds.js": "const SOUNDS = { hit: { freq: 200, type: 'sawtooth', duration: 0.15 }, ... };",
-    "setup.js": "const SETUP = function(game) { game.physics.addCollisionPair('player','enemy'); game.entities.spawn('player', {x:400,y:300}); };"
-  }
-}
-\`\`\`
+===TITLE: Game Title===
+===FILE: config.js===
+const CONFIG = { renderer: '2d', bgColor: '#111', world: { width: 800, height: 600 }, gravity: 0, startScene: 'title' };
+===FILE: player.js===
+const PLAYER = { type: 'player', width: 32, height: 32, speed: 200, ... };
+===FILE: enemies.js===
+const ENEMIES = [{ type: 'slime', ... }, { type: 'goblin', ... }];
+===FILE: scenes.js===
+const SCENES = { title: { enter(game) {...}, update(game,dt) {...}, draw(game,ctx) {...} }, gameplay: {...}, gameover: {...} };
+===FILE: sounds.js===
+const SOUNDS = { hit: { freq: 200, type: 'sawtooth', duration: 0.15 }, ... };
+===FILE: setup.js===
+const SETUP = function(game) { game.physics.addCollisionPair('player','enemy'); game.entities.spawn('player', {x:400,y:300}); };
+===DONE===
+
+IMPORTANT OUTPUT FORMAT RULES:
+- First line must be ===TITLE: Your Title===
+- Each file starts with ===FILE: filename.js===
+- End with ===DONE===
+- No text before ===TITLE or after ===DONE===
+- No code fences (\`\`\`) — just raw code between markers
 
 ## Framework API available to your scripts:
 
@@ -273,12 +281,101 @@ const PLAYER = {
 };
 
 ### For 3D games (config.renderer = '3d'):
-- Set CONFIG.renderer = '3d'
-- Three.js is auto-loaded via CDN
-- Access via game.three.scene, game.three.camera, game.three.renderer
-- In SETUP function: create Three.js scene, camera, lights, add meshes
-- In entity update: manipulate Three.js objects stored on entity (entity.mesh = ...)
-- The canvas is shared — framework handles the render call
+
+CONFIG for 3D:
+const CONFIG = {
+  renderer: '3d',
+  skyColor: '#87ceeb',
+  fogColor: '#87ceeb',
+  fogDensity: 0.015,
+  groundColor: 0x4a7a4a,
+  camDistance: 10,
+  camHeight: 5,
+  startScene: 'title',
+};
+
+Three.js (r128) + GLTFLoader are auto-loaded. Access via:
+- game.three.scene — THREE.Scene
+- game.three.camera — THREE.PerspectiveCamera
+- game.three.renderer — THREE.WebGLRenderer
+- game.three.sun — THREE.DirectionalLight
+- game.three.camYaw / camPitch — camera rotation
+- game.three.followEntity(entity) — third-person camera follow
+- game.three.addToScene(object) — add THREE.Object3D to scene
+- game.three.removeFromScene(object) — remove from scene
+
+Model loading:
+- game.loader.loadModel(url) — load any glTF, returns Promise<THREE.Group>
+- game.loader.medieval(name) — shortcut for /assets/medieval/{name}.gltf
+- game.loader.preload([url1, url2]) — preload multiple models
+
+Available medieval models (use game.loader.medieval('ModelName')):
+WALLS: Wall_Plaster_Straight, Wall_Plaster_Door_Flat, Wall_Plaster_Door_Round, Wall_Plaster_Window_Wide_Round, Wall_UnevenBrick_Straight, Wall_UnevenBrick_Door_Flat, Wall_Arch
+FLOORS: Floor_Brick, Floor_WoodDark, Floor_WoodLight, Floor_RedBrick, Floor_UnevenBrick
+ROOFS: Roof_RoundTiles_4x4, Roof_RoundTiles_6x6, Roof_RoundTiles_8x8, Roof_Tower_RoundTiles, Roof_Wooden_2x1
+DOORS: Door_1_Flat, Door_1_Round, Door_2_Flat, Door_4_Round, Door_8_Flat
+WINDOWS: Window_Thin_Round1, Window_Wide_Round1, WindowShutters_Wide_Round_Open
+STAIRS: Stairs_Exterior_Straight, Stairs_Exterior_Platform, Stair_Interior_Simple
+PROPS: Prop_Crate, Prop_Wagon, Prop_Chimney, Prop_WoodenFence_Single, Prop_Vine1, Prop_Support
+STRUCTURAL: Corner_Exterior_Brick, Corner_Exterior_Wood, Balcony_Simple_Straight, Overhang_Plaster_Long, DoorFrame_Round_Brick
+
+3D entity pattern:
+const BUILDING = {
+  type: 'building',
+  async init(entity, game) {
+    // Load and position a model
+    const wall = await game.loader.medieval('Wall_Plaster_Straight');
+    wall.position.set(entity.x, 0, entity.z);
+    wall.scale.setScalar(entity.scale || 1);
+    game.three.addToScene(wall);
+    entity.mesh = wall; // store reference for updates
+  },
+  update(entity, game, dt) {
+    // Sync mesh position with entity
+    if (entity.mesh) {
+      entity.mesh.position.set(entity.x, entity.y, entity.z);
+    }
+  },
+  onDestroy(entity) {
+    if (entity.mesh) entity.mesh.parent?.remove(entity.mesh);
+  },
+};
+
+3D player pattern:
+const PLAYER = {
+  type: 'player',
+  speed: 5,
+  async init(entity, game) {
+    // Create simple mesh or load model
+    const geo = new THREE.BoxGeometry(0.6, 1.6, 0.4);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x3a6a9a });
+    entity.mesh = new THREE.Mesh(geo, mat);
+    entity.mesh.castShadow = true;
+    entity.mesh.position.set(entity.x, 0.8, entity.z);
+    game.three.addToScene(entity.mesh);
+    game.three.followEntity(entity);
+    game.input.requestPointerLock();
+  },
+  update(entity, game, dt) {
+    const speed = entity.speed || 5;
+    let mx = 0, mz = 0;
+    if (game.input.isDown('KeyW')) mz -= 1;
+    if (game.input.isDown('KeyS')) mz += 1;
+    if (game.input.isDown('KeyA')) mx -= 1;
+    if (game.input.isDown('KeyD')) mx += 1;
+    if (mx || mz) {
+      const len = Math.sqrt(mx*mx + mz*mz);
+      mx /= len; mz /= len;
+      const yaw = game.three.camYaw;
+      entity.x += (mx*Math.cos(yaw) - mz*Math.sin(yaw)) * speed * dt;
+      entity.z += (mx*Math.sin(yaw) + mz*Math.cos(yaw)) * speed * dt;
+    }
+    if (entity.mesh) {
+      entity.mesh.position.set(entity.x, 0.8, entity.z);
+      entity.mesh.rotation.y = game.three.camYaw + Math.PI;
+    }
+  },
+};
 
 ### Scenes:
 const SCENES = {
@@ -312,7 +409,10 @@ RULES:
 - scenes.js is ALWAYS required (must have at least 'title' and 'gameplay')
 - setup.js is ALWAYS required (spawns initial entities, registers collisions)
 - Keep each file focused on one concern
-- For 3D games: put Three.js setup in setup.js, mesh creation in entity init/setup3d
+- For 3D games: entity init can be async (use async init(entity, game) {...})
+- Load models in init(), store on entity.mesh, sync position in update()
+- Use game.three.followEntity(entity) for third-person camera
+- Available medieval models: see list above, use game.loader.medieval('Name')
 - All positions in pixels, speeds in pixels/sec, time in seconds`;
 };
 
@@ -327,48 +427,120 @@ ${filesListing}
 
 User request: "${userMsg}"
 
-Output ONLY a JSON object with the files that need to change (omit unchanged files):
+Output ONLY the files that need to change (omit unchanged files), using file markers:
 
-\`\`\`json
-{
-  "files": {
-    "player.js": "...updated content..."
-  }
-}
-\`\`\`
+===FILE: player.js===
+...complete updated file content...
+===DONE===
 
 Rules:
 - Only include files that actually change
 - Output the COMPLETE file content for changed files (not diffs)
+- No code fences — just raw code between markers
 - Do not change the framework API calls — only change game logic
 - Keep the same const name conventions (PLAYER, ENEMIES, SCENES, etc.)`;
 };
 
-/** Parse a JSON game response (```json block) into title + files */
-function parseGameJson(text: string): { title: string; files: Record<string, string> } | null {
-  // Try to extract from ```json code fence first
-  const fenceMatch = text.match(/```json\s*([\s\S]*?)```/);
-  const jsonStr = fenceMatch ? fenceMatch[1].trim() : text.trim();
+/** Parse file-marker format streaming output into files */
+function parseFileMarkers(text: string): { title: string; files: Record<string, string> } | null {
+  const files: Record<string, string> = {};
+  let title = 'Untitled Game';
 
-  try {
-    const data = JSON.parse(jsonStr);
-    if (data.files && typeof data.files === 'object') {
-      return { title: data.title || 'Untitled Game', files: data.files };
-    }
-    return null;
-  } catch {
-    // Try to find a JSON object with "files" key anywhere in the text
-    const match = text.match(/\{[\s\S]*"files"\s*:\s*\{[\s\S]*\}\s*\}/);
-    if (match) {
-      try {
-        const data = JSON.parse(match[0]);
-        if (data.files && typeof data.files === 'object') {
-          return { title: data.title || 'Untitled Game', files: data.files };
-        }
-      } catch { /* fall through */ }
-    }
-    return null;
+  // Extract title
+  const titleMatch = text.match(/===TITLE:\s*(.*?)===/);
+  if (titleMatch) title = titleMatch[1].trim();
+
+  // Extract files
+  const filePattern = /===FILE:\s*([\w.-]+)===\n([\s\S]*?)(?====FILE:|===DONE===|$)/g;
+  let match;
+  while ((match = filePattern.exec(text)) !== null) {
+    const name = match[1].trim();
+    const content = match[2].trim();
+    if (name && content) files[name] = content;
   }
+
+  return Object.keys(files).length > 0 ? { title, files } : null;
+}
+
+/**
+ * Stream Claude output and emit per-file events in real-time.
+ * Detects ===FILE: name=== markers as they arrive.
+ */
+function createFileStreamParser(emit: (data: Record<string, unknown>) => void) {
+  let buffer = '';
+  let currentFile: string | null = null;
+  let currentContent = '';
+  let title = 'Untitled Game';
+  const files: Record<string, string> = {};
+
+  return {
+    /** Feed a text chunk from Claude */
+    push(chunk: string) {
+      buffer += chunk;
+
+      // Process complete lines
+      while (true) {
+        const lineEnd = buffer.indexOf('\n');
+        if (lineEnd === -1) break;
+        const line = buffer.substring(0, lineEnd);
+        buffer = buffer.substring(lineEnd + 1);
+
+        // Check for title marker
+        const titleMatch = line.match(/^===TITLE:\s*(.*?)===/);
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+          emit({ status: `🎮 ${title}` });
+          continue;
+        }
+
+        // Check for file marker
+        const fileMatch = line.match(/^===FILE:\s*([\w.-]+)===/);
+        if (fileMatch) {
+          // Finish previous file
+          if (currentFile) {
+            files[currentFile] = currentContent.trim();
+            const lineCount = files[currentFile].split('\n').length;
+            emit({ fileDone: currentFile, lines: lineCount });
+          }
+          // Start new file
+          currentFile = fileMatch[1].trim();
+          currentContent = '';
+          emit({ fileStart: currentFile });
+          continue;
+        }
+
+        // Check for done marker
+        if (line.trim() === '===DONE===') {
+          if (currentFile) {
+            files[currentFile] = currentContent.trim();
+            const lineCount = files[currentFile].split('\n').length;
+            emit({ fileDone: currentFile, lines: lineCount });
+            currentFile = null;
+          }
+          continue;
+        }
+
+        // Regular line — append to current file
+        if (currentFile) {
+          currentContent += line + '\n';
+          emit({ fileChunk: { name: currentFile, line } });
+        }
+      }
+    },
+
+    /** Flush remaining buffer */
+    flush() {
+      if (currentFile && (currentContent.trim() || buffer.trim())) {
+        currentContent += buffer;
+        files[currentFile] = currentContent.trim();
+        const lineCount = files[currentFile].split('\n').length;
+        emit({ fileDone: currentFile, lines: lineCount });
+      }
+      buffer = '';
+    },
+
+    getResult() { return { title, files }; },
+  };
 }
 
 /** Extract game files from the last assistant message in conversation history */
@@ -376,7 +548,7 @@ function extractLastGameFiles(messages: { role: string; content: string }[]): Re
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.role === 'assistant') {
-      const parsed = parseGameJson(m.content);
+      const parsed = parseFileMarkers(m.content);
       if (parsed) return parsed.files;
     }
   }
@@ -452,23 +624,20 @@ export async function POST(req: Request) {
 
             let editFailed = false;
             try {
-              let editResponse = '';
+              const editParser = createFileStreamParser(emit);
               await streamClaude(
                 MODULAR_EDIT_PROMPT(userMsg, existingFiles),
-                (text) => { editResponse += text; },
+                (text) => { editParser.push(text); },
               );
-
+              editParser.flush();
               clearInterval(pInterval);
 
-              const parsed = parseGameJson(editResponse);
-              if (parsed && Object.keys(parsed.files).length > 0) {
+              const editResult = editParser.getResult();
+              if (Object.keys(editResult.files).length > 0) {
                 // Merge changed files into existing files
-                const mergedFiles = { ...existingFiles, ...parsed.files };
+                const mergedFiles = { ...existingFiles, ...editResult.files };
                 emit({ status: '✅ Changes applied' });
-                emit({ game: { title: parsed.title || 'Updated Game', files: mergedFiles } });
-                // Also emit the raw JSON as text so it's stored in conversation history
-                const gameJson = JSON.stringify({ title: parsed.title || 'Updated Game', files: mergedFiles });
-                emit({ text: '```json\n' + gameJson + '\n```\n' });
+                emit({ game: { title: editResult.title || 'Updated Game', files: mergedFiles } });
               } else {
                 emit({ status: '⚠️ Edit parse failed, regenerating full game...' });
                 editFailed = true;
@@ -490,43 +659,36 @@ export async function POST(req: Request) {
             // Fall through to full generation — legacy conversations get regenerated
           }
 
-          // === Always use modular generation with the framework ===
-          emit({ status: '⏳ Generating modular game...' });
-          const progressMsgs = [
-            '🎮 Building game...',
-            '⚙️ Designing game logic...',
-            '🎨 Creating visuals...',
-            '🔧 Adding interactions...',
-            '✨ Polishing gameplay...',
-            '📦 Finalizing...',
-          ];
-          let progressIdx = 0;
-          const progressInterval = setInterval(() => {
-            if (progressIdx < progressMsgs.length) {
-              emit({ status: progressMsgs[progressIdx] });
-              progressIdx++;
-            }
-          }, 4000);
+          // === Modular generation with real-time file streaming ===
+          emit({ status: '⏳ Generating game modules...' });
 
-          let fullResponse = '';
-          try {
+          const fileParser = createFileStreamParser(emit);
+
+          await streamClaude(
+            MODULAR_PROMPT(userMsg, messages),
+            (text) => { fileParser.push(text); },
+          );
+          fileParser.flush();
+
+          const result = fileParser.getResult();
+          if (Object.keys(result.files).length > 0) {
+            emit({ status: `✅ Game ready — ${Object.keys(result.files).length} modules` });
+            emit({ game: { title: result.title, files: result.files } });
+          } else {
+            // Fallback: markers not found — try JSON parse
+            emit({ status: '⚠️ Unexpected format — trying fallback...' });
+            // Reconstruct full text for fallback
+            let fullText = '';
             await streamClaude(
               MODULAR_PROMPT(userMsg, messages),
-              (text) => { fullResponse += text; },
+              (t) => { fullText += t; },
             );
-          } finally {
-            clearInterval(progressInterval);
-          }
-
-          // Parse the completed JSON response and emit the game event
-          const parsed = parseGameJson(fullResponse);
-          if (parsed) {
-            emit({ status: `✅ Game ready — ${Object.keys(parsed.files).length} modules` });
-            emit({ game: { title: parsed.title, files: parsed.files } });
-          } else {
-            // Fallback: Claude returned something other than JSON — try HTML extraction
-            emit({ status: '⚠️ Unexpected format — trying fallback...' });
-            emit({ text: fullResponse });
+            const parsed = parseFileMarkers(fullText);
+            if (parsed) {
+              emit({ game: { title: parsed.title, files: parsed.files } });
+            } else {
+              emit({ text: fullText });
+            }
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

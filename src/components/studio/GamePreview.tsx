@@ -2,18 +2,107 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Gamepad2, RefreshCw, Maximize2, Minimize2, X } from 'lucide-react';
 
+export interface GameObjectInfo {
+  name: string;
+  index: number;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
+}
+
+export interface GamePreviewHandle {
+  sendToGame: (msg: Record<string, unknown>) => void;
+  selectModel: (name: string) => void;
+  selectModelByIndex: (index: number) => void;
+  deselectAll: () => void;
+  setGizmoMode: (mode: 'translate' | 'rotate' | 'scale' | 'none') => void;
+  addModel: (name: string, x?: number, y?: number, z?: number) => void;
+  removeSelected: () => void;
+  getSceneModels: () => void;
+}
+
 export function GamePreview({
   html,
   onClose,
+  onObjectSelected,
+  onObjectDeselected,
+  onObjectTransformed,
+  onSceneModels,
+  previewRef,
 }: {
   html: string;
   onClose: () => void;
+  onObjectSelected?: (info: GameObjectInfo) => void;
+  onObjectDeselected?: () => void;
+  onObjectTransformed?: (info: Omit<GameObjectInfo, 'name' | 'index'>) => void;
+  onSceneModels?: (models: GameObjectInfo[]) => void;
+  previewRef?: React.MutableRefObject<GamePreviewHandle | null>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [iframeFocused, setIframeFocused] = useState(false);
   const [key, setKey] = useState(0);
+
+  // Send a message to the game iframe
+  const sendToGame = useCallback((msg: Record<string, unknown>) => {
+    iframeRef.current?.contentWindow?.postMessage(msg, '*');
+  }, []);
+
+  // Expose handle methods
+  useEffect(() => {
+    if (!previewRef) return;
+    previewRef.current = {
+      sendToGame,
+      selectModel: (name: string) => sendToGame({ type: 'selectModel', name }),
+      selectModelByIndex: (index: number) => sendToGame({ type: 'selectModelByIndex', index }),
+      deselectAll: () => sendToGame({ type: 'deselectAll' }),
+      setGizmoMode: (mode) => sendToGame({ type: 'setGizmoMode', mode }),
+      addModel: (name, x = 0, y = 0, z = 0) => sendToGame({ type: 'addModel', name, x, y, z }),
+      removeSelected: () => sendToGame({ type: 'removeSelected' }),
+      getSceneModels: () => sendToGame({ type: 'getSceneModels' }),
+    };
+    return () => { if (previewRef) previewRef.current = null; };
+  }, [previewRef, sendToGame]);
+
+  // Listen for messages from the game iframe
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      const msg = event.data;
+      if (!msg || !msg.type) return;
+
+      // Only accept messages from our iframe
+      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) return;
+
+      switch (msg.type) {
+        case 'objectSelected':
+          onObjectSelected?.({
+            name: msg.name,
+            index: msg.index,
+            position: msg.position,
+            rotation: msg.rotation,
+            scale: msg.scale,
+          });
+          break;
+        case 'deselected':
+          onObjectDeselected?.();
+          break;
+        case 'objectTransformed':
+          onObjectTransformed?.({
+            position: msg.position,
+            rotation: msg.rotation,
+            scale: msg.scale,
+          });
+          break;
+        case 'sceneModels':
+          onSceneModels?.(msg.models);
+          break;
+      }
+    }
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onObjectSelected, onObjectDeselected, onObjectTransformed, onSceneModels]);
 
   const refresh = useCallback(() => {
     setKey((k) => k + 1);
@@ -83,7 +172,7 @@ export function GamePreview({
         </div>
       </div>
 
-      {/* Game iframe — click overlay to focus */}
+      {/* Game iframe -- click overlay to focus */}
       <div className="flex-1 min-h-0 bg-black relative">
         <iframe
           ref={iframeRef}

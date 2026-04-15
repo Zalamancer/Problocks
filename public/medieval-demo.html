@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medieval Village — Problocks</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',system-ui,sans-serif}
+canvas{display:block}
+#hud{position:absolute;top:16px;left:16px;pointer-events:none;z-index:10}
+#hud .label{color:#e8d5a3;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.8)}
+#fps{position:absolute;top:16px;right:16px;color:#8f8;font-size:11px;font-family:monospace;pointer-events:none;z-index:10;text-shadow:0 1px 3px #000;text-align:right;line-height:1.7;background:rgba(0,0,0,0.4);padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;pointer-events:none;z-index:10;opacity:0.4}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:#fff}
+#crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%)}
+#crosshair::after{width:100%;height:2px;top:50%;transform:translateY(-50%)}
+#prompt{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);color:#e8d5a3;font-size:15px;background:rgba(0,0,0,0.5);padding:10px 24px;border-radius:20px;border:1px solid rgba(232,213,163,0.15);z-index:10;pointer-events:none}
+#loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#1a2a3a;z-index:100;flex-direction:column;gap:12px}
+#loading .text{color:#8ba;font-size:16px;letter-spacing:0.1em}
+#loading .bar{width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden}
+#loading .fill{height:100%;background:#4a7a5a;border-radius:2px;transition:width 0.3s}
+#viewbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:10;pointer-events:all;background:rgba(0,0,0,0.5);padding:4px;border-radius:10px;border:1px solid rgba(255,255,255,0.08)}
+#viewbar button{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#aaa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s}
+#viewbar button:hover{background:rgba(255,255,255,0.12);color:#ddd}
+#viewbar button.active{background:rgba(74,122,90,0.35);border-color:rgba(74,122,90,0.5);color:#8fca8f}
+#gizmo-bar{position:absolute;bottom:16px;left:16px;display:flex;gap:4px;z-index:10;pointer-events:all;background:rgba(0,0,0,0.5);padding:4px;border-radius:10px;border:1px solid rgba(255,255,255,0.08)}
+#gizmo-bar button{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#aaa;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:14px;font-family:inherit;transition:all 0.15s;line-height:1}
+#gizmo-bar button:hover{background:rgba(255,255,255,0.12);color:#ddd}
+#gizmo-bar button.active{background:rgba(74,122,90,0.35);border-color:rgba(74,122,90,0.5);color:#8fca8f}
+#gizmo-bar button[data-gizmo="play"].active{background:rgba(90,74,122,0.35);border-color:rgba(90,74,122,0.5);color:#ca8fca}
+</style>
+</head>
+<body>
+<div id="loading"><div class="text">Loading Village...</div><div class="bar"><div class="fill" id="load-fill" style="width:0%"></div></div></div>
+<div id="hud"><div class="label">WASD Move | Mouse Look | Shift Sprint</div></div>
+<div id="fps"></div>
+<div id="crosshair"></div>
+<div id="prompt">Click objects to select | W/E/R for gizmo modes</div>
+<div id="gizmo-bar">
+  <button data-gizmo="translate" class="active" title="Move (W)">&#8597;</button>
+  <button data-gizmo="rotate" title="Rotate (E)">&#8635;</button>
+  <button data-gizmo="scale" title="Scale (R)">&#10529;</button>
+  <button data-gizmo="play" title="Play mode">&#9654;</button>
+</div>
+<div id="viewbar">
+  <button class="active" data-mode="solid">Solid</button>
+  <button data-mode="wire">Wireframe</button>
+  <button data-mode="points">Vertices</button>
+  <button data-mode="xray">X-Ray</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<script>
+'use strict';
+
+// ── Performance-first setup ──
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.FogExp2(0xa0c4e8, 0.018);
+
+const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 150);
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+// Chromebook simulation: press C to toggle quarter-res rendering
+let chromebookMode = false;
+function applyRenderScale() {
+  const scale = chromebookMode ? 0.35 : 1;
+  renderer.setSize(innerWidth * scale, innerHeight * scale);
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
+}
+renderer.setPixelRatio(1);
+applyRenderScale();
+window.addEventListener('keydown', e => {
+  if (e.code === 'KeyC' && !document.pointerLockElement) {
+    chromebookMode = !chromebookMode;
+    applyRenderScale();
+  }
+});
+// NO shadow maps = massive perf gain
+document.body.prepend(renderer.domElement);
+
+// Simple lighting (no shadows)
+scene.add(new THREE.HemisphereLight(0x87ceeb, 0x4a6a3a, 0.8));
+scene.add(new THREE.AmbientLight(0x606080, 0.4));
+const sun = new THREE.DirectionalLight(0xffeedd, 0.8);
+sun.position.set(30, 50, 20);
+scene.add(sun);
+
+// Warm fills
+[[0,2.5,0],[6,2.5,-4],[-6,2.5,4]].forEach(([x,y,z])=>{
+  const p = new THREE.PointLight(0xff9944, 0.4, 15);
+  p.position.set(x,y,z); scene.add(p);
+});
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100,100),
+  new THREE.MeshLambertMaterial({color:0x5a8a4a})
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+// ── Player ──
+const player = {x:0, z:3, speed:6};
+const pGroup = new THREE.Group();
+const pTorso = new THREE.Mesh(new THREE.BoxGeometry(.5,.7,.35), new THREE.MeshLambertMaterial({color:0x3a6a9a}));
+pTorso.position.set(0,1.1,0); pGroup.add(pTorso);
+const pHead = new THREE.Mesh(new THREE.BoxGeometry(.35,.35,.35), new THREE.MeshLambertMaterial({color:0xf5c6a0}));
+pHead.position.set(0,1.65,0); pGroup.add(pHead);
+const pHat = new THREE.Mesh(new THREE.ConeGeometry(.25,.4,5), new THREE.MeshLambertMaterial({color:0x6a3a2a}));
+pHat.position.set(0,2.0,0); pGroup.add(pHat);
+const legs=[];
+[-0.12,0.12].forEach(ox=>{
+  const l=new THREE.Mesh(new THREE.BoxGeometry(.15,.5,.2), new THREE.MeshLambertMaterial({color:0x5a4a3a}));
+  l.position.set(ox,.45,0); pGroup.add(l); legs.push(l);
+});
+pGroup.position.set(0,0,3);
+scene.add(pGroup);
+
+// ── Input ──
+const keys={};
+let camYaw=0, camPitch=-0.3;
+window.addEventListener('keydown',e=>{keys[e.code]=true;if(document.pointerLockElement)e.preventDefault();});
+window.addEventListener('keyup',e=>{keys[e.code]=false});
+document.addEventListener('mousemove',e=>{
+  if(document.pointerLockElement){
+    camYaw+=e.movementX*0.003;
+    camPitch=Math.max(-0.8,Math.min(0.4,camPitch+e.movementY*0.003));
+  }
+});
+renderer.domElement.addEventListener('click',()=>{
+  // In edit mode, don't auto-lock pointer — use Play button instead
+  if (window._editMode) return;
+  renderer.domElement.requestPointerLock();
+  document.getElementById('prompt').style.display='none';
+});
+
+// ── Optimized model loading + geometry merging ──
+const gltf = new THREE.GLTFLoader();
+const cache = {};
+let total=0, loaded=0;
+
+// ── Edit mode flag ──
+// In edit mode (studio), models are NOT merged — they stay as individual groups
+// so they can be selected/transformed independently.
+// When running standalone (no parent iframe), merge for performance.
+window._editMode = (window.parent !== window); // true if inside iframe (studio)
+
+// In edit mode: hide crosshair initially, show prompt
+if (window._editMode) {
+  document.getElementById('crosshair').style.display = 'none';
+}
+
+// Track all scene models for selection
+window._sceneModels = [];
+
+// Collect all meshes to merge after loading (only used in play mode)
+const pendingMeshes = [];
+let allLoaded = false;
+
+function loadM(name, x, y, z, ry, s) {
+  total++;
+  const url='/assets/medieval/'+name+'.gltf';
+  const promise = cache[url]
+    ? Promise.resolve(cache[url].clone())
+    : new Promise((res,rej)=>{
+        gltf.load(url, g=>{
+          g.scene.traverse(c=>{
+            if(c.isMesh){
+              c.castShadow=false;c.receiveShadow=false;
+              // Drop normal/roughness maps to save GPU — keep base color only
+              if(c.material.normalMap){c.material.normalMap.dispose();c.material.normalMap=null}
+              if(c.material.roughnessMap){c.material.roughnessMap.dispose();c.material.roughnessMap=null}
+              if(c.material.metalnessMap){c.material.metalnessMap.dispose();c.material.metalnessMap=null}
+              if(c.material.aoMap){c.material.aoMap.dispose();c.material.aoMap=null}
+            }
+          });
+          cache[url]=g.scene;
+          res(g.scene.clone());
+        }, undefined, rej);
+      });
+
+  promise.then(mesh=>{
+    mesh.position.set(x, y||0, z);
+    if(ry) mesh.rotation.y=ry;
+    mesh.scale.setScalar(s||2);
+    mesh.userData.modelName = name;
+    mesh.userData.modelIndex = window._sceneModels.length;
+
+    if (window._editMode) {
+      // Edit mode: add directly to scene as individual group (selectable)
+      scene.add(mesh);
+      window._sceneModels.push(mesh);
+    } else {
+      // Play mode: collect for merging
+      mesh.updateMatrixWorld(true);
+      pendingMeshes.push(mesh);
+      window._sceneModels.push(mesh);
+    }
+
+    loaded++;
+    updateLoad();
+  }).catch(()=>{loaded++;updateLoad()});
+}
+
+function updateLoad(){
+  const p=total>0?Math.round(loaded/total*100):0;
+  const f=document.getElementById('load-fill');
+  if(f) f.style.width=p+'%';
+
+  if(loaded>=total && !allLoaded){
+    allLoaded=true;
+    if (!window._editMode) {
+      mergeMeshes();
+    } else {
+      console.log('[Edit] ' + window._sceneModels.length + ' models added individually (edit mode)');
+    }
+    setTimeout(()=>{const e=document.getElementById('loading');if(e)e.style.display='none'},200);
+  }
+}
+
+// Merge all loaded meshes into minimal draw calls (grouped by material) — play mode only
+function mergeMeshes() {
+  const materialGroups = new Map();
+
+  for (const root of pendingMeshes) {
+    root.traverse(child => {
+      if (!child.isMesh) return;
+      const mat = child.material;
+      const key = mat.uuid;
+      if (!materialGroups.has(key)) {
+        materialGroups.set(key, { material: mat, geometries: [] });
+      }
+      const geo = child.geometry.clone();
+      geo.applyMatrix4(child.matrixWorld);
+      materialGroups.get(key).geometries.push(geo);
+    });
+  }
+
+  let drawCalls = 0;
+  for (const [, group] of materialGroups) {
+    if (group.geometries.length === 0) continue;
+    try {
+      const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(group.geometries, false);
+      if (merged) {
+        const mesh = new THREE.Mesh(merged, group.material);
+        scene.add(mesh);
+        drawCalls++;
+      }
+    } catch(e) {
+      for (const geo of group.geometries) {
+        scene.add(new THREE.Mesh(geo, group.material));
+        drawCalls++;
+      }
+    }
+  }
+
+  console.log('[Perf] Merged ' + pendingMeshes.length + ' models into ' + drawCalls + ' draw calls');
+  pendingMeshes.length = 0;
+}
+
+// ── View modes (wireframe, vertices, x-ray) ──
+let currentViewMode = 'solid';
+const wireOverlays = []; // wireframe meshes added on top
+const pointOverlays = []; // point clouds
+
+function clearOverlays() {
+  wireOverlays.forEach(m => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); });
+  wireOverlays.length = 0;
+  pointOverlays.forEach(m => { scene.remove(m); m.material.dispose(); });
+  pointOverlays.length = 0;
+}
+
+function setViewMode(mode) {
+  clearOverlays();
+  currentViewMode = mode;
+
+  scene.traverse(child => {
+    if (!child.isMesh || child === ground) return;
+    // Reset material state
+    if (child.userData._origMat) {
+      child.material = child.userData._origMat;
+      child.userData._origMat = null;
+    }
+    child.material.wireframe = false;
+    child.material.transparent = false;
+    child.material.opacity = 1;
+    child.material.needsUpdate = true;
+  });
+
+  if (mode === 'wire') {
+    scene.traverse(child => {
+      if (!child.isMesh || child === ground) return;
+      // Save original, show wireframe overlay on top
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffaa, wireframe: true, transparent: true, opacity: 0.7
+      });
+      const wireMesh = new THREE.Mesh(child.geometry, wireMat);
+      wireMesh.position.copy(child.position);
+      wireMesh.rotation.copy(child.rotation);
+      wireMesh.scale.copy(child.scale);
+      wireMesh.matrixAutoUpdate = false;
+      wireMesh.matrix.copy(child.matrix);
+      wireMesh.matrixWorld.copy(child.matrixWorld);
+      scene.add(wireMesh);
+      wireOverlays.push(wireMesh);
+      // Dim the solid mesh
+      child.userData._origMat = child.material;
+      child.material = child.material.clone();
+      child.material.transparent = true;
+      child.material.opacity = 0.3;
+    });
+  }
+
+  if (mode === 'points') {
+    scene.traverse(child => {
+      if (!child.isMesh || child === ground) return;
+      const pointsMat = new THREE.PointsMaterial({ color: 0x00ffaa, size: 3, sizeAttenuation: false });
+      const points = new THREE.Points(child.geometry, pointsMat);
+      points.position.copy(child.position);
+      points.rotation.copy(child.rotation);
+      points.scale.copy(child.scale);
+      points.matrixAutoUpdate = false;
+      points.matrix.copy(child.matrix);
+      points.matrixWorld.copy(child.matrixWorld);
+      scene.add(points);
+      pointOverlays.push(points);
+      // Dim solid
+      child.userData._origMat = child.material;
+      child.material = child.material.clone();
+      child.material.transparent = true;
+      child.material.opacity = 0.15;
+    });
+  }
+
+  if (mode === 'xray') {
+    scene.traverse(child => {
+      if (!child.isMesh || child === ground) return;
+      child.userData._origMat = child.material;
+      child.material = new THREE.MeshBasicMaterial({
+        color: 0x4488aa, wireframe: true, transparent: true, opacity: 0.5
+      });
+    });
+  }
+}
+
+// Button handlers
+document.querySelectorAll('#viewbar button').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    document.querySelectorAll('#viewbar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setViewMode(btn.dataset.mode);
+  });
+});
+
+// === BUILD VILLAGE (same layout, loaded once then merged) ===
+
+// Front building
+loadM('Wall_Plaster_Straight',-6,0,-8);
+loadM('Wall_Plaster_Straight',-4,0,-8);
+loadM('Wall_Plaster_Door_Round',-2,0,-8);
+loadM('Wall_Plaster_Straight',0,0,-8);
+loadM('Wall_Plaster_Window_Wide_Round',2,0,-8);
+loadM('Wall_Plaster_Straight',4,0,-8);
+
+// Second floor
+loadM('Wall_Plaster_Straight',-6,4,-8);
+loadM('Wall_Plaster_Window_Wide_Round',-4,4,-8);
+loadM('Wall_Plaster_Straight',-2,4,-8);
+loadM('Wall_Plaster_Window_Wide_Round',0,4,-8);
+
+// Right wall
+loadM('Wall_UnevenBrick_Straight',6,0,-8,Math.PI/2);
+loadM('Wall_UnevenBrick_Straight',6,0,-6,Math.PI/2);
+loadM('Wall_UnevenBrick_Door_Flat',6,0,-4,Math.PI/2);
+
+// Left wall
+loadM('Wall_UnevenBrick_Straight',-8,0,-6,-Math.PI/2);
+loadM('Wall_UnevenBrick_Straight',-8,0,-4,-Math.PI/2);
+
+// Back building
+loadM('Wall_Plaster_Straight',-6,0,6,Math.PI);
+loadM('Wall_Plaster_Door_Flat',-4,0,6,Math.PI);
+loadM('Wall_Plaster_Window_Wide_Round',-2,0,6,Math.PI);
+loadM('Wall_Plaster_Straight',0,0,6,Math.PI);
+
+// Right building
+loadM('Wall_Plaster_Straight',10,0,2,Math.PI/2);
+loadM('Wall_Plaster_Door_Round',10,0,4,Math.PI/2);
+
+// Roof
+loadM('Roof_RoundTiles_8x8',-1,7.8,-8);
+
+// Props (fewer = faster)
+loadM('Prop_Crate',-1,0,-3,0,2);
+loadM('Prop_Crate',-.3,0,-2.6,.4,1.8);
+loadM('Prop_Wagon',5,0,1,-.3,2);
+loadM('Prop_WoodenFence_Single',-12,0,-1,0,2);
+loadM('Prop_WoodenFence_Single',-12,0,1,0,2);
+loadM('Prop_WoodenFence_Single',-12,0,3,0,2);
+loadM('Prop_Chimney',-5,7.8,-8,0,2);
+loadM('Prop_Vine1',-6,1,-7.8,0,2);
+loadM('Prop_Support',5,0,-7,0,2);
+
+// Stairs
+loadM('Stairs_Exterior_Straight',-2,0,-6,0,2);
+
+// Balcony
+loadM('Balcony_Simple_Straight',-4,4,-7.5,0,2);
+
+// Floor tiles (only center, not full grid)
+for(let x=-2;x<=2;x+=2)for(let z=-2;z<=2;z+=2) loadM('Floor_Brick',x,0.01,z,0,2);
+
+// Corners
+loadM('Corner_Exterior_Brick',6,0,-8,0,2);
+loadM('Corner_Exterior_Wood',-8,0,-8,0,2);
+
+// Door + shutters
+loadM('DoorFrame_Round_Brick',-2,0,-7.9,0,2);
+loadM('Door_1_Round',-2,0,-7.85,0,2);
+loadM('WindowShutters_Wide_Round_Open',2,0,-7.9,0,2);
+
+// === GAME LOOP ===
+let elapsed=0, frames=0, lastFpsUpdate=0;
+const clock=new THREE.Clock();
+const fpsEl=document.getElementById('fps');
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05);
+  elapsed+=dt;
+
+  // Stats overlay
+  frames++;
+  if(elapsed-lastFpsUpdate>0.5){
+    const ri = renderer.info.render;
+    const mi = renderer.info.memory;
+    fpsEl.innerHTML =
+      '<b>' + Math.round(frames/(elapsed-lastFpsUpdate)) + ' FPS</b><br>' +
+      'Draw calls: ' + ri.calls + '<br>' +
+      'Triangles: ' + ri.triangles.toLocaleString() + '<br>' +
+      'Vertices: ' + (ri.triangles * 3).toLocaleString() + '<br>' +
+      'Geometries: ' + mi.geometries + '<br>' +
+      'Textures: ' + mi.textures + '<br>' +
+      'Scene objects: ' + scene.children.length;
+    frames=0; lastFpsUpdate=elapsed;
+  }
+
+  // Movement — only process when pointer is locked (play mode) and gizmo not active
+  const canMove = document.pointerLockElement && !window._gizmoDragging;
+  if (canMove) {
+    let mx=0,mz=0;
+    if(keys['KeyW'])mz-=1;if(keys['KeyS'])mz+=1;
+    if(keys['KeyA'])mx-=1;if(keys['KeyD'])mx+=1;
+    const spd=keys['ShiftLeft']?player.speed*1.8:player.speed;
+    if(mx||mz){
+      const len=Math.sqrt(mx*mx+mz*mz);mx/=len;mz/=len;
+      player.x+=(mx*Math.cos(camYaw)-mz*Math.sin(camYaw))*spd*dt;
+      player.z+=(mx*Math.sin(camYaw)+mz*Math.cos(camYaw))*spd*dt;
+      legs[0].position.y=.45+Math.sin(elapsed*8)*.08;
+      legs[1].position.y=.45+Math.sin(elapsed*8+Math.PI)*.08;
+    }
+    // Clamp to world
+    player.x=Math.max(-40,Math.min(40,player.x));
+    player.z=Math.max(-40,Math.min(40,player.z));
+
+    pGroup.position.set(player.x,0,player.z);
+    pGroup.rotation.y=camYaw+Math.PI;
+  }
+
+  camera.position.set(
+    player.x-Math.sin(camYaw)*10,
+    5-camPitch*3,
+    player.z-Math.cos(camYaw)*10
+  );
+  camera.lookAt(player.x,1.5,player.z);
+
+  renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  applyRenderScale();
+});
+
+// ── Gizmo (transform controls) ──
+const gizmo = new THREE.TransformControls(camera, renderer.domElement);
+gizmo.setMode('translate');
+gizmo.setSize(0.8);
+scene.add(gizmo);
+window._gizmo = gizmo;
+window._gizmoDragging = false;
+
+gizmo.addEventListener('dragging-changed', function(event) {
+  window._gizmoDragging = event.value;
+});
+
+// Notify parent when gizmo moves an object
+gizmo.addEventListener('objectChange', function() {
+  if (selectedObject) {
+    window.parent.postMessage({
+      type: 'objectTransformed',
+      position: { x: selectedObject.position.x, y: selectedObject.position.y, z: selectedObject.position.z },
+      rotation: { x: selectedObject.rotation.x, y: selectedObject.rotation.y, z: selectedObject.rotation.z },
+      scale: { x: selectedObject.scale.x, y: selectedObject.scale.y, z: selectedObject.scale.z },
+    }, '*');
+  }
+});
+
+// ── Selection state ──
+let selectedObject = null;
+const originalMaterials = new Map();
+
+function deselectAll() {
+  // Restore all original materials
+  for (const [mesh, mat] of originalMaterials) {
+    if (mesh.parent) mesh.material = mat;
+  }
+  originalMaterials.clear();
+  selectedObject = null;
+
+  // Remove gizmo
+  if (window._gizmo) {
+    window._gizmo.detach();
+  }
+
+  // Notify parent
+  window.parent.postMessage({ type: 'deselected' }, '*');
+}
+
+function selectObject(obj) {
+  deselectAll();
+
+  // Find the top-level group (the loaded model root)
+  let root = obj;
+  while (root.parent && root.parent !== scene) {
+    root = root.parent;
+  }
+
+  // Don't select ground or player
+  if (root === ground || root === pGroup) return;
+
+  selectedObject = root;
+
+  // Gray out everything else, highlight selected
+  scene.traverse(function(child) {
+    if (!child.isMesh || child === ground) return;
+    // Skip player meshes
+    let isPlayer = false;
+    let pp = child;
+    while (pp) { if (pp === pGroup) { isPlayer = true; break; } pp = pp.parent; }
+    if (isPlayer) return;
+
+    originalMaterials.set(child, child.material);
+
+    // Check if this mesh is part of the selected object
+    let isSelected = false;
+    let p = child;
+    while (p) {
+      if (p === root) { isSelected = true; break; }
+      p = p.parent;
+    }
+
+    if (!isSelected) {
+      // Gray + transparent
+      child.material = new THREE.MeshLambertMaterial({
+        color: 0x444444,
+        transparent: true,
+        opacity: 0.3,
+      });
+    } else {
+      // Highlight with emissive outline
+      child.material = child.material.clone();
+      if (child.material.emissive) {
+        child.material.emissive = new THREE.Color(0x00aaff);
+        child.material.emissiveIntensity = 0.3;
+      }
+    }
+  });
+
+  // Attach gizmo
+  if (window._gizmo) {
+    window._gizmo.attach(root);
+  }
+
+  // Notify parent of selection
+  const modelName = root.userData.modelName || 'unknown';
+  const modelIndex = root.userData.modelIndex !== undefined ? root.userData.modelIndex : -1;
+  window.parent.postMessage({
+    type: 'objectSelected',
+    name: modelName,
+    index: modelIndex,
+    position: { x: root.position.x, y: root.position.y, z: root.position.z },
+    rotation: { x: root.rotation.x, y: root.rotation.y, z: root.rotation.z },
+    scale: { x: root.scale.x, y: root.scale.y, z: root.scale.z },
+  }, '*');
+}
+
+function selectModelByName(name) {
+  // Find the first model matching this name
+  for (const model of window._sceneModels) {
+    if (model.userData.modelName === name) {
+      selectObject(model);
+      return;
+    }
+  }
+}
+
+function setGizmoMode(mode) {
+  if (!window._gizmo) return;
+  if (mode === 'none') {
+    window._gizmo.detach();
+  } else {
+    window._gizmo.setMode(mode);
+    if (selectedObject) window._gizmo.attach(selectedObject);
+  }
+
+  // Update gizmo bar active state
+  document.querySelectorAll('#gizmo-bar button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.gizmo === mode);
+  });
+}
+
+function addModelToScene(name, x, y, z) {
+  loadM(name, x, y, z, 0, 2);
+}
+
+// ── Click-to-select with raycasting ──
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+renderer.domElement.addEventListener('click', function(e) {
+  // Only when not pointer-locked (editing mode)
+  if (document.pointerLockElement) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(pointer, camera);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  if (intersects.length > 0) {
+    const hit = intersects[0].object;
+    // Skip ground, player, and gizmo
+    if (hit === ground) { deselectAll(); return; }
+    let isGizmo = false;
+    let pg = hit;
+    while (pg) { if (pg === gizmo) { isGizmo = true; break; } pg = pg.parent; }
+    if (isGizmo) return;
+    let isPlayerMesh = false;
+    let pp = hit;
+    while (pp) { if (pp === pGroup) { isPlayerMesh = true; break; } pp = pp.parent; }
+    if (isPlayerMesh) return;
+
+    selectObject(hit);
+  } else {
+    deselectAll();
+  }
+});
+
+// ── Gizmo bar button handlers ──
+document.querySelectorAll('#gizmo-bar button').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const mode = btn.dataset.gizmo;
+
+    if (mode === 'play') {
+      // Enter play mode — lock pointer
+      renderer.domElement.requestPointerLock();
+      document.getElementById('prompt').style.display = 'none';
+      deselectAll();
+      document.querySelectorAll('#gizmo-bar button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      return;
+    }
+
+    setGizmoMode(mode);
+  });
+});
+
+// ── Keyboard shortcuts for gizmo (only when not pointer-locked) ──
+window.addEventListener('keydown', function(e) {
+  if (document.pointerLockElement) return;
+
+  if (e.code === 'KeyW' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    setGizmoMode('translate');
+  }
+  if (e.code === 'KeyE' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    setGizmoMode('rotate');
+  }
+  if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    setGizmoMode('scale');
+  }
+  if (e.code === 'Escape') {
+    deselectAll();
+  }
+  if (e.code === 'Delete' || e.code === 'Backspace') {
+    if (selectedObject) {
+      const idx = window._sceneModels.indexOf(selectedObject);
+      scene.remove(selectedObject);
+      if (idx !== -1) window._sceneModels.splice(idx, 1);
+      deselectAll();
+    }
+  }
+});
+
+// Hide gizmo bar and show crosshair when pointer locked, vice versa
+document.addEventListener('pointerlockchange', function() {
+  const locked = !!document.pointerLockElement;
+  document.getElementById('gizmo-bar').style.display = locked ? 'none' : 'flex';
+  document.getElementById('crosshair').style.display = locked ? 'block' : 'none';
+  if (!locked) {
+    // Exiting play mode — reset play button
+    document.querySelectorAll('#gizmo-bar button').forEach(function(b) { b.classList.remove('active'); });
+    const translateBtn = document.querySelector('#gizmo-bar button[data-gizmo="translate"]');
+    if (translateBtn) translateBtn.classList.add('active');
+    setGizmoMode('translate');
+  }
+});
+
+// ── Studio Integration API ──
+// Listen for commands from parent (Problocks studio)
+window.addEventListener('message', function(event) {
+  const msg = event.data;
+  if (!msg || !msg.type) return;
+
+  if (msg.type === 'selectModel') {
+    selectModelByName(msg.name);
+  }
+
+  if (msg.type === 'selectModelByIndex') {
+    const model = window._sceneModels[msg.index];
+    if (model) selectObject(model);
+  }
+
+  if (msg.type === 'deselectAll') {
+    deselectAll();
+  }
+
+  if (msg.type === 'setGizmoMode') {
+    setGizmoMode(msg.mode);
+  }
+
+  if (msg.type === 'addModel') {
+    addModelToScene(msg.name, msg.x || 0, msg.y || 0, msg.z || 0);
+  }
+
+  if (msg.type === 'removeSelected') {
+    if (selectedObject) {
+      const idx = window._sceneModels.indexOf(selectedObject);
+      scene.remove(selectedObject);
+      if (idx !== -1) window._sceneModels.splice(idx, 1);
+      deselectAll();
+    }
+  }
+
+  if (msg.type === 'getSceneModels') {
+    const models = window._sceneModels.map(function(m, i) {
+      return {
+        index: i,
+        name: m.userData.modelName,
+        position: { x: m.position.x, y: m.position.y, z: m.position.z },
+        rotation: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
+        scale: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
+      };
+    });
+    window.parent.postMessage({ type: 'sceneModels', models: models }, '*');
+  }
+});
+</script>
+</body>
+</html>

@@ -51,8 +51,10 @@ export function PanelColorSwatches({
   }
 
   const hexField = (
-    <div className="flex items-center gap-1 flex-1 min-w-0 bg-white/[0.03] rounded-md px-2 h-7">
-      <span className="text-zinc-500 text-xs font-mono select-none">#</span>
+    <div className="relative flex-1 min-w-0">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">
+        #
+      </span>
       <input
         type="text"
         value={hexInput}
@@ -65,7 +67,7 @@ export function PanelColorSwatches({
           }
         }}
         spellCheck={false}
-        className="flex-1 min-w-0 bg-transparent text-zinc-200 text-xs font-mono outline-none"
+        className="w-full bg-panel-surface text-white text-sm py-2 pl-7 pr-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-gray-600"
       />
     </div>
   )

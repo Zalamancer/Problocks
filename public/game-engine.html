@@ -5,7 +5,7 @@
 <title>Blocky Village</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{overflow:hidden;width:100vw;height:100vh;background:#5ecfff;font-family:sans-serif}
+body{overflow:hidden;width:100vw;height:100vh;background:#5ecfff;font-family:'Segoe UI',system-ui,sans-serif}
 canvas{display:block;outline:none}
 #hud{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
   color:rgba(255,255,255,.55);font-size:11px;font-weight:600;letter-spacing:.07em;
@@ -14,11 +14,120 @@ canvas{display:block;outline:none}
   background:rgba(0,0,0,.5);color:#fff;font-size:12px;font-weight:700;
   padding:4px 14px;border-radius:20px;pointer-events:none;display:none;z-index:5;
   border:1px solid rgba(255,255,255,.15)}
+
+/* ── Top HUD bar ─────────────────────────────────────────────────── */
+#top-hud{position:fixed;top:10px;left:10px;display:flex;align-items:center;gap:8px;z-index:10}
+#coin-hud{display:flex;align-items:center;gap:5px;background:rgba(0,0,16,.7);
+  border:1.5px solid #ffd700;border-radius:30px;padding:5px 14px 5px 10px;
+  font-weight:800;font-size:14px;color:#ffd700;backdrop-filter:blur(6px)}
+#coin-hud span{transition:transform .3s}
+#coin-hud span.pop{animation:coinpop .3s}
+@keyframes coinpop{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}}
+
+/* ── Shop button ─────────────────────────────────────────────────── */
+#shop-btn{position:fixed;bottom:40px;right:14px;width:52px;height:52px;
+  border-radius:50%;background:linear-gradient(135deg,#7722ff,#2255ff);
+  border:2.5px solid rgba(255,255,255,.25);color:#fff;font-size:24px;cursor:pointer;
+  box-shadow:0 6px 20px rgba(100,40,255,.55);z-index:10;
+  display:flex;align-items:center;justify-content:center;transition:transform .15s;
+  animation:shopbounce 3s infinite}
+@keyframes shopbounce{0%,90%,100%{transform:scale(1)}95%{transform:scale(1.12)}}
+#shop-btn:hover{transform:scale(1.12)!important}
+
+/* ── Shop overlay ────────────────────────────────────────────────── */
+#shop-overlay{position:fixed;inset:0;background:rgba(0,0,16,.88);display:none;
+  align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(8px)}
+#shop-overlay.open{display:flex}
+.shop-win{background:#11142a;border:2px solid #252860;border-radius:22px;
+  width:min(700px,97vw);max-height:88vh;display:flex;flex-direction:column;
+  overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.04)}
+.shop-hdr{display:flex;align-items:center;gap:10px;padding:16px 20px;
+  background:linear-gradient(135deg,#191d44,#1f2350);border-bottom:1.5px solid #252860}
+.shop-logo{font-size:22px;font-weight:900;color:#fff;letter-spacing:.06em;flex:1}
+.shop-logo span{background:linear-gradient(90deg,#7755ff,#44aaff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.bal-chip{display:flex;align-items:center;gap:6px;background:#0e1025;
+  border:1.5px solid #ffd700;border-radius:30px;padding:5px 14px;
+  font-weight:800;font-size:15px;color:#ffd700;letter-spacing:.02em}
+.shop-x{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.07);
+  border:none;color:#888;font-size:20px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;transition:all .15s;line-height:1}
+.shop-x:hover{background:rgba(255,50,50,.25);color:#ff7070}
+.shop-tabs{display:flex;gap:6px;padding:12px 18px;background:#0c0f22;
+  border-bottom:1px solid #1c1f44}
+.tab-btn{padding:8px 18px;border-radius:30px;border:none;cursor:pointer;
+  font-size:12px;font-weight:800;letter-spacing:.05em;transition:all .18s;
+  background:rgba(255,255,255,.06);color:#666}
+.tab-btn:hover{background:rgba(255,255,255,.1);color:#bbb}
+.tab-btn.on{background:linear-gradient(135deg,#3355ff,#6622ff);color:#fff;
+  box-shadow:0 4px 18px rgba(80,60,255,.45)}
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));
+  gap:12px;padding:16px 18px;overflow-y:auto;flex:1;min-height:0}
+.shop-grid::-webkit-scrollbar{width:5px}
+.shop-grid::-webkit-scrollbar-thumb{background:#2a2d55;border-radius:4px}
+.icard{background:#191c3a;border:1.5px solid #252855;border-radius:16px;
+  padding:14px 10px 12px;display:flex;flex-direction:column;align-items:center;
+  gap:5px;cursor:default;transition:transform .18s,border-color .18s,box-shadow .18s;
+  position:relative;overflow:hidden}
+.icard::before{content:'';position:absolute;inset:0;opacity:0;
+  background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.07),transparent 70%);
+  transition:opacity .2s}
+.icard:hover{transform:translateY(-4px);border-color:#3a3d88;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.icard:hover::before{opacity:1}
+.icard.owned{border-color:#22cc55!important;background:#0f1f14}
+.icard.legendary-card{border-color:#ffd70044;animation:legborder 2.5s infinite}
+@keyframes legborder{0%,100%{border-color:#ffd70044;box-shadow:0 0 12px #ffd70022}
+  50%{border-color:#ff880066;box-shadow:0 0 22px #ffaa0033}}
+.iemoji{font-size:42px;line-height:1;margin:4px 0;filter:drop-shadow(0 2px 8px rgba(0,0,0,.4))}
+.iname{font-size:12px;font-weight:800;color:#eef;text-align:center;letter-spacing:.03em}
+.idesc{font-size:10px;color:#555;text-align:center;line-height:1.35;min-height:26px}
+.irarity{font-size:9px;font-weight:800;letter-spacing:.09em;padding:2px 9px;border-radius:20px}
+.r-common{background:rgba(160,160,160,.15);color:#999}
+.r-rare{background:rgba(60,120,255,.18);color:#5599ff}
+.r-epic{background:rgba(140,50,255,.18);color:#bb77ff}
+.r-legendary{background:linear-gradient(90deg,rgba(255,140,0,.25),rgba(255,220,0,.25));
+  color:#ffd700;box-shadow:0 0 8px rgba(255,200,0,.2)}
+.iprice{display:flex;align-items:center;gap:4px;font-size:14px;font-weight:800;color:#ffd700}
+.ibuy{width:100%;padding:8px 0;border-radius:30px;border:none;cursor:pointer;
+  font-size:11px;font-weight:900;letter-spacing:.06em;transition:all .16s;margin-top:4px;
+  background:linear-gradient(135deg,#2255ff,#5522ff);color:#fff}
+.ibuy:hover:not(:disabled){background:linear-gradient(135deg,#3366ff,#6633ff);
+  box-shadow:0 4px 16px rgba(50,100,255,.55);transform:scale(1.04)}
+.ibuy:active:not(:disabled){transform:scale(.97)}
+.ibuy:disabled{cursor:default}
+.ibuy.is-owned{background:linear-gradient(135deg,#22aa44,#118833)!important}
+.ibuy.no-gold{background:rgba(60,60,60,.5)!important;color:#555!important}
+
+/* ── Notification toast ──────────────────────────────────────────── */
+#notif{position:fixed;top:72px;left:50%;transform:translateX(-50%) translateY(-12px);
+  background:#11142a;border:1.5px solid #22cc55;border-radius:30px;
+  padding:9px 24px;color:#22dd66;font-weight:800;font-size:13px;
+  pointer-events:none;opacity:0;transition:all .3s;z-index:200;white-space:nowrap;
+  box-shadow:0 4px 20px rgba(30,200,80,.3)}
+#notif.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#notif.err{border-color:#cc3333;color:#ff6666;box-shadow:0 4px 20px rgba(200,50,50,.3)}
 </style>
 </head>
 <body>
 <div id="hud">WASD · MOVE &nbsp; MOUSE · LOOK &nbsp; ESC · PAUSE &nbsp; | &nbsp; CLICK PART TO SELECT</div>
 <div id="sel-label" id="sel-label"></div>
+<div id="top-hud"><div id="coin-hud">🪙 <span id="coin-count">0</span></div></div>
+<button id="shop-btn" title="Open Shop">🛒</button>
+<div id="shop-overlay"><div class="shop-win">
+  <div class="shop-hdr">
+    <div class="shop-logo"><span>BLOCKY</span> SHOP</div>
+    <div class="bal-chip">🪙 <span id="shop-bal">0</span></div>
+    <button class="shop-x" id="shop-close">✕</button>
+  </div>
+  <div class="shop-tabs" id="shop-tabs">
+    <button class="tab-btn on" data-tab="all">All</button>
+    <button class="tab-btn" data-tab="skins">Skins</button>
+    <button class="tab-btn" data-tab="boosts">Boosts</button>
+    <button class="tab-btn" data-tab="cosmetics">Cosmetics</button>
+  </div>
+  <div class="shop-grid" id="shop-grid"></div>
+</div></div>
+<div id="notif"></div>
 
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.158.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.158.0/examples/jsm/"}}
@@ -421,6 +530,18 @@ const S=[
   // Coins
   {name:'Coin 1',       partType:'Cylinder',color:'#ffdd00',roughness:.2,metalness:.8,texture:'Metal',emissiveColor:'#ffdd00',emissiveIntensity:.3,position:{x:2,y:2,z:3},scale:{x:.4,y:.12,z:.4},rotation:{x:90,y:0,z:0}},
   {name:'Coin 2',       partType:'Cylinder',color:'#ffdd00',roughness:.2,metalness:.8,texture:'Metal',emissiveColor:'#ffdd00',emissiveIntensity:.3,position:{x:-2,y:2.5,z:4},scale:{x:.4,y:.12,z:.4},rotation:{x:90,y:0,z:0}},
+  // Shop stall (northwest corner)
+  {name:'Stall Base',   partType:'Block',color:'#d4aa70',roughness:.85,metalness:0,texture:'Wood',position:{x:-8,y:.6,z:-5},scale:{x:4,y:1.2,z:2},rotation:{x:0,y:0,z:0},castShadow:true},
+  {name:'Stall Back',   partType:'Block',color:'#a07840',roughness:.85,metalness:0,texture:'Wood',position:{x:-8,y:2.2,z:-6},scale:{x:4,y:2.4,z:.3},rotation:{x:0,y:0,z:0}},
+  {name:'Stall Awning', partType:'Block',color:'#e84040',roughness:.7,metalness:0,texture:'None',position:{x:-8,y:3.4,z:-4.5},scale:{x:4.2,y:.25,z:2.5},rotation:{x:-10,y:0,z:0}},
+  {name:'Stall Post L', partType:'Block',color:'#a07840',roughness:.85,metalness:0,texture:'Wood',position:{x:-10,y:2,z:-4},scale:{x:.25,y:4,z:.25},rotation:{x:0,y:0,z:0}},
+  {name:'Stall Post R', partType:'Block',color:'#a07840',roughness:.85,metalness:0,texture:'Wood',position:{x:-6,y:2,z:-4},scale:{x:.25,y:4,z:.25},rotation:{x:0,y:0,z:0}},
+  {name:'Shop Sign',    partType:'Block',color:'#ffd700',roughness:.2,metalness:.5,emissiveColor:'#ffd700',emissiveIntensity:.5,texture:'Metal',position:{x:-8,y:3.0,z:-4.1},scale:{x:2.5,y:.7,z:.15},rotation:{x:0,y:0,z:0}},
+  {name:'Potion Red',   partType:'Cylinder',color:'#ff4444',roughness:.1,metalness:.1,emissiveColor:'#ff2222',emissiveIntensity:.6,texture:'None',position:{x:-9.2,y:1.35,z:-5},scale:{x:.28,y:.55,z:.28},rotation:{x:0,y:0,z:0}},
+  {name:'Potion Blue',  partType:'Cylinder',color:'#4488ff',roughness:.1,metalness:.1,emissiveColor:'#2244ff',emissiveIntensity:.6,texture:'None',position:{x:-8.4,y:1.35,z:-5},scale:{x:.28,y:.55,z:.28},rotation:{x:0,y:0,z:0}},
+  {name:'Gold Chest',   partType:'Block',color:'#ffd700',roughness:.3,metalness:.7,texture:'Metal',emissiveColor:'#ffaa00',emissiveIntensity:.2,position:{x:-7,y:1.35,z:-5},scale:{x:.7,y:.55,z:.55},rotation:{x:0,y:0,z:0}},
+  {name:'Coin 3',       partType:'Cylinder',color:'#ffdd00',roughness:.2,metalness:.8,texture:'Metal',emissiveColor:'#ffdd00',emissiveIntensity:.3,position:{x:-10,y:1,z:-3},scale:{x:.4,y:.12,z:.4},rotation:{x:90,y:0,z:0}},
+  {name:'Coin 4',       partType:'Cylinder',color:'#ffdd00',roughness:.2,metalness:.8,texture:'Metal',emissiveColor:'#ffdd00',emissiveIntensity:.3,position:{x:-6,y:1,z:-3},scale:{x:.4,y:.12,z:.4},rotation:{x:90,y:0,z:0}},
   // Clouds (big flat blocks up high)
   {name:'Cloud 1',      partType:'Block',color:'#ffffff',roughness:.5,metalness:0,texture:'None',position:{x:-15,y:18,z:-10},scale:{x:10,y:3.5,z:5},rotation:{x:0,y:0,z:0},castShadow:false},
   {name:'Cloud 2',      partType:'Block',color:'#f5f5ff',roughness:.5,metalness:0,texture:'None',position:{x:12,y:20,z:-15},scale:{x:9,y:3,z:4.5},rotation:{x:0,y:15,z:0},castShadow:false},
@@ -458,9 +579,13 @@ function animate(){
   camera.position.z=Math.max(-11,Math.min(11,camera.position.z+vel.z));
   camera.position.y=4;
 
-  // Coin spin + bob
+  // Coin spin + bob + collect on approach
   coinIds.forEach((id,i)=>{
-    const p=parts.get(id); if(!p||id===selId)return;
+    const p=parts.get(id); if(!p)return;
+    const dx=camera.position.x-p.mesh.position.x;
+    const dz=camera.position.z-p.mesh.position.z;
+    if(Math.hypot(dx,dz)<1.4){collectCoin(id);return;}
+    if(id===selId)return;
     p.mesh.rotation.y=t*2+i;
     p.mesh.position.y=p.meta.position.y+Math.sin(t*2+i)*.2;
   });
@@ -477,6 +602,110 @@ animate();
 
 // Send initial scene to studio
 setTimeout(()=>postSceneModels(),800);
+
+// ─── Coin + Shop system ────────────────────────────────────────────────────
+let coinBalance=0;
+const ownedItems=new Set();
+
+const SHOP_ITEMS=[
+  {id:'leather_hat',  name:'Leather Hat',    desc:'Classic adventurer style', emoji:'🎩', rarity:'common',    cat:'skins',     price:30},
+  {id:'pixel_pet',    name:'Pixel Pet',      desc:'A loyal blocky companion', emoji:'🐾', rarity:'common',    cat:'cosmetics', price:40},
+  {id:'speed_boots',  name:'Speed Boots',    desc:'Run 30% faster',           emoji:'⚡', rarity:'common',    cat:'boosts',    price:50},
+  {id:'forest_cloak', name:'Forest Cloak',   desc:'Blend into the woods',     emoji:'🌿', rarity:'rare',      cat:'skins',     price:95},
+  {id:'shield_charm', name:'Shield Charm',   desc:'Reduce incoming damage',   emoji:'🛡️', rarity:'rare',      cat:'boosts',    price:120},
+  {id:'lucky_coin',   name:'Lucky Coin',     desc:'Double your coin finds',   emoji:'🍀', rarity:'rare',      cat:'boosts',    price:150},
+  {id:'rainbow_trail',name:'Rainbow Trail',  desc:'Leave color behind you',   emoji:'🌈', rarity:'epic',      cat:'cosmetics', price:200},
+  {id:'crystal_wand', name:'Crystal Wand',   desc:'Channel magical energy',   emoji:'🔮', rarity:'epic',      cat:'cosmetics', price:250},
+  {id:'fire_sword',   name:'Fire Sword',     desc:'Burns bright in darkness', emoji:'🗡️', rarity:'epic',      cat:'cosmetics', price:300},
+  {id:'golden_crown', name:'Golden Crown',   desc:'Rule all you survey',      emoji:'👑', rarity:'legendary', cat:'skins',     price:500},
+  {id:'teleport_gem', name:'Teleport Gem',   desc:'Blink anywhere instantly', emoji:'💎', rarity:'legendary', cat:'boosts',    price:600},
+  {id:'dragon_wings', name:'Dragon Wings',   desc:'Soar above the village',   emoji:'🐉', rarity:'legendary', cat:'skins',     price:750},
+];
+
+function updateCoinUI(){
+  const el=document.getElementById('coin-count');
+  document.getElementById('coin-count').textContent=coinBalance;
+  document.getElementById('shop-bal').textContent=coinBalance;
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
+
+let _notifTimer;
+function showNotif(msg,isErr=false){
+  const n=document.getElementById('notif');
+  n.textContent=msg; n.className=isErr?'err show':'show';
+  clearTimeout(_notifTimer);
+  _notifTimer=setTimeout(()=>{n.className='';},2200);
+}
+
+function collectCoin(id){
+  const i=coinIds.indexOf(id); if(i===-1)return;
+  coinIds.splice(i,1);
+  const p=parts.get(id); if(!p)return;
+  // Pop-out animation then remove
+  const m=p.mesh;
+  let s=1;
+  const pop=setInterval(()=>{
+    s-=.14; if(s<=0){clearInterval(pop);scene.remove(m);parts.delete(id);return;}
+    m.scale.setScalar(s);
+  },16);
+  coinBalance+=10;
+  updateCoinUI();
+  showNotif('🪙 +10 coins!');
+}
+
+function renderShopItems(tab='all'){
+  const grid=document.getElementById('shop-grid');
+  const items=tab==='all'?SHOP_ITEMS:SHOP_ITEMS.filter(it=>it.cat===tab);
+  grid.innerHTML=items.map(it=>{
+    const owned=ownedItems.has(it.id);
+    const canBuy=!owned&&coinBalance>=it.price;
+    return `<div class="icard${owned?' owned':''}${it.rarity==='legendary'?' legendary-card':''}">
+      <div class="iemoji">${it.emoji}</div>
+      <div class="iname">${it.name}</div>
+      <div class="idesc">${it.desc}</div>
+      <div class="irarity r-${it.rarity}">${it.rarity.toUpperCase()}</div>
+      <div class="iprice">🪙 ${it.price}</div>
+      <button class="ibuy${owned?' is-owned':canBuy?'':' no-gold'}"
+        ${owned||!canBuy?'disabled':''} data-item="${it.id}">
+        ${owned?'OWNED':'BUY'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function buyItem(itemId){
+  const it=SHOP_ITEMS.find(i=>i.id===itemId);
+  if(!it||ownedItems.has(itemId)||coinBalance<it.price)return;
+  coinBalance-=it.price;
+  ownedItems.add(itemId);
+  updateCoinUI();
+  showNotif(`${it.emoji} ${it.name} purchased!`);
+  renderShopItems(document.querySelector('.tab-btn.on')?.dataset.tab||'all');
+}
+
+// ── Shop event listeners ──
+document.getElementById('shop-btn').addEventListener('click',()=>{
+  document.getElementById('shop-overlay').classList.add('open');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab==='all'));
+  renderShopItems('all');
+});
+document.getElementById('shop-close').addEventListener('click',()=>{
+  document.getElementById('shop-overlay').classList.remove('open');
+});
+document.getElementById('shop-overlay').addEventListener('click',e=>{
+  if(e.target===document.getElementById('shop-overlay'))
+    document.getElementById('shop-overlay').classList.remove('open');
+});
+document.getElementById('shop-tabs').addEventListener('click',e=>{
+  const btn=e.target.closest('.tab-btn'); if(!btn)return;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderShopItems(btn.dataset.tab);
+});
+document.getElementById('shop-grid').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-item]'); if(!btn||btn.disabled)return;
+  buyItem(btn.dataset.item);
+});
 </script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { FolderOpen, FileCode, FileText, Box, Search, Plus, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
-import { PanelSearchInput, PanelCategoryTabs, PanelButtonGroup } from '@/components/ui';
+import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useStudio } from '@/store/studio-store';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
@@ -190,33 +190,31 @@ export function AssetsPanel() {
         </div>
       </div>
 
-      {/* Filter panel (view mode + category) */}
+      {/* Filter panel (view + category) */}
       {filtersOpen && (
-        <div className="shrink-0 px-3 pb-2 flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-500 w-14 shrink-0">View</span>
-            <PanelButtonGroup
-              value={viewMode}
-              onChange={(v) => setViewMode(v as 'list' | 'grid')}
-              options={[
-                { value: 'grid', icon: LayoutGrid, title: 'Grid view' },
-                { value: 'list', icon: List, title: 'List view' },
-              ]}
-            />
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-[10px] uppercase tracking-wide text-zinc-500 w-14 shrink-0 pt-1.5">Category</span>
-            <div className="flex-1 min-w-0">
-              <PanelCategoryTabs
-                compact
-                activeTab={category}
-                onChange={setCategory}
-                tabs={CATEGORIES
-                  .filter((c) => c.id === 'all' || (catCounts[c.id] || 0) > 0)
-                  .map((c) => ({ id: c.id, label: c.label }))}
-              />
-            </div>
-          </div>
+        <div className="shrink-0 px-3 pb-3 space-y-2">
+          <PanelSelect
+            label="View"
+            value={viewMode}
+            onChange={(v) => setViewMode(v as 'list' | 'grid')}
+            options={[
+              { value: 'grid', label: 'Grid' },
+              { value: 'list', label: 'List' },
+            ]}
+          />
+          <PanelSelect
+            label="Category"
+            value={category}
+            onChange={setCategory}
+            options={CATEGORIES
+              .filter((c) => c.id === 'all' || (catCounts[c.id] || 0) > 0)
+              .map((c) => ({
+                value: c.id,
+                label: c.id === 'all'
+                  ? `${c.label} (${assets.length})`
+                  : `${c.label} (${catCounts[c.id] || 0})`,
+              }))}
+          />
         </div>
       )}
 

@@ -337,7 +337,7 @@ export function AssetsPanel() {
                   <div className="relative w-full aspect-square">
                     <AssetThumbnail modelName={asset.name} fluid />
                     {/* Hover overlay with extra stats */}
-                    <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                    <div className="absolute inset-0 bg-panel-surface/95 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
                       <AssetExpandedStats asset={asset} />
                     </div>
                   </div>

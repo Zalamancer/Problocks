@@ -66,7 +66,7 @@ export function BuildingCanvas() {
     if (!container || sceneRef.current) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x14141a);
+    scene.background = new THREE.Color(0x87c3ed); // Roblox-style sky blue
 
     const camera = new THREE.PerspectiveCamera(
       55,
@@ -111,26 +111,26 @@ export function BuildingCanvas() {
 
     const { gridExtent } = useBuildingStore.getState();
     const gridSpan = gridExtent * 2 * TILE;
-    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x3a3a44, 0x26262e);
-    (grid.material as THREE.Material).depthWrite = false;
-    scene.add(grid);
 
-    // Invisible ground plane for raycasting.
-    const groundGeo = new THREE.PlaneGeometry(gridSpan * 2, gridSpan * 2);
-    groundGeo.rotateX(-Math.PI / 2);
+    // Default baseplate — doubles as the raycast surface. Roblox-style
+    // bright green grass so the workspace reads immediately as a world.
+    const baseSize = 128;
     const ground = new THREE.Mesh(
-      groundGeo,
-      new THREE.MeshBasicMaterial({ visible: false }),
+      new THREE.PlaneGeometry(baseSize, baseSize).rotateX(-Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x6aaa4d, roughness: 1 }),
     );
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    ground.name = 'baseplate';
     scene.add(ground);
 
-    // Backing plane receiving shadows so the scene has grounding.
-    const shadowCatcher = new THREE.Mesh(
-      new THREE.PlaneGeometry(gridSpan, gridSpan).rotateX(-Math.PI / 2),
-      new THREE.ShadowMaterial({ opacity: 0.25 }),
-    );
-    shadowCatcher.receiveShadow = true;
-    scene.add(shadowCatcher);
+    // Build-area grid sits slightly above the baseplate to avoid z-fight.
+    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x2f5a22, 0x558c3d);
+    grid.position.y = 0.01;
+    (grid.material as THREE.Material).depthWrite = false;
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = 0.6;
+    scene.add(grid);
 
     const floorGroup = new THREE.Group();
     floorGroup.name = 'floors';

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, Hammer, Play } from 'lucide-react';
+import { ArrowLeft, Play, Gamepad2 } from 'lucide-react';
 
 interface MarketplaceGame {
   id: string;
@@ -12,18 +12,10 @@ interface MarketplaceGame {
   badge: string;
 }
 
-const GAMES: MarketplaceGame[] = [
-  {
-    id: 'tile-builder',
-    title: 'Tile Builder',
-    tagline: 'Bloxburg-style tile-based house building. Place floors and walls on a 2m grid.',
-    author: 'Problocks',
-    plays: 0,
-    href: '/build',
-    accent: 'from-emerald-500/40 to-sky-500/20',
-    badge: 'New',
-  },
-];
+// Tile Builder is now a built-in studio tool for placing map geometry —
+// not a standalone game. Marketplace will populate from published
+// student games once publishing is wired up.
+const GAMES: MarketplaceGame[] = [];
 
 export default function MarketplacePage() {
   return (
@@ -51,42 +43,55 @@ export default function MarketplacePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {GAMES.map((g) => (
+        {GAMES.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-zinc-900/40 p-12 flex flex-col items-center text-center">
+            <div className="h-12 w-12 rounded-xl bg-white/5 flex items-center justify-center mb-4">
+              <Gamepad2 size={22} className="text-zinc-500" />
+            </div>
+            <h3 className="text-sm font-semibold text-zinc-200">No games published yet</h3>
+            <p className="text-xs text-zinc-500 mt-1 max-w-sm">
+              Build a game in Studio and publish it here so classmates can play.
+            </p>
             <Link
-              key={g.id}
-              href={g.href}
-              className="group flex flex-col rounded-2xl bg-zinc-900/80 border border-white/[0.06] overflow-hidden hover:border-white/15 transition-colors"
+              href="/studio"
+              className="mt-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors"
             >
-              <div
-                className={`aspect-[16/10] relative bg-gradient-to-br ${g.accent} flex items-center justify-center`}
-              >
-                <Hammer size={48} className="text-white/70" />
-                {g.badge && (
-                  <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500 text-white">
-                    {g.badge}
-                  </span>
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-xs font-semibold">
-                    <Play size={12} />
-                    Play
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 flex flex-col gap-1.5">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-zinc-100 leading-tight">{g.title}</h3>
-                  <span className="text-[10px] text-zinc-500 shrink-0 mt-0.5">
-                    {g.plays.toLocaleString()} plays
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-400 leading-snug line-clamp-2">{g.tagline}</p>
-                <p className="text-[11px] text-zinc-600 mt-1">by {g.author}</p>
-              </div>
+              <Play size={12} />
+              Open Studio
             </Link>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {GAMES.map((g) => (
+              <Link
+                key={g.id}
+                href={g.href}
+                className="group flex flex-col rounded-2xl bg-zinc-900/80 border border-white/[0.06] overflow-hidden hover:border-white/15 transition-colors"
+              >
+                <div
+                  className={`aspect-[16/10] relative bg-gradient-to-br ${g.accent} flex items-center justify-center`}
+                >
+                  <Gamepad2 size={48} className="text-white/70" />
+                  {g.badge && (
+                    <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500 text-white">
+                      {g.badge}
+                    </span>
+                  )}
+                </div>
+                <div className="p-4 flex flex-col gap-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-zinc-100 leading-tight">{g.title}</h3>
+                    <span className="text-[10px] text-zinc-500 shrink-0 mt-0.5">
+                      {g.plays.toLocaleString()} plays
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-snug line-clamp-2">{g.tagline}</p>
+                  <p className="text-[11px] text-zinc-600 mt-1">by {g.author}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

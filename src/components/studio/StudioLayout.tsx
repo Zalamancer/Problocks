@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, ArrowRight, ArrowDown, Terminal, Gamepad2, Box } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { StudioTerminal } from './Terminal';
 import { GamePreview, type GamePreviewHandle, type GameObjectInfo } from './GamePreview';
@@ -12,7 +12,7 @@ import { KanbanView } from './views/KanbanView';
 import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
 import { useHotkeys } from '@/hooks/useHotkeys';
-import { LivePreview } from './views/LivePreview';
+import { WorkspaceView } from './views/WorkspaceView';
 import { useStudio } from '@/store/studio-store';
 import { CodeView } from './CodeView';
 import { useProjectBoard } from '@/store/project-board-store';
@@ -54,10 +54,10 @@ export function StudioLayout() {
   useThemeEffect();
   const { board } = useProjectBoard();
   const [wizardOpen, setWizardOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [viewMode, setViewMode] = useState<ViewMode>('3d');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [terminalOpen, setTerminalOpen] = useState(true);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalMaximized, setTerminalMaximized] = useState(false);
   const [gameHtml, setGameHtml] = useState<string | null>(null);
   const previewRef = useRef<GamePreviewHandle | null>(null);
@@ -73,8 +73,6 @@ export function StudioLayout() {
     'mod+j': () => setTerminalOpen((o) => !o),
   });
 
-  const flowDirection = useStudio((s) => s.flowDirection);
-  const toggleFlowDirection = useStudio((s) => s.toggleFlowDirection);
   const addGame = useStudio((s) => s.addGame);
   const updateGame = useStudio((s) => s.updateGame);
   const activeGameId = useStudio((s) => s.activeGameId);
@@ -213,104 +211,6 @@ export function StudioLayout() {
           {/* Center — relative container so the task panel can overlay */}
           <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
 
-            {/* Terminal + Game toggle — always available */}
-            {!board && (
-              <div className="shrink-0 flex items-center justify-end gap-1 px-3 py-2 border-b border-white/[0.05]">
-                <button
-                  onClick={() => setViewMode(viewMode === '3d' ? 'kanban' : '3d')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === '3d' ? 'bg-blue-500/10 text-blue-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
-                  }`}
-                  title="Toggle 3D Preview"
-                >
-                  <Box size={12} />
-                  3D
-                </button>
-                {gameHtml && (
-                  <button
-                    onClick={() => setGameHtml(gameHtml ? null : gameHtml)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                      gameHtml ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
-                    }`}
-                    title="Toggle Game Preview"
-                  >
-                    <Gamepad2 size={12} />
-                    Game
-                  </button>
-                )}
-                <button
-                  onClick={() => setTerminalOpen(!terminalOpen)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    terminalOpen ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
-                  }`}
-                  title="Toggle AI Terminal"
-                >
-                  <Terminal size={12} />
-                  Terminal
-                </button>
-              </div>
-            )}
-
-            {/* View toggle — only when board exists */}
-            {board && (
-              <div className="flex items-center gap-1 px-3 py-2 border-b border-white/[0.05] shrink-0">
-                <button
-                  onClick={() => setViewMode('kanban')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === 'kanban' ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  Board
-                </button>
-                <button
-                  onClick={() => setViewMode('canvas')}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === 'canvas' ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  Graph
-                </button>
-                <button
-                  onClick={() => setViewMode('3d')}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === '3d' ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  <Box size={12} />
-                  3D
-                </button>
-
-                {viewMode === 'canvas' && (
-                  <>
-                    <div className="w-px h-4 bg-white/[0.08] mx-1" />
-                    <button
-                      onClick={toggleFlowDirection}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
-                      title={flowDirection === 'LR' ? 'Switch to vertical layout' : 'Switch to horizontal layout'}
-                    >
-                      {flowDirection === 'LR' ? <ArrowRight size={12} /> : <ArrowDown size={12} />}
-                      {flowDirection === 'LR' ? 'Horizontal' : 'Vertical'}
-                    </button>
-                  </>
-                )}
-
-                <div className="ml-auto flex items-center gap-2">
-                  <span className="text-xs text-zinc-600">{template?.name}</span>
-                  <div className="w-px h-4 bg-white/[0.08]" />
-                  <button
-                    onClick={() => setTerminalOpen(!terminalOpen)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                      terminalOpen ? 'bg-green-500/10 text-green-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'
-                    }`}
-                    title="Toggle AI Terminal"
-                  >
-                    <Terminal size={12} />
-                    Terminal
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Main view */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               {/* Code view — opened from file tree */}
@@ -341,7 +241,7 @@ export function StudioLayout() {
                 </div>
               ) : viewMode === '3d' ? (
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  <LivePreview />
+                  <WorkspaceView />
                 </div>
               ) : !board ? (
                 <div className="flex-1 min-h-0 overflow-hidden">

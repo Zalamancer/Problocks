@@ -21,12 +21,15 @@ interface ColorPickerPanelProps {
   color: string
   onChange: (hex: string) => void
   showAlpha?: boolean
+  /** Optional preset swatches rendered inside the panel (under hex input). */
+  presets?: string[]
 }
 
 export const ColorPickerPanel = memo(function ColorPickerPanel({
   color,
   onChange,
   showAlpha = true,
+  presets,
 }: ColorPickerPanelProps) {
   const [hsv, setHsv] = useState(() => parseColor(color))
   const [hexInput, setHexInput] = useState(() => color.replace('#', '').slice(0, 6).toUpperCase())
@@ -462,6 +465,44 @@ export const ColorPickerPanel = memo(function ColorPickerPanel({
           </div>
         </div>
 
+        {/* ── Preset swatches ── */}
+        {presets && presets.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              paddingTop: 8,
+            }}
+          >
+            {presets.map((c) => {
+              const selected = c.toLowerCase() === color.toLowerCase()
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onChange(c)}
+                  title={c}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 6,
+                    border: selected ? '2px solid #fff' : '2px solid transparent',
+                    outline: selected ? '1px solid rgba(0,0,0,0.4)' : 'none',
+                    backgroundColor: c,
+                    cursor: 'pointer',
+                    padding: 0,
+                    transform: selected ? 'scale(1.1)' : 'none',
+                    transition: 'transform 0.15s, border-color 0.15s',
+                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
+                  }}
+                />
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Gradient controls (shown in linear/radial mode) ── */}
         {mode !== 'solid' && (
           <div
@@ -543,6 +584,8 @@ interface ColorPickerProps {
   onChange: (hex: string) => void
   showAlpha?: boolean
   className?: string
+  /** Optional preset swatches rendered inside the popover panel. */
+  presets?: string[]
 }
 
 export const ColorPicker = memo(function ColorPicker({
@@ -550,6 +593,7 @@ export const ColorPicker = memo(function ColorPicker({
   onChange,
   showAlpha = true,
   className,
+  presets,
 }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -621,7 +665,7 @@ export const ColorPicker = memo(function ColorPicker({
       {isOpen &&
         createPortal(
           <div ref={panelRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}>
-            <ColorPickerPanel color={color} onChange={onChange} showAlpha={showAlpha} />
+            <ColorPickerPanel color={color} onChange={onChange} showAlpha={showAlpha} presets={presets} />
           </div>,
           document.body,
         )}

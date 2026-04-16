@@ -16,12 +16,10 @@ const DEFAULT_COLORS = [
 
 interface PanelColorSwatchesProps {
   label?: string
+  /** Preset colors shown inside the ColorPicker popover. */
   colors?: string[]
   value: string
   onChange: (color: string) => void
-  showCustom?: boolean
-  /** Alias for showCustom */
-  showPicker?: boolean
   className?: string
 }
 
@@ -30,35 +28,16 @@ export function PanelColorSwatches({
   colors = DEFAULT_COLORS,
   value,
   onChange,
-  showCustom = true,
-  showPicker,
   className,
 }: PanelColorSwatchesProps) {
-  const showColorPicker = showPicker ?? showCustom
-  const swatches = (
-    <div className="flex items-center gap-1.5 flex-wrap flex-1">
-      {colors.map((c) => (
-        <button
-          key={c}
-          onClick={() => onChange(c)}
-          className={cn(
-            'w-6 h-6 rounded-md border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            value === c ? 'border-accent scale-110' : 'border-transparent hover:border-white/30',
-          )}
-          style={{ backgroundColor: c }}
-          title={c}
-        />
-      ))}
-      {showColorPicker && <ColorPicker color={value} onChange={onChange} />}
-    </div>
-  )
+  const trigger = <ColorPicker color={value} onChange={onChange} presets={colors} />
 
-  if (!label) return <div className={cn('mb-3', className)}>{swatches}</div>
+  if (!label) return <div className={cn('mb-3', className)}>{trigger}</div>
 
   return (
     <div className={cn('flex items-center gap-3 mb-3', className)}>
       <span className="text-gray-400 text-sm w-20 shrink-0">{label}</span>
-      {swatches}
+      {trigger}
     </div>
   )
 }

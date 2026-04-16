@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FolderOpen, FileCode, FileText, Box, Search, Plus, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
+import { FolderOpen, FileCode, FileText, Box, Search, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
 import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useStudio } from '@/store/studio-store';
@@ -92,7 +92,6 @@ export function AssetsPanel() {
 
   const games = useStudio((s) => s.games);
   const activeGameId = useStudio((s) => s.activeGameId);
-  const setActiveGameId = useStudio((s) => s.setActiveGameId);
   const openFileName = useStudio((s) => s.openFileName);
   const setOpenFileName = useStudio((s) => s.setOpenFileName);
 
@@ -129,16 +128,7 @@ export function AssetsPanel() {
       {/* Header */}
       <div className="shrink-0 px-3 pt-2 pb-1 flex items-center gap-2">
         {activeGame ? (
-          <>
-            <span className="flex-1 text-sm font-medium text-zinc-200 truncate">{activeGame.name}</span>
-            <button
-              onClick={() => setActiveGameId(null)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
-            >
-              <Plus size={11} />
-              New
-            </button>
-          </>
+          <span className="flex-1 text-sm font-medium text-zinc-200 truncate">{activeGame.name}</span>
         ) : (
           <span className="text-sm text-zinc-500">No active game</span>
         )}

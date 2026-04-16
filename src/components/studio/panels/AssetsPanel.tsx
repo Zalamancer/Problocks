@@ -156,15 +156,14 @@ export function AssetsPanel() {
         </div>
       )}
 
-      {/* Search + Filter button */}
-      <div className="shrink-0 px-3 py-2">
+      {/* Search + Filter + conditional View/Category — balanced 8px rhythm */}
+      <div className="shrink-0 px-3 py-2 space-y-2 [&_>div]:!mb-0">
         <div className="flex items-center gap-1.5">
           <div className="flex-1 min-w-0">
             <PanelSearchInput
               value={search}
               onChange={setSearch}
               placeholder="Search 3D assets..."
-              className="!mb-0"
             />
           </div>
           <button
@@ -183,35 +182,34 @@ export function AssetsPanel() {
             )}
           </button>
         </div>
-      </div>
 
-      {/* Filter panel (view + category) */}
-      {filtersOpen && (
-        <div className="shrink-0 px-3 pb-3 space-y-2">
-          <PanelSelect
-            label="View"
-            value={viewMode}
-            onChange={(v) => setViewMode(v as 'list' | 'grid')}
-            options={[
-              { value: 'grid', label: 'Grid' },
-              { value: 'list', label: 'List' },
-            ]}
-          />
-          <PanelSelect
-            label="Category"
-            value={category}
-            onChange={setCategory}
-            options={CATEGORIES
-              .filter((c) => c.id === 'all' || (catCounts[c.id] || 0) > 0)
-              .map((c) => ({
-                value: c.id,
-                label: c.id === 'all'
-                  ? `${c.label} (${assets.length})`
-                  : `${c.label} (${catCounts[c.id] || 0})`,
-              }))}
-          />
-        </div>
-      )}
+        {filtersOpen && (
+          <>
+            <PanelSelect
+              label="View"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'list' | 'grid')}
+              options={[
+                { value: 'grid', label: 'Grid' },
+                { value: 'list', label: 'List' },
+              ]}
+            />
+            <PanelSelect
+              label="Category"
+              value={category}
+              onChange={setCategory}
+              options={CATEGORIES
+                .filter((c) => c.id === 'all' || (catCounts[c.id] || 0) > 0)
+                .map((c) => ({
+                  value: c.id,
+                  label: c.id === 'all'
+                    ? `${c.label} (${assets.length})`
+                    : `${c.label} (${catCounts[c.id] || 0})`,
+                }))}
+            />
+          </>
+        )}
+      </div>
 
       {/* Asset list / grid */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3">

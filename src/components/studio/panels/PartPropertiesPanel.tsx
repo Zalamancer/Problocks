@@ -91,7 +91,7 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete }: Props) {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
 
         {/* ── Part ── */}
         <PanelSection title="Part" collapsible defaultOpen>

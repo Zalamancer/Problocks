@@ -2,782 +2,464 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Medieval Village — Problocks</title>
+<title>Medieval House — 3D</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',system-ui,sans-serif}
-canvas{display:block}
-#hud{position:absolute;top:16px;left:16px;pointer-events:none;z-index:10}
-#hud .label{color:#e8d5a3;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.8)}
-#fps{position:absolute;top:16px;right:16px;color:#8f8;font-size:11px;font-family:monospace;pointer-events:none;z-index:10;text-shadow:0 1px 3px #000;text-align:right;line-height:1.7;background:rgba(0,0,0,0.4);padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
-#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;pointer-events:none;z-index:10;opacity:0.4}
-#crosshair::before,#crosshair::after{content:'';position:absolute;background:#fff}
-#crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%)}
-#crosshair::after{width:100%;height:2px;top:50%;transform:translateY(-50%)}
-#prompt{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);color:#e8d5a3;font-size:15px;background:rgba(0,0,0,0.5);padding:10px 24px;border-radius:20px;border:1px solid rgba(232,213,163,0.15);z-index:10;pointer-events:none}
-#loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#1a2a3a;z-index:100;flex-direction:column;gap:12px}
-#loading .text{color:#8ba;font-size:16px;letter-spacing:0.1em}
-#loading .bar{width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden}
-#loading .fill{height:100%;background:#4a7a5a;border-radius:2px;transition:width 0.3s}
-#viewbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:10;pointer-events:all;background:rgba(0,0,0,0.5);padding:4px;border-radius:10px;border:1px solid rgba(255,255,255,0.08)}
-#viewbar button{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#aaa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s}
-#viewbar button:hover{background:rgba(255,255,255,0.12);color:#ddd}
-#viewbar button.active{background:rgba(74,122,90,0.35);border-color:rgba(74,122,90,0.5);color:#8fca8f}
-#gizmo-bar{position:absolute;bottom:16px;left:16px;display:flex;gap:4px;z-index:10;pointer-events:all;background:rgba(0,0,0,0.5);padding:4px;border-radius:10px;border:1px solid rgba(255,255,255,0.08)}
-#gizmo-bar button{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#aaa;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:14px;font-family:inherit;transition:all 0.15s;line-height:1}
-#gizmo-bar button:hover{background:rgba(255,255,255,0.12);color:#ddd}
-#gizmo-bar button.active{background:rgba(74,122,90,0.35);border-color:rgba(74,122,90,0.5);color:#8fca8f}
-#gizmo-bar button[data-gizmo="play"].active{background:rgba(90,74,122,0.35);border-color:rgba(90,74,122,0.5);color:#ca8fca}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; width:100vw; height:100vh; font-family:sans-serif; }
+canvas { display:block; }
+#overlay {
+  position:fixed; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; background:rgba(0,0,0,.65);
+  color:#e8d5a3; z-index:10; gap:10px; cursor:pointer;
+}
+#overlay h2 { font-size:22px; font-weight:700; letter-spacing:.04em; }
+#overlay p  { font-size:13px; color:#a89060; }
+#crosshair {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:18px; height:18px; pointer-events:none; display:none; z-index:5;
+}
+#crosshair::before,#crosshair::after {
+  content:''; position:absolute; background:rgba(255,255,255,.7);
+}
+#crosshair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
+#crosshair::after  { height:2px; width:100%; top:50%;  transform:translateY(-50%); }
+#hud {
+  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,.45); font-size:11px; letter-spacing:.06em;
+  pointer-events:none; display:none; z-index:5;
+}
 </style>
 </head>
 <body>
-<div id="loading"><div class="text">Loading Village...</div><div class="bar"><div class="fill" id="load-fill" style="width:0%"></div></div></div>
-<div id="hud"><div class="label">WASD Move | Mouse Look | Shift Sprint</div></div>
-<div id="fps"></div>
+<div id="overlay">
+  <h2>Medieval House</h2>
+  <p>Click to explore &nbsp;·&nbsp; WASD move &nbsp;·&nbsp; Mouse look &nbsp;·&nbsp; ESC pause</p>
+</div>
 <div id="crosshair"></div>
-<div id="prompt">Click objects to select | W/E/R for gizmo modes</div>
-<div id="gizmo-bar">
-  <button data-gizmo="translate" class="active" title="Move (W)">&#8597;</button>
-  <button data-gizmo="rotate" title="Rotate (E)">&#8635;</button>
-  <button data-gizmo="scale" title="Scale (R)">&#10529;</button>
-  <button data-gizmo="play" title="Play mode">&#9654;</button>
-</div>
-<div id="viewbar">
-  <button class="active" data-mode="solid">Solid</button>
-  <button data-mode="wire">Wireframe</button>
-  <button data-mode="points">Vertices</button>
-  <button data-mode="xray">X-Ray</button>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<div id="hud">WASD · MOVE &nbsp;&nbsp; MOUSE · LOOK &nbsp;&nbsp; ESC · PAUSE</div>
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
 <script>
-'use strict';
+// ─── Scene ────────────────────────────────────────────────────────────────
+const scene    = new THREE.Scene();
+scene.fog      = new THREE.FogExp2(0x0a0e18, 0.038);
+scene.background = new THREE.Color(0x0a0e18);
 
-// ── Performance-first setup ──
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.FogExp2(0xa0c4e8, 0.018);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace   = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 150);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 300);
+camera.position.set(0, 1.7, 9);
 
-const renderer = new THREE.WebGLRenderer({ antialias: false });
-// Chromebook simulation: press C to toggle quarter-res rendering
-let chromebookMode = false;
-function applyRenderScale() {
-  const scale = chromebookMode ? 0.35 : 1;
-  renderer.setSize(innerWidth * scale, innerHeight * scale);
-  renderer.domElement.style.width = '100%';
-  renderer.domElement.style.height = '100%';
-}
-renderer.setPixelRatio(1);
-applyRenderScale();
-window.addEventListener('keydown', e => {
-  if (e.code === 'KeyC' && !document.pointerLockElement) {
-    chromebookMode = !chromebookMode;
-    applyRenderScale();
-  }
-});
-// NO shadow maps = massive perf gain
-document.body.prepend(renderer.domElement);
-
-// Simple lighting (no shadows)
-scene.add(new THREE.HemisphereLight(0x87ceeb, 0x4a6a3a, 0.8));
-scene.add(new THREE.AmbientLight(0x606080, 0.4));
-const sun = new THREE.DirectionalLight(0xffeedd, 0.8);
-sun.position.set(30, 50, 20);
-scene.add(sun);
-
-// Warm fills
-[[0,2.5,0],[6,2.5,-4],[-6,2.5,4]].forEach(([x,y,z])=>{
-  const p = new THREE.PointLight(0xff9944, 0.4, 15);
-  p.position.set(x,y,z); scene.add(p);
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
 });
 
-// Ground
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(100,100),
-  new THREE.MeshLambertMaterial({color:0x5a8a4a})
-);
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
+// ─── Pointer-lock + WASD ─────────────────────────────────────────────────
+const overlay   = document.getElementById('overlay');
+const crosshair = document.getElementById('crosshair');
+const hud       = document.getElementById('hud');
+const keys = {};
+let locked = false;
+let yaw = 0, pitch = 0;
 
-// ── Player ──
-const player = {x:0, z:3, speed:6};
-const pGroup = new THREE.Group();
-const pTorso = new THREE.Mesh(new THREE.BoxGeometry(.5,.7,.35), new THREE.MeshLambertMaterial({color:0x3a6a9a}));
-pTorso.position.set(0,1.1,0); pGroup.add(pTorso);
-const pHead = new THREE.Mesh(new THREE.BoxGeometry(.35,.35,.35), new THREE.MeshLambertMaterial({color:0xf5c6a0}));
-pHead.position.set(0,1.65,0); pGroup.add(pHead);
-const pHat = new THREE.Mesh(new THREE.ConeGeometry(.25,.4,5), new THREE.MeshLambertMaterial({color:0x6a3a2a}));
-pHat.position.set(0,2.0,0); pGroup.add(pHat);
-const legs=[];
-[-0.12,0.12].forEach(ox=>{
-  const l=new THREE.Mesh(new THREE.BoxGeometry(.15,.5,.2), new THREE.MeshLambertMaterial({color:0x5a4a3a}));
-  l.position.set(ox,.45,0); pGroup.add(l); legs.push(l);
-});
-pGroup.position.set(0,0,3);
-scene.add(pGroup);
+overlay.addEventListener('click', () => renderer.domElement.requestPointerLock());
 
-// ── Input ──
-const keys={};
-let camYaw=0, camPitch=-0.3;
-window.addEventListener('keydown',e=>{keys[e.code]=true;if(document.pointerLockElement)e.preventDefault();});
-window.addEventListener('keyup',e=>{keys[e.code]=false});
-document.addEventListener('mousemove',e=>{
-  if(document.pointerLockElement){
-    camYaw+=e.movementX*0.003;
-    camPitch=Math.max(-0.8,Math.min(0.4,camPitch+e.movementY*0.003));
-  }
-});
-renderer.domElement.addEventListener('click',()=>{
-  // In edit mode, don't auto-lock pointer — use Play button instead
-  if (window._editMode) return;
-  renderer.domElement.requestPointerLock();
-  document.getElementById('prompt').style.display='none';
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  overlay.style.display   = locked ? 'none' : 'flex';
+  crosshair.style.display = locked ? 'block' : 'none';
+  hud.style.display       = locked ? 'block' : 'none';
 });
 
-// ── Optimized model loading + geometry merging ──
-const gltf = new THREE.GLTFLoader();
-const cache = {};
-let total=0, loaded=0;
+document.addEventListener('mousemove', e => {
+  if (!locked) return;
+  yaw   -= e.movementX * 0.002;
+  pitch  = Math.max(-1.2, Math.min(1.2, pitch - e.movementY * 0.002));
+});
 
-// ── Edit mode flag ──
-// In edit mode (studio), models are NOT merged — they stay as individual groups
-// so they can be selected/transformed independently.
-// When running standalone (no parent iframe), merge for performance.
-window._editMode = (window.parent !== window); // true if inside iframe (studio)
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup',   e => { keys[e.code] = false; });
 
-// In edit mode: hide crosshair initially, show prompt
-if (window._editMode) {
-  document.getElementById('crosshair').style.display = 'none';
-}
-
-// Track all scene models for selection
-window._sceneModels = [];
-
-// Collect all meshes to merge after loading (only used in play mode)
-const pendingMeshes = [];
-let allLoaded = false;
-
-function loadM(name, x, y, z, ry, s) {
-  total++;
-  const url='/assets/medieval/'+name+'.gltf';
-  const promise = cache[url]
-    ? Promise.resolve(cache[url].clone())
-    : new Promise((res,rej)=>{
-        gltf.load(url, g=>{
-          g.scene.traverse(c=>{
-            if(c.isMesh){
-              c.castShadow=false;c.receiveShadow=false;
-              // Drop normal/roughness maps to save GPU — keep base color only
-              if(c.material.normalMap){c.material.normalMap.dispose();c.material.normalMap=null}
-              if(c.material.roughnessMap){c.material.roughnessMap.dispose();c.material.roughnessMap=null}
-              if(c.material.metalnessMap){c.material.metalnessMap.dispose();c.material.metalnessMap=null}
-              if(c.material.aoMap){c.material.aoMap.dispose();c.material.aoMap=null}
-            }
-          });
-          cache[url]=g.scene;
-          res(g.scene.clone());
-        }, undefined, rej);
-      });
-
-  promise.then(mesh=>{
-    mesh.position.set(x, y||0, z);
-    if(ry) mesh.rotation.y=ry;
-    mesh.scale.setScalar(s||2);
-    mesh.userData.modelName = name;
-    mesh.userData.modelIndex = window._sceneModels.length;
-
-    if (window._editMode) {
-      // Edit mode: add directly to scene as individual group (selectable)
-      scene.add(mesh);
-      window._sceneModels.push(mesh);
-    } else {
-      // Play mode: collect for merging
-      mesh.updateMatrixWorld(true);
-      pendingMeshes.push(mesh);
-      window._sceneModels.push(mesh);
+// ─── Procedural textures ─────────────────────────────────────────────────
+function makeStoneTexture(size) {
+  size = size || 256;
+  var c = document.createElement('canvas');
+  c.width = c.height = size;
+  var x = c.getContext('2d');
+  x.fillStyle = '#5a5040'; x.fillRect(0, 0, size, size);
+  var rng = 7919;
+  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
+  var y0 = 2;
+  while (y0 < size) {
+    var rh = Math.floor(r(14, 22));
+    var x0 = y0 % 2 === 0 ? 0 : Math.floor(r(-10, 10));
+    while (x0 < size) {
+      var sw = Math.floor(r(30, 55));
+      var gr = Math.floor(r(68, 98)), gg = Math.floor(r(60, 88)), gb = Math.floor(r(50, 78));
+      x.fillStyle = 'rgb(' + gr + ',' + gg + ',' + gb + ')';
+      x.fillRect(x0 + 1, y0 + 1, Math.min(sw, size - x0) - 2, rh - 2);
+      x.fillStyle = 'rgba(255,255,255,0.06)';
+      x.fillRect(x0 + 1, y0 + 1, Math.min(sw, size - x0) - 2, 2);
+      x.fillStyle = 'rgba(0,0,0,0.25)';
+      x.fillRect(x0 + 1, y0 + rh - 4, Math.min(sw, size - x0) - 2, 3);
+      x0 += sw + 2;
     }
-
-    loaded++;
-    updateLoad();
-  }).catch(()=>{loaded++;updateLoad()});
+    y0 += rh + 2;
+  }
+  var t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
 }
 
-function updateLoad(){
-  const p=total>0?Math.round(loaded/total*100):0;
-  const f=document.getElementById('load-fill');
-  if(f) f.style.width=p+'%';
-
-  if(loaded>=total && !allLoaded){
-    allLoaded=true;
-    if (!window._editMode) {
-      mergeMeshes();
-    } else {
-      console.log('[Edit] ' + window._sceneModels.length + ' models added individually (edit mode)');
-    }
-    setTimeout(()=>{const e=document.getElementById('loading');if(e)e.style.display='none'},200);
+function makeThatchTexture(size) {
+  size = size || 256;
+  var c = document.createElement('canvas'); c.width = c.height = size;
+  var x = c.getContext('2d');
+  x.fillStyle = '#6b4a18'; x.fillRect(0, 0, size, size);
+  var rng = 13337;
+  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
+  for (var i = 0; i < 80; i++) {
+    var ly = r(0, size), lx = r(-20, size);
+    x.strokeStyle = 'rgba(' + Math.floor(r(90,140)) + ',' + Math.floor(r(60,100)) + ',' + Math.floor(r(10,30)) + ',0.5)';
+    x.lineWidth = r(1.5, 3.5);
+    x.setLineDash([r(15, 35), r(4, 10)]);
+    x.beginPath(); x.moveTo(lx, ly); x.lineTo(lx + size, ly); x.stroke();
   }
+  x.setLineDash([]);
+  var t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
 }
 
-// Merge all loaded meshes into minimal draw calls (grouped by material) — play mode only
-function mergeMeshes() {
-  const materialGroups = new Map();
-
-  for (const root of pendingMeshes) {
-    root.traverse(child => {
-      if (!child.isMesh) return;
-      const mat = child.material;
-      const key = mat.uuid;
-      if (!materialGroups.has(key)) {
-        materialGroups.set(key, { material: mat, geometries: [] });
-      }
-      const geo = child.geometry.clone();
-      geo.applyMatrix4(child.matrixWorld);
-      materialGroups.get(key).geometries.push(geo);
-    });
+function makeGrassTexture(size) {
+  size = size || 512;
+  var c = document.createElement('canvas'); c.width = c.height = size;
+  var x = c.getContext('2d');
+  x.fillStyle = '#2a5a1e'; x.fillRect(0, 0, size, size);
+  var rng = 99991;
+  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
+  for (var i = 0; i < 600; i++) {
+    x.fillStyle = 'rgba(' + Math.floor(r(20,60)) + ',' + Math.floor(r(70,110)) + ',' + Math.floor(r(15,40)) + ',0.6)';
+    x.fillRect(r(0, size), r(0, size), r(3, 10), r(3, 10));
   }
-
-  let drawCalls = 0;
-  for (const [, group] of materialGroups) {
-    if (group.geometries.length === 0) continue;
-    try {
-      const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(group.geometries, false);
-      if (merged) {
-        const mesh = new THREE.Mesh(merged, group.material);
-        scene.add(mesh);
-        drawCalls++;
-      }
-    } catch(e) {
-      for (const geo of group.geometries) {
-        scene.add(new THREE.Mesh(geo, group.material));
-        drawCalls++;
-      }
-    }
-  }
-
-  console.log('[Perf] Merged ' + pendingMeshes.length + ' models into ' + drawCalls + ' draw calls');
-  pendingMeshes.length = 0;
+  var t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(24, 24);
+  return t;
 }
 
-// ── View modes (wireframe, vertices, x-ray) ──
-let currentViewMode = 'solid';
-const wireOverlays = []; // wireframe meshes added on top
-const pointOverlays = []; // point clouds
-
-function clearOverlays() {
-  wireOverlays.forEach(m => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); });
-  wireOverlays.length = 0;
-  pointOverlays.forEach(m => { scene.remove(m); m.material.dispose(); });
-  pointOverlays.length = 0;
+function makeWoodTexture(size) {
+  size = size || 128;
+  var c = document.createElement('canvas'); c.width = c.height = size;
+  var x = c.getContext('2d');
+  x.fillStyle = '#4a2e0e'; x.fillRect(0, 0, size, size);
+  var rng = 55511;
+  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
+  for (var i = 0; i < 20; i++) {
+    x.strokeStyle = 'rgba(' + Math.floor(r(30,60)) + ',' + Math.floor(r(18,36)) + ',' + Math.floor(r(5,15)) + ',0.5)';
+    x.lineWidth = r(1, 3);
+    x.beginPath(); x.moveTo(0, r(0, size)); x.lineTo(size, r(0, size)); x.stroke();
+  }
+  return new THREE.CanvasTexture(c);
 }
 
-function setViewMode(mode) {
-  clearOverlays();
-  currentViewMode = mode;
+var stoneTex = makeStoneTexture(256);
+stoneTex.repeat.set(3, 2);
+var thatchTex = makeThatchTexture(256);
+thatchTex.repeat.set(2, 2);
+var grassTex  = makeGrassTexture(512);
+var woodTex   = makeWoodTexture(128);
 
-  scene.traverse(child => {
-    if (!child.isMesh || child === ground) return;
-    // Reset material state
-    if (child.userData._origMat) {
-      child.material = child.userData._origMat;
-      child.userData._origMat = null;
-    }
-    child.material.wireframe = false;
-    child.material.transparent = false;
-    child.material.opacity = 1;
-    child.material.needsUpdate = true;
-  });
+// ─── Materials ────────────────────────────────────────────────────────────
+var mStone  = new THREE.MeshStandardMaterial({ map: stoneTex,  roughness: .92, metalness: 0 });
+var mThatch = new THREE.MeshStandardMaterial({ map: thatchTex, roughness: .97, metalness: 0 });
+var mWood   = new THREE.MeshStandardMaterial({ map: woodTex,   roughness: .9,  metalness: 0, color: 0x5a3810 });
+var mGrass  = new THREE.MeshStandardMaterial({ map: grassTex,  roughness: 1,   metalness: 0 });
+var mGlass  = new THREE.MeshStandardMaterial({ color: 0x8ab4e8, transparent: true, opacity: .38, roughness: .1, metalness: .2, emissive: 0xffa020, emissiveIntensity: .55 });
+var mDark   = new THREE.MeshStandardMaterial({ color: 0x1a0d04, roughness: 1 });
 
-  if (mode === 'wire') {
-    scene.traverse(child => {
-      if (!child.isMesh || child === ground) return;
-      // Save original, show wireframe overlay on top
-      const wireMat = new THREE.MeshBasicMaterial({
-        color: 0x00ffaa, wireframe: true, transparent: true, opacity: 0.7
-      });
-      const wireMesh = new THREE.Mesh(child.geometry, wireMat);
-      wireMesh.position.copy(child.position);
-      wireMesh.rotation.copy(child.rotation);
-      wireMesh.scale.copy(child.scale);
-      wireMesh.matrixAutoUpdate = false;
-      wireMesh.matrix.copy(child.matrix);
-      wireMesh.matrixWorld.copy(child.matrixWorld);
-      scene.add(wireMesh);
-      wireOverlays.push(wireMesh);
-      // Dim the solid mesh
-      child.userData._origMat = child.material;
-      child.material = child.material.clone();
-      child.material.transparent = true;
-      child.material.opacity = 0.3;
-    });
-  }
-
-  if (mode === 'points') {
-    scene.traverse(child => {
-      if (!child.isMesh || child === ground) return;
-      const pointsMat = new THREE.PointsMaterial({ color: 0x00ffaa, size: 3, sizeAttenuation: false });
-      const points = new THREE.Points(child.geometry, pointsMat);
-      points.position.copy(child.position);
-      points.rotation.copy(child.rotation);
-      points.scale.copy(child.scale);
-      points.matrixAutoUpdate = false;
-      points.matrix.copy(child.matrix);
-      points.matrixWorld.copy(child.matrixWorld);
-      scene.add(points);
-      pointOverlays.push(points);
-      // Dim solid
-      child.userData._origMat = child.material;
-      child.material = child.material.clone();
-      child.material.transparent = true;
-      child.material.opacity = 0.15;
-    });
-  }
-
-  if (mode === 'xray') {
-    scene.traverse(child => {
-      if (!child.isMesh || child === ground) return;
-      child.userData._origMat = child.material;
-      child.material = new THREE.MeshBasicMaterial({
-        color: 0x4488aa, wireframe: true, transparent: true, opacity: 0.5
-      });
-    });
-  }
+function addBox(w, h, d, mat, parent) {
+  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.castShadow = m.receiveShadow = true;
+  (parent || scene).add(m);
+  return m;
 }
 
-// Button handlers
-document.querySelectorAll('#viewbar button').forEach(btn => {
-  btn.addEventListener('click', e => {
-    e.stopPropagation();
-    document.querySelectorAll('#viewbar button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    setViewMode(btn.dataset.mode);
-  });
-});
+// ─── Ground ───────────────────────────────────────────────────────────────
+var ground = addBox(200, 0.3, 200, mGrass);
+ground.position.y = -0.15;
 
-// === BUILD VILLAGE (same layout, loaded once then merged) ===
+var pathMat = new THREE.MeshStandardMaterial({ color: 0x7a5c30, roughness: 1 });
+var path = addBox(2.4, 0.01, 12, pathMat);
+path.position.set(0, 0, 5.5);
 
-// Front building
-loadM('Wall_Plaster_Straight',-6,0,-8);
-loadM('Wall_Plaster_Straight',-4,0,-8);
-loadM('Wall_Plaster_Door_Round',-2,0,-8);
-loadM('Wall_Plaster_Straight',0,0,-8);
-loadM('Wall_Plaster_Window_Wide_Round',2,0,-8);
-loadM('Wall_Plaster_Straight',4,0,-8);
+// ─── House dimensions ────────────────────────────────────────────────────
+var HW = 5.5, HH = 3.6, HD = 5.5;
+var group = new THREE.Group();
 
-// Second floor
-loadM('Wall_Plaster_Straight',-6,4,-8);
-loadM('Wall_Plaster_Window_Wide_Round',-4,4,-8);
-loadM('Wall_Plaster_Straight',-2,4,-8);
-loadM('Wall_Plaster_Window_Wide_Round',0,4,-8);
-
-// Right wall
-loadM('Wall_UnevenBrick_Straight',6,0,-8,Math.PI/2);
-loadM('Wall_UnevenBrick_Straight',6,0,-6,Math.PI/2);
-loadM('Wall_UnevenBrick_Door_Flat',6,0,-4,Math.PI/2);
-
+// Back wall
+var bk = addBox(HW, HH, 0.4, mStone, group); bk.position.set(0, HH/2, -HD/2);
 // Left wall
-loadM('Wall_UnevenBrick_Straight',-8,0,-6,-Math.PI/2);
-loadM('Wall_UnevenBrick_Straight',-8,0,-4,-Math.PI/2);
+var lw = addBox(0.4, HH, HD, mStone, group); lw.position.set(-HW/2, HH/2, 0);
+// Right wall
+var rw = addBox(0.4, HH, HD, mStone, group); rw.position.set(HW/2, HH/2, 0);
 
-// Back building
-loadM('Wall_Plaster_Straight',-6,0,6,Math.PI);
-loadM('Wall_Plaster_Door_Flat',-4,0,6,Math.PI);
-loadM('Wall_Plaster_Window_Wide_Round',-2,0,6,Math.PI);
-loadM('Wall_Plaster_Straight',0,0,6,Math.PI);
+// Front wall (with door + window gaps)
+var fwL = addBox(1.4, HH, 0.4, mStone, group); fwL.position.set(-HW/2+0.7,  HH/2,  HD/2);
+var fwR = addBox(1.4, HH, 0.4, mStone, group); fwR.position.set( HW/2-0.7,  HH/2,  HD/2);
+var fwT = addBox(2.7, 0.9, 0.4, mStone, group); fwT.position.set(0, HH-0.45, HD/2);
+var fwW1= addBox(0.6, 2.0, 0.4, mStone, group); fwW1.position.set(-HW/2+2.5, HH/2-0.5, HD/2);
+var fwW2= addBox(0.6, 2.0, 0.4, mStone, group); fwW2.position.set( HW/2-2.5, HH/2-0.5, HD/2);
+var fwBW1=addBox(1.5, 1.2, 0.4, mStone, group); fwBW1.position.set(-HW/2+2.5, 0.6, HD/2);
+var fwBW2=addBox(1.5, 1.2, 0.4, mStone, group); fwBW2.position.set( HW/2-2.5, 0.6, HD/2);
+var fwAW1=addBox(1.5, 0.5, 0.4, mStone, group); fwAW1.position.set(-HW/2+2.5, HH-0.25, HD/2);
+var fwAW2=addBox(1.5, 0.5, 0.4, mStone, group); fwAW2.position.set( HW/2-2.5, HH-0.25, HD/2);
 
-// Right building
-loadM('Wall_Plaster_Straight',10,0,2,Math.PI/2);
-loadM('Wall_Plaster_Door_Round',10,0,4,Math.PI/2);
+// Floor + ceiling
+var floorMesh = addBox(HW-0.4, 0.12, HD-0.4, new THREE.MeshStandardMaterial({color:0x5a4020,roughness:1}), group);
+floorMesh.position.set(0, 0.06, 0);
+var ceilMesh  = addBox(HW-0.4, 0.1, HD-0.4, mWood, group);
+ceilMesh.position.set(0, HH-0.05, 0);
 
-// Roof
-loadM('Roof_RoundTiles_8x8',-1,7.8,-8);
+// Door opening fill
+var doorBack = addBox(1.1, 2.1, 0.05, mDark, group); doorBack.position.set(0, 1.05, HD/2+0.01);
 
-// Props (fewer = faster)
-loadM('Prop_Crate',-1,0,-3,0,2);
-loadM('Prop_Crate',-.3,0,-2.6,.4,1.8);
-loadM('Prop_Wagon',5,0,1,-.3,2);
-loadM('Prop_WoodenFence_Single',-12,0,-1,0,2);
-loadM('Prop_WoodenFence_Single',-12,0,1,0,2);
-loadM('Prop_WoodenFence_Single',-12,0,3,0,2);
-loadM('Prop_Chimney',-5,7.8,-8,0,2);
-loadM('Prop_Vine1',-6,1,-7.8,0,2);
-loadM('Prop_Support',5,0,-7,0,2);
+// Windows
+function addWindow(wx, wy, wz) {
+  var g = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.2, 0.05), mGlass);
+  g.position.set(wx, wy, wz); group.add(g);
+  var fr1=addBox(1.1,0.08,0.08,mWood,group); fr1.position.set(wx,wy+0.6,wz+0.04);
+  var fr2=addBox(1.1,0.08,0.08,mWood,group); fr2.position.set(wx,wy-0.6,wz+0.04);
+  var fr3=addBox(0.08,1.2,0.08,mWood,group); fr3.position.set(wx-0.55,wy,wz+0.04);
+  var fr4=addBox(0.08,1.2,0.08,mWood,group); fr4.position.set(wx+0.55,wy,wz+0.04);
+  var cr1=addBox(1.0,0.06,0.05,mWood,group); cr1.position.set(wx,wy,wz+0.06);
+  var cr2=addBox(0.06,1.2,0.05,mWood,group); cr2.position.set(wx,wy,wz+0.06);
+}
+addWindow(-HW/2+2.5, 1.8, HD/2+0.01);
+addWindow( HW/2-2.5, 1.8, HD/2+0.01);
+addWindow(-HW/2+0.01, 1.8, 0);
+addWindow( HW/2-0.01, 1.8, 0);
 
-// Stairs
-loadM('Stairs_Exterior_Straight',-2,0,-6,0,2);
+// Door frame
+var dfL=addBox(0.18,2.3,0.18,mWood,group); dfL.position.set(-0.64,1.15,HD/2);
+var dfR=addBox(0.18,2.3,0.18,mWood,group); dfR.position.set( 0.64,1.15,HD/2);
+var dfT=addBox(1.46,0.18,0.18,mWood,group); dfT.position.set(0,2.24,HD/2);
 
-// Balcony
-loadM('Balcony_Simple_Straight',-4,4,-7.5,0,2);
+// Door (open)
+var door=addBox(1.1,2.1,0.08,mWood,group);
+door.position.set(-0.64-0.55, 1.05, HD/2-0.02);
+door.rotation.y = Math.PI * 0.45;
 
-// Floor tiles (only center, not full grid)
-for(let x=-2;x<=2;x+=2)for(let z=-2;z<=2;z+=2) loadM('Floor_Brick',x,0.01,z,0,2);
+// Fireplace
+var fpBase=addBox(1.6,0.2,0.8,mStone,group); fpBase.position.set(0,0.1,-HD/2+0.7);
+var fpL=addBox(0.2,1.4,0.8,mStone,group); fpL.position.set(-0.7,0.9,-HD/2+0.7);
+var fpR=addBox(0.2,1.4,0.8,mStone,group); fpR.position.set( 0.7,0.9,-HD/2+0.7);
+var fpTop=addBox(1.6,0.2,0.8,mStone,group); fpTop.position.set(0,1.65,-HD/2+0.7);
+var firebox=addBox(1.1,0.9,0.4,mDark,group); firebox.position.set(0,0.6,-HD/2+0.5);
+var fireMat=new THREE.MeshStandardMaterial({color:0xff4400,emissive:0xff2200,emissiveIntensity:2,transparent:true,opacity:.85});
+var fire=new THREE.Mesh(new THREE.ConeGeometry(0.25,0.5,6),fireMat);
+fire.position.set(0,0.6,-HD/2+0.4); group.add(fire);
 
-// Corners
-loadM('Corner_Exterior_Brick',6,0,-8,0,2);
-loadM('Corner_Exterior_Wood',-8,0,-8,0,2);
+// Table
+var tableMat=new THREE.MeshStandardMaterial({color:0x6a4520,roughness:.9});
+var tableTop=addBox(1.4,0.08,0.8,tableMat,group); tableTop.position.set(-0.8,0.9,0);
+[[-1.3,0.45,-0.25],[-0.3,0.45,-0.25],[-1.3,0.45,0.25],[-0.3,0.45,0.25]].forEach(function(pos){
+  var leg=addBox(0.1,0.9,0.1,tableMat,group); leg.position.set(pos[0],pos[1],pos[2]);
+});
 
-// Door + shutters
-loadM('DoorFrame_Round_Brick',-2,0,-7.9,0,2);
-loadM('Door_1_Round',-2,0,-7.85,0,2);
-loadM('WindowShutters_Wide_Round_Open',2,0,-7.9,0,2);
+// Chimney
+var chimMat=mStone;
+var chim=addBox(1.0,3.0,0.9,chimMat,group); chim.position.set(1.2,HH+0.9,-HD/2+0.5);
+var chimCap=addBox(1.3,0.15,1.1,chimMat,group); chimCap.position.set(1.2,HH+2.42,-HD/2+0.5);
 
-// === GAME LOOP ===
-let elapsed=0, frames=0, lastFpsUpdate=0;
-const clock=new THREE.Clock();
-const fpsEl=document.getElementById('fps');
+scene.add(group);
 
-function animate(){
+// ─── Roof ────────────────────────────────────────────────────────────────
+var roofGroup = new THREE.Group();
+roofGroup.position.set(0, HH, 0);
+scene.add(roofGroup);
+
+var roofH = 2.2;
+var slope  = Math.atan2(roofH, HD/2);
+var panelLenFB = Math.sqrt(roofH*roofH + (HD/2)*(HD/2)) + 0.3;
+var slopeS = Math.atan2(roofH, HW/2);
+var panelLenLR = Math.sqrt(roofH*roofH + (HW/2)*(HW/2)) + 0.3;
+
+function addRoofPanel(w, d, px, pz, ry, rx) {
+  var g = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), mThatch);
+  g.castShadow = true; g.position.set(px, 0, pz);
+  g.rotation.set(rx, ry, 0); roofGroup.add(g);
+}
+addRoofPanel(HW+1.0, panelLenFB, 0,  HD/2*0.4+0.1,  0, -slope);
+addRoofPanel(HW+1.0, panelLenFB, 0, -HD/2*0.4-0.1,  0,  slope);
+addRoofPanel(HD+0.6, panelLenLR, -HW/2*0.4-0.1, 0, -Math.PI/2, -slopeS);
+addRoofPanel(HD+0.6, panelLenLR,  HW/2*0.4+0.1, 0,  Math.PI/2, -slopeS);
+
+var ridge=new THREE.Mesh(new THREE.BoxGeometry(HW+1.2,0.2,0.2),mWood);
+ridge.position.set(0,roofH+0.07,0); ridge.castShadow=true; roofGroup.add(ridge);
+
+[HD/2+0.18,-HD/2-0.18].forEach(function(ez){
+  var e=new THREE.Mesh(new THREE.BoxGeometry(HW+1.2,0.16,0.16),mWood);
+  e.position.set(0,0,ez); roofGroup.add(e);
+});
+
+// ─── Trees ───────────────────────────────────────────────────────────────
+function addTree(tx, tz, h) {
+  h = h || 4.5;
+  var trunkMat=new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:1});
+  var leafMat =new THREE.MeshStandardMaterial({color:0x1e5218,roughness:1});
+  var trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.30,h*.35,8),trunkMat);
+  trunk.position.set(tx,h*.175,tz); trunk.castShadow=true; scene.add(trunk);
+  [0,.28,.52].forEach(function(off,i){
+    var cone=new THREE.Mesh(new THREE.ConeGeometry(h*.28-i*h*.06,h*.35,10),leafMat);
+    cone.position.set(tx,h*.35+off*h*.32,tz); cone.castShadow=true; scene.add(cone);
+  });
+}
+addTree(-7,3); addTree(-8,-2); addTree(-7,-6);
+addTree(7.5,2); addTree(8.5,-3); addTree(7,7);
+addTree(-4,10); addTree(4,11); addTree(0,12);
+
+// ─── Well ────────────────────────────────────────────────────────────────
+var wellMat=new THREE.MeshStandardMaterial({color:0x7a6848,roughness:1});
+var wellBase=new THREE.Mesh(new THREE.CylinderGeometry(.7,.8,.7,12),wellMat);
+wellBase.position.set(5.5,.35,3); wellBase.castShadow=true; scene.add(wellBase);
+var wellRim=new THREE.Mesh(new THREE.TorusGeometry(.72,.08,8,18),wellMat);
+wellRim.rotation.x=Math.PI/2; wellRim.position.set(5.5,.72,3); scene.add(wellRim);
+[[5.1,.85,2.6],[5.9,.85,2.6],[5.1,.85,3.4],[5.9,.85,3.4]].forEach(function(p){
+  var post=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.9,6),mWood);
+  post.position.set(p[0],p[1],p[2]); scene.add(post);
+});
+var wellRoof=new THREE.Mesh(new THREE.ConeGeometry(.85,.5,4),mThatch);
+wellRoof.position.set(5.5,1.7,3); wellRoof.rotation.y=Math.PI/4; wellRoof.castShadow=true; scene.add(wellRoof);
+
+// ─── Fence ───────────────────────────────────────────────────────────────
+function fencePost(px,pz){
+  var p=new THREE.Mesh(new THREE.BoxGeometry(.12,.9,.12),mWood);
+  p.position.set(px,.45,pz); scene.add(p);
+}
+function fenceRail(x1,z1,x2,z2){
+  var cx=(x1+x2)/2, cz=(z1+z2)/2;
+  var len=Math.sqrt((x2-x1)*(x2-x1)+(z2-z1)*(z2-z1));
+  var r1=new THREE.Mesh(new THREE.BoxGeometry(len,.08,.08),mWood);
+  r1.position.set(cx,.65,cz); r1.rotation.y=Math.atan2(x2-x1,z2-z1); scene.add(r1);
+  var r2=r1.clone(); r2.position.y=.35; scene.add(r2);
+}
+for(var i=-3;i<=3;i++){fencePost(-9,i*2);fencePost(9,i*2);}
+for(var j=-2;j<=3;j++){fencePost(j*2,-9);fencePost(j*2,9);}
+fenceRail(-9,-6,-9,6); fenceRail(9,-6,9,6);
+fenceRail(-6,-9,6,-9); fenceRail(-6,9,6,9);
+
+// ─── Lighting ────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x1a2a4a, 1.2));
+
+var moon=new THREE.DirectionalLight(0x7090d0, 1.4);
+moon.position.set(12,20,8);
+moon.castShadow=true;
+moon.shadow.mapSize.set(2048,2048);
+moon.shadow.camera.left=moon.shadow.camera.bottom=-25;
+moon.shadow.camera.right=moon.shadow.camera.top=25;
+moon.shadow.camera.far=80;
+scene.add(moon);
+
+// Window candle glow
+[[-HW/2+2.5,1.8,HD/2],[HW/2-2.5,1.8,HD/2],[-HW/2,1.8,0],[HW/2,1.8,0]].forEach(function(p){
+  var pl=new THREE.PointLight(0xffaa30,1.2,5); pl.position.set(p[0],p[1],p[2]); scene.add(pl);
+});
+
+var firePL=new THREE.PointLight(0xff5500,2.5,4.5);
+firePL.position.set(0,0.8,-HD/2+0.4); scene.add(firePL);
+
+var lanternL=new THREE.PointLight(0xffaa30,1.8,6);
+lanternL.position.set(-0.9,2.4,HD/2+0.5); scene.add(lanternL);
+var lanternR=new THREE.PointLight(0xffaa30,1.8,6);
+lanternR.position.set( 0.9,2.4,HD/2+0.5); scene.add(lanternR);
+
+// Stars
+var starVerts=[];
+for(var s=0;s<600;s++){
+  var theta=Math.random()*Math.PI*2, phi=Math.random()*Math.PI*.5;
+  starVerts.push(Math.sin(phi)*Math.cos(theta)*120, Math.cos(phi)*80+20, Math.sin(phi)*Math.sin(theta)*120);
+}
+var stars=new THREE.Points(
+  new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(starVerts,3)),
+  new THREE.PointsMaterial({color:0xffffff,size:.12,sizeAttenuation:true})
+);
+scene.add(stars);
+
+var moonMesh=new THREE.Mesh(new THREE.CircleGeometry(3,32),new THREE.MeshBasicMaterial({color:0xfff8e0,side:THREE.DoubleSide}));
+moonMesh.position.set(60,55,-80); scene.add(moonMesh);
+
+// ─── Smoke particles ─────────────────────────────────────────────────────
+var SMOKE_COUNT=24;
+var smokePositions=new Float32Array(SMOKE_COUNT*3);
+var smokePhases=[];
+for(var k=0;k<SMOKE_COUNT;k++) smokePhases.push(k/SMOKE_COUNT);
+var smokeMat=new THREE.PointsMaterial({color:0x888880,size:0.55,sizeAttenuation:true,transparent:true,opacity:.38});
+var smokeGeo=new THREE.BufferGeometry();
+smokeGeo.setAttribute('position',new THREE.BufferAttribute(smokePositions,3));
+scene.add(new THREE.Points(smokeGeo,smokeMat));
+
+var CHIMNEY_X=1.2, CHIMNEY_Z=-HD/2+0.5;
+
+// ─── Camera movement ─────────────────────────────────────────────────────
+var velocity=new THREE.Vector3();
+var direction=new THREE.Vector3();
+var SPEED=4.5, FRICTION=0.88;
+
+// ─── Animate ─────────────────────────────────────────────────────────────
+var clock=new THREE.Clock();
+var elapsed=0;
+
+function animate() {
   requestAnimationFrame(animate);
-  const dt=Math.min(clock.getDelta(),0.05);
+  var dt=Math.min(clock.getDelta(),.05);
   elapsed+=dt;
 
-  // Stats overlay
-  frames++;
-  if(elapsed-lastFpsUpdate>0.5){
-    const ri = renderer.info.render;
-    const mi = renderer.info.memory;
-    fpsEl.innerHTML =
-      '<b>' + Math.round(frames/(elapsed-lastFpsUpdate)) + ' FPS</b><br>' +
-      'Draw calls: ' + ri.calls + '<br>' +
-      'Triangles: ' + ri.triangles.toLocaleString() + '<br>' +
-      'Vertices: ' + (ri.triangles * 3).toLocaleString() + '<br>' +
-      'Geometries: ' + mi.geometries + '<br>' +
-      'Textures: ' + mi.textures + '<br>' +
-      'Scene objects: ' + scene.children.length;
-    frames=0; lastFpsUpdate=elapsed;
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  if (locked) {
+    direction.set(0,0,0);
+    if(keys['KeyW']||keys['ArrowUp'])    direction.z-=1;
+    if(keys['KeyS']||keys['ArrowDown'])  direction.z+=1;
+    if(keys['KeyA']||keys['ArrowLeft'])  direction.x-=1;
+    if(keys['KeyD']||keys['ArrowRight']) direction.x+=1;
+    direction.normalize().applyEuler(new THREE.Euler(0,yaw,0));
+    velocity.x+=direction.x*SPEED*dt;
+    velocity.z+=direction.z*SPEED*dt;
   }
+  velocity.multiplyScalar(FRICTION);
+  camera.position.x=Math.max(-8.5,Math.min(8.5,camera.position.x+velocity.x));
+  camera.position.z=Math.max(-8.5,Math.min(8.5,camera.position.z+velocity.z));
+  camera.position.y=1.7;
 
-  // Movement — only process when pointer is locked (play mode) and gizmo not active
-  const canMove = document.pointerLockElement && !window._gizmoDragging;
-  if (canMove) {
-    let mx=0,mz=0;
-    if(keys['KeyW'])mz-=1;if(keys['KeyS'])mz+=1;
-    if(keys['KeyA'])mx-=1;if(keys['KeyD'])mx+=1;
-    const spd=keys['ShiftLeft']?player.speed*1.8:player.speed;
-    if(mx||mz){
-      const len=Math.sqrt(mx*mx+mz*mz);mx/=len;mz/=len;
-      player.x+=(mx*Math.cos(camYaw)-mz*Math.sin(camYaw))*spd*dt;
-      player.z+=(mx*Math.sin(camYaw)+mz*Math.cos(camYaw))*spd*dt;
-      legs[0].position.y=.45+Math.sin(elapsed*8)*.08;
-      legs[1].position.y=.45+Math.sin(elapsed*8+Math.PI)*.08;
-    }
-    // Clamp to world
-    player.x=Math.max(-40,Math.min(40,player.x));
-    player.z=Math.max(-40,Math.min(40,player.z));
+  // Flicker
+  firePL.intensity=2.2+Math.sin(elapsed*7)*0.4+Math.sin(elapsed*13)*0.2;
+  fire.scale.y=0.9+Math.sin(elapsed*9)*0.15;
+  lanternL.intensity=lanternR.intensity=1.6+Math.sin(elapsed*5.3+1)*0.3;
 
-    pGroup.position.set(player.x,0,player.z);
-    pGroup.rotation.y=camYaw+Math.PI;
+  // Smoke
+  for(var i=0;i<SMOKE_COUNT;i++){
+    smokePhases[i]=(smokePhases[i]+dt*0.18)%1;
+    var p=smokePhases[i];
+    smokePositions[i*3  ]=CHIMNEY_X+Math.sin(elapsed*0.7+i)*0.18*p*4;
+    smokePositions[i*3+1]=HH+2.5+p*5;
+    smokePositions[i*3+2]=CHIMNEY_Z+Math.cos(elapsed*0.5+i)*0.1*p*3;
   }
-
-  camera.position.set(
-    player.x-Math.sin(camYaw)*10,
-    5-camPitch*3,
-    player.z-Math.cos(camYaw)*10
-  );
-  camera.lookAt(player.x,1.5,player.z);
+  smokeGeo.attributes.position.needsUpdate=true;
+  smokeMat.opacity=0.28+Math.sin(elapsed)*0.07;
 
   renderer.render(scene,camera);
 }
 animate();
-
-window.addEventListener('resize',()=>{
-  camera.aspect=innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  applyRenderScale();
-});
-
-// ── Gizmo (transform controls) ──
-const gizmo = new THREE.TransformControls(camera, renderer.domElement);
-gizmo.setMode('translate');
-gizmo.setSize(0.8);
-scene.add(gizmo);
-window._gizmo = gizmo;
-window._gizmoDragging = false;
-
-gizmo.addEventListener('dragging-changed', function(event) {
-  window._gizmoDragging = event.value;
-});
-
-// Notify parent when gizmo moves an object
-gizmo.addEventListener('objectChange', function() {
-  if (selectedObject) {
-    window.parent.postMessage({
-      type: 'objectTransformed',
-      position: { x: selectedObject.position.x, y: selectedObject.position.y, z: selectedObject.position.z },
-      rotation: { x: selectedObject.rotation.x, y: selectedObject.rotation.y, z: selectedObject.rotation.z },
-      scale: { x: selectedObject.scale.x, y: selectedObject.scale.y, z: selectedObject.scale.z },
-    }, '*');
-  }
-});
-
-// ── Selection state ──
-let selectedObject = null;
-const originalMaterials = new Map();
-
-function deselectAll() {
-  // Restore all original materials
-  for (const [mesh, mat] of originalMaterials) {
-    if (mesh.parent) mesh.material = mat;
-  }
-  originalMaterials.clear();
-  selectedObject = null;
-
-  // Remove gizmo
-  if (window._gizmo) {
-    window._gizmo.detach();
-  }
-
-  // Notify parent
-  window.parent.postMessage({ type: 'deselected' }, '*');
-}
-
-function selectObject(obj) {
-  deselectAll();
-
-  // Find the top-level group (the loaded model root)
-  let root = obj;
-  while (root.parent && root.parent !== scene) {
-    root = root.parent;
-  }
-
-  // Don't select ground or player
-  if (root === ground || root === pGroup) return;
-
-  selectedObject = root;
-
-  // Gray out everything else, highlight selected
-  scene.traverse(function(child) {
-    if (!child.isMesh || child === ground) return;
-    // Skip player meshes
-    let isPlayer = false;
-    let pp = child;
-    while (pp) { if (pp === pGroup) { isPlayer = true; break; } pp = pp.parent; }
-    if (isPlayer) return;
-
-    originalMaterials.set(child, child.material);
-
-    // Check if this mesh is part of the selected object
-    let isSelected = false;
-    let p = child;
-    while (p) {
-      if (p === root) { isSelected = true; break; }
-      p = p.parent;
-    }
-
-    if (!isSelected) {
-      // Gray + transparent
-      child.material = new THREE.MeshLambertMaterial({
-        color: 0x444444,
-        transparent: true,
-        opacity: 0.3,
-      });
-    } else {
-      // Highlight with emissive outline
-      child.material = child.material.clone();
-      if (child.material.emissive) {
-        child.material.emissive = new THREE.Color(0x00aaff);
-        child.material.emissiveIntensity = 0.3;
-      }
-    }
-  });
-
-  // Attach gizmo
-  if (window._gizmo) {
-    window._gizmo.attach(root);
-  }
-
-  // Notify parent of selection
-  const modelName = root.userData.modelName || 'unknown';
-  const modelIndex = root.userData.modelIndex !== undefined ? root.userData.modelIndex : -1;
-  window.parent.postMessage({
-    type: 'objectSelected',
-    name: modelName,
-    index: modelIndex,
-    position: { x: root.position.x, y: root.position.y, z: root.position.z },
-    rotation: { x: root.rotation.x, y: root.rotation.y, z: root.rotation.z },
-    scale: { x: root.scale.x, y: root.scale.y, z: root.scale.z },
-  }, '*');
-}
-
-function selectModelByName(name) {
-  // Find the first model matching this name
-  for (const model of window._sceneModels) {
-    if (model.userData.modelName === name) {
-      selectObject(model);
-      return;
-    }
-  }
-}
-
-function setGizmoMode(mode) {
-  if (!window._gizmo) return;
-  if (mode === 'none') {
-    window._gizmo.detach();
-  } else {
-    window._gizmo.setMode(mode);
-    if (selectedObject) window._gizmo.attach(selectedObject);
-  }
-
-  // Update gizmo bar active state
-  document.querySelectorAll('#gizmo-bar button').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.gizmo === mode);
-  });
-}
-
-function addModelToScene(name, x, y, z) {
-  loadM(name, x, y, z, 0, 2);
-}
-
-// ── Click-to-select with raycasting ──
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-renderer.domElement.addEventListener('click', function(e) {
-  // Only when not pointer-locked (editing mode)
-  if (document.pointerLockElement) return;
-
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-  raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
-
-  if (intersects.length > 0) {
-    const hit = intersects[0].object;
-    // Skip ground, player, and gizmo
-    if (hit === ground) { deselectAll(); return; }
-    let isGizmo = false;
-    let pg = hit;
-    while (pg) { if (pg === gizmo) { isGizmo = true; break; } pg = pg.parent; }
-    if (isGizmo) return;
-    let isPlayerMesh = false;
-    let pp = hit;
-    while (pp) { if (pp === pGroup) { isPlayerMesh = true; break; } pp = pp.parent; }
-    if (isPlayerMesh) return;
-
-    selectObject(hit);
-  } else {
-    deselectAll();
-  }
-});
-
-// ── Gizmo bar button handlers ──
-document.querySelectorAll('#gizmo-bar button').forEach(function(btn) {
-  btn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    const mode = btn.dataset.gizmo;
-
-    if (mode === 'play') {
-      // Enter play mode — lock pointer
-      renderer.domElement.requestPointerLock();
-      document.getElementById('prompt').style.display = 'none';
-      deselectAll();
-      document.querySelectorAll('#gizmo-bar button').forEach(function(b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      return;
-    }
-
-    setGizmoMode(mode);
-  });
-});
-
-// ── Keyboard shortcuts for gizmo (only when not pointer-locked) ──
-window.addEventListener('keydown', function(e) {
-  if (document.pointerLockElement) return;
-
-  if (e.code === 'KeyW' && !e.ctrlKey && !e.metaKey) {
-    e.preventDefault();
-    setGizmoMode('translate');
-  }
-  if (e.code === 'KeyE' && !e.ctrlKey && !e.metaKey) {
-    e.preventDefault();
-    setGizmoMode('rotate');
-  }
-  if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
-    e.preventDefault();
-    setGizmoMode('scale');
-  }
-  if (e.code === 'Escape') {
-    deselectAll();
-  }
-  if (e.code === 'Delete' || e.code === 'Backspace') {
-    if (selectedObject) {
-      const idx = window._sceneModels.indexOf(selectedObject);
-      scene.remove(selectedObject);
-      if (idx !== -1) window._sceneModels.splice(idx, 1);
-      deselectAll();
-    }
-  }
-});
-
-// Hide gizmo bar and show crosshair when pointer locked, vice versa
-document.addEventListener('pointerlockchange', function() {
-  const locked = !!document.pointerLockElement;
-  document.getElementById('gizmo-bar').style.display = locked ? 'none' : 'flex';
-  document.getElementById('crosshair').style.display = locked ? 'block' : 'none';
-  if (!locked) {
-    // Exiting play mode — reset play button
-    document.querySelectorAll('#gizmo-bar button').forEach(function(b) { b.classList.remove('active'); });
-    const translateBtn = document.querySelector('#gizmo-bar button[data-gizmo="translate"]');
-    if (translateBtn) translateBtn.classList.add('active');
-    setGizmoMode('translate');
-  }
-});
-
-// ── Studio Integration API ──
-// Listen for commands from parent (Problocks studio)
-window.addEventListener('message', function(event) {
-  const msg = event.data;
-  if (!msg || !msg.type) return;
-
-  if (msg.type === 'selectModel') {
-    selectModelByName(msg.name);
-  }
-
-  if (msg.type === 'selectModelByIndex') {
-    const model = window._sceneModels[msg.index];
-    if (model) selectObject(model);
-  }
-
-  if (msg.type === 'deselectAll') {
-    deselectAll();
-  }
-
-  if (msg.type === 'setGizmoMode') {
-    setGizmoMode(msg.mode);
-  }
-
-  if (msg.type === 'addModel') {
-    addModelToScene(msg.name, msg.x || 0, msg.y || 0, msg.z || 0);
-  }
-
-  if (msg.type === 'removeSelected') {
-    if (selectedObject) {
-      const idx = window._sceneModels.indexOf(selectedObject);
-      scene.remove(selectedObject);
-      if (idx !== -1) window._sceneModels.splice(idx, 1);
-      deselectAll();
-    }
-  }
-
-  if (msg.type === 'getSceneModels') {
-    const models = window._sceneModels.map(function(m, i) {
-      return {
-        index: i,
-        name: m.userData.modelName,
-        position: { x: m.position.x, y: m.position.y, z: m.position.z },
-        rotation: { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z },
-        scale: { x: m.scale.x, y: m.scale.y, z: m.scale.z },
-      };
-    });
-    window.parent.postMessage({ type: 'sceneModels', models: models }, '*');
-  }
-});
 </script>
 </body>
 </html>

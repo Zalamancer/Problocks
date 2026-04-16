@@ -23,11 +23,18 @@ const TAB_GROUPS: TabGroupDef[] = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onSceneSelect?: (id: string) => void }) {
+interface PanelContentProps {
+  group: LeftPanelGroup;
+  onSceneSelect?: (id: string) => void;
+  onGameGenerated?: (html: string, files?: Record<string, string>) => void;
+  activeGameName?: string | null;
+}
+
+function PanelContent({ group, onSceneSelect, onGameGenerated, activeGameName }: PanelContentProps) {
   switch (group) {
     case 'scene':    return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
     case 'assets':   return <AssetsPanel />;
-    case 'chat':     return <ChatPanel />;
+    case 'chat':     return <ChatPanel onGameGenerated={onGameGenerated} activeGameName={activeGameName} />;
     case 'settings': return <SettingsPanel />;
   }
 }
@@ -116,7 +123,13 @@ export function LeftPanelToggle() {
   );
 }
 
-export function LeftPanel({ onSceneSelect }: { onSceneSelect?: (id: string) => void } = {}) {
+interface LeftPanelProps {
+  onSceneSelect?: (id: string) => void;
+  onGameGenerated?: (html: string, files?: Record<string, string>) => void;
+  activeGameName?: string | null;
+}
+
+export function LeftPanel({ onSceneSelect, onGameGenerated, activeGameName }: LeftPanelProps = {}) {
   const { leftPanelCollapsed, leftPanelActiveGroup } = useStudio();
   return (
     <aside className={cn('flex-shrink-0 overflow-visible transition-all duration-300', leftPanelCollapsed ? 'w-0' : 'w-[300px]')}>
@@ -127,7 +140,12 @@ export function LeftPanel({ onSceneSelect }: { onSceneSelect?: (id: string) => v
         <MainGroupHeader />
         {!leftPanelCollapsed && (
           <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-            <PanelContent group={leftPanelActiveGroup} onSceneSelect={onSceneSelect} />
+            <PanelContent
+              group={leftPanelActiveGroup}
+              onSceneSelect={onSceneSelect}
+              onGameGenerated={onGameGenerated}
+              activeGameName={activeGameName}
+            />
           </div>
         )}
       </div>

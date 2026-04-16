@@ -201,7 +201,11 @@ export function StudioLayout() {
 
       <div className="flex-1 relative min-h-0">
         <div className="h-full flex overflow-hidden gap-1.5">
-          <LeftPanel onSceneSelect={handleSceneSelect} />
+          <LeftPanel
+            onSceneSelect={handleSceneSelect}
+            onGameGenerated={handleGameGenerated}
+            activeGameName={activeGameId ? games.find((g) => g.id === activeGameId)?.name ?? null : null}
+          />
 
           {/* Center — relative container so the task panel can overlay */}
           <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">

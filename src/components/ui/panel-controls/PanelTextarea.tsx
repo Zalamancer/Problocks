@@ -10,6 +10,7 @@ interface PanelTextareaProps {
   disabled?: boolean
   /** Show character count */
   showCount?: boolean
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
 export function PanelTextarea({
@@ -21,6 +22,7 @@ export function PanelTextarea({
   className,
   disabled,
   showCount,
+  onKeyDown,
 }: PanelTextareaProps) {
   return (
     <div className="mb-3">
@@ -31,6 +33,7 @@ export function PanelTextarea({
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           rows={rows}
           disabled={disabled}

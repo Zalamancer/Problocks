@@ -2,56 +2,197 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageSquare, Sparkles, Square } from 'lucide-react';
 import { PanelTextarea, PanelActionButton } from '@/components/ui';
-import { getGameHtml } from '@/lib/game-engine';
+import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-store';
+import { useBuildingStore, type EdgeDir } from '@/store/building-store';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
-interface ChatPanelProps {
-  onGameGenerated?: (html: string, files?: Record<string, string>) => void;
-  activeGameName?: string | null;
+type StudioAction =
+  | {
+      type: 'addPart';
+      name?: string;
+      partType?: PartType;
+      position?: { x: number; y: number; z: number };
+      rotation?: { x: number; y: number; z: number };
+      scale?: { x: number; y: number; z: number };
+      color?: string;
+    }
+  | {
+      type: 'updatePart';
+      id: string;
+      name?: string;
+      position?: { x: number; y: number; z: number };
+      rotation?: { x: number; y: number; z: number };
+      scale?: { x: number; y: number; z: number };
+      color?: string;
+    }
+  | { type: 'removePart'; id: string }
+  | { type: 'clearParts' }
+  | { type: 'placeFloor'; x: number; z: number }
+  | { type: 'eraseFloor'; x: number; z: number }
+  | { type: 'placeWall'; x: number; z: number; dir: EdgeDir }
+  | { type: 'eraseWall'; x: number; z: number; dir: EdgeDir }
+  | { type: 'clearBuilding' }
+  | { type: 'setFloorAsset'; asset: string }
+  | { type: 'setWallAsset'; asset: string };
+
+function shortDescribe(a: StudioAction): string {
+  switch (a.type) {
+    case 'addPart':
+      return `➕ Part${a.name ? ` "${a.name}"` : ''}${a.color ? ` ${a.color}` : ''}`;
+    case 'updatePart':
+      return `✏️ Update ${a.id}`;
+    case 'removePart':
+      return `🗑️ Remove ${a.id}`;
+    case 'clearParts':
+      return '🧹 Clear parts';
+    case 'placeFloor':
+      return `🟫 Floor (${a.x},${a.z})`;
+    case 'eraseFloor':
+      return `✖️ Floor (${a.x},${a.z})`;
+    case 'placeWall':
+      return `🧱 Wall (${a.x},${a.z},${a.dir})`;
+    case 'eraseWall':
+      return `✖️ Wall (${a.x},${a.z},${a.dir})`;
+    case 'clearBuilding':
+      return '🧹 Clear building';
+    case 'setFloorAsset':
+      return `🎨 Floor asset → ${a.asset}`;
+    case 'setWallAsset':
+      return `🎨 Wall asset → ${a.asset}`;
+  }
 }
 
-export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = {}) {
+export function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [statuses, setStatuses] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const receivedGameEventRef = useRef(false);
 
-  // Auto-scroll on updates
+  // Scene/building store actions (read stably via getState inside callback)
+  const addPart = useSceneStore((s) => s.addPart);
+  const updateSceneObject = useSceneStore((s) => s.updateSceneObject);
+  const removePart = useSceneStore((s) => s.removePart);
+  const setSceneObjects = useSceneStore((s) => s.setSceneObjects);
+
+  const placeFloor = useBuildingStore((s) => s.placeFloor);
+  const eraseFloor = useBuildingStore((s) => s.eraseFloor);
+  const placeWall = useBuildingStore((s) => s.placeWall);
+  const eraseWall = useBuildingStore((s) => s.eraseWall);
+  const clearBuilding = useBuildingStore((s) => s.clear);
+  const setFloorAsset = useBuildingStore((s) => s.setFloorAsset);
+  const setWallAsset = useBuildingStore((s) => s.setWallAsset);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, statuses, streaming]);
 
-  // When the active game changes, reset chat so we start a fresh conversation
-  useEffect(() => {
-    setMessages([]);
-    setStatuses([]);
-  }, [activeGameName]);
+  const applyAction = useCallback(
+    (action: StudioAction) => {
+      switch (action.type) {
+        case 'addPart':
+          addPart({
+            name: action.name,
+            partType: action.partType,
+            position: action.position,
+            rotation: action.rotation,
+            scale: action.scale,
+            color: action.color,
+          });
+          break;
+        case 'updatePart': {
+          const changes: Partial<ScenePart> = {};
+          if (action.name !== undefined) changes.name = action.name;
+          if (action.position) changes.position = action.position;
+          if (action.rotation) changes.rotation = action.rotation;
+          if (action.scale) changes.scale = action.scale;
+          if (action.color) changes.color = action.color;
+          updateSceneObject(action.id, changes);
+          break;
+        }
+        case 'removePart':
+          removePart(action.id);
+          break;
+        case 'clearParts':
+          setSceneObjects([]);
+          break;
+        case 'placeFloor':
+          placeFloor(action.x, action.z);
+          break;
+        case 'eraseFloor':
+          eraseFloor(action.x, action.z);
+          break;
+        case 'placeWall':
+          placeWall(action.x, action.z, action.dir);
+          break;
+        case 'eraseWall':
+          eraseWall(action.x, action.z, action.dir);
+          break;
+        case 'clearBuilding':
+          clearBuilding();
+          break;
+        case 'setFloorAsset':
+          setFloorAsset(action.asset);
+          break;
+        case 'setWallAsset':
+          setWallAsset(action.asset);
+          break;
+      }
+    },
+    [
+      addPart,
+      updateSceneObject,
+      removePart,
+      setSceneObjects,
+      placeFloor,
+      eraseFloor,
+      placeWall,
+      eraseWall,
+      clearBuilding,
+      setFloorAsset,
+      setWallAsset,
+    ],
+  );
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
+
+    // Snapshot current scene state for the agent
+    const sceneState = useSceneStore.getState();
+    const buildingState = useBuildingStore.getState();
+    const snapshot = {
+      parts: sceneState.sceneObjects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        partType: p.partType,
+        position: p.position,
+        color: p.color,
+        scale: p.scale,
+      })),
+      floors: Object.keys(buildingState.floors),
+      walls: Object.keys(buildingState.walls),
+      gridSize: buildingState.gridSize,
+    };
 
     const next: Message[] = [...messages, { role: 'user', content: trimmed }];
     setMessages([...next, { role: 'assistant', content: '' }]);
     setInput('');
     setStreaming(true);
     setStatuses([]);
-    receivedGameEventRef.current = false;
 
     try {
       abortRef.current = new AbortController();
-      const res = await fetch('/api/agent', {
+      const res = await fetch('/api/studio-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, scene: snapshot }),
         signal: abortRef.current.signal,
       });
 
@@ -92,59 +233,26 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
               setStatuses((prev) => [...prev, parsed.status]);
             }
 
-            if (parsed.fileStart) {
-              setStatuses((prev) => [...prev, `📝 Writing ${parsed.fileStart}...`]);
-            }
-
-            if (parsed.fileDone) {
-              setStatuses((prev) => {
-                const updated = [...prev];
-                for (let i = updated.length - 1; i >= 0; i--) {
-                  if (updated[i].includes(`Writing ${parsed.fileDone}`)) {
-                    updated[i] = `✅ ${parsed.fileDone} (${parsed.lines}L)`;
-                    break;
-                  }
-                }
-                return updated;
-              });
-            }
-
-            if (parsed.game) {
-              const { title, files } = parsed.game as {
-                title: string;
-                files: Record<string, string>;
-              };
-              const html = getGameHtml({ files });
-              receivedGameEventRef.current = true;
-              onGameGenerated?.(html, files);
-              setStatuses((prev) => [
-                ...prev,
-                `🎮 ${title} loaded! (${Object.keys(files).length} modules)`,
-              ]);
+            if (parsed.action) {
+              const action = parsed.action as StudioAction;
+              applyAction(action);
+              setStatuses((prev) => [...prev, shortDescribe(action)]);
             }
 
             if (parsed.text) {
               assistantText += parsed.text;
-              // Strip code fences from what we show in chat bubble
-              const visible = assistantText.replace(/```[\w]*\s*[\s\S]*?```/g, '').trim();
               setMessages((prev) => {
                 const updated = [...prev];
-                updated[updated.length - 1] = { role: 'assistant', content: visible };
+                updated[updated.length - 1] = {
+                  role: 'assistant',
+                  content: assistantText.trim(),
+                };
                 return updated;
               });
             }
           } catch {
             // skip malformed chunks
           }
-        }
-      }
-
-      // Legacy fallback — extract HTML game code if no typed game event arrived
-      if (!receivedGameEventRef.current) {
-        const htmlMatch = assistantText.match(/```html\s*([\s\S]*?)```/);
-        if (htmlMatch && onGameGenerated) {
-          onGameGenerated(htmlMatch[1].trim());
-          setStatuses((prev) => [...prev, '🎮 Game loaded in preview!']);
         }
       }
     } catch (err: unknown) {
@@ -164,7 +272,7 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, onGameGenerated]);
+  }, [input, streaming, messages, applyAction]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -185,19 +293,17 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Message history */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-3 space-y-2 select-text"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2 select-text">
         {showEmpty ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
               <MessageSquare size={28} className="mx-auto text-gray-600 mb-2" />
-              <p className="text-sm text-gray-400">AI Chat</p>
+              <p className="text-sm text-gray-400">Studio Chat</p>
               <p className="text-xs text-gray-600 mt-1">
-                {activeGameName
-                  ? `Continue working on: ${activeGameName}`
-                  : 'Describe a game to build it instantly'}
+                Tell the AI what to build in your workspace
+              </p>
+              <p className="text-[10px] text-gray-700 mt-2">
+                e.g. &ldquo;place 5 red blocks in a row&rdquo; &middot; &ldquo;build a 4x4 floor&rdquo;
               </p>
             </div>
           </div>
@@ -205,7 +311,10 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
           <>
             {messages.map((msg, i) => {
               const isLast = i === messages.length - 1;
-              const isEmptyStreaming = streaming && isLast && msg.role === 'assistant' && !msg.content;
+              const isEmptyStreaming =
+                streaming && isLast && msg.role === 'assistant' && !msg.content;
+              // Hide trailing empty assistant bubble when we're only getting actions (no text yet)
+              if (msg.role === 'assistant' && !msg.content && !isEmptyStreaming) return null;
               return (
                 <div
                   key={i}
@@ -218,7 +327,7 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
                   {isEmptyStreaming ? (
                     <span className="inline-block w-1.5 h-4 bg-green-400 animate-pulse align-text-bottom" />
                   ) : (
-                    msg.content || '\u00A0'
+                    msg.content
                   )}
                 </div>
               );
@@ -246,19 +355,14 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
           onChange={setInput}
           onKeyDown={handleKeyDown}
           placeholder={
-            streaming ? 'Generating… press cancel to stop' : 'Describe your game or changes…'
+            streaming ? 'Generating… press cancel to stop' : 'Tell the AI what to build…'
           }
           rows={3}
           showCount
           disabled={streaming}
         />
         {streaming ? (
-          <PanelActionButton
-            onClick={cancel}
-            variant="destructive"
-            icon={Square}
-            fullWidth
-          >
+          <PanelActionButton onClick={cancel} variant="destructive" icon={Square} fullWidth>
             Cancel
           </PanelActionButton>
         ) : (
@@ -269,7 +373,7 @@ export function ChatPanel({ onGameGenerated, activeGameName }: ChatPanelProps = 
             fullWidth
             disabled={!input.trim()}
           >
-            Generate
+            Build
           </PanelActionButton>
         )}
       </div>

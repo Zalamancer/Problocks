@@ -23,18 +23,11 @@ const TAB_GROUPS: TabGroupDef[] = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-interface PanelContentProps {
-  group: LeftPanelGroup;
-  onSceneSelect?: (id: string) => void;
-  onGameGenerated?: (html: string, files?: Record<string, string>) => void;
-  activeGameName?: string | null;
-}
-
-function PanelContent({ group, onSceneSelect, onGameGenerated, activeGameName }: PanelContentProps) {
+function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onSceneSelect?: (id: string) => void }) {
   switch (group) {
     case 'scene':    return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
     case 'assets':   return <AssetsPanel />;
-    case 'chat':     return <ChatPanel onGameGenerated={onGameGenerated} activeGameName={activeGameName} />;
+    case 'chat':     return <ChatPanel />;
     case 'settings': return <SettingsPanel />;
   }
 }
@@ -123,13 +116,7 @@ export function LeftPanelToggle() {
   );
 }
 
-interface LeftPanelProps {
-  onSceneSelect?: (id: string) => void;
-  onGameGenerated?: (html: string, files?: Record<string, string>) => void;
-  activeGameName?: string | null;
-}
-
-export function LeftPanel({ onSceneSelect, onGameGenerated, activeGameName }: LeftPanelProps = {}) {
+export function LeftPanel({ onSceneSelect }: { onSceneSelect?: (id: string) => void } = {}) {
   const { leftPanelCollapsed, leftPanelActiveGroup } = useStudio();
   return (
     <aside className={cn('flex-shrink-0 overflow-visible transition-all duration-300', leftPanelCollapsed ? 'w-0' : 'w-[300px]')}>
@@ -140,12 +127,7 @@ export function LeftPanel({ onSceneSelect, onGameGenerated, activeGameName }: Le
         <MainGroupHeader />
         {!leftPanelCollapsed && (
           <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-            <PanelContent
-              group={leftPanelActiveGroup}
-              onSceneSelect={onSceneSelect}
-              onGameGenerated={onGameGenerated}
-              activeGameName={activeGameName}
-            />
+            <PanelContent group={leftPanelActiveGroup} onSceneSelect={onSceneSelect} />
           </div>
         )}
       </div>

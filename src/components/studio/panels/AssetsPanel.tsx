@@ -30,6 +30,42 @@ const CATEGORIES = [
   { id: 'balconies', label: 'Balconies' },
 ];
 
+const SORT_OPTIONS = [
+  { value: 'name-asc', label: 'Name (A → Z)' },
+  { value: 'name-desc', label: 'Name (Z → A)' },
+  { value: 'tris-asc', label: 'Tris (low → high)' },
+  { value: 'tris-desc', label: 'Tris (high → low)' },
+  { value: 'verts-asc', label: 'Verts (low → high)' },
+  { value: 'verts-desc', label: 'Verts (high → low)' },
+  { value: 'size-asc', label: 'Size (low → high)' },
+  { value: 'size-desc', label: 'Size (high → low)' },
+];
+
+const TRIS_RANGES: Record<string, { label: string; min: number; max: number } | null> = {
+  any: null,
+  low: { label: '≤ 100 (low-poly)', min: 0, max: 100 },
+  med: { label: '100 – 500', min: 100, max: 500 },
+  high: { label: '500 – 1K', min: 500, max: 1000 },
+  vhigh: { label: '1K – 2K', min: 1000, max: 2000 },
+  extreme: { label: '> 2K (high-poly)', min: 2000, max: Infinity },
+};
+
+const VERTS_RANGES: Record<string, { label: string; min: number; max: number } | null> = {
+  any: null,
+  low: { label: '≤ 100', min: 0, max: 100 },
+  med: { label: '100 – 500', min: 100, max: 500 },
+  high: { label: '500 – 1K', min: 500, max: 1000 },
+  extreme: { label: '> 1K', min: 1000, max: Infinity },
+};
+
+const SIZE_RANGES: Record<string, { label: string; min: number; max: number } | null> = {
+  any: null,
+  tiny: { label: '≤ 50 KB', min: 0, max: 50 },
+  small: { label: '50 – 200 KB', min: 50, max: 200 },
+  med: { label: '200 KB – 1 MB', min: 200, max: 1024 },
+  large: { label: '> 1 MB', min: 1024, max: Infinity },
+};
+
 function formatTris(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
   return String(n);
@@ -71,9 +107,19 @@ export function AssetsPanel() {
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState('name-asc');
+  const [trisRange, setTrisRange] = useState('any');
+  const [vertsRange, setVertsRange] = useState('any');
+  const [sizeRange, setSizeRange] = useState('any');
 
   // Non-default filter means the dot indicator is shown on the filter icon
-  const hasActiveFilters = category !== 'all' || viewMode !== 'grid';
+  const hasActiveFilters =
+    category !== 'all' ||
+    viewMode !== 'grid' ||
+    sort !== 'name-asc' ||
+    trisRange !== 'any' ||
+    vertsRange !== 'any' ||
+    sizeRange !== 'any';
 
   const games = useStudio((s) => s.games);
   const activeGameId = useStudio((s) => s.activeGameId);
@@ -90,10 +136,31 @@ export function AssetsPanel() {
       .catch(() => {});
   }, []);
 
+  const tr = TRIS_RANGES[trisRange];
+  const vr = VERTS_RANGES[vertsRange];
+  const sr = SIZE_RANGES[sizeRange];
+
   const filtered = assets.filter(a => {
     if (category !== 'all' && a.cat !== category) return false;
     if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (tr && (a.tris < tr.min || a.tris >= tr.max)) return false;
+    if (vr && (a.vertices < vr.min || a.vertices >= vr.max)) return false;
+    if (sr && (a.binKB < sr.min || a.binKB >= sr.max)) return false;
     return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sort) {
+      case 'name-asc': return a.name.localeCompare(b.name);
+      case 'name-desc': return b.name.localeCompare(a.name);
+      case 'tris-asc': return a.tris - b.tris;
+      case 'tris-desc': return b.tris - a.tris;
+      case 'verts-asc': return a.vertices - b.vertices;
+      case 'verts-desc': return b.vertices - a.vertices;
+      case 'size-asc': return a.binKB - b.binKB;
+      case 'size-desc': return b.binKB - a.binKB;
+      default: return 0;
+    }
   });
 
   const catCounts = assets.reduce((acc, a) => {
@@ -171,6 +238,12 @@ export function AssetsPanel() {
               ]}
             />
             <PanelSelect
+              label="Sort by"
+              value={sort}
+              onChange={setSort}
+              options={SORT_OPTIONS}
+            />
+            <PanelSelect
               label="Category"
               value={category}
               onChange={setCategory}
@@ -183,6 +256,33 @@ export function AssetsPanel() {
                     : `${c.label} (${catCounts[c.id] || 0})`,
                 }))}
             />
+            <PanelSelect
+              label="Tris"
+              value={trisRange}
+              onChange={setTrisRange}
+              options={Object.entries(TRIS_RANGES).map(([k, v]) => ({
+                value: k,
+                label: v ? v.label : 'Any',
+              }))}
+            />
+            <PanelSelect
+              label="Verts"
+              value={vertsRange}
+              onChange={setVertsRange}
+              options={Object.entries(VERTS_RANGES).map(([k, v]) => ({
+                value: k,
+                label: v ? v.label : 'Any',
+              }))}
+            />
+            <PanelSelect
+              label="File size"
+              value={sizeRange}
+              onChange={setSizeRange}
+              options={Object.entries(SIZE_RANGES).map(([k, v]) => ({
+                value: k,
+                label: v ? v.label : 'Any',
+              }))}
+            />
           </>
         )}
       </div>
@@ -191,7 +291,7 @@ export function AssetsPanel() {
       <div className="flex-1 min-h-0 overflow-y-auto px-3">
         {viewMode === 'list' ? (
           <div className="flex flex-col gap-0.5">
-            {filtered.map(asset => {
+            {sorted.map(asset => {
               const isSelected = selectedAsset === asset.name;
               return (
                 <button
@@ -222,7 +322,7 @@ export function AssetsPanel() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-1.5">
-            {filtered.map(asset => {
+            {sorted.map(asset => {
               const isSelected = selectedAsset === asset.name;
               return (
                 <button
@@ -250,9 +350,9 @@ export function AssetsPanel() {
           </div>
         )}
 
-        {filtered.length === 0 && (
+        {sorted.length === 0 && (
           <div className="flex items-center justify-center py-8">
-            <p className="text-xs text-zinc-600">{search ? 'No matching assets' : 'No assets loaded'}</p>
+            <p className="text-xs text-zinc-600">{search || hasActiveFilters ? 'No matching assets' : 'No assets loaded'}</p>
           </div>
         )}
       </div>

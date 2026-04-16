@@ -243,22 +243,22 @@ export function AssetsPanel() {
                 <button
                   key={asset.name}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
-                  className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
+                  className={`group relative flex flex-col rounded-lg overflow-hidden transition-colors ${
                     isSelected
                       ? 'bg-accent/10 border border-accent/20'
                       : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent'
                   }`}
                 >
-                  <AssetThumbnail modelName={asset.name} size={72} />
-                  <span className="text-[11px] text-zinc-400 mt-1 truncate w-full text-center">
+                  <div className="relative w-full aspect-square">
+                    <AssetThumbnail modelName={asset.name} fluid />
+                    {/* Hover overlay with extra stats */}
+                    <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                      <AssetExpandedStats asset={asset} />
+                    </div>
+                  </div>
+                  <span className="block w-full px-2 py-1 text-sm text-zinc-300 truncate text-left">
                     {asset.name.replace(/_/g, ' ')}
                   </span>
-                  <span className={`text-[10px] font-mono ${trisColor(asset.tris)}`}>
-                    {formatTris(asset.tris)} tris
-                  </span>
-                  {isSelected && (
-                    <AssetExpandedStats asset={asset} />
-                  )}
                 </button>
               );
             })}

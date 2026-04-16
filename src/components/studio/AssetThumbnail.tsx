@@ -93,14 +93,19 @@ async function processQueue() {
 interface AssetThumbnailProps {
   modelName: string;
   size?: number;
+  fluid?: boolean;
 }
 
-export function AssetThumbnail({ modelName, size = 80 }: AssetThumbnailProps) {
+export function AssetThumbnail({ modelName, size = 80, fluid = false }: AssetThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [measuredSize, setMeasuredSize] = useState(size);
   const renderedRef = useRef(false);
+
+  // Track the effective size for canvas dimensions and renderer setSize.
+  const effectiveSize = fluid ? measuredSize : size;
 
   const renderThumbnail = useCallback(() => {
     if (renderedRef.current || !canvasRef.current) return;
@@ -110,7 +115,7 @@ export function AssetThumbnail({ modelName, size = 80 }: AssetThumbnailProps) {
       try {
         await loadThreeJs();
 
-        const shared = getSharedRenderer(size);
+        const shared = getSharedRenderer(effectiveSize);
         if (!shared) {
           setError(true);
           return;
@@ -181,7 +186,7 @@ export function AssetThumbnail({ modelName, size = 80 }: AssetThumbnailProps) {
         setError(true);
       }
     });
-  }, [modelName, size]);
+  }, [modelName, effectiveSize]);
 
   // IntersectionObserver: only render when visible
   useEffect(() => {
@@ -202,22 +207,52 @@ export function AssetThumbnail({ modelName, size = 80 }: AssetThumbnailProps) {
     return () => observer.disconnect();
   }, [renderThumbnail]);
 
+  // ResizeObserver for fluid mode: update measuredSize when the parent
+  // resizes so the WebGL canvas stays crisp at any card size.
+  useEffect(() => {
+    if (!fluid) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.floor(entry.contentRect.width);
+      if (w > 0) {
+        setMeasuredSize((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fluid]);
+
+  // Re-render thumbnail when fluid size changes after initial load.
+  useEffect(() => {
+    if (!fluid || !loaded) return;
+    renderedRef.current = false;
+    renderThumbnail();
+  }, [fluid, effectiveSize, loaded, renderThumbnail]);
+
+  const wrapperStyle = fluid
+    ? { width: '100%', height: '100%' }
+    : { width: size, height: size };
+  const canvasStyle = fluid
+    ? { width: '100%', height: '100%' }
+    : { width: size, height: size };
+
   return (
-    <div ref={containerRef} style={{ width: size, height: size }}>
+    <div ref={containerRef} style={wrapperStyle}>
       {error ? (
         <div
           className="rounded bg-zinc-800 flex items-center justify-center text-zinc-600 text-[10px]"
-          style={{ width: size, height: size }}
+          style={wrapperStyle}
         >
           ?
         </div>
       ) : (
         <canvas
           ref={canvasRef}
-          width={size * 2}
-          height={size * 2}
+          width={effectiveSize * 2}
+          height={effectiveSize * 2}
           className={`rounded bg-zinc-900 ${loaded ? '' : 'animate-pulse'}`}
-          style={{ width: size, height: size }}
+          style={canvasStyle}
         />
       )}
     </div>

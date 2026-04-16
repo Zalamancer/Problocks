@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FolderOpen, FileCode, FileText, Box, Search, Plus, Triangle, Layers, LayoutGrid, List } from 'lucide-react';
-import { PanelSearchInput } from '@/components/ui';
+import { FolderOpen, FileCode, FileText, Box, Search, Plus, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
+import { PanelSearchInput, PanelCategoryTabs, PanelButtonGroup } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import { useStudio } from '@/store/studio-store';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
 
@@ -84,6 +85,10 @@ export function AssetsPanel() {
   const [assets, setAssets] = useState<AssetInfo[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Non-default filter means the dot indicator is shown on the filter icon
+  const hasActiveFilters = category !== 'all' || viewMode !== 'grid';
 
   const games = useStudio((s) => s.games);
   const activeGameId = useStudio((s) => s.activeGameId);
@@ -161,53 +166,59 @@ export function AssetsPanel() {
         </div>
       )}
 
-      {/* Search + View Toggle */}
-      <div className="shrink-0 px-3 py-1.5 flex items-center gap-1.5">
-        <div className="flex-1">
-          <PanelSearchInput value={search} onChange={setSearch} placeholder="Search 3D assets..." />
-        </div>
-        <div className="flex shrink-0 rounded-md overflow-hidden border border-white/[0.06]">
+      {/* Search + Filter button */}
+      <div className="shrink-0 px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0">
+            <PanelSearchInput value={search} onChange={setSearch} placeholder="Search 3D assets..." />
+          </div>
           <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 transition-colors ${
-              viewMode === 'list' ? 'bg-white/[0.1] text-zinc-200' : 'text-zinc-600 hover:text-zinc-400'
-            }`}
-            title="List view"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={cn(
+              'relative shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+              filtersOpen
+                ? 'bg-accent/15 text-accent'
+                : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06]',
+            )}
+            title="Filters"
           >
-            <List size={13} />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 transition-colors ${
-              viewMode === 'grid' ? 'bg-white/[0.1] text-zinc-200' : 'text-zinc-600 hover:text-zinc-400'
-            }`}
-            title="Grid view"
-          >
-            <LayoutGrid size={13} />
+            <SlidersHorizontal size={15} />
+            {hasActiveFilters && !filtersOpen && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
+            )}
           </button>
         </div>
       </div>
 
-      {/* Category pills */}
-      <div className="shrink-0 px-3 pb-1.5 flex flex-wrap gap-1">
-        {CATEGORIES.map(c => {
-          const count = c.id === 'all' ? assets.length : (catCounts[c.id] || 0);
-          if (c.id !== 'all' && !count) return null;
-          return (
-            <button
-              key={c.id}
-              onClick={() => setCategory(c.id)}
-              className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
-                category === c.id
-                  ? 'bg-accent/15 text-accent'
-                  : 'bg-white/[0.04] text-zinc-600 hover:text-zinc-400'
-              }`}
-            >
-              {c.label} {count > 0 && <span className="text-zinc-700 ml-0.5">{count}</span>}
-            </button>
-          );
-        })}
-      </div>
+      {/* Filter panel (view mode + category) */}
+      {filtersOpen && (
+        <div className="shrink-0 px-3 pb-2 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500 w-14 shrink-0">View</span>
+            <PanelButtonGroup
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'list' | 'grid')}
+              options={[
+                { value: 'grid', icon: LayoutGrid, title: 'Grid view' },
+                { value: 'list', icon: List, title: 'List view' },
+              ]}
+            />
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500 w-14 shrink-0 pt-1.5">Category</span>
+            <div className="flex-1 min-w-0">
+              <PanelCategoryTabs
+                compact
+                activeTab={category}
+                onChange={setCategory}
+                tabs={CATEGORIES
+                  .filter((c) => c.id === 'all' || (catCounts[c.id] || 0) > 0)
+                  .map((c) => ({ id: c.id, label: c.label }))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Asset list / grid */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3">

@@ -8,6 +8,7 @@ export { TabNavigation } from './TabNavigation'
 export type { Tab } from './TabNavigation'
 export { GlassPanel } from './GlassPanel'
 export { LoadingSpinner, LoadingOverlay } from './LoadingSpinner'
+export { ColorPicker, ColorPickerPanel } from './ColorPicker'
 
 // Global overlays — mount once in root layout
 export { ConfirmDialog } from './ConfirmDialog'

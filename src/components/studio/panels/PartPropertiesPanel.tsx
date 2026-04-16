@@ -2,7 +2,7 @@
 import { Trash2 } from 'lucide-react';
 import {
   PanelSection, PanelSlider, PanelSelect, PanelInput,
-  PanelToggle, PanelActionButton,
+  PanelToggle, PanelActionButton, PanelColorSwatches,
 } from '@/components/ui';
 import type { ScenePart, TexturePreset, PartType } from '@/store/scene-store';
 
@@ -138,11 +138,10 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete }: Props) {
 
         {/* ── Appearance ── */}
         <PanelSection title="Appearance" collapsible defaultOpen>
-          <PanelInput
+          <PanelColorSwatches
             label="Color"
             value={part.color}
             onChange={v => set('color', v)}
-            type="color"
           />
           <PanelSelect
             label="Texture"
@@ -166,11 +165,10 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete }: Props) {
 
         {/* ── Lighting ── */}
         <PanelSection title="Lighting" collapsible defaultOpen={false}>
-          <PanelInput
+          <PanelColorSwatches
             label="Emissive"
             value={part.emissiveColor}
             onChange={v => set('emissiveColor', v)}
-            type="color"
           />
           <PanelSlider
             label="Intensity"

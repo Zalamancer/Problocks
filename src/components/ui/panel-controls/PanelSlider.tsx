@@ -42,6 +42,7 @@ export function PanelSlider({
   const clamp = useCallback((val: number) => Math.min(Math.max(val, min), max), [min, max])
 
   const formatDisplay = (v: number) => {
+    if (v == null || isNaN(v)) return '0'
     if (formatValue) return formatValue(v)
     return precision > 0 ? v.toFixed(precision) : String(Math.round(v))
   }
@@ -111,7 +112,8 @@ export function PanelSlider({
         document.body.style.cursor = ''
         if (!dragDidMove.current) {
           selectAllOnEdit.current = false
-          const raw = precision > 0 ? value.toFixed(precision) : String(Math.round(value))
+          const safeVal = value ?? 0
+          const raw = precision > 0 ? safeVal.toFixed(precision) : String(Math.round(safeVal))
           setEditValue(raw)
           setIsEditing(true)
         }
@@ -125,7 +127,8 @@ export function PanelSlider({
 
   const handleDoubleClick = () => {
     selectAllOnEdit.current = true
-    const raw = precision > 0 ? value.toFixed(precision) : String(Math.round(value))
+    const safeVal = value ?? 0
+    const raw = precision > 0 ? safeVal.toFixed(precision) : String(Math.round(safeVal))
     setEditValue(raw)
     setIsEditing(true)
     if (inputRef.current) { inputRef.current.focus(); inputRef.current.select() }

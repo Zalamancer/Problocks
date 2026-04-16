@@ -158,7 +158,7 @@ export function AssetsPanel() {
 
       {/* Search + Filter button */}
       <div className="shrink-0 px-3 py-2">
-        <div className="flex items-stretch gap-1.5">
+        <div className="flex items-center gap-1.5">
           <div className="flex-1 min-w-0">
             <PanelSearchInput
               value={search}
@@ -170,7 +170,7 @@ export function AssetsPanel() {
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
             className={cn(
-              'relative shrink-0 aspect-square rounded-lg flex items-center justify-center transition-colors',
+              'relative shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
               filtersOpen
                 ? 'bg-accent/15 text-accent'
                 : 'bg-panel-surface text-zinc-500 hover:text-zinc-200 hover:bg-panel-surface-hover',

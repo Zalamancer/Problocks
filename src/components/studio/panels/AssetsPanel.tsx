@@ -157,7 +157,7 @@ export function AssetsPanel() {
       )}
 
       {/* Search + Filter + conditional View/Category — balanced 8px rhythm */}
-      <div className="shrink-0 px-3 py-2 space-y-2 [&_>div]:!mb-0">
+      <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">
         <div className="flex items-center gap-1.5">
           <div className="flex-1 min-w-0">
             <PanelSearchInput

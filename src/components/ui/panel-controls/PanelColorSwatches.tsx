@@ -32,12 +32,13 @@ export function PanelColorSwatches({
   onChange,
   className,
 }: PanelColorSwatchesProps) {
-  const [hexInput, setHexInput] = useState(() => value.replace('#', '').slice(0, 6).toUpperCase())
+  const safeValue = value ?? ''
+  const [hexInput, setHexInput] = useState(() => safeValue.replace('#', '').slice(0, 6).toUpperCase())
 
   // Keep local input in sync with external value (e.g. swatch/picker click)
   useEffect(() => {
-    setHexInput(value.replace('#', '').slice(0, 6).toUpperCase())
-  }, [value])
+    setHexInput(safeValue.replace('#', '').slice(0, 6).toUpperCase())
+  }, [safeValue])
 
   const commit = () => {
     const raw = hexInput.replace('#', '').trim()
@@ -45,7 +46,7 @@ export function PanelColorSwatches({
       onChange('#' + raw.toLowerCase())
     } else {
       // revert display to last valid value
-      setHexInput(value.replace('#', '').slice(0, 6).toUpperCase())
+      setHexInput(safeValue.replace('#', '').slice(0, 6).toUpperCase())
     }
   }
 
@@ -69,7 +70,7 @@ export function PanelColorSwatches({
     </div>
   )
 
-  const trigger = <ColorPicker color={value} onChange={onChange} presets={colors} />
+  const trigger = <ColorPicker color={safeValue || '#000000'} onChange={onChange} presets={colors} />
 
   if (!label) {
     return (

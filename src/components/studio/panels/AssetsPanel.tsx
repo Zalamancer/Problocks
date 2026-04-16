@@ -158,17 +158,22 @@ export function AssetsPanel() {
 
       {/* Search + Filter button */}
       <div className="shrink-0 px-3 py-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-stretch gap-1.5">
           <div className="flex-1 min-w-0">
-            <PanelSearchInput value={search} onChange={setSearch} placeholder="Search 3D assets..." />
+            <PanelSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search 3D assets..."
+              className="!mb-0"
+            />
           </div>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
             className={cn(
-              'relative shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+              'relative shrink-0 aspect-square rounded-lg flex items-center justify-center transition-colors',
               filtersOpen
                 ? 'bg-accent/15 text-accent'
-                : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06]',
+                : 'bg-panel-surface text-zinc-500 hover:text-zinc-200 hover:bg-panel-surface-hover',
             )}
             title="Filters"
           >

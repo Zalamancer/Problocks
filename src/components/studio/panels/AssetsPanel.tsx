@@ -125,15 +125,6 @@ export function AssetsPanel() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Header */}
-      <div className="shrink-0 px-3 pt-2 pb-1 flex items-center gap-2">
-        {activeGame ? (
-          <span className="flex-1 text-sm font-medium text-zinc-200 truncate">{activeGame.name}</span>
-        ) : (
-          <span className="text-sm text-zinc-500">No active game</span>
-        )}
-      </div>
-
       {/* Code files section */}
       {codeFiles.length > 0 && (
         <div className="shrink-0 px-3 py-1.5 border-b border-white/[0.04]">

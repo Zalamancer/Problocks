@@ -23,7 +23,8 @@ export function TopMenuBar() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [hoverMode, setHoverMode] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const { projectName, theme, toggleTheme } = useStudio();
+  const { projectName, theme, toggleTheme, games, activeGameId } = useStudio();
+  const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
 
   useEffect(() => {
     if (!openMenu) return;
@@ -113,8 +114,10 @@ export function TopMenuBar() {
 
       <div className="flex-1" />
 
-      {/* Project name */}
-      <span className="text-xs text-gray-500 mr-3 truncate max-w-[140px]">{projectName}</span>
+      {/* Active game name — absolutely centered in the bar */}
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-xs font-medium text-zinc-300 truncate max-w-[220px]">
+        {activeGame?.name ?? projectName}
+      </span>
 
       {/* Actions */}
       <div className="flex items-center gap-1 pr-2">

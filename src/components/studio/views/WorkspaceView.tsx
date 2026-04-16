@@ -1,5 +1,5 @@
 'use client';
-import { Square, Columns, Eraser, Trash2, MousePointer2 } from 'lucide-react';
+import { Square, Columns, Eraser, Trash2, MousePointer2, Box } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { BuildingCanvas } from '@/components/building/BuildingCanvas';
 import { useBuildingStore, type Tool } from '@/store/building-store';
@@ -20,15 +20,16 @@ export function WorkspaceView() {
 }
 
 interface ToolDef {
-  id: Tool | 'select';
+  id: Tool;
   label: string;
   icon: LucideIcon;
 }
 
 const TOOLS: ToolDef[] = [
-  { id: 'select', label: 'Select (orbit only)', icon: MousePointer2 },
-  { id: 'floor', label: 'Floor', icon: Square },
-  { id: 'wall', label: 'Wall', icon: Columns },
+  { id: 'select', label: 'Select / orbit', icon: MousePointer2 },
+  { id: 'part',   label: 'Part (drop a block)', icon: Box },
+  { id: 'floor',  label: 'Floor tile', icon: Square },
+  { id: 'wall',   label: 'Wall segment', icon: Columns },
   { id: 'eraser', label: 'Eraser', icon: Eraser },
 ];
 
@@ -43,16 +44,13 @@ function FloatingBuildToolbar() {
       onMouseDown={(e) => e.stopPropagation()}
     >
       {TOOLS.map(({ id, label, icon: Icon }) => {
-        const active = id !== 'select' && tool === id;
+        const active = tool === id;
         return (
           <button
             key={id}
             type="button"
             title={label}
-            onClick={() => {
-              if (id === 'select') return; // orbit-only mode — future: disable raycaster
-              setTool(id);
-            }}
+            onClick={() => setTool(id)}
             className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
               active
                 ? 'bg-white text-black'

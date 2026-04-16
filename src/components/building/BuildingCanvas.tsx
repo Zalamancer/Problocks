@@ -3,11 +3,13 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { useBuildingStore, type EdgeDir } from '@/store/building-store';
+import { useSceneStore, type ScenePart, type PartType } from '@/store/scene-store';
 
 const TILE = 2;
 const WALL_HEIGHT = 3;
 const WALL_THICK = 0.15;
 const FLOOR_THICK = 0.1;
+const PART_DEFAULT_SIZE = 2; // 2m box, matches tile size
 
 interface SceneRefs {
   scene: THREE.Scene;
@@ -18,9 +20,22 @@ interface SceneRefs {
   ghost: THREE.Mesh;
   floorGroup: THREE.Group;
   wallGroup: THREE.Group;
+  /** Parent of all ScenePart meshes — child.userData.id links back to the store. */
+  partGroup: THREE.Group;
   raycaster: THREE.Raycaster;
   pointer: THREE.Vector2;
   animId: number;
+}
+
+/** Build geometry for a scene part. Scale is applied on the mesh afterwards. */
+function geometryForPart(type: PartType): THREE.BufferGeometry {
+  switch (type) {
+    case 'Sphere':   return new THREE.SphereGeometry(0.5, 24, 16);
+    case 'Cylinder': return new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
+    case 'Wedge':    return new THREE.ConeGeometry(0.7, 1, 4); // approximation for first slice
+    case 'Block':
+    default:         return new THREE.BoxGeometry(1, 1, 1);
+  }
 }
 
 /** Map a world point to the nearest grid edge in canonical form. */
@@ -59,6 +74,8 @@ export function BuildingCanvas() {
   const tool = useBuildingStore((s) => s.tool);
   const floors = useBuildingStore((s) => s.floors);
   const walls = useBuildingStore((s) => s.walls);
+  const parts = useSceneStore((s) => s.sceneObjects);
+  const selectedPartId = useSceneStore((s) => s.selectedPart?.id ?? null);
 
   // --- init scene once ---
   useEffect(() => {
@@ -140,6 +157,10 @@ export function BuildingCanvas() {
     wallGroup.name = 'walls';
     scene.add(wallGroup);
 
+    const partGroup = new THREE.Group();
+    partGroup.name = 'parts';
+    scene.add(partGroup);
+
     const ghost = new THREE.Mesh(
       new THREE.BoxGeometry(TILE, FLOOR_THICK, TILE),
       new THREE.MeshBasicMaterial({
@@ -161,6 +182,7 @@ export function BuildingCanvas() {
       ghost,
       floorGroup,
       wallGroup,
+      partGroup,
       raycaster: new THREE.Raycaster(),
       pointer: new THREE.Vector2(),
       animId: 0,
@@ -203,21 +225,45 @@ export function BuildingCanvas() {
     if (!refs) return;
     const canvas = refs.renderer.domElement;
 
-    function worldFromEvent(e: MouseEvent): { x: number; z: number } | null {
+    function setPointerFromEvent(e: MouseEvent) {
       const rect = canvas.getBoundingClientRect();
       refs!.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       refs!.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       refs!.raycaster.setFromCamera(refs!.pointer, refs!.camera);
+    }
+
+    function worldFromEvent(e: MouseEvent): { x: number; z: number } | null {
+      setPointerFromEvent(e);
       const hits = refs!.raycaster.intersectObject(refs!.ground);
       if (!hits.length) return null;
       return { x: hits[0].point.x, z: hits[0].point.z };
     }
 
+    /** Returns the top-level part mesh under the cursor (with userData.id), if any. */
+    function partHitFromEvent(e: MouseEvent): THREE.Mesh | null {
+      setPointerFromEvent(e);
+      const hits = refs!.raycaster.intersectObjects(refs!.partGroup.children, false);
+      return hits.length ? (hits[0].object as THREE.Mesh) : null;
+    }
+
     function updateGhost(world: { x: number; z: number }) {
       const ghost = refs!.ghost;
-      ghost.visible = true;
       const mat = ghost.material as THREE.MeshBasicMaterial;
+
+      if (tool === 'select') {
+        ghost.visible = false;
+        return;
+      }
+
+      ghost.visible = true;
       ghost.geometry.dispose();
+
+      if (tool === 'part') {
+        ghost.geometry = new THREE.BoxGeometry(PART_DEFAULT_SIZE, PART_DEFAULT_SIZE, PART_DEFAULT_SIZE);
+        ghost.position.set(world.x, PART_DEFAULT_SIZE / 2, world.z);
+        mat.color.setHex(0x4ade80);
+        return;
+      }
 
       if (tool === 'wall') {
         const e = edgeFromWorld(world.x, world.z);
@@ -265,9 +311,47 @@ export function BuildingCanvas() {
 
     function onDown(e: MouseEvent) {
       if (e.button !== 0) return;
+
+      // 1) Click on an existing part always selects it — regardless of tool.
+      //    (The only exceptions are 'eraser' which removes it, and 'part'
+      //    which should still spawn a new one nearby.)
+      const hitPart = partHitFromEvent(e);
+      const sceneStore = useSceneStore.getState();
+      if (hitPart && tool !== 'part') {
+        const id = hitPart.userData.id as string | undefined;
+        if (id) {
+          if (tool === 'eraser') {
+            sceneStore.removePart(id);
+          } else {
+            const part = sceneStore.sceneObjects.find((p) => p.id === id) ?? null;
+            sceneStore.setSelectedPart(part);
+          }
+          return;
+        }
+      }
+
       const world = worldFromEvent(e);
-      if (!world) return;
+      if (!world) {
+        // Clicking empty sky → deselect.
+        if (tool === 'select') sceneStore.setSelectedPart(null);
+        return;
+      }
       const store = useBuildingStore.getState();
+
+      if (tool === 'select') {
+        sceneStore.setSelectedPart(null);
+        return;
+      }
+
+      if (tool === 'part') {
+        sceneStore.addPart({
+          partType: 'Block',
+          position: { x: world.x, y: PART_DEFAULT_SIZE / 2, z: world.z },
+          scale: { x: PART_DEFAULT_SIZE, y: PART_DEFAULT_SIZE, z: PART_DEFAULT_SIZE },
+          color: '#a1a1aa',
+        });
+        return;
+      }
 
       if (tool === 'floor') {
         const tx = Math.round(world.x / TILE);
@@ -363,6 +447,52 @@ export function BuildingCanvas() {
       group.add(mesh);
     }
   }, [walls]);
+
+  // --- rebuild part meshes when scene parts change ---
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    const group = refs.partGroup;
+    while (group.children.length) {
+      const c = group.children[0] as THREE.Mesh;
+      c.geometry.dispose();
+      (c.material as THREE.Material).dispose();
+      group.remove(c);
+    }
+    for (const p of parts) {
+      const mesh = new THREE.Mesh(
+        geometryForPart(p.partType),
+        new THREE.MeshStandardMaterial({
+          color: p.color,
+          roughness: p.roughness,
+          metalness: p.metalness,
+          emissive: new THREE.Color(p.emissiveColor),
+          emissiveIntensity: p.emissiveIntensity,
+        }),
+      );
+      mesh.position.set(p.position.x, p.position.y, p.position.z);
+      mesh.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z);
+      mesh.scale.set(p.scale.x, p.scale.y, p.scale.z);
+      mesh.castShadow = p.castShadow;
+      mesh.receiveShadow = true;
+      mesh.visible = p.visible;
+      mesh.userData.id = p.id;
+      group.add(mesh);
+    }
+  }, [parts]);
+
+  // --- selection highlight: emissive glow on the selected part mesh ---
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    for (const child of refs.partGroup.children) {
+      const mesh = child as THREE.Mesh;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      const isSelected = mesh.userData.id === selectedPartId;
+      mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
+      mat.emissiveIntensity = isSelected ? 0.35 : 0;
+    }
+  }, [selectedPartId, parts]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

@@ -14,7 +14,7 @@ import { create } from 'zustand';
  *   The W-edge of (x,z) is the E-edge of (x-1, z).
  */
 
-export type Tool = 'floor' | 'wall' | 'eraser';
+export type Tool = 'select' | 'part' | 'floor' | 'wall' | 'eraser';
 export type EdgeDir = 'N' | 'E';
 
 export interface FloorCell {

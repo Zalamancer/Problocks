@@ -32,6 +32,32 @@ interface SceneStore {
   updateSelectedPart: (changes: Partial<ScenePart>) => void;
   setSceneObjects: (objects: ScenePart[]) => void;
   updateSceneObject: (id: string, changes: Partial<ScenePart>) => void;
+
+  /** Append a new part to the scene. Missing fields get sensible defaults. */
+  addPart: (partial: Partial<ScenePart>) => ScenePart;
+  /** Remove a part by id (also deselects it if selected). */
+  removePart: (id: string) => void;
+}
+
+function defaultPart(overrides: Partial<ScenePart> = {}): ScenePart {
+  const id = overrides.id ?? crypto.randomUUID().slice(0, 12);
+  return {
+    id,
+    name: overrides.name ?? `Part_${id.slice(0, 4)}`,
+    partType: overrides.partType ?? 'Block',
+    position: overrides.position ?? { x: 0, y: 0.5, z: 0 },
+    rotation: overrides.rotation ?? { x: 0, y: 0, z: 0 },
+    scale: overrides.scale ?? { x: 1, y: 1, z: 1 },
+    color: overrides.color ?? '#a1a1aa',
+    roughness: overrides.roughness ?? 0.7,
+    metalness: overrides.metalness ?? 0,
+    emissiveColor: overrides.emissiveColor ?? '#000000',
+    emissiveIntensity: overrides.emissiveIntensity ?? 0,
+    texture: overrides.texture ?? 'SmoothPlastic',
+    castShadow: overrides.castShadow ?? true,
+    anchored: overrides.anchored ?? true,
+    visible: overrides.visible ?? true,
+  };
 }
 
 export const useSceneStore = create<SceneStore>((set, get) => ({
@@ -64,5 +90,20 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
         s.selectedPart?.id === id
           ? { ...s.selectedPart, ...changes }
           : s.selectedPart,
+    })),
+
+  addPart: (partial) => {
+    const part = defaultPart(partial);
+    set((s) => ({
+      sceneObjects: [...s.sceneObjects, part],
+      selectedPart: part,
+    }));
+    return part;
+  },
+
+  removePart: (id) =>
+    set((s) => ({
+      sceneObjects: s.sceneObjects.filter((o) => o.id !== id),
+      selectedPart: s.selectedPart?.id === id ? null : s.selectedPart,
     })),
 }));

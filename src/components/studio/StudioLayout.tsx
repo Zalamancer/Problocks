@@ -156,24 +156,19 @@ export function StudioLayout() {
     previewRef.current?.sendToGame({ type: 'selectModel', id });
   }, []);
 
-  // Part delete
+  // Part delete — remove from native scene store AND notify any running
+  // iframe game. The postMessage is a no-op if there's no iframe.
+  const removePartFromStore = useSceneStore((s) => s.removePart);
   const handlePartDelete = useCallback(() => {
     if (!selectedPart) return;
     previewRef.current?.sendToGame({ type: 'removePart', id: selectedPart.id });
+    removePartFromStore(selectedPart.id);
     setSelectedPart(null);
-  }, [selectedPart, setSelectedPart]);
+  }, [selectedPart, setSelectedPart, removePartFromStore]);
 
-  // On first load, if no active game, load the game engine as default
-  useEffect(() => {
-    if (!activeGameId && games.length === 0) {
-      fetch('/game-engine.html')
-        .then(r => r.text())
-        .then(html => {
-          addGame({ name: 'Blocky Village', prompt: 'roblox blocky village', html });
-        })
-        .catch(() => {});
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Blocky Village auto-load was an iframe-based game demo that covered the
+  // native 3D workspace. Removed — the studio now boots straight into the
+  // native WorkspaceView where users build directly.
 
   // When activeGameId changes, load game into preview or clear it
   useEffect(() => {
@@ -315,8 +310,9 @@ export function StudioLayout() {
 
           </div>
 
-          {/* Right panel — part properties when game active, task detail otherwise */}
-          {gameHtml && selectedPart ? (
+          {/* Right panel — part properties when a part is selected (native
+              workspace OR running iframe game); task detail otherwise. */}
+          {selectedPart ? (
             <PartPropertiesPanel
               part={selectedPart}
               onUpdate={handlePartUpdate}

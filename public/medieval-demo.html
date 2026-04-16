@@ -2,460 +2,471 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Medieval House — 3D</title>
+<title>Blocky Village</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#000; overflow:hidden; width:100vw; height:100vh; font-family:sans-serif; }
-canvas { display:block; }
+body { overflow:hidden; width:100vw; height:100vh; background:#5ecfff; }
 #overlay {
   position:fixed; inset:0; display:flex; flex-direction:column;
-  align-items:center; justify-content:center; background:rgba(0,0,0,.65);
-  color:#e8d5a3; z-index:10; gap:10px; cursor:pointer;
+  align-items:center; justify-content:center; background:rgba(0,0,0,.45);
+  color:#fff; z-index:10; gap:8px; cursor:pointer;
 }
-#overlay h2 { font-size:22px; font-weight:700; letter-spacing:.04em; }
-#overlay p  { font-size:13px; color:#a89060; }
+#overlay h2 { font-size:28px; font-weight:900; letter-spacing:.05em; text-shadow:0 3px 0 rgba(0,0,0,.4); }
+#overlay p  { font-size:13px; opacity:.75; }
 #crosshair {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  width:18px; height:18px; pointer-events:none; display:none; z-index:5;
+  width:16px; height:16px; pointer-events:none; display:none; z-index:5;
 }
-#crosshair::before,#crosshair::after {
-  content:''; position:absolute; background:rgba(255,255,255,.7);
-}
+#crosshair::before,#crosshair::after { content:''; position:absolute; background:#fff; border-radius:2px; }
 #crosshair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
-#crosshair::after  { height:2px; width:100%; top:50%;  transform:translateY(-50%); }
+#crosshair::after  { height:2px; width:100%; top:50%; transform:translateY(-50%); }
 #hud {
-  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
-  color:rgba(255,255,255,.45); font-size:11px; letter-spacing:.06em;
-  pointer-events:none; display:none; z-index:5;
+  position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,.6); font-size:11px; font-weight:600; letter-spacing:.08em;
+  pointer-events:none; display:none; z-index:5; text-shadow:0 1px 4px rgba(0,0,0,.5);
 }
 </style>
 </head>
 <body>
 <div id="overlay">
-  <h2>Medieval House</h2>
-  <p>Click to explore &nbsp;·&nbsp; WASD move &nbsp;·&nbsp; Mouse look &nbsp;·&nbsp; ESC pause</p>
+  <h2>🏰 Blocky Village</h2>
+  <p>Click to explore · WASD move · Mouse look · ESC pause</p>
 </div>
 <div id="crosshair"></div>
-<div id="hud">WASD · MOVE &nbsp;&nbsp; MOUSE · LOOK &nbsp;&nbsp; ESC · PAUSE</div>
+<div id="hud">WASD · MOVE &nbsp; MOUSE · LOOK &nbsp; ESC · PAUSE</div>
+
 <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
 <script>
-// ─── Scene ────────────────────────────────────────────────────────────────
-const scene    = new THREE.Scene();
-scene.fog      = new THREE.FogExp2(0x0a0e18, 0.038);
-scene.background = new THREE.Color(0x0a0e18);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// ─── Renderer ─────────────────────────────────────────────────────────────
+var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-renderer.outputColorSpace   = THREE.SRGBColorSpace;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 300);
-camera.position.set(0, 1.7, 9);
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x5ecfff);
+scene.fog = new THREE.Fog(0x5ecfff, 40, 110);
 
-window.addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
+var camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 3.5, 14);
+
+window.addEventListener('resize', function() {
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// ─── Pointer-lock + WASD ─────────────────────────────────────────────────
-const overlay   = document.getElementById('overlay');
-const crosshair = document.getElementById('crosshair');
-const hud       = document.getElementById('hud');
-const keys = {};
-let locked = false;
-let yaw = 0, pitch = 0;
+// ─── Pointer lock ─────────────────────────────────────────────────────────
+var overlay   = document.getElementById('overlay');
+var crosshair = document.getElementById('crosshair');
+var hud       = document.getElementById('hud');
+var keys = {}, locked = false, yaw = 0, pitch = 0;
 
-overlay.addEventListener('click', () => renderer.domElement.requestPointerLock());
-
-document.addEventListener('pointerlockchange', () => {
+overlay.addEventListener('click', function() { renderer.domElement.requestPointerLock(); });
+document.addEventListener('pointerlockchange', function() {
   locked = document.pointerLockElement === renderer.domElement;
   overlay.style.display   = locked ? 'none' : 'flex';
   crosshair.style.display = locked ? 'block' : 'none';
   hud.style.display       = locked ? 'block' : 'none';
 });
-
-document.addEventListener('mousemove', e => {
+document.addEventListener('mousemove', function(e) {
   if (!locked) return;
-  yaw   -= e.movementX * 0.002;
-  pitch  = Math.max(-1.2, Math.min(1.2, pitch - e.movementY * 0.002));
+  yaw -= e.movementX * 0.0025;
+  pitch = Math.max(-1.1, Math.min(1.1, pitch - e.movementY * 0.0025));
 });
+document.addEventListener('keydown', function(e) { keys[e.code] = true; });
+document.addEventListener('keyup',   function(e) { keys[e.code] = false; });
 
-document.addEventListener('keydown', e => { keys[e.code] = true; });
-document.addEventListener('keyup',   e => { keys[e.code] = false; });
+// ─── Color palette ────────────────────────────────────────────────────────
+var C = {
+  grass:   0x4ecf4e,
+  dirt:    0xc8a464,
+  wall:    0xf5e6c8,   // warm cream
+  wall2:   0xe8d5b0,
+  roof:    0xe84040,   // bright red
+  roof2:   0xc83030,
+  door:    0xa0600a,
+  doorInner: 0x7a4808,
+  window:  0x80d0ff,
+  winFrame:0x5a3808,
+  chimney: 0xd46030,
+  tree1:   0x40c840,
+  tree2:   0x30a830,
+  tree3:   0x58e058,
+  trunk:   0xa05018,
+  path:    0xd4a060,
+  fence:   0xd4aa70,
+  flower1: 0xff4488,
+  flower2: 0xffdd00,
+  flower3: 0xff8800,
+  cloud:   0xffffff,
+  water:   0x40aaff,
+  stone:   0xaaa090,
+};
 
-// ─── Procedural textures ─────────────────────────────────────────────────
-function makeStoneTexture(size) {
-  size = size || 256;
-  var c = document.createElement('canvas');
-  c.width = c.height = size;
-  var x = c.getContext('2d');
-  x.fillStyle = '#5a5040'; x.fillRect(0, 0, size, size);
-  var rng = 7919;
-  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
-  var y0 = 2;
-  while (y0 < size) {
-    var rh = Math.floor(r(14, 22));
-    var x0 = y0 % 2 === 0 ? 0 : Math.floor(r(-10, 10));
-    while (x0 < size) {
-      var sw = Math.floor(r(30, 55));
-      var gr = Math.floor(r(68, 98)), gg = Math.floor(r(60, 88)), gb = Math.floor(r(50, 78));
-      x.fillStyle = 'rgb(' + gr + ',' + gg + ',' + gb + ')';
-      x.fillRect(x0 + 1, y0 + 1, Math.min(sw, size - x0) - 2, rh - 2);
-      x.fillStyle = 'rgba(255,255,255,0.06)';
-      x.fillRect(x0 + 1, y0 + 1, Math.min(sw, size - x0) - 2, 2);
-      x.fillStyle = 'rgba(0,0,0,0.25)';
-      x.fillRect(x0 + 1, y0 + rh - 4, Math.min(sw, size - x0) - 2, 3);
-      x0 += sw + 2;
-    }
-    y0 += rh + 2;
+// ─── Material cache ───────────────────────────────────────────────────────
+var mats = {};
+function mat(hex, opts) {
+  var key = hex + JSON.stringify(opts||{});
+  if (!mats[key]) {
+    var o = Object.assign({ color: hex, roughness: .85, metalness: 0 }, opts||{});
+    mats[key] = new THREE.MeshStandardMaterial(o);
   }
-  var t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
+  return mats[key];
 }
 
-function makeThatchTexture(size) {
-  size = size || 256;
-  var c = document.createElement('canvas'); c.width = c.height = size;
-  var x = c.getContext('2d');
-  x.fillStyle = '#6b4a18'; x.fillRect(0, 0, size, size);
-  var rng = 13337;
-  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
-  for (var i = 0; i < 80; i++) {
-    var ly = r(0, size), lx = r(-20, size);
-    x.strokeStyle = 'rgba(' + Math.floor(r(90,140)) + ',' + Math.floor(r(60,100)) + ',' + Math.floor(r(10,30)) + ',0.5)';
-    x.lineWidth = r(1.5, 3.5);
-    x.setLineDash([r(15, 35), r(4, 10)]);
-    x.beginPath(); x.moveTo(lx, ly); x.lineTo(lx + size, ly); x.stroke();
-  }
-  x.setLineDash([]);
-  var t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
-function makeGrassTexture(size) {
-  size = size || 512;
-  var c = document.createElement('canvas'); c.width = c.height = size;
-  var x = c.getContext('2d');
-  x.fillStyle = '#2a5a1e'; x.fillRect(0, 0, size, size);
-  var rng = 99991;
-  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
-  for (var i = 0; i < 600; i++) {
-    x.fillStyle = 'rgba(' + Math.floor(r(20,60)) + ',' + Math.floor(r(70,110)) + ',' + Math.floor(r(15,40)) + ',0.6)';
-    x.fillRect(r(0, size), r(0, size), r(3, 10), r(3, 10));
-  }
-  var t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(24, 24);
-  return t;
-}
-
-function makeWoodTexture(size) {
-  size = size || 128;
-  var c = document.createElement('canvas'); c.width = c.height = size;
-  var x = c.getContext('2d');
-  x.fillStyle = '#4a2e0e'; x.fillRect(0, 0, size, size);
-  var rng = 55511;
-  var r = function(mn, mx) { rng = (rng * 16807) % 2147483647; return mn + (rng / 2147483647) * (mx - mn); };
-  for (var i = 0; i < 20; i++) {
-    x.strokeStyle = 'rgba(' + Math.floor(r(30,60)) + ',' + Math.floor(r(18,36)) + ',' + Math.floor(r(5,15)) + ',0.5)';
-    x.lineWidth = r(1, 3);
-    x.beginPath(); x.moveTo(0, r(0, size)); x.lineTo(size, r(0, size)); x.stroke();
-  }
-  return new THREE.CanvasTexture(c);
-}
-
-var stoneTex = makeStoneTexture(256);
-stoneTex.repeat.set(3, 2);
-var thatchTex = makeThatchTexture(256);
-thatchTex.repeat.set(2, 2);
-var grassTex  = makeGrassTexture(512);
-var woodTex   = makeWoodTexture(128);
-
-// ─── Materials ────────────────────────────────────────────────────────────
-var mStone  = new THREE.MeshStandardMaterial({ map: stoneTex,  roughness: .92, metalness: 0 });
-var mThatch = new THREE.MeshStandardMaterial({ map: thatchTex, roughness: .97, metalness: 0 });
-var mWood   = new THREE.MeshStandardMaterial({ map: woodTex,   roughness: .9,  metalness: 0, color: 0x5a3810 });
-var mGrass  = new THREE.MeshStandardMaterial({ map: grassTex,  roughness: 1,   metalness: 0 });
-var mGlass  = new THREE.MeshStandardMaterial({ color: 0x8ab4e8, transparent: true, opacity: .38, roughness: .1, metalness: .2, emissive: 0xffa020, emissiveIntensity: .55 });
-var mDark   = new THREE.MeshStandardMaterial({ color: 0x1a0d04, roughness: 1 });
-
-function addBox(w, h, d, mat, parent) {
-  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+// ─── Builder helpers ──────────────────────────────────────────────────────
+function box(w, h, d, color, opts) {
+  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
   m.castShadow = m.receiveShadow = true;
-  (parent || scene).add(m);
   return m;
 }
+function sphere(r, color, opts) {
+  var m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat(color, opts));
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+function cyl(rt, rb, h, color, segs) {
+  var m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, segs||8), mat(color));
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+function add(obj, px, py, pz, parent) {
+  obj.position.set(px, py, pz);
+  (parent || scene).add(obj);
+  return obj;
+}
+function clone(obj) { return obj.clone(); }
 
 // ─── Ground ───────────────────────────────────────────────────────────────
-var ground = addBox(200, 0.3, 200, mGrass);
-ground.position.y = -0.15;
+var ground = add(box(200, 1, 200, C.grass), 0, -0.5, 0);
 
-var pathMat = new THREE.MeshStandardMaterial({ color: 0x7a5c30, roughness: 1 });
-var path = addBox(2.4, 0.01, 12, pathMat);
-path.position.set(0, 0, 5.5);
+// Dirt path from gate to door
+add(box(3, 0.05, 16, C.dirt), 0, 0.02, 5);
 
-// ─── House dimensions ────────────────────────────────────────────────────
-var HW = 5.5, HH = 3.6, HD = 5.5;
-var group = new THREE.Group();
+// Pond
+var pond = add(cyl(.01, 3.5, 0.15, C.water, 20), -10, 0.06, -4);
 
-// Back wall
-var bk = addBox(HW, HH, 0.4, mStone, group); bk.position.set(0, HH/2, -HD/2);
-// Left wall
-var lw = addBox(0.4, HH, HD, mStone, group); lw.position.set(-HW/2, HH/2, 0);
-// Right wall
-var rw = addBox(0.4, HH, HD, mStone, group); rw.position.set(HW/2, HH/2, 0);
-
-// Front wall (with door + window gaps)
-var fwL = addBox(1.4, HH, 0.4, mStone, group); fwL.position.set(-HW/2+0.7,  HH/2,  HD/2);
-var fwR = addBox(1.4, HH, 0.4, mStone, group); fwR.position.set( HW/2-0.7,  HH/2,  HD/2);
-var fwT = addBox(2.7, 0.9, 0.4, mStone, group); fwT.position.set(0, HH-0.45, HD/2);
-var fwW1= addBox(0.6, 2.0, 0.4, mStone, group); fwW1.position.set(-HW/2+2.5, HH/2-0.5, HD/2);
-var fwW2= addBox(0.6, 2.0, 0.4, mStone, group); fwW2.position.set( HW/2-2.5, HH/2-0.5, HD/2);
-var fwBW1=addBox(1.5, 1.2, 0.4, mStone, group); fwBW1.position.set(-HW/2+2.5, 0.6, HD/2);
-var fwBW2=addBox(1.5, 1.2, 0.4, mStone, group); fwBW2.position.set( HW/2-2.5, 0.6, HD/2);
-var fwAW1=addBox(1.5, 0.5, 0.4, mStone, group); fwAW1.position.set(-HW/2+2.5, HH-0.25, HD/2);
-var fwAW2=addBox(1.5, 0.5, 0.4, mStone, group); fwAW2.position.set( HW/2-2.5, HH-0.25, HD/2);
-
-// Floor + ceiling
-var floorMesh = addBox(HW-0.4, 0.12, HD-0.4, new THREE.MeshStandardMaterial({color:0x5a4020,roughness:1}), group);
-floorMesh.position.set(0, 0.06, 0);
-var ceilMesh  = addBox(HW-0.4, 0.1, HD-0.4, mWood, group);
-ceilMesh.position.set(0, HH-0.05, 0);
-
-// Door opening fill
-var doorBack = addBox(1.1, 2.1, 0.05, mDark, group); doorBack.position.set(0, 1.05, HD/2+0.01);
-
-// Windows
-function addWindow(wx, wy, wz) {
-  var g = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.2, 0.05), mGlass);
-  g.position.set(wx, wy, wz); group.add(g);
-  var fr1=addBox(1.1,0.08,0.08,mWood,group); fr1.position.set(wx,wy+0.6,wz+0.04);
-  var fr2=addBox(1.1,0.08,0.08,mWood,group); fr2.position.set(wx,wy-0.6,wz+0.04);
-  var fr3=addBox(0.08,1.2,0.08,mWood,group); fr3.position.set(wx-0.55,wy,wz+0.04);
-  var fr4=addBox(0.08,1.2,0.08,mWood,group); fr4.position.set(wx+0.55,wy,wz+0.04);
-  var cr1=addBox(1.0,0.06,0.05,mWood,group); cr1.position.set(wx,wy,wz+0.06);
-  var cr2=addBox(0.06,1.2,0.05,mWood,group); cr2.position.set(wx,wy,wz+0.06);
+// ─── Clouds (decorative boxes) ────────────────────────────────────────────
+var clouds = [];
+function makeCloud(cx, cy, cz) {
+  var g = new THREE.Group();
+  [[0,0,0,3.5,1.4,2.2],[1.4,.5,0,2.2,1.1,1.8],[-1.3,.3,0,2,1,1.5],[0,-.1,1,2.8,1,1.2]].forEach(function(b){
+    var p = add(box(b[3],b[4],b[5],C.cloud), b[0],b[1],b[2], g);
+    p.castShadow = false;
+  });
+  g.position.set(cx, cy, cz);
+  scene.add(g);
+  clouds.push({ g: g, speed: .6+Math.random()*.8, baseY: cy });
+  return g;
 }
-addWindow(-HW/2+2.5, 1.8, HD/2+0.01);
-addWindow( HW/2-2.5, 1.8, HD/2+0.01);
-addWindow(-HW/2+0.01, 1.8, 0);
-addWindow( HW/2-0.01, 1.8, 0);
+makeCloud(-20, 22, -15);
+makeCloud( 15, 25, -20);
+makeCloud(  5, 20, -30);
+makeCloud(-30, 23, -10);
+makeCloud( 25, 22, -5);
 
-// Door frame
-var dfL=addBox(0.18,2.3,0.18,mWood,group); dfL.position.set(-0.64,1.15,HD/2);
-var dfR=addBox(0.18,2.3,0.18,mWood,group); dfR.position.set( 0.64,1.15,HD/2);
-var dfT=addBox(1.46,0.18,0.18,mWood,group); dfT.position.set(0,2.24,HD/2);
+// ─── Main house ───────────────────────────────────────────────────────────
+var HW=5, HH=4, HD=5.5;
+var house = new THREE.Group();
 
-// Door (open)
-var door=addBox(1.1,2.1,0.08,mWood,group);
-door.position.set(-0.64-0.55, 1.05, HD/2-0.02);
-door.rotation.y = Math.PI * 0.45;
+// Walls (chunky, slightly rounded look via scaling)
+add(box(HW,   HH,   0.5,  C.wall),  0,  HH/2, -HD/2, house); // back
+add(box(0.5,  HH,   HD,   C.wall), -HW/2, HH/2, 0,   house); // left
+add(box(0.5,  HH,   HD,   C.wall),  HW/2, HH/2, 0,   house); // right
 
-// Fireplace
-var fpBase=addBox(1.6,0.2,0.8,mStone,group); fpBase.position.set(0,0.1,-HD/2+0.7);
-var fpL=addBox(0.2,1.4,0.8,mStone,group); fpL.position.set(-0.7,0.9,-HD/2+0.7);
-var fpR=addBox(0.2,1.4,0.8,mStone,group); fpR.position.set( 0.7,0.9,-HD/2+0.7);
-var fpTop=addBox(1.6,0.2,0.8,mStone,group); fpTop.position.set(0,1.65,-HD/2+0.7);
-var firebox=addBox(1.1,0.9,0.4,mDark,group); firebox.position.set(0,0.6,-HD/2+0.5);
-var fireMat=new THREE.MeshStandardMaterial({color:0xff4400,emissive:0xff2200,emissiveIntensity:2,transparent:true,opacity:.85});
-var fire=new THREE.Mesh(new THREE.ConeGeometry(0.25,0.5,6),fireMat);
-fire.position.set(0,0.6,-HD/2+0.4); group.add(fire);
+// Front: two side columns + top, leaving door+window gaps
+add(box(1.3,  HH,   0.5, C.wall), -HW/2+.65, HH/2, HD/2, house);
+add(box(1.3,  HH,   0.5, C.wall),  HW/2-.65, HH/2, HD/2, house);
+add(box(2.4,  .9,   0.5, C.wall2),       0, HH-.45, HD/2, house); // above door
+// Side strips next to windows
+add(box(.55, HH, 0.5, C.wall), -HW/2+2.2, HH/2, HD/2, house);
+add(box(.55, HH, 0.5, C.wall),  HW/2-2.2, HH/2, HD/2, house);
+add(box(1.5, 1.1, 0.5, C.wall), -HW/2+2.2, .55, HD/2, house);
+add(box(1.5, 1.1, 0.5, C.wall),  HW/2-2.2, .55, HD/2, house);
+add(box(1.5, .55, 0.5, C.wall), -HW/2+2.2, HH-.28, HD/2, house);
+add(box(1.5, .55, 0.5, C.wall),  HW/2-2.2, HH-.28, HD/2, house);
 
-// Table
-var tableMat=new THREE.MeshStandardMaterial({color:0x6a4520,roughness:.9});
-var tableTop=addBox(1.4,0.08,0.8,tableMat,group); tableTop.position.set(-0.8,0.9,0);
-[[-1.3,0.45,-0.25],[-0.3,0.45,-0.25],[-1.3,0.45,0.25],[-0.3,0.45,0.25]].forEach(function(pos){
-  var leg=addBox(0.1,0.9,0.1,tableMat,group); leg.position.set(pos[0],pos[1],pos[2]);
-});
+// Floor
+add(box(HW-.5, .2, HD-.5, mat(C.dirt)), 0, .1, 0, house);
 
-// Chimney
-var chimMat=mStone;
-var chim=addBox(1.0,3.0,0.9,chimMat,group); chim.position.set(1.2,HH+0.9,-HD/2+0.5);
-var chimCap=addBox(1.3,0.15,1.1,chimMat,group); chimCap.position.set(1.2,HH+2.42,-HD/2+0.5);
+// ── Door (bright, chunky) ──────────────────────────────────────────────
+var doorGroup = new THREE.Group();
+// Frame
+add(box(.25,2.7,.55,C.winFrame), -.68, 1.35, HD/2, house);
+add(box(.25,2.7,.55,C.winFrame),  .68, 1.35, HD/2, house);
+add(box(1.61,.3,.55,C.winFrame),   0, 2.85, HD/2, house);
+// Door panel (bright orange-brown, slightly open)
+var doorPanel = add(box(1.2, 2.55, .15, C.door), -.68-.6+.04, 1.27, HD/2-.05, house);
+doorPanel.rotation.y = Math.PI*.35;
+// Handle
+var handle = add(sphere(.12, 0xffdd00), .58, 1.3, HD/2+.12, house);
 
-scene.add(group);
+// ── Windows (big + bright) ─────────────────────────────────────────────
+function addWindow(wx, wy, wz, hor) {
+  var wMat = mat(C.window, { transparent:true, opacity:.75, roughness:.05, metalness:.1, emissive:0xfff4c0, emissiveIntensity:.4 });
+  var glass = new THREE.Mesh(new THREE.BoxGeometry(hor?0.1:1.2, 1.3, hor?1.2:0.1), wMat);
+  glass.position.set(wx, wy, wz);
+  glass.castShadow = false;
+  house.add(glass);
+  // Thick chunky frame
+  var fw = hor ? 1.4 : 0.15, fh = hor ? 0.15 : 1.5, fd = hor ? 0.15 : 1.4;
+  [wy+.75,wy-.75].forEach(function(fy){
+    add(box(hor?1.4:.15, .18, hor?.18:1.4, C.winFrame), wx, fy, wz, house);
+  });
+  [wx-.7, wx+.7].forEach(function(fx){
+    add(box(.18, 1.5, hor?1.4:.18, C.winFrame), fx, wy, wz, house);
+  });
+  // Cross divider
+  add(box(hor?.08:1.2,.1,hor?1.2:.08,C.winFrame), wx, wy, wz, house);
+  add(box(hor?1.2:.1,.08,hor?.1:1.2,C.winFrame), wx, wy, wz, house);
+}
+addWindow(-HW/2+2.2, 1.8, HD/2+.01, false);
+addWindow( HW/2-2.2, 1.8, HD/2+.01, false);
+addWindow(-HW/2+.01, 1.8, 0, true);
+addWindow( HW/2-.01, 1.8, 0, true);
 
-// ─── Roof ────────────────────────────────────────────────────────────────
+// ── Roof (big red pyramid-ish, chunky) ────────────────────────────────
+var roofH = 2.8;
 var roofGroup = new THREE.Group();
 roofGroup.position.set(0, HH, 0);
+
+// Two thick slanted roof panels front+back
+var slopeFB = Math.atan2(roofH, HD/2);
+var lenFB   = Math.sqrt(roofH*roofH + (HD/2)*(HD/2)) + .3;
+var slopeLR = Math.atan2(roofH, HW/2);
+var lenLR   = Math.sqrt(roofH*roofH + (HW/2)*(HW/2)) + .3;
+
+var rp1=add(box(HW+1.2,.4,lenFB,C.roof),  0,0, HD/2*.38+.05, roofGroup); rp1.rotation.x=-slopeFB;
+var rp2=add(box(HW+1.2,.4,lenFB,C.roof),  0,0,-HD/2*.38-.05, roofGroup); rp2.rotation.x= slopeFB;
+var rp3=add(box(lenLR,.4,HD+1.2,C.roof2),-HW/2*.38-.05,0,0, roofGroup); rp3.rotation.z= slopeLR;
+var rp4=add(box(lenLR,.4,HD+1.2,C.roof2), HW/2*.38+.05,0,0, roofGroup); rp4.rotation.z=-slopeLR;
+
+// Ridge cap
+add(box(HW+1.4,.55,.55,C.roof2), 0, roofH+.22, 0, roofGroup);
+// Eave blocks
+add(box(HW+1.5,.45,.45,C.roof2), 0, -.1, HD/2+.22, roofGroup);
+add(box(HW+1.5,.45,.45,C.roof2), 0, -.1,-HD/2-.22, roofGroup);
+
+// Gable end fills (triangular fill using tall thin boxes)
+for(var gi=0;gi<6;gi++){
+  var gf=gi/5, gy=gf*roofH, gw=(1-gf)*(HW+1.2);
+  var gs=add(box(gw,.38,.38,C.wall2), 0,gy,HD/2+.25, roofGroup);
+  var gs2=gs.clone(); gs2.position.z=-HD/2-.25; roofGroup.add(gs2);
+}
+
 scene.add(roofGroup);
+scene.add(house);
 
-var roofH = 2.2;
-var slope  = Math.atan2(roofH, HD/2);
-var panelLenFB = Math.sqrt(roofH*roofH + (HD/2)*(HD/2)) + 0.3;
-var slopeS = Math.atan2(roofH, HW/2);
-var panelLenLR = Math.sqrt(roofH*roofH + (HW/2)*(HW/2)) + 0.3;
+// ── Chimney (big bright orange) ────────────────────────────────────────
+var chim = new THREE.Group();
+add(box(1.2,3.5,1.2,C.chimney), 0,0,0, chim);
+add(box(1.6,.4,1.6,C.chimney), 0,1.8,0, chim);
+chim.position.set(1.5, HH+.5, -HD/2+.8);
+scene.add(chim);
 
-function addRoofPanel(w, d, px, pz, ry, rx) {
-  var g = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), mThatch);
-  g.castShadow = true; g.position.set(px, 0, pz);
-  g.rotation.set(rx, ry, 0); roofGroup.add(g);
+// ─── Second smaller house (neighbour) ────────────────────────────────────
+var h2 = new THREE.Group();
+var H2W=3.8, H2H=3, H2D=3.8;
+add(box(H2W,H2H,H2D,0xe0c8ff), 0,H2H/2,0, h2); // purple walls
+// Roof
+var r2g = new THREE.Group();
+r2g.position.set(0,H2H,0);
+var sl2=Math.atan2(2,H2D/2), l2=Math.sqrt(4+H2D*H2D/4)+.2;
+var sl2x=Math.atan2(2,H2W/2), l2x=Math.sqrt(4+H2W*H2W/4)+.2;
+add(box(H2W+.8,.35,l2,0xff9900),0,0,H2D/2*.38,r2g).rotation.x=-sl2;
+add(box(H2W+.8,.35,l2,0xff9900),0,0,-H2D/2*.38,r2g).rotation.x=sl2;
+add(box(l2x,.35,H2D+.8,0xe06600),0,0,0,r2g).position.x=-H2W/2*.38; r2g.children[r2g.children.length-1].rotation.z=sl2x;
+add(box(l2x,.35,H2D+.8,0xe06600),0,0,0,r2g).position.x=H2W/2*.38;  r2g.children[r2g.children.length-1].rotation.z=-sl2x;
+add(box(H2W+.9,.45,.35,0xe06600),0,-.05,H2D/2+.15,r2g);
+add(box(H2W+.9,.45,.35,0xe06600),0,-.05,-H2D/2-.15,r2g);
+add(box(H2W+.9,.45,.35,0xff6600),0,1.95+.15,0,r2g);
+h2.add(r2g);
+// Door
+add(box(.9,1.8,.2,0x60a020),0,.9,H2D/2+.05, h2);
+// Window
+var wMat2=mat(C.window,{transparent:true,opacity:.8,roughness:.05,emissive:0xfff4c0,emissiveIntensity:.35});
+var win2=new THREE.Mesh(new THREE.BoxGeometry(.8,1,.1),wMat2);
+win2.position.set(-1.2,1.6,H2D/2+.06); h2.add(win2);
+h2.position.set(-9.5, 0, -3);
+scene.add(h2);
+
+// ─── Tower ───────────────────────────────────────────────────────────────
+var tower = new THREE.Group();
+add(box(3,8,3,0xb8c8d8),0,4,0,tower);
+// Battlements
+for(var bi=0;bi<4;bi++){
+  var ba=bi*Math.PI/2;
+  var bx=Math.sin(ba)*1.5, bz=Math.cos(ba)*1.5;
+  add(box(.7,.9,.7,0xa0b0c0),bx,8.45,bz,tower);
 }
-addRoofPanel(HW+1.0, panelLenFB, 0,  HD/2*0.4+0.1,  0, -slope);
-addRoofPanel(HW+1.0, panelLenFB, 0, -HD/2*0.4-0.1,  0,  slope);
-addRoofPanel(HD+0.6, panelLenLR, -HW/2*0.4-0.1, 0, -Math.PI/2, -slopeS);
-addRoofPanel(HD+0.6, panelLenLR,  HW/2*0.4+0.1, 0,  Math.PI/2, -slopeS);
+// Cone roof
+var towerCone=new THREE.Mesh(new THREE.ConeGeometry(1.8,2.8,4),mat(0x8060c0));
+towerCone.rotation.y=Math.PI/4; add(towerCone,0,9.4,0,tower);
+// Window
+var tWin=new THREE.Mesh(new THREE.BoxGeometry(.5,.8,.15),wMat2);
+tWin.position.set(0,5,1.55); tower.add(tWin);
+tower.position.set(10, 0, -8);
+scene.add(tower);
 
-var ridge=new THREE.Mesh(new THREE.BoxGeometry(HW+1.2,0.2,0.2),mWood);
-ridge.position.set(0,roofH+0.07,0); ridge.castShadow=true; roofGroup.add(ridge);
-
-[HD/2+0.18,-HD/2-0.18].forEach(function(ez){
-  var e=new THREE.Mesh(new THREE.BoxGeometry(HW+1.2,0.16,0.16),mWood);
-  e.position.set(0,0,ez); roofGroup.add(e);
-});
-
-// ─── Trees ───────────────────────────────────────────────────────────────
-function addTree(tx, tz, h) {
-  h = h || 4.5;
-  var trunkMat=new THREE.MeshStandardMaterial({color:0x5a3a18,roughness:1});
-  var leafMat =new THREE.MeshStandardMaterial({color:0x1e5218,roughness:1});
-  var trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.30,h*.35,8),trunkMat);
-  trunk.position.set(tx,h*.175,tz); trunk.castShadow=true; scene.add(trunk);
-  [0,.28,.52].forEach(function(off,i){
-    var cone=new THREE.Mesh(new THREE.ConeGeometry(h*.28-i*h*.06,h*.35,10),leafMat);
-    cone.position.set(tx,h*.35+off*h*.32,tz); cone.castShadow=true; scene.add(cone);
-  });
+// ─── Blocky trees (sphere + box trunk) ───────────────────────────────────
+var bobTrees = [];
+function addTree(tx, tz, s, col1, col2) {
+  s = s||1;
+  var g = new THREE.Group();
+  var trunk = add(box(s*.7,s*2,s*.7,C.trunk), 0,s,0, g);
+  // Big round canopy (2-3 overlapping spheres for blobby look)
+  var c1 = add(sphere(s*1.5,col1), 0,s*2.8,0, g);
+  var c2 = add(sphere(s*1.1,col2), s*.7,s*3.1,s*.3, g);
+  var c3 = add(sphere(s*1.0,col1), -s*.5,s*3.3,-s*.4, g);
+  g.position.set(tx,0,tz);
+  scene.add(g);
+  bobTrees.push({ g:g, phase: Math.random()*Math.PI*2 });
+  return g;
 }
-addTree(-7,3); addTree(-8,-2); addTree(-7,-6);
-addTree(7.5,2); addTree(8.5,-3); addTree(7,7);
-addTree(-4,10); addTree(4,11); addTree(0,12);
+addTree(-5,  6, 1.0, C.tree1, C.tree2);
+addTree(-7,  2, 1.2, C.tree3, C.tree1);
+addTree(-8, -2, 0.9, C.tree2, C.tree3);
+addTree( 6,  4, 1.0, C.tree1, C.tree3);
+addTree( 8,  0, 1.1, C.tree2, C.tree1);
+addTree( 7, -5, 0.8, C.tree3, C.tree2);
+addTree(-4, -8, 1.0, C.tree1, C.tree2);
+addTree( 3, -9, 0.9, C.tree2, C.tree3);
+addTree(-15, 3, 1.3, C.tree1, C.tree3);
+addTree( 15,-2, 1.1, C.tree3, C.tree2);
 
-// ─── Well ────────────────────────────────────────────────────────────────
-var wellMat=new THREE.MeshStandardMaterial({color:0x7a6848,roughness:1});
-var wellBase=new THREE.Mesh(new THREE.CylinderGeometry(.7,.8,.7,12),wellMat);
-wellBase.position.set(5.5,.35,3); wellBase.castShadow=true; scene.add(wellBase);
-var wellRim=new THREE.Mesh(new THREE.TorusGeometry(.72,.08,8,18),wellMat);
-wellRim.rotation.x=Math.PI/2; wellRim.position.set(5.5,.72,3); scene.add(wellRim);
-[[5.1,.85,2.6],[5.9,.85,2.6],[5.1,.85,3.4],[5.9,.85,3.4]].forEach(function(p){
-  var post=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.9,6),mWood);
-  post.position.set(p[0],p[1],p[2]); scene.add(post);
-});
-var wellRoof=new THREE.Mesh(new THREE.ConeGeometry(.85,.5,4),mThatch);
-wellRoof.position.set(5.5,1.7,3); wellRoof.rotation.y=Math.PI/4; wellRoof.castShadow=true; scene.add(wellRoof);
-
-// ─── Fence ───────────────────────────────────────────────────────────────
-function fencePost(px,pz){
-  var p=new THREE.Mesh(new THREE.BoxGeometry(.12,.9,.12),mWood);
-  p.position.set(px,.45,pz); scene.add(p);
+// ─── Flowers (tiny bright spheres) ────────────────────────────────────────
+var flowerColors=[C.flower1,C.flower2,C.flower3,0xaa44ff,0x44ffaa];
+for(var fi=0;fi<35;fi++){
+  var fa=Math.random()*Math.PI*2, fr=4+Math.random()*14;
+  if(fr>5.5&&fr<7&&Math.abs(Math.sin(fa))<.6) continue; // skip on path
+  var fc=flowerColors[fi%flowerColors.length];
+  var fl=add(sphere(.15,fc),Math.cos(fa)*fr,.22,Math.sin(fa)*fr);
+  add(cyl(.04,.04,.35,0x50a020,5),Math.cos(fa)*fr,.1,Math.sin(fa)*fr);
 }
+
+// ─── Fence (bright, chunky) ───────────────────────────────────────────────
+function fencePost(px,pz){ add(box(.25,1.4,.25,C.fence), px,.7,pz); }
 function fenceRail(x1,z1,x2,z2){
-  var cx=(x1+x2)/2, cz=(z1+z2)/2;
-  var len=Math.sqrt((x2-x1)*(x2-x1)+(z2-z1)*(z2-z1));
-  var r1=new THREE.Mesh(new THREE.BoxGeometry(len,.08,.08),mWood);
-  r1.position.set(cx,.65,cz); r1.rotation.y=Math.atan2(x2-x1,z2-z1); scene.add(r1);
-  var r2=r1.clone(); r2.position.y=.35; scene.add(r2);
+  var cx=(x1+x2)/2,cz=(z1+z2)/2;
+  var len=Math.sqrt((x2-x1)**2+(z2-z1)**2);
+  var r=box(len,.18,.18,C.fence);
+  r.position.set(cx,.85,cz);
+  r.rotation.y=Math.atan2(x2-x1,z2-z1);
+  scene.add(r);
+  var r2=r.clone(); r2.position.y=.45; scene.add(r2);
 }
-for(var i=-3;i<=3;i++){fencePost(-9,i*2);fencePost(9,i*2);}
-for(var j=-2;j<=3;j++){fencePost(j*2,-9);fencePost(j*2,9);}
-fenceRail(-9,-6,-9,6); fenceRail(9,-6,9,6);
-fenceRail(-6,-9,6,-9); fenceRail(-6,9,6,9);
+var FSIZE=13;
+for(var fpi=-FSIZE;fpi<=FSIZE;fpi+=2.5){fencePost(fpi,-FSIZE);fencePost(fpi,FSIZE);fencePost(-FSIZE,fpi);fencePost(FSIZE,fpi);}
+fenceRail(-FSIZE,-FSIZE, FSIZE,-FSIZE);
+fenceRail(-FSIZE, FSIZE, FSIZE, FSIZE);
+fenceRail(-FSIZE,-FSIZE,-FSIZE, FSIZE);
+fenceRail( FSIZE,-FSIZE, FSIZE, FSIZE);
 
-// ─── Lighting ────────────────────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0x1a2a4a, 1.2));
-
-var moon=new THREE.DirectionalLight(0x7090d0, 1.4);
-moon.position.set(12,20,8);
-moon.castShadow=true;
-moon.shadow.mapSize.set(2048,2048);
-moon.shadow.camera.left=moon.shadow.camera.bottom=-25;
-moon.shadow.camera.right=moon.shadow.camera.top=25;
-moon.shadow.camera.far=80;
-scene.add(moon);
-
-// Window candle glow
-[[-HW/2+2.5,1.8,HD/2],[HW/2-2.5,1.8,HD/2],[-HW/2,1.8,0],[HW/2,1.8,0]].forEach(function(p){
-  var pl=new THREE.PointLight(0xffaa30,1.2,5); pl.position.set(p[0],p[1],p[2]); scene.add(pl);
+// ─── Floating coins (collectibles) ────────────────────────────────────────
+var coins=[];
+[[2,1.8,3],[3.5,2.2,-2],[-2,1.5,4],[-3,2,1],[1,2.5,-3]].forEach(function(p){
+  var c=add(cyl(.22,.22,.1,0xffdd00,12), p[0],p[1],p[2]);
+  c.rotation.x=Math.PI/2;
+  coins.push({ m:c, baseY:p[1], phase:Math.random()*Math.PI*2 });
 });
 
-var firePL=new THREE.PointLight(0xff5500,2.5,4.5);
-firePL.position.set(0,0.8,-HD/2+0.4); scene.add(firePL);
+// ─── Lighting ─────────────────────────────────────────────────────────────
+// Bright, cheerful, no dark shadows
+scene.add(new THREE.AmbientLight(0xffffff, 1.6));
 
-var lanternL=new THREE.PointLight(0xffaa30,1.8,6);
-lanternL.position.set(-0.9,2.4,HD/2+0.5); scene.add(lanternL);
-var lanternR=new THREE.PointLight(0xffaa30,1.8,6);
-lanternR.position.set( 0.9,2.4,HD/2+0.5); scene.add(lanternR);
+var sun = new THREE.DirectionalLight(0xfffbe8, 2.2);
+sun.position.set(15, 30, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=sun.shadow.camera.bottom=-25;
+sun.shadow.camera.right=sun.shadow.camera.top=25;
+sun.shadow.camera.far=80;
+scene.add(sun);
 
-// Stars
-var starVerts=[];
-for(var s=0;s<600;s++){
-  var theta=Math.random()*Math.PI*2, phi=Math.random()*Math.PI*.5;
-  starVerts.push(Math.sin(phi)*Math.cos(theta)*120, Math.cos(phi)*80+20, Math.sin(phi)*Math.sin(theta)*120);
-}
-var stars=new THREE.Points(
-  new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(starVerts,3)),
-  new THREE.PointsMaterial({color:0xffffff,size:.12,sizeAttenuation:true})
-);
-scene.add(stars);
+// Fill light from opposite side (removes harsh shadows)
+var fill = new THREE.DirectionalLight(0xaadcff, 1.0);
+fill.position.set(-10,15,-8);
+scene.add(fill);
 
-var moonMesh=new THREE.Mesh(new THREE.CircleGeometry(3,32),new THREE.MeshBasicMaterial({color:0xfff8e0,side:THREE.DoubleSide}));
-moonMesh.position.set(60,55,-80); scene.add(moonMesh);
+// Window warm glows
+[[-HW/2+2.2,1.8,HD/2],[HW/2-2.2,1.8,HD/2],[-HW/2,1.8,0],[HW/2,1.8,0]].forEach(function(p){
+  var pl=new THREE.PointLight(0xffcc44,1.5,5); pl.position.set(p[0],p[1],p[2]); scene.add(pl);
+});
 
-// ─── Smoke particles ─────────────────────────────────────────────────────
-var SMOKE_COUNT=24;
-var smokePositions=new Float32Array(SMOKE_COUNT*3);
-var smokePhases=[];
-for(var k=0;k<SMOKE_COUNT;k++) smokePhases.push(k/SMOKE_COUNT);
-var smokeMat=new THREE.PointsMaterial({color:0x888880,size:0.55,sizeAttenuation:true,transparent:true,opacity:.38});
-var smokeGeo=new THREE.BufferGeometry();
-smokeGeo.setAttribute('position',new THREE.BufferAttribute(smokePositions,3));
-scene.add(new THREE.Points(smokeGeo,smokeMat));
+// Pond shimmer
+var pondLight=new THREE.PointLight(0x44aaff,1.2,6);
+pondLight.position.set(-10,1,-4); scene.add(pondLight);
 
-var CHIMNEY_X=1.2, CHIMNEY_Z=-HD/2+0.5;
+// ─── Smoke (white puffs above chimney) ────────────────────────────────────
+var SMOKE=20, spos=new Float32Array(SMOKE*3), sphase=[];
+for(var si=0;si<SMOKE;si++) sphase.push(si/SMOKE);
+var sMat=new THREE.PointsMaterial({color:0xffffff,size:1.1,sizeAttenuation:true,transparent:true,opacity:.55});
+var sGeo=new THREE.BufferGeometry();
+sGeo.setAttribute('position',new THREE.BufferAttribute(spos,3));
+scene.add(new THREE.Points(sGeo,sMat));
 
 // ─── Camera movement ─────────────────────────────────────────────────────
-var velocity=new THREE.Vector3();
-var direction=new THREE.Vector3();
-var SPEED=4.5, FRICTION=0.88;
+var vel = new THREE.Vector3();
+var dir = new THREE.Vector3();
+var SPEED=6, FRIC=0.86;
 
 // ─── Animate ─────────────────────────────────────────────────────────────
-var clock=new THREE.Clock();
-var elapsed=0;
+var clock=new THREE.Clock(), t=0;
 
 function animate() {
   requestAnimationFrame(animate);
   var dt=Math.min(clock.getDelta(),.05);
-  elapsed+=dt;
+  t+=dt;
 
+  // Camera
   camera.rotation.order='YXZ';
   camera.rotation.y=yaw;
   camera.rotation.x=pitch;
 
   if (locked) {
-    direction.set(0,0,0);
-    if(keys['KeyW']||keys['ArrowUp'])    direction.z-=1;
-    if(keys['KeyS']||keys['ArrowDown'])  direction.z+=1;
-    if(keys['KeyA']||keys['ArrowLeft'])  direction.x-=1;
-    if(keys['KeyD']||keys['ArrowRight']) direction.x+=1;
-    direction.normalize().applyEuler(new THREE.Euler(0,yaw,0));
-    velocity.x+=direction.x*SPEED*dt;
-    velocity.z+=direction.z*SPEED*dt;
+    dir.set(0,0,0);
+    if(keys['KeyW']||keys['ArrowUp'])    dir.z-=1;
+    if(keys['KeyS']||keys['ArrowDown'])  dir.z+=1;
+    if(keys['KeyA']||keys['ArrowLeft'])  dir.x-=1;
+    if(keys['KeyD']||keys['ArrowRight']) dir.x+=1;
+    dir.normalize().applyEuler(new THREE.Euler(0,yaw,0));
+    vel.x+=dir.x*SPEED*dt;
+    vel.z+=dir.z*SPEED*dt;
   }
-  velocity.multiplyScalar(FRICTION);
-  camera.position.x=Math.max(-8.5,Math.min(8.5,camera.position.x+velocity.x));
-  camera.position.z=Math.max(-8.5,Math.min(8.5,camera.position.z+velocity.z));
-  camera.position.y=1.7;
+  vel.multiplyScalar(FRIC);
+  camera.position.x=Math.max(-12,Math.min(12,camera.position.x+vel.x));
+  camera.position.z=Math.max(-12,Math.min(12,camera.position.z+vel.z));
+  camera.position.y=3.5;
 
-  // Flicker
-  firePL.intensity=2.2+Math.sin(elapsed*7)*0.4+Math.sin(elapsed*13)*0.2;
-  fire.scale.y=0.9+Math.sin(elapsed*9)*0.15;
-  lanternL.intensity=lanternR.intensity=1.6+Math.sin(elapsed*5.3+1)*0.3;
+  // Cloud drift
+  clouds.forEach(function(cl){ cl.g.position.x=(cl.g.position.x+cl.speed*dt)%80-40; });
+
+  // Tree gentle bob
+  bobTrees.forEach(function(bt){ bt.g.rotation.z=Math.sin(t*1.2+bt.phase)*.025; });
+
+  // Coin spin + bob
+  coins.forEach(function(cn){
+    cn.m.rotation.z+=dt*2;
+    cn.m.position.y=cn.baseY+Math.sin(t*2+cn.phase)*.18;
+  });
+
+  // Handle bob on door
+  handle.position.y=1.3+Math.sin(t*1.5)*.04;
 
   // Smoke
-  for(var i=0;i<SMOKE_COUNT;i++){
-    smokePhases[i]=(smokePhases[i]+dt*0.18)%1;
-    var p=smokePhases[i];
-    smokePositions[i*3  ]=CHIMNEY_X+Math.sin(elapsed*0.7+i)*0.18*p*4;
-    smokePositions[i*3+1]=HH+2.5+p*5;
-    smokePositions[i*3+2]=CHIMNEY_Z+Math.cos(elapsed*0.5+i)*0.1*p*3;
+  for(var i=0;i<SMOKE;i++){
+    sphase[i]=(sphase[i]+dt*.14)%1;
+    var p=sphase[i];
+    spos[i*3  ]=1.5+Math.sin(t*.8+i)*.35*p*3;
+    spos[i*3+1]=HH+3.8+p*6;
+    spos[i*3+2]=-HD/2+.8+Math.cos(t*.6+i)*.2*p*2;
   }
-  smokeGeo.attributes.position.needsUpdate=true;
-  smokeMat.opacity=0.28+Math.sin(elapsed)*0.07;
+  sGeo.attributes.position.needsUpdate=true;
+  sMat.opacity=.4+Math.sin(t)*.1;
 
   renderer.render(scene,camera);
 }

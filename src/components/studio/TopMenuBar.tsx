@@ -67,13 +67,13 @@ export function TopMenuBar() {
       id: 'file',
       label: 'File',
       items: [
-        { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => {} },
+        { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => { useStudio.getState().setActiveGameId(null); } },
         { separator: true },
         { id: 'save',    label: 'Save',                   icon: Save,   shortcut: '⌘S', onClick: () => {} },
         { id: 'publish', label: 'Publish to Marketplace', icon: Upload,                 onClick: () => {} },
       ],
     },
-    { kind: 'direct', id: 'marketplace', label: 'Marketplace', onClick: () => {} },
+    { kind: 'direct', id: 'marketplace', label: 'Marketplace', onClick: () => { window.location.href = '/marketplace'; } },
     { kind: 'direct', id: 'classroom',   label: 'Classroom',   onClick: () => {} },
   ];
 

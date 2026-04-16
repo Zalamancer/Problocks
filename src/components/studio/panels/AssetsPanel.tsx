@@ -272,11 +272,6 @@ export function AssetsPanel() {
         )}
       </div>
 
-      {/* Footer stats */}
-      <div className="shrink-0 px-3 py-2 border-t border-white/[0.04] text-[10px] text-zinc-600 flex items-center gap-3">
-        <span>{filtered.length} models</span>
-        <span>{filtered.reduce((s, a) => s + a.tris, 0).toLocaleString()} total tris</span>
-      </div>
     </div>
   );
 }

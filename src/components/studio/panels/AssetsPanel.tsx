@@ -44,37 +44,22 @@ function trisColor(tris: number): string {
 }
 
 function AssetExpandedStats({ asset }: { asset: AssetInfo }) {
+  const rows: Array<{ label: string; value: string; valueClass?: string }> = [
+    { label: 'Tris', value: asset.tris.toLocaleString(), valueClass: `font-mono ${trisColor(asset.tris)}` },
+    { label: 'Verts', value: asset.vertices.toLocaleString(), valueClass: 'font-mono text-zinc-300' },
+    { label: 'Size', value: `${asset.binKB} KB`, valueClass: 'font-mono text-zinc-300' },
+    { label: 'Mats', value: String(asset.materials), valueClass: 'font-mono text-zinc-300' },
+    { label: 'Tex', value: String(asset.textures), valueClass: 'font-mono text-zinc-300' },
+    { label: 'Cat', value: asset.cat, valueClass: 'text-zinc-300' },
+  ];
   return (
-    <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 text-[10px] w-full text-left">
-      <div>
-        <span className="text-zinc-600">Tris</span>
-        <span className={`ml-1 font-mono ${trisColor(asset.tris)}`}>{asset.tris.toLocaleString()}</span>
-      </div>
-      <div>
-        <span className="text-zinc-600">Verts</span>
-        <span className="ml-1 text-zinc-400 font-mono">{asset.vertices.toLocaleString()}</span>
-      </div>
-      <div>
-        <span className="text-zinc-600">Size</span>
-        <span className="ml-1 text-zinc-400 font-mono">{asset.binKB}KB</span>
-      </div>
-      <div>
-        <span className="text-zinc-600">Mats</span>
-        <span className="ml-1 text-zinc-400 font-mono">{asset.materials}</span>
-      </div>
-      <div>
-        <span className="text-zinc-600">Tex</span>
-        <span className="ml-1 text-zinc-400 font-mono">{asset.textures}</span>
-      </div>
-      <div>
-        <span className="text-zinc-600">Cat</span>
-        <span className="ml-1 text-zinc-400">{asset.cat}</span>
-      </div>
-      <div className="col-span-3 mt-1">
-        <code className="text-[9px] text-zinc-600 select-all">
-          game.loader.medieval(&apos;{asset.name}&apos;)
-        </code>
-      </div>
+    <div className="w-full flex flex-col gap-1 text-[11px] text-left">
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-center justify-between gap-2">
+          <span className="text-zinc-500">{row.label}</span>
+          <span className={row.valueClass}>{row.value}</span>
+        </div>
+      ))}
     </div>
   );
 }

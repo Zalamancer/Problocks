@@ -1,9 +1,10 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sparkles, ArrowRight, ArrowDown, Terminal, Gamepad2, Box } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { StudioTerminal } from './Terminal';
-import { GamePreview } from './GamePreview';
+import { GamePreview, type GamePreviewHandle, type GameObjectInfo } from './GamePreview';
+import { GameToolbar } from './GameToolbar';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
 import { TimelineBar } from './views/TimelineBar';
@@ -18,10 +19,12 @@ import { useProjectBoard } from '@/store/project-board-store';
 import { getTemplate } from '@/lib/templates';
 import { getGameHtml } from '@/lib/game-engine';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
+import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
 import { resolveEffectiveTask } from '@/lib/templates/types';
 import type { TemplateId } from '@/lib/templates/types';
+import { useSceneStore, type ScenePart } from '@/store/scene-store';
 
 type ViewMode = 'canvas' | 'kanban' | '3d';
 
@@ -57,6 +60,10 @@ export function StudioLayout() {
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [terminalMaximized, setTerminalMaximized] = useState(false);
   const [gameHtml, setGameHtml] = useState<string | null>(null);
+  const previewRef = useRef<GamePreviewHandle | null>(null);
+
+  // Scene store
+  const { selectedPart, setSelectedPart, updateSelectedPart, setSceneObjects } = useSceneStore();
 
   // Keyboard shortcuts
   useHotkeys({
@@ -121,7 +128,56 @@ export function StudioLayout() {
     }
   }
 
-  // When activeGameId changes (e.g. user clicks a game in AssetsPanel), load it into preview
+  // Game message handlers
+  const handleObjectSelected = useCallback((info: GameObjectInfo & Record<string, unknown>) => {
+    setSelectedPart(info as unknown as ScenePart);
+  }, [setSelectedPart]);
+
+  const handleObjectDeselected = useCallback(() => {
+    setSelectedPart(null);
+  }, [setSelectedPart]);
+
+  const handleObjectTransformed = useCallback((info: Omit<GameObjectInfo, 'name' | 'index'> & Record<string, unknown>) => {
+    updateSelectedPart(info as unknown as Partial<ScenePart>);
+  }, [updateSelectedPart]);
+
+  const handleSceneModels = useCallback((models: GameObjectInfo[]) => {
+    setSceneObjects(models as unknown as ScenePart[]);
+  }, [setSceneObjects]);
+
+  // Part property update: update store + send to game live
+  const handlePartUpdate = useCallback((changes: Partial<ScenePart>) => {
+    updateSelectedPart(changes);
+    if (selectedPart) {
+      previewRef.current?.sendToGame({ type: 'updatePart', id: selectedPart.id, ...changes });
+    }
+  }, [selectedPart, updateSelectedPart]);
+
+  // Scene hierarchy part select
+  const handleSceneSelect = useCallback((id: string) => {
+    previewRef.current?.sendToGame({ type: 'selectModel', id });
+  }, []);
+
+  // Part delete
+  const handlePartDelete = useCallback(() => {
+    if (!selectedPart) return;
+    previewRef.current?.sendToGame({ type: 'removePart', id: selectedPart.id });
+    setSelectedPart(null);
+  }, [selectedPart, setSelectedPart]);
+
+  // On first load, if no active game, load the game engine as default
+  useEffect(() => {
+    if (!activeGameId && games.length === 0) {
+      fetch('/game-engine.html')
+        .then(r => r.text())
+        .then(html => {
+          addGame({ name: 'Blocky Village', prompt: 'roblox blocky village', html });
+        })
+        .catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When activeGameId changes, load game into preview or clear it
   useEffect(() => {
     if (activeGameId) {
       const active = games.find((g) => g.id === activeGameId);
@@ -132,6 +188,10 @@ export function StudioLayout() {
           setGameHtml(active.html);
         }
       }
+    } else {
+      // New game — clear preview and file viewer
+      setGameHtml(null);
+      setOpenFileName(null);
     }
   }, [activeGameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -148,7 +208,7 @@ export function StudioLayout() {
 
       <div className="flex-1 relative min-h-0">
         <div className="h-full flex overflow-hidden gap-1.5">
-          <LeftPanel />
+          <LeftPanel onSceneSelect={handleSceneSelect} />
 
           {/* Center — relative container so the task panel can overlay */}
           <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
@@ -267,7 +327,18 @@ export function StudioLayout() {
                   />
                 );
               })() : gameHtml && !terminalMaximized ? (
-                <GamePreview html={gameHtml} onClose={() => setGameHtml(null)} />
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <GameToolbar previewRef={previewRef} />
+                  <GamePreview
+                    html={gameHtml}
+                    onClose={() => { setGameHtml(null); setSelectedPart(null); }}
+                    previewRef={previewRef}
+                    onObjectSelected={handleObjectSelected as (info: GameObjectInfo) => void}
+                    onObjectDeselected={handleObjectDeselected}
+                    onObjectTransformed={handleObjectTransformed as (info: Omit<GameObjectInfo, 'name' | 'index'>) => void}
+                    onSceneModels={handleSceneModels as (models: GameObjectInfo[]) => void}
+                  />
+                </div>
               ) : viewMode === '3d' ? (
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <LivePreview />
@@ -344,14 +415,20 @@ export function StudioLayout() {
 
           </div>
 
-          {/* Right panel — task detail, same glass shell as left panel */}
-          {board && template && selectedTaskId && (
+          {/* Right panel — part properties when game active, task detail otherwise */}
+          {gameHtml && selectedPart ? (
+            <PartPropertiesPanel
+              part={selectedPart}
+              onUpdate={handlePartUpdate}
+              onDelete={handlePartDelete}
+            />
+          ) : board && template && selectedTaskId ? (
             <TaskDetailPanel
               templateTaskId={selectedTaskId}
               template={template}
               board={board}
             />
-          )}
+          ) : null}
         </div>
 
         <LeftPanelToggle />

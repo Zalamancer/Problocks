@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, MessageSquare, Settings, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { FolderOpen, MessageSquare, Settings, ChevronLeft, ChevronRight, ChevronDown, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
 import { IconButton } from '@/components/ui';
@@ -8,6 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 import { AssetsPanel }   from './panels/AssetsPanel';
 import { ChatPanel }     from './panels/ChatPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
+import { ScenePanel }    from './panels/ScenePanel';
 
 interface TabGroupDef {
   id: LeftPanelGroup;
@@ -16,13 +17,15 @@ interface TabGroupDef {
 }
 
 const TAB_GROUPS: TabGroupDef[] = [
+  { id: 'scene',    label: 'Scene',    icon: Layers },
   { id: 'assets',   label: 'Assets',   icon: FolderOpen },
   { id: 'chat',     label: 'Chat',     icon: MessageSquare },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-function PanelContent({ group }: { group: LeftPanelGroup }) {
+function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onSceneSelect?: (id: string) => void }) {
   switch (group) {
+    case 'scene':    return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
     case 'assets':   return <AssetsPanel />;
     case 'chat':     return <ChatPanel />;
     case 'settings': return <SettingsPanel />;
@@ -113,7 +116,7 @@ export function LeftPanelToggle() {
   );
 }
 
-export function LeftPanel() {
+export function LeftPanel({ onSceneSelect }: { onSceneSelect?: (id: string) => void } = {}) {
   const { leftPanelCollapsed, leftPanelActiveGroup } = useStudio();
   return (
     <aside className={cn('flex-shrink-0 overflow-visible transition-all duration-300', leftPanelCollapsed ? 'w-0' : 'w-[300px]')}>
@@ -124,7 +127,7 @@ export function LeftPanel() {
         <MainGroupHeader />
         {!leftPanelCollapsed && (
           <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-            <PanelContent group={leftPanelActiveGroup} />
+            <PanelContent group={leftPanelActiveGroup} onSceneSelect={onSceneSelect} />
           </div>
         )}
       </div>

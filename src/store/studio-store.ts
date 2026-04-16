@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type LeftPanelGroup = 'assets' | 'chat' | 'settings';
+export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'settings';
 export type Theme = 'dark' | 'light';
 export type FlowDirection = 'LR' | 'TB';
 

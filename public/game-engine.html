@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Blocky Village</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;width:100vw;height:100vh;background:#5ecfff;font-family:sans-serif}
+canvas{display:block;outline:none}
+#hud{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
+  color:rgba(255,255,255,.55);font-size:11px;font-weight:600;letter-spacing:.07em;
+  pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.5);z-index:5}
+#sel-label{position:fixed;top:10px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.5);color:#fff;font-size:12px;font-weight:700;
+  padding:4px 14px;border-radius:20px;pointer-events:none;display:none;z-index:5;
+  border:1px solid rgba(255,255,255,.15)}
+</style>
+</head>
+<body>
+<div id="hud">WASD · MOVE &nbsp; MOUSE · LOOK &nbsp; ESC · PAUSE &nbsp; | &nbsp; CLICK PART TO SELECT</div>
+<div id="sel-label" id="sel-label"></div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.158.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.158.0/examples/jsm/"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+// ─── Renderer ──────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({antialias:true,canvas:document.createElement('canvas')});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+renderer.domElement.setAttribute('tabindex','0');
+renderer.domElement.focus();
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x5ecfff);
+scene.fog=new THREE.Fog(0x5ecfff,45,110);
+
+const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,200);
+camera.position.set(0,4,14);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// ─── Lighting ──────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff,1.5));
+const sun=new THREE.DirectionalLight(0xfffbe8,2.0);
+sun.position.set(15,30,10);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=sun.shadow.camera.bottom=-30;
+sun.shadow.camera.right=sun.shadow.camera.top=30;
+sun.shadow.camera.far=80;
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0xaadcff,0.8).position.set(-10,15,-8));
+
+// ─── Part system ──────────────────────────────────────────────────────────
+const parts=new Map(); // id → {mesh, meta}
+let selId=null;
+let gizmoMode='select'; // 'select'|'translate'|'rotate'|'scale'
+const selLabel=document.getElementById('sel-label');
+
+const TEXTURE_PRESETS={
+  None:         {roughness:.85,metalness:0},
+  SmoothPlastic:{roughness:.2, metalness:0},
+  Brick:        {roughness:.95,metalness:0},
+  Wood:         {roughness:.8, metalness:0},
+  Metal:        {roughness:.25,metalness:.85},
+  Marble:       {roughness:.15,metalness:.05},
+  Neon:         {roughness:.5, metalness:0,emissive:true},
+  Diamond:      {roughness:0,  metalness:.9,transparent:true,opacity:.7},
+};
+
+function mkId(){return 'p_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);}
+function d2r(d){return d*(Math.PI/180);}
+function r2d(r){return r*(180/Math.PI);}
+
+function mkGeo(type){
+  switch(type){
+    case 'Sphere':   return new THREE.SphereGeometry(.5,14,10);
+    case 'Cylinder': return new THREE.CylinderGeometry(.5,.5,1,14);
+    case 'Wedge':    return mkWedgeGeo();
+    default:         return new THREE.BoxGeometry(1,1,1);
+  }
+}
+
+function mkWedgeGeo(){
+  // Right triangular prism (ramp): bottom rect + back rect + sloped top + 2 triangle sides
+  const v=new Float32Array([
+    // bottom
+    -.5,-.5,-.5,  .5,-.5,-.5,  .5,-.5, .5,
+    -.5,-.5,-.5,  .5,-.5, .5, -.5,-.5, .5,
+    // back (vertical)
+    -.5,-.5,-.5, -.5, .5,-.5,  .5, .5,-.5,
+    -.5,-.5,-.5,  .5, .5,-.5,  .5,-.5,-.5,
+    // slope (top-front)
+    -.5,-.5, .5,  .5,-.5, .5,  .5, .5,-.5,
+    -.5,-.5, .5,  .5, .5,-.5, -.5, .5,-.5,
+    // left side
+    -.5,-.5,-.5, -.5,-.5, .5, -.5, .5,-.5,
+    // right side
+     .5,-.5,-.5,  .5, .5,-.5,  .5,-.5, .5,
+  ]);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(v,3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function mkMat(meta){
+  const preset=TEXTURE_PRESETS[meta.texture||'None']||TEXTURE_PRESETS.None;
+  const m=new THREE.MeshStandardMaterial({
+    color: meta.color||'#cccccc',
+    roughness: meta.roughness??preset.roughness,
+    metalness: meta.metalness??preset.metalness,
+    emissive: (preset.emissive||meta.emissiveIntensity>0) ? (meta.emissiveColor||meta.color||'#000000') : '#000000',
+    emissiveIntensity: meta.emissiveIntensity||0,
+    transparent: preset.transparent||false,
+    opacity: preset.opacity??1,
+  });
+  return m;
+}
+
+function addPart(meta){
+  const id=meta.id||mkId();
+  const geo=mkGeo(meta.partType||'Block');
+  const mat=mkMat(meta);
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.set(meta.position?.x||0, meta.position?.y||0, meta.position?.z||0);
+  mesh.rotation.set(d2r(meta.rotation?.x||0),d2r(meta.rotation?.y||0),d2r(meta.rotation?.z||0));
+  mesh.scale.set(meta.scale?.x||1, meta.scale?.y||1, meta.scale?.z||1);
+  mesh.castShadow=meta.castShadow!==false;
+  mesh.receiveShadow=true;
+  mesh.visible=meta.visible!==false;
+  mesh.name=meta.name||'Part';
+  mesh.userData.id=id;
+  mesh.userData.partType=meta.partType||'Block';
+  scene.add(mesh);
+  const full={id,name:mesh.name,partType:meta.partType||'Block',
+    position:{x:meta.position?.x||0,y:meta.position?.y||0,z:meta.position?.z||0},
+    rotation:{x:meta.rotation?.x||0,y:meta.rotation?.y||0,z:meta.rotation?.z||0},
+    scale:{x:meta.scale?.x||1,y:meta.scale?.y||1,z:meta.scale?.z||1},
+    color:meta.color||'#cccccc',
+    roughness:mat.roughness,metalness:mat.metalness,
+    emissiveColor:meta.emissiveColor||'#000000',
+    emissiveIntensity:meta.emissiveIntensity||0,
+    texture:meta.texture||'None',
+    castShadow:mesh.castShadow,
+    anchored:meta.anchored!==false,
+    visible:mesh.visible,
+  };
+  parts.set(id,{mesh,meta:full});
+  return id;
+}
+
+function removePart(id){
+  const p=parts.get(id); if(!p)return;
+  if(selId===id)deselect();
+  scene.remove(p.mesh);
+  p.mesh.geometry.dispose();
+  p.mesh.material.dispose();
+  parts.delete(id);
+  postSceneModels();
+}
+
+function updatePart(id,changes){
+  const p=parts.get(id); if(!p)return;
+  const {mesh,meta}=p;
+  Object.assign(meta,changes);
+  if(changes.position){const{x,y,z}=changes.position;mesh.position.set(x,y,z);}
+  if(changes.rotation){const{x,y,z}=changes.rotation;mesh.rotation.set(d2r(x),d2r(y),d2r(z));}
+  if(changes.scale){const{x,y,z}=changes.scale;mesh.scale.set(x,y,z);}
+  if(changes.name!==undefined){mesh.name=changes.name;}
+  if(changes.visible!==undefined){mesh.visible=changes.visible;}
+  if(changes.castShadow!==undefined){mesh.castShadow=changes.castShadow;}
+  // Material updates
+  const mat=mesh.material;
+  if(changes.color!==undefined)mat.color.set(changes.color);
+  if(changes.roughness!==undefined)mat.roughness=changes.roughness;
+  if(changes.metalness!==undefined)mat.metalness=changes.metalness;
+  if(changes.emissiveColor!==undefined)mat.emissive.set(changes.emissiveColor);
+  if(changes.emissiveIntensity!==undefined)mat.emissiveIntensity=changes.emissiveIntensity;
+  if(changes.texture){
+    const pr=TEXTURE_PRESETS[changes.texture]||TEXTURE_PRESETS.None;
+    mat.roughness=meta.roughness=pr.roughness;
+    mat.metalness=meta.metalness=pr.metalness;
+    mat.transparent=pr.transparent||false;
+    mat.opacity=pr.opacity??1;
+    if(pr.emissive){mat.emissive.set(changes.color||meta.color||'#ffffff');mat.emissiveIntensity=1.5;}
+    else{mat.emissiveIntensity=0;}
+  }
+  if(changes.partType&&changes.partType!==mesh.userData.partType){
+    mesh.geometry.dispose();
+    mesh.geometry=mkGeo(changes.partType);
+    mesh.userData.partType=changes.partType;
+    meta.partType=changes.partType;
+  }
+  mat.needsUpdate=true;
+}
+
+function getPartState(id){
+  const p=parts.get(id); if(!p)return null;
+  const{mesh,meta}=p;
+  return{
+    id,name:mesh.name,partType:meta.partType,
+    position:{x:+mesh.position.x.toFixed(3),y:+mesh.position.y.toFixed(3),z:+mesh.position.z.toFixed(3)},
+    rotation:{x:+r2d(mesh.rotation.x).toFixed(2),y:+r2d(mesh.rotation.y).toFixed(2),z:+r2d(mesh.rotation.z).toFixed(2)},
+    scale:{x:+mesh.scale.x.toFixed(3),y:+mesh.scale.y.toFixed(3),z:+mesh.scale.z.toFixed(3)},
+    color:meta.color,roughness:meta.roughness,metalness:meta.metalness,
+    emissiveColor:meta.emissiveColor,emissiveIntensity:meta.emissiveIntensity,
+    texture:meta.texture,castShadow:meta.castShadow,
+    anchored:meta.anchored,visible:meta.visible,
+  };
+}
+
+function postSceneModels(){
+  const models=[...parts.values()].map(p=>getPartState(p.meta.id));
+  window.parent.postMessage({type:'sceneModels',models},'*');
+}
+
+// ─── Selection + highlight ─────────────────────────────────────────────────
+const outlineMat=new THREE.MeshBasicMaterial({color:0x00eeff,side:THREE.BackSide,transparent:true,opacity:.6});
+let outlineMesh=null;
+
+function showOutline(mesh){
+  clearOutline();
+  outlineMesh=new THREE.Mesh(mesh.geometry,outlineMat);
+  outlineMesh.scale.set(1.06,1.06,1.06);
+  mesh.add(outlineMesh);
+}
+function clearOutline(){
+  if(outlineMesh){outlineMesh.parent?.remove(outlineMesh);outlineMesh=null;}
+}
+
+function selectPart(id){
+  const p=parts.get(id);if(!p)return;
+  if(selId===id)return;
+  clearOutline();
+  selId=id;
+  showOutline(p.mesh);
+  if(gizmoMode!=='select'){
+    tc.attach(p.mesh);
+  }
+  selLabel.style.display='block';
+  selLabel.textContent=p.mesh.name;
+  window.parent.postMessage({type:'objectSelected',...getPartState(id)},'*');
+}
+
+function deselect(){
+  clearOutline();
+  selId=null;
+  tc.detach();
+  selLabel.style.display='none';
+  window.parent.postMessage({type:'objectDeselected'},'*');
+}
+
+function setGizmoMode(mode){
+  gizmoMode=mode;
+  if(mode==='select'){
+    tc.detach();
+  } else {
+    tc.setMode(mode==='move'?'translate':mode);
+    if(selId){const p=parts.get(selId);if(p)tc.attach(p.mesh);}
+  }
+}
+
+// ─── TransformControls ─────────────────────────────────────────────────────
+const tc=new TransformControls(camera,renderer.domElement);
+tc.setSize(.85);
+scene.add(tc);
+
+tc.addEventListener('dragging-changed',e=>{
+  orbitActive=!e.value;
+  if(!e.value&&selId){
+    const state=getPartState(selId);
+    // Sync meta position/rotation/scale from mesh
+    const p=parts.get(selId);
+    if(p){
+      p.meta.position={x:+p.mesh.position.x.toFixed(3),y:+p.mesh.position.y.toFixed(3),z:+p.mesh.position.z.toFixed(3)};
+      p.meta.rotation={x:+r2d(p.mesh.rotation.x).toFixed(2),y:+r2d(p.mesh.rotation.y).toFixed(2),z:+r2d(p.mesh.rotation.z).toFixed(2)};
+      p.meta.scale={x:+p.mesh.scale.x.toFixed(3),y:+p.mesh.scale.y.toFixed(3),z:+p.mesh.scale.z.toFixed(3)};
+    }
+    window.parent.postMessage({type:'objectTransformed',...getPartState(selId)},'*');
+  }
+});
+
+// ─── Click to select ───────────────────────────────────────────────────────
+const raycaster=new THREE.Raycaster();
+let pDown=null;
+renderer.domElement.addEventListener('pointerdown',e=>{if(e.button===0)pDown={x:e.clientX,y:e.clientY};});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!pDown||e.button!==0)return;
+  const dx=e.clientX-pDown.x,dy=e.clientY-pDown.y;
+  pDown=null;
+  if(Math.hypot(dx,dy)>6||tc.dragging)return;
+  const rect=renderer.domElement.getBoundingClientRect();
+  const mouse=new THREE.Vector2(
+    ((e.clientX-rect.left)/rect.width)*2-1,
+    -((e.clientY-rect.top)/rect.height)*2+1
+  );
+  raycaster.setFromCamera(mouse,camera);
+  const meshes=[...parts.values()].map(p=>p.mesh).filter(m=>m.visible);
+  const hits=raycaster.intersectObjects(meshes,false);
+  if(hits.length>0){
+    const hit=hits.find(h=>!h.object.isMesh||h.object!==outlineMesh);
+    if(hit)selectPart(hit.object.userData.id);
+  } else {
+    deselect();
+  }
+});
+
+// ─── WASD orbit ────────────────────────────────────────────────────────────
+const keys={};
+let orbitActive=true;
+let locked=false,yaw=0,pitch=0;
+const vel=new THREE.Vector3();
+document.addEventListener('keydown',e=>{keys[e.code]=true;});
+document.addEventListener('keyup',e=>{keys[e.code]=false;});
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;});
+document.addEventListener('mousemove',e=>{
+  if(!locked||!orbitActive)return;
+  yaw-=e.movementX*.0022;pitch=Math.max(-1.1,Math.min(1.1,pitch-e.movementY*.0022));
+});
+renderer.domElement.addEventListener('dblclick',()=>renderer.domElement.requestPointerLock());
+document.getElementById('hud').addEventListener('click',()=>renderer.domElement.requestPointerLock());
+
+// ─── postMessage from studio ────────────────────────────────────────────────
+window.addEventListener('message',e=>{
+  const msg=e.data;if(!msg?.type)return;
+  switch(msg.type){
+    case 'setGizmoMode': setGizmoMode(msg.mode); break;
+    case 'selectModel':
+      if(msg.id) selectPart(msg.id);
+      else if(msg.name){const p=[...parts.values()].find(p=>p.mesh.name===msg.name);if(p)selectPart(p.meta.id);}
+      break;
+    case 'selectModelByIndex':{const arr=[...parts.keys()];if(arr[msg.index])selectPart(arr[msg.index]);break;}
+    case 'deselectAll': deselect(); break;
+    case 'addPart':{
+      const id=addPart({
+        partType:msg.partType||'Block',
+        color:msg.color||'#ff4444',
+        position:{x:msg.x||0,y:msg.y||1,z:msg.z||0},
+        scale:{x:1,y:1,z:1},rotation:{x:0,y:0,z:0},
+        name:msg.name||(msg.partType||'Block'),
+      });
+      selectPart(id);
+      postSceneModels();
+      break;
+    }
+    case 'removePart': removePart(msg.id||selId); break;
+    case 'updatePart': if(msg.id)updatePart(msg.id,msg); break;
+    case 'duplicatePart':{
+      if(!selId)break;
+      const p=parts.get(selId);if(!p)break;
+      const orig=getPartState(selId);
+      const id=addPart({...orig,id:undefined,position:{x:orig.position.x+1.5,y:orig.position.y,z:orig.position.z}});
+      selectPart(id);
+      postSceneModels();
+      break;
+    }
+    case 'getSceneModels': postSceneModels(); break;
+  }
+});
+
+// ─── Default scene ─────────────────────────────────────────────────────────
+const S=[
+  // Ground & path
+  {name:'Ground',       partType:'Block',color:'#4ecf4e',roughness:.9,metalness:0,texture:'None',position:{x:0,y:-.5,z:0},scale:{x:60,y:1,z:60},rotation:{x:0,y:0,z:0},castShadow:false},
+  {name:'Path',         partType:'Block',color:'#c8a464',roughness:1, metalness:0,texture:'None',position:{x:0,y:.05,z:6},scale:{x:3,y:.12,z:14},rotation:{x:0,y:0,z:0},castShadow:false},
+  // House walls
+  {name:'Wall Front L', partType:'Block',color:'#f5e6c8',roughness:.8,metalness:0,texture:'SmoothPlastic',position:{x:-2.2,y:2,z:2.75},scale:{x:1.4,y:4,z:.5},rotation:{x:0,y:0,z:0}},
+  {name:'Wall Front R', partType:'Block',color:'#f5e6c8',roughness:.8,metalness:0,texture:'SmoothPlastic',position:{x:2.2,y:2,z:2.75},scale:{x:1.4,y:4,z:.5},rotation:{x:0,y:0,z:0}},
+  {name:'Wall Front Top',partType:'Block',color:'#f5e6c8',roughness:.8,metalness:0,texture:'SmoothPlastic',position:{x:0,y:3.6,z:2.75},scale:{x:2.8,y:.8,z:.5},rotation:{x:0,y:0,z:0}},
+  {name:'Wall Back',    partType:'Block',color:'#ead5b5',roughness:.8,metalness:0,texture:'SmoothPlastic',position:{x:0,y:2,z:-2.75},scale:{x:5.5,y:4,z:.5},rotation:{x:0,y:0,z:0}},
+  {name:'Wall Left',    partType:'Block',color:'#ead5b5',roughness:.8,metalness:0,texture:'SmoothPlastic',position:{x:-2.75,y:2,z:0},scale:{x:.5,y:4,z:5.5},rotation:{x:0,y:0,z:0}},
+  {name:'Wall Right',   partType:'Block',color:'#ead5b5',roughness:.8,metalness:0,texture:'SmoothPlastic',position:{x:2.75,y:2,z:0},scale:{x:.5,y:4,z:5.5},rotation:{x:0,y:0,z:0}},
+  // Roof
+  {name:'Roof Front',   partType:'Wedge',color:'#e84040',roughness:.7,metalness:0,texture:'None',position:{x:0,y:4.8,z:2.45},scale:{x:6.2,y:2.8,z:3},rotation:{x:0,y:0,z:0}},
+  {name:'Roof Back',    partType:'Wedge',color:'#e84040',roughness:.7,metalness:0,texture:'None',position:{x:0,y:4.8,z:-2.45},scale:{x:6.2,y:2.8,z:3},rotation:{x:0,y:180,z:0}},
+  {name:'Roof Ridge',   partType:'Block',color:'#c82020',roughness:.7,metalness:0,texture:'None',position:{x:0,y:6.3,z:0},scale:{x:6.4,y:.4,z:.4},rotation:{x:0,y:0,z:0}},
+  // Chimney
+  {name:'Chimney',      partType:'Block',color:'#d46030',roughness:.9,metalness:0,texture:'Brick',position:{x:1.5,y:5.5,z:-2},scale:{x:1.1,y:3.5,z:1.1},rotation:{x:0,y:0,z:0}},
+  {name:'Chimney Cap',  partType:'Block',color:'#b04020',roughness:.9,metalness:0,texture:'Brick',position:{x:1.5,y:7.4,z:-2},scale:{x:1.5,y:.3,z:1.5},rotation:{x:0,y:0,z:0}},
+  // Door
+  {name:'Door',         partType:'Block',color:'#a0600a',roughness:.85,metalness:0,texture:'Wood',position:{x:0,y:1.15,z:3.1},scale:{x:1.2,y:2.3,z:.2},rotation:{x:0,y:30,z:0}},
+  {name:'Door Frame',   partType:'Block',color:'#7a4808',roughness:.85,metalness:0,texture:'Wood',position:{x:0,y:1.5,z:2.96},scale:{x:1.7,y:3.1,z:.3},rotation:{x:0,y:0,z:0}},
+  // Windows
+  {name:'Window Left',  partType:'Block',color:'#80d0ff',roughness:.1,metalness:.1,emissiveColor:'#fffbc0',emissiveIntensity:.6,texture:'None',position:{x:-1.7,y:2.2,z:2.85},scale:{x:1.1,y:1.2,z:.12},rotation:{x:0,y:0,z:0}},
+  {name:'Window Right', partType:'Block',color:'#80d0ff',roughness:.1,metalness:.1,emissiveColor:'#fffbc0',emissiveIntensity:.6,texture:'None',position:{x:1.7,y:2.2,z:2.85},scale:{x:1.1,y:1.2,z:.12},rotation:{x:0,y:0,z:0}},
+  // Trees
+  {name:'Tree Trunk 1', partType:'Cylinder',color:'#a05018',roughness:.9,metalness:0,texture:'Wood',position:{x:-6,y:1.3,z:3},scale:{x:.7,y:2.6,z:.7},rotation:{x:0,y:0,z:0}},
+  {name:'Tree Top 1a',  partType:'Sphere',color:'#3ecf3e',roughness:.9,metalness:0,texture:'None',position:{x:-6,y:4.2,z:3},scale:{x:2.8,y:2.8,z:2.8},rotation:{x:0,y:0,z:0}},
+  {name:'Tree Top 1b',  partType:'Sphere',color:'#50df50',roughness:.9,metalness:0,texture:'None',position:{x:-5.2,y:4.9,z:2.4},scale:{x:1.9,y:1.9,z:1.9},rotation:{x:0,y:0,z:0}},
+  {name:'Tree Trunk 2', partType:'Cylinder',color:'#a05018',roughness:.9,metalness:0,texture:'Wood',position:{x:7,y:1.3,z:2},scale:{x:.7,y:2.6,z:.7},rotation:{x:0,y:0,z:0}},
+  {name:'Tree Top 2a',  partType:'Sphere',color:'#30bf30',roughness:.9,metalness:0,texture:'None',position:{x:7,y:4.2,z:2},scale:{x:2.6,y:2.6,z:2.6},rotation:{x:0,y:0,z:0}},
+  {name:'Tree Top 2b',  partType:'Sphere',color:'#48cf48',roughness:.9,metalness:0,texture:'None',position:{x:7.8,y:4.7,z:1.4},scale:{x:1.7,y:1.7,z:1.7},rotation:{x:0,y:0,z:0}},
+  // Well
+  {name:'Well Base',    partType:'Cylinder',color:'#aaa090',roughness:.9,metalness:0,texture:'Brick',position:{x:5.5,y:.55,z:3},scale:{x:1.4,y:1.1,z:1.4},rotation:{x:0,y:0,z:0}},
+  {name:'Well Post L',  partType:'Block',color:'#d4aa70',roughness:.85,metalness:0,texture:'Wood',position:{x:4.9,y:1.5,z:3},scale:{x:.22,y:1.4,z:.22},rotation:{x:0,y:0,z:0}},
+  {name:'Well Post R',  partType:'Block',color:'#d4aa70',roughness:.85,metalness:0,texture:'Wood',position:{x:6.1,y:1.5,z:3},scale:{x:.22,y:1.4,z:.22},rotation:{x:0,y:0,z:0}},
+  {name:'Well Roof',    partType:'Wedge',color:'#e84040',roughness:.7,metalness:0,texture:'None',position:{x:5.5,y:2.5,z:3},scale:{x:2,y:.9,z:1.4},rotation:{x:0,y:270,z:0}},
+  // Fence
+  {name:'Fence N',      partType:'Block',color:'#d4aa70',roughness:.9,metalness:0,texture:'Wood',position:{x:0,y:.7,z:-10},scale:{x:20,y:.25,z:.25},rotation:{x:0,y:0,z:0}},
+  {name:'Fence S',      partType:'Block',color:'#d4aa70',roughness:.9,metalness:0,texture:'Wood',position:{x:0,y:.7,z:10},scale:{x:20,y:.25,z:.25},rotation:{x:0,y:0,z:0}},
+  {name:'Fence W',      partType:'Block',color:'#d4aa70',roughness:.9,metalness:0,texture:'Wood',position:{x:-10,y:.7,z:0},scale:{x:.25,y:.25,z:20},rotation:{x:0,y:0,z:0}},
+  {name:'Fence E',      partType:'Block',color:'#d4aa70',roughness:.9,metalness:0,texture:'Wood',position:{x:10,y:.7,z:0},scale:{x:.25,y:.25,z:20},rotation:{x:0,y:0,z:0}},
+  // Flowers
+  {name:'Flower 1',     partType:'Sphere',color:'#ff4488',roughness:.8,metalness:0,texture:'None',position:{x:-3,y:.5,z:4},scale:{x:.4,y:.4,z:.4},rotation:{x:0,y:0,z:0}},
+  {name:'Flower 2',     partType:'Sphere',color:'#ffdd00',roughness:.8,metalness:0,texture:'None',position:{x:3.5,y:.5,z:4.5},scale:{x:.4,y:.4,z:.4},rotation:{x:0,y:0,z:0}},
+  {name:'Flower 3',     partType:'Sphere',color:'#ff8800',roughness:.8,metalness:0,texture:'None',position:{x:-4,y:.5,z:2},scale:{x:.4,y:.4,z:.4},rotation:{x:0,y:0,z:0}},
+  // Coins
+  {name:'Coin 1',       partType:'Cylinder',color:'#ffdd00',roughness:.2,metalness:.8,texture:'Metal',emissiveColor:'#ffdd00',emissiveIntensity:.3,position:{x:2,y:2,z:3},scale:{x:.4,y:.12,z:.4},rotation:{x:90,y:0,z:0}},
+  {name:'Coin 2',       partType:'Cylinder',color:'#ffdd00',roughness:.2,metalness:.8,texture:'Metal',emissiveColor:'#ffdd00',emissiveIntensity:.3,position:{x:-2,y:2.5,z:4},scale:{x:.4,y:.12,z:.4},rotation:{x:90,y:0,z:0}},
+  // Clouds (big flat blocks up high)
+  {name:'Cloud 1',      partType:'Block',color:'#ffffff',roughness:.5,metalness:0,texture:'None',position:{x:-15,y:18,z:-10},scale:{x:10,y:3.5,z:5},rotation:{x:0,y:0,z:0},castShadow:false},
+  {name:'Cloud 2',      partType:'Block',color:'#f5f5ff',roughness:.5,metalness:0,texture:'None',position:{x:12,y:20,z:-15},scale:{x:9,y:3,z:4.5},rotation:{x:0,y:15,z:0},castShadow:false},
+];
+
+S.forEach(def=>addPart({...def,id:undefined}));
+
+// ─── Coin bob ──────────────────────────────────────────────────────────────
+const coinIds=[...parts.values()].filter(p=>p.meta.name.startsWith('Coin')).map(p=>p.meta.id);
+const cloudIds=[...parts.values()].filter(p=>p.meta.name.startsWith('Cloud')).map(p=>p.meta.id);
+
+// ─── Animate ───────────────────────────────────────────────────────────────
+const clock=new THREE.Clock();
+let t=0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  t+=dt;
+
+  // WASD first-person
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw; camera.rotation.x=pitch;
+  if(locked&&orbitActive){
+    const dir=new THREE.Vector3();
+    if(keys['KeyW']||keys['ArrowUp'])    dir.z-=1;
+    if(keys['KeyS']||keys['ArrowDown'])  dir.z+=1;
+    if(keys['KeyA']||keys['ArrowLeft'])  dir.x-=1;
+    if(keys['KeyD']||keys['ArrowRight']) dir.x+=1;
+    dir.normalize().applyEuler(new THREE.Euler(0,yaw,0));
+    vel.x+=dir.x*5*dt; vel.z+=dir.z*5*dt;
+  }
+  vel.multiplyScalar(.87);
+  camera.position.x=Math.max(-11,Math.min(11,camera.position.x+vel.x));
+  camera.position.z=Math.max(-11,Math.min(11,camera.position.z+vel.z));
+  camera.position.y=4;
+
+  // Coin spin + bob
+  coinIds.forEach((id,i)=>{
+    const p=parts.get(id); if(!p||id===selId)return;
+    p.mesh.rotation.y=t*2+i;
+    p.mesh.position.y=p.meta.position.y+Math.sin(t*2+i)*.2;
+  });
+
+  // Cloud drift
+  cloudIds.forEach((id,i)=>{
+    const p=parts.get(id); if(!p||id===selId)return;
+    p.mesh.position.x=p.meta.position.x+Math.sin(t*.12+i*2)*3;
+  });
+
+  renderer.render(scene,camera);
+}
+animate();
+
+// Send initial scene to studio
+setTimeout(()=>postSceneModels(),800);
+</script>
+</body>
+</html>

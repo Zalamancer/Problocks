@@ -63,7 +63,11 @@ const JUMP_BUFFER = 0.15;   // queue a Space press if it lands just before groun
 const STEP_HEIGHT = 0.45;   // auto-step onto obstacles up to this tall
 const CAM_DIST = 6;
 const CAM_SHOULDER = 0;     // 0 = centered; positive = over-the-right-shoulder
-const CAM_LERP = 12;        // cam follow smoothness
+const CAM_FOLLOW_RATE = 14; // exponential smoothing rate for camera position (higher = snappier)
+const LOOK_FOLLOW_RATE = 18; // exponential smoothing rate for look-at point
+const CAM_MIN_DIST = 1.2;   // pull-in floor when occluded so we never end up inside the head
+const CAM_MIN_GROUND = 0.4; // minimum clearance above ground (prevents floor clipping)
+const CAM_COLLIDE_PAD = 0.25; // shrink raycast hit by this so cam doesn't kiss the wall
 const BOB_SPEED = 11;
 const BOB_AMP = 0.08;
 const LOOK_SENS = 0.0022;
@@ -81,7 +85,14 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   const velocity = new THREE.Vector3();
   const keys: Record<string, boolean> = {};
   let yaw = 0;
-  let pitch = -0.25;
+  // Convention: pitch > 0 → camera ABOVE the target (looking down).
+  //             pitch < 0 → camera BELOW the target (looking up).
+  // Camera offset from target in spherical coords:
+  //   offset = (sin yaw * cos pitch, sin pitch, cos yaw * cos pitch) * CAM_DIST
+  // At yaw=0, pitch=0 → offset=(0,0,+dist) i.e. camera directly BEHIND the
+  // character on +Z, looking toward -Z at the target. W sends the character
+  // in (-sin yaw, -cos yaw) ground direction, i.e. away from the camera.
+  let pitch = 0.22;
   let grounded = false;
   let coyoteTimer = 0;   // counts up while airborne; jump OK if < COYOTE_TIME
   let jumpBuffer = 0;    // counts down after Space press; auto-jump on landing
@@ -90,9 +101,15 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   const camDesired = new THREE.Vector3();
   const camSmooth = new THREE.Vector3();
   const lookAtSmooth = new THREE.Vector3();
+  const lookAtTarget = new THREE.Vector3();
+  let camInitialized = false; // explicit so we don't snap if camera drifts to origin
   const savedCamPos = new THREE.Vector3();
   const savedTarget = new THREE.Vector3();
   let savedControlsEnabled = true;
+  // Reused for camera occlusion ray
+  const camRay = new THREE.Raycaster();
+  const camRayDir = new THREE.Vector3();
+  const camRayOrigin = new THREE.Vector3();
 
   // Temp vars reused every frame to avoid GC pressure
   const tmpBox = new THREE.Box3();
@@ -198,7 +215,8 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   function onMouseMove(e: MouseEvent) {
     if (document.pointerLockElement !== refs.renderer.domElement) return;
     yaw -= e.movementX * LOOK_SENS;
-    pitch = Math.max(-1.2, Math.min(0.5, pitch - e.movementY * LOOK_SENS));
+    // Mouse down (movementY > 0) → look down more → camera rises → pitch UP.
+    pitch = Math.max(-1.1, Math.min(1.2, pitch + e.movementY * LOOK_SENS));
   }
   function onCanvasClick() {
     if (!active) return;
@@ -301,6 +319,7 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       renderedYaw = Math.PI;
       camSmooth.set(0, 0, 0);
       lookAtSmooth.set(0, 0, 0);
+      camInitialized = false;
       if (armL) armL.rotation.x = 0;
       if (armR) armR.rotation.x = 0;
       if (legL) legL.rotation.x = 0;
@@ -515,24 +534,53 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       const backZ = cy * cp;   // behind-character unit vector on Z
       const rightX = cy;       // camera's right on the ground plane
       const rightZ = -sy;
-      camDesired.set(
-        character.position.x + backX * CAM_DIST + rightX * CAM_SHOULDER,
-        headY - sp * CAM_DIST + 0.2,
-        character.position.z + backZ * CAM_DIST + rightZ * CAM_SHOULDER,
-      );
-      const camK = Math.min(1, CAM_LERP * step);
-      if (camSmooth.lengthSq() === 0) camSmooth.copy(camDesired); // first frame
-      camSmooth.lerp(camDesired, camK);
-      refs.camera.position.copy(camSmooth);
 
-      // Look at a smoothed head position so the view doesn't jitter while bobbing
-      if (lookAtSmooth.lengthSq() === 0) {
-        lookAtSmooth.set(character.position.x, headY, character.position.z);
-      }
-      lookAtSmooth.lerp(
-        tmpCenter.set(character.position.x, headY, character.position.z),
-        Math.min(1, 14 * step),
+      // Pivot point the camera orbits — the smoothed head target. Using the
+      // smoothed look-at (computed below) as the pivot means head-bob/jump
+      // jitter never reaches the camera distance computation.
+      camRayOrigin.set(character.position.x, headY, character.position.z);
+
+      // Desired offset from pivot at full distance
+      const offX = backX * CAM_DIST + rightX * CAM_SHOULDER;
+      const offY = -sp * CAM_DIST + 0.2;
+      const offZ = backZ * CAM_DIST + rightZ * CAM_SHOULDER;
+      let dist = Math.hypot(offX, offY, offZ);
+
+      // Camera occlusion — cast from pivot toward desired cam position and
+      // pull in if anything (parts/floors/walls) blocks line of sight.
+      camRayDir.set(offX, offY, offZ).normalize();
+      camRay.set(camRayOrigin, camRayDir);
+      camRay.far = dist;
+      const hits = camRay.intersectObjects(
+        [refs.partGroup, refs.floorGroup, refs.wallGroup],
+        true,
       );
+      if (hits.length > 0) {
+        dist = Math.max(CAM_MIN_DIST, hits[0].distance - CAM_COLLIDE_PAD);
+      }
+
+      camDesired.set(
+        camRayOrigin.x + camRayDir.x * dist,
+        camRayOrigin.y + camRayDir.y * dist,
+        camRayOrigin.z + camRayDir.z * dist,
+      );
+      // Never let the camera dip below ground clearance
+      if (camDesired.y < CAM_MIN_GROUND) camDesired.y = CAM_MIN_GROUND;
+
+      // Frame-rate-independent exponential smoothing (asymptotic, never overshoots)
+      const camK = 1 - Math.exp(-CAM_FOLLOW_RATE * step);
+      const lookK = 1 - Math.exp(-LOOK_FOLLOW_RATE * step);
+
+      if (!camInitialized) {
+        camSmooth.copy(camDesired);
+        lookAtSmooth.copy(camRayOrigin);
+        camInitialized = true;
+      } else {
+        camSmooth.lerp(camDesired, camK);
+        lookAtTarget.copy(camRayOrigin);
+        lookAtSmooth.lerp(lookAtTarget, lookK);
+      }
+      refs.camera.position.copy(camSmooth);
       refs.camera.lookAt(lookAtSmooth);
     },
   };

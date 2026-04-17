@@ -1,17 +1,17 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   MousePointer2, Move3D, RotateCcw, Scale3D,
-  Plus, Copy, Trash2, ChevronDown, Play, Square,
+  Plus, Copy, Trash2, ChevronDown,
 } from 'lucide-react';
 import { useSceneStore, type GizmoMode, type PartType } from '@/store/scene-store';
 import type { GamePreviewHandle } from './GamePreview';
 
-const GIZMO_BUTTONS: { mode: GizmoMode; icon: React.ReactNode; label: string }[] = [
-  { mode: 'select',  icon: <MousePointer2 size={13} />, label: 'Select' },
-  { mode: 'move',    icon: <Move3D size={13} />,        label: 'Move' },
-  { mode: 'rotate',  icon: <RotateCcw size={13} />,     label: 'Rotate' },
-  { mode: 'scale',   icon: <Scale3D size={13} />,        label: 'Scale' },
+const GIZMO_BUTTONS: { mode: GizmoMode; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
+  { mode: 'select',  icon: MousePointer2, label: 'Select' },
+  { mode: 'move',    icon: Move3D,        label: 'Move' },
+  { mode: 'rotate',  icon: RotateCcw,     label: 'Rotate' },
+  { mode: 'scale',   icon: Scale3D,       label: 'Scale' },
 ];
 
 const PART_TYPES: { type: PartType; emoji: string }[] = [
@@ -31,10 +31,23 @@ interface Props {
 }
 
 export function GameToolbar({ previewRef }: Props) {
-  const { gizmoMode, setGizmoMode, selectedPart, isPlaying, setIsPlaying } = useSceneStore();
+  const { gizmoMode, setGizmoMode, selectedPart } = useSceneStore();
   const [addOpen, setAddOpen] = useState(false);
   const addRef = useRef<HTMLDivElement>(null);
+  const [gizmoOpen, setGizmoOpen] = useState(false);
+  const gizmoRef = useRef<HTMLDivElement>(null);
   const [colorIdx, setColorIdx] = useState(0);
+
+  useEffect(() => {
+    if (!addOpen && !gizmoOpen) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (addRef.current && !addRef.current.contains(t)) setAddOpen(false);
+      if (gizmoRef.current && !gizmoRef.current.contains(t)) setGizmoOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [addOpen, gizmoOpen]);
 
   /** True when a live game preview iframe is mounted. */
   const hasIframe = () => !!previewRef?.current;
@@ -100,51 +113,45 @@ export function GameToolbar({ previewRef }: Props) {
     useSceneStore.getState().removePart(selectedPart.id);
   }
 
-  function togglePlay() {
-    const next = !isPlaying;
-    setIsPlaying(next);
-    if (next) {
-      setGizmoMode('select');
-      if (hasIframe()) previewRef!.current!.sendToGame({ type: 'setGizmoMode', mode: 'none' });
-    }
-    if (hasIframe()) previewRef!.current!.sendToGame({ type: 'setPlayMode', playing: next });
-  }
-
   return (
     <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 bg-zinc-900/90 border-b border-white/[0.06]">
-      {/* Play / Stop */}
-      <button
-        onClick={togglePlay}
-        title={isPlaying ? 'Stop' : 'Play'}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-          isPlaying
-            ? 'bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25'
-            : 'bg-green-500/15 border border-green-500/30 text-green-300 hover:bg-green-500/25'
-        }`}
-      >
-        {isPlaying ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
-        <span className="hidden sm:inline">{isPlaying ? 'Stop' : 'Play'}</span>
-      </button>
+      {/* Gizmo mode — single icon + dropdown */}
+      <div className="relative" ref={gizmoRef}>
+        {(() => {
+          const active = GIZMO_BUTTONS.find(b => b.mode === gizmoMode) ?? GIZMO_BUTTONS[0];
+          const ActiveIcon = active.icon;
+          return (
+            <button
+              onClick={() => setGizmoOpen(o => !o)}
+              title={active.label}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800/60 text-zinc-200 hover:bg-white/[0.08] text-xs font-medium transition-all"
+            >
+              <ActiveIcon size={13} />
+              <ChevronDown size={11} className={`transition-transform ${gizmoOpen ? 'rotate-180' : ''}`} />
+            </button>
+          );
+        })()}
 
-      <div className="w-px h-5 bg-white/[0.08] mx-1" />
-
-      {/* Gizmo mode toggles */}
-      <div className="flex items-center gap-0.5 bg-zinc-800/60 rounded-lg p-0.5">
-        {GIZMO_BUTTONS.map(btn => (
-          <button
-            key={btn.mode}
-            onClick={() => switchMode(btn.mode)}
-            title={btn.label}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
-              gizmoMode === btn.mode
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06]'
-            }`}
-          >
-            {btn.icon}
-            <span className="hidden sm:inline">{btn.label}</span>
-          </button>
-        ))}
+        {gizmoOpen && (
+          <div className="absolute top-full left-0 mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl py-1 z-50 min-w-[140px]">
+            {GIZMO_BUTTONS.map(btn => {
+              const Icon = btn.icon;
+              const isActive = gizmoMode === btn.mode;
+              return (
+                <button
+                  key={btn.mode}
+                  onClick={() => { switchMode(btn.mode); setGizmoOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left ${
+                    isActive ? 'text-white bg-white/[0.06]' : 'text-zinc-200 hover:bg-white/[0.07]'
+                  }`}
+                >
+                  <Icon size={13} />
+                  {btn.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="w-px h-5 bg-white/[0.08] mx-1" />
@@ -181,21 +188,21 @@ export function GameToolbar({ previewRef }: Props) {
         onClick={duplicate}
         disabled={!selectedPart}
         title="Duplicate"
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] disabled:opacity-30 disabled:pointer-events-none transition-all"
+        aria-label="Duplicate"
+        className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] disabled:opacity-30 disabled:pointer-events-none transition-all"
       >
-        <Copy size={12} />
-        <span className="hidden sm:inline">Duplicate</span>
+        <Copy size={13} />
       </button>
 
       {/* Delete */}
       <button
         onClick={deletePart}
         disabled={!selectedPart}
-        title="Delete part"
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none transition-all"
+        title="Delete"
+        aria-label="Delete"
+        className="flex items-center justify-center w-7 h-7 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none transition-all"
       >
-        <Trash2 size={12} />
-        <span className="hidden sm:inline">Delete</span>
+        <Trash2 size={13} />
       </button>
 
       {/* Selected part name badge */}

@@ -6,12 +6,19 @@
 export function setup3dRenderer(game) {
   const { canvas, config } = game;
 
+  // Quality tier passed in via config (injected by host). Missing fields fall
+  // back to the original "high" defaults so existing games keep their look.
+  const q = config.quality || {};
+  const wantShadows = q.shadows !== false;
+  const shadowType = q.shadowType === 'basic' ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+  const shadowMapSize = q.shadowMapSize ?? 2048;
+
   // Create Three.js renderer
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: q.antialias !== false });
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.maxPixelRatio ?? 2));
+  renderer.shadowMap.enabled = wantShadows;
+  renderer.shadowMap.type = shadowType;
 
   // Scene
   const scene = new THREE.Scene();
@@ -31,8 +38,8 @@ export function setup3dRenderer(game) {
 
   const sun = new THREE.DirectionalLight(0xffeedd, 1.0);
   sun.position.set(30, 50, 20);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = wantShadows;
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 120;
   sun.shadow.camera.left = -60;
@@ -47,7 +54,7 @@ export function setup3dRenderer(game) {
     const groundMat = new THREE.MeshLambertMaterial({ color: config.groundColor || 0x4a7a4a });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
+    ground.receiveShadow = wantShadows;
     scene.add(ground);
   }
 

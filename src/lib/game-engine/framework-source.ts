@@ -1,5 +1,5 @@
 /** Pre-built framework source — auto-generated, do not edit by hand. */
-/** To regenerate: concatenate input.js + entities.js + physics.js + audio.js + particles.js + scene.js + engine.js, strip imports/exports */
+/** To regenerate: concatenate all engine modules, strip imports/exports */
 export const FRAMEWORK_SOURCE = `
 /**
  * Problocks Input System
@@ -143,6 +143,12 @@ function createEntities() {
       };
 
       entities.push(entity);
+
+      // Call init lifecycle hook
+      if (def.init) {
+        try { def.init(entity, entities._game); } catch(e) { console.warn(\`[\${type}] init error:\`, e); }
+      }
+
       return entity;
     },
 
@@ -452,6 +458,197 @@ function createSceneManager() {
   };
 }
 /**
+ * Problocks 3D Renderer
+ * Sets up Three.js scene, camera, lights, and provides helpers.
+ * Uses Three.js r128 loaded via CDN (available as global \`THREE\`).
+ */
+function setup3dRenderer(game) {
+  const { canvas, config } = game;
+
+  // Quality tier passed in via config (injected by host). Missing fields fall
+  // back to the original "high" defaults so existing games keep their look.
+  const q = config.quality || {};
+  const wantShadows = q.shadows !== false;
+  const shadowType = q.shadowType === 'basic' ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+  const shadowMapSize = q.shadowMapSize ?? 2048;
+
+  // Create Three.js renderer
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: q.antialias !== false });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.maxPixelRatio ?? 2));
+  renderer.shadowMap.enabled = wantShadows;
+  renderer.shadowMap.type = shadowType;
+
+  // Scene
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(config.skyColor || '#87ceeb');
+  scene.fog = new THREE.FogExp2(config.fogColor || config.skyColor || '#87ceeb', config.fogDensity || 0.015);
+
+  // Camera
+  const camera = new THREE.PerspectiveCamera(65, canvas.clientWidth / canvas.clientHeight, 0.1, 500);
+  camera.position.set(0, 8, 12);
+
+  // Lights
+  const hemi = new THREE.HemisphereLight(0x87ceeb, 0x3a5a3a, 0.6);
+  scene.add(hemi);
+
+  const ambient = new THREE.AmbientLight(0x404060, 0.3);
+  scene.add(ambient);
+
+  const sun = new THREE.DirectionalLight(0xffeedd, 1.0);
+  sun.position.set(30, 50, 20);
+  sun.castShadow = wantShadows;
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 120;
+  sun.shadow.camera.left = -60;
+  sun.shadow.camera.right = 60;
+  sun.shadow.camera.top = 60;
+  sun.shadow.camera.bottom = -60;
+  scene.add(sun);
+
+  // Ground plane
+  if (config.ground !== false) {
+    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshLambertMaterial({ color: config.groundColor || 0x4a7a4a });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = wantShadows;
+    scene.add(ground);
+  }
+
+  // Store on game.three
+  game.three.scene = scene;
+  game.three.camera = camera;
+  game.three.renderer = renderer;
+  game.three.sun = sun;
+
+  // Camera control state
+  game.three.camYaw = 0;
+  game.three.camPitch = -0.3;
+  game.three.camDistance = config.camDistance || 10;
+  game.three.camHeight = config.camHeight || 5;
+  game.three.camTarget = new THREE.Vector3(0, 0, 0);
+
+  // Helper: follow an entity with third-person camera
+  game.three.followEntity = function(entity) {
+    game.three._followTarget = entity;
+  };
+
+  // Helper: create a mesh group and add to scene
+  game.three.addToScene = function(object) {
+    scene.add(object);
+    return object;
+  };
+
+  // Helper: remove from scene
+  game.three.removeFromScene = function(object) {
+    scene.remove(object);
+  };
+
+  // Called by engine each frame
+  game.three._update = function(dt) {
+    // Mouse look (when pointer locked)
+    if (game.input.mouse.locked) {
+      game.three.camYaw += game.input.mouse.dx * 0.003;
+      game.three.camPitch = Math.max(-0.8, Math.min(0.4, game.three.camPitch + game.input.mouse.dy * 0.003));
+    }
+
+    // Follow target
+    const target = game.three._followTarget;
+    if (target && target._alive) {
+      game.three.camTarget.set(target.x, target.y || 0, target.z || 0);
+    }
+
+    // Position camera
+    const t = game.three.camTarget;
+    const dist = game.three.camDistance;
+    const height = game.three.camHeight;
+    camera.position.set(
+      t.x - Math.sin(game.three.camYaw) * dist,
+      t.y + height - game.three.camPitch * 3,
+      t.z - Math.cos(game.three.camYaw) * dist,
+    );
+    camera.lookAt(t.x, t.y + 1.5, t.z);
+
+    // Move sun with camera
+    sun.position.set(t.x + 30, 50, t.z + 20);
+    sun.target.position.copy(t);
+    sun.target.updateMatrixWorld();
+  };
+
+  // Resize handler
+  game.three._resize = function() {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+}
+/**
+ * Problocks Asset Loader
+ * Loads glTF models with caching. Requires THREE.GLTFLoader from CDN.
+ */
+function createLoader() {
+  let gltfLoader = null;
+  const cache = {}; // url → Promise<THREE.Group>
+
+  function getLoader() {
+    if (!gltfLoader) {
+      gltfLoader = new THREE.GLTFLoader();
+    }
+    return gltfLoader;
+  }
+
+  return {
+    /**
+     * Load a glTF model. Returns a promise that resolves to a cloned THREE.Group.
+     * Results are cached — subsequent loads of the same URL return clones.
+     * @param {string} url — e.g. '/assets/medieval/Wall_Plaster_Straight.gltf'
+     */
+    loadModel(url) {
+      if (!cache[url]) {
+        cache[url] = new Promise((resolve, reject) => {
+          getLoader().load(
+            url,
+            (gltf) => {
+              // Enable shadows on all meshes
+              gltf.scene.traverse((child) => {
+                if (child.isMesh) {
+                  child.castShadow = true;
+                  child.receiveShadow = true;
+                }
+              });
+              resolve(gltf.scene);
+            },
+            undefined,
+            reject,
+          );
+        });
+      }
+      // Always return a clone so each instance is independent
+      return cache[url].then((original) => original.clone());
+    },
+
+    /**
+     * Preload multiple models in parallel
+     * @param {string[]} urls
+     */
+    preload(urls) {
+      return Promise.all(urls.map(url => this.loadModel(url)));
+    },
+
+    /**
+     * Convenience: load a medieval village model by name
+     * @param {string} name — e.g. 'Wall_Plaster_Straight' (without path/extension)
+     */
+    medieval(name) {
+      return this.loadModel('/assets/medieval/' + name + '.gltf');
+    },
+  };
+}
+/**
  * Problocks Game Engine
  * Main entry point — creates the game loop and wires all systems together.
  *
@@ -525,20 +722,31 @@ function createEngine(canvas, config = {}) {
     },
   };
 
+  // Asset loader
+  const loader = createLoader();
+
   // Custom game state — scripts can store anything here
   const state = {};
 
   // The game object passed to all lifecycle hooks
   const game = {
     canvas, config, input, entities, physics, audio,
-    particles, scenes, time, camera, three, world, ui, state,
+    particles, scenes, time, camera, three, world, ui, state, loader,
   };
+
+  // Give entity system access to game for init() calls
+  entities._game = game;
 
   // Gravity from config
   if (config.gravity != null) physics.setGravity(config.gravity);
 
   // Request pointer lock if 3D
   if (config.renderer === '3d') input.requestPointerLock();
+
+  // Setup 3D if configured
+  if (config.renderer === '3d') {
+    setup3dRenderer(game);
+  }
 
   let running = false;
   let animFrameId = null;
@@ -573,6 +781,9 @@ function createEngine(canvas, config = {}) {
 
     // Camera
     camera._update();
+
+    // 3D camera update
+    if (game.three._update) game.three._update(dt);
 
     // Particles
     particles._update(dt);
@@ -657,12 +868,8 @@ function createEngine(canvas, config = {}) {
   function onResize() {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
-    if (three.renderer) {
-      three.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-      if (three.camera) {
-        three.camera.aspect = canvas.clientWidth / canvas.clientHeight;
-        three.camera.updateProjectionMatrix();
-      }
+    if (game.three._resize) {
+      game.three._resize();
     }
   }
   window.addEventListener('resize', onResize);

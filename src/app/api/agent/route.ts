@@ -399,8 +399,15 @@ const SOUNDS = {
 const COLLISIONS = [['player', 'enemy'], ['player', 'item'], ['bullet', 'enemy']];
 
 ### UI (called in update/draw):
+// Raw px (fine for top-left HUD):
 game.ui.text('Score: ' + game.state.score, 20, 30, { color: '#fff', font: '20px sans-serif' });
 game.ui.bar(20, 40, 100, 8, player.hp, player.maxHp, '#e74c3c');
+
+// Responsive (UDim = scale*canvas + offset; ANCHOR pins element by its own bounds):
+game.ui.text('FPS: ' + game.time.fps, UDim(1, -20), UDim(0, 20), { anchor: ANCHOR.TopRight });
+game.ui.text('GAME OVER', UDim(0.5, 0), UDim(0.5, 0), { anchor: ANCHOR.Center, font: '48px sans-serif' });
+game.ui.bar(UDim(0.5, -50), UDim(1, -30), UDim(0, 100), UDim(0, 10), player.hp, player.maxHp, '#e74c3c', '#333', { anchor: ANCHOR.Bottom });
+// Prefer UDim+ANCHOR for anything that shouldn't hug the top-left corner — keeps HUD correct on any screen size (Chromebook → monitor).
 
 RULES:
 - Each file defines ONE const (PLAYER, ENEMIES, SCENES, SOUNDS, CONFIG, SETUP, COLLISIONS)

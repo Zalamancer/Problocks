@@ -2,6 +2,31 @@
 /** To regenerate: concatenate all engine modules, strip imports/exports */
 export const FRAMEWORK_SOURCE = `
 /**
+ * Problocks UDim2 — responsive positioning primitives (Roblox-style).
+ * scale * parent + offset. Exposed as globals for game scripts.
+ */
+function UDim(scale, offset) {
+  return { _udim: true, scale: scale || 0, offset: offset || 0 };
+}
+function UDim2(xScale, xOffset, yScale, yOffset) {
+  return {
+    _udim2: true,
+    x: UDim(xScale, xOffset),
+    y: UDim(yScale, yOffset),
+  };
+}
+function resolveUDim(v, parent) {
+  if (typeof v === 'number') return v;
+  if (v && v._udim) return v.scale * parent + v.offset;
+  return 0;
+}
+const ANCHOR = {
+  TopLeft: [0, 0], Top: [0.5, 0], TopRight: [1, 0],
+  Left: [0, 0.5], Center: [0.5, 0.5], Right: [1, 0.5],
+  BottomLeft: [0, 1], Bottom: [0.5, 1], BottomRight: [1, 1],
+};
+
+/**
  * Problocks Input System
  * Tracks keyboard, mouse, and touch state with frame-accurate "just pressed" detection.
  */
@@ -695,27 +720,47 @@ function createEngine(canvas, config = {}) {
     height: config.world?.height || 600,
   };
 
-  // UI system (2D overlay)
+  // UI system (2D overlay).
+  // Positions and sizes accept raw px numbers (legacy) or UDim objects for
+  // responsive layouts. opts.anchor = [ax, ay] in 0..1 anchors by the
+  // element's own bounds — e.g. anchor [1,0] pins its top-right at (x,y).
   const ui = {
     _queue: [],
     text(text, x, y, opts = {}) {
-      this._queue.push({ type: 'text', text, x, y, ...opts });
+      this._queue.push({ type: 'text', text, x, y, opts });
     },
-    bar(x, y, w, h, value, max, color = '#e74c3c', bgColor = '#333') {
-      this._queue.push({ type: 'bar', x, y, w, h, value, max, color, bgColor });
+    bar(x, y, w, h, value, max, color = '#e74c3c', bgColor = '#333', opts = {}) {
+      this._queue.push({ type: 'bar', x, y, w, h, value, max, color, bgColor, opts });
     },
     _draw(ctx) {
+      const cw = ctx.canvas.width;
+      const ch = ctx.canvas.height;
       for (const item of this._queue) {
+        const opts = item.opts || {};
         if (item.type === 'text') {
-          ctx.fillStyle = item.color || '#fff';
-          ctx.font = item.font || '16px sans-serif';
-          ctx.textAlign = item.align || 'left';
-          ctx.fillText(item.text, item.x, item.y);
+          ctx.fillStyle = opts.color || '#fff';
+          ctx.font = opts.font || '16px sans-serif';
+          const px = resolveUDim(item.x, cw);
+          const py = resolveUDim(item.y, ch);
+          const a = opts.anchor;
+          if (a) {
+            ctx.textAlign = a[0] === 1 ? 'right' : a[0] === 0.5 ? 'center' : 'left';
+            ctx.textBaseline = a[1] === 1 ? 'bottom' : a[1] === 0.5 ? 'middle' : 'top';
+          } else {
+            ctx.textAlign = opts.align || 'left';
+          }
+          ctx.fillText(item.text, px, py);
         } else if (item.type === 'bar') {
+          let px = resolveUDim(item.x, cw);
+          let py = resolveUDim(item.y, ch);
+          const pw = resolveUDim(item.w, cw);
+          const ph = resolveUDim(item.h, ch);
+          const a = opts.anchor;
+          if (a) { px -= (a[0] || 0) * pw; py -= (a[1] || 0) * ph; }
           ctx.fillStyle = item.bgColor;
-          ctx.fillRect(item.x, item.y, item.w, item.h);
+          ctx.fillRect(px, py, pw, ph);
           ctx.fillStyle = item.color;
-          ctx.fillRect(item.x, item.y, item.w * Math.max(0, item.value / item.max), item.h);
+          ctx.fillRect(px, py, pw * Math.max(0, item.value / item.max), ph);
         }
       }
       this._queue.length = 0;

@@ -16,6 +16,7 @@ import { createParticles } from './particles.js';
 import { createSceneManager } from './scene.js';
 import { setup3dRenderer } from './renderer3d.js';
 import { createLoader } from './loader.js';
+import { resolveUDim } from './udim.js';
 
 export function createEngine(canvas, config = {}) {
   const ctx2d = config.renderer !== '3d' ? canvas.getContext('2d') : null;
@@ -53,27 +54,50 @@ export function createEngine(canvas, config = {}) {
     height: config.world?.height || 600,
   };
 
-  // UI system (2D overlay)
+  // UI system (2D overlay).
+  // Positions and sizes accept either raw px numbers (legacy) or UDim/UDim2
+  // objects (scale * parent + offset) for responsive layouts. Pass
+  // `opts.anchor = [ax, ay]` in 0..1 to anchor by the element's own bounds —
+  // e.g. anchor [1,0] pins the top-right corner of the element at (x,y).
   const ui = {
     _queue: [],
     text(text, x, y, opts = {}) {
-      this._queue.push({ type: 'text', text, x, y, ...opts });
+      this._queue.push({ type: 'text', text, x, y, opts });
     },
-    bar(x, y, w, h, value, max, color = '#e74c3c', bgColor = '#333') {
-      this._queue.push({ type: 'bar', x, y, w, h, value, max, color, bgColor });
+    bar(x, y, w, h, value, max, color = '#e74c3c', bgColor = '#333', opts = {}) {
+      this._queue.push({ type: 'bar', x, y, w, h, value, max, color, bgColor, opts });
     },
     _draw(ctx) {
+      const cw = ctx.canvas.width;
+      const ch = ctx.canvas.height;
       for (const item of this._queue) {
+        const opts = item.opts || {};
         if (item.type === 'text') {
-          ctx.fillStyle = item.color || '#fff';
-          ctx.font = item.font || '16px sans-serif';
-          ctx.textAlign = item.align || 'left';
-          ctx.fillText(item.text, item.x, item.y);
+          ctx.fillStyle = opts.color || '#fff';
+          ctx.font = opts.font || '16px sans-serif';
+          const px = resolveUDim(item.x, cw);
+          const py = resolveUDim(item.y, ch);
+          const a = opts.anchor;
+          if (a) {
+            // Map anchor to Canvas textAlign/textBaseline — cheaper than measureText().
+            ctx.textAlign = a[0] === 1 ? 'right' : a[0] === 0.5 ? 'center' : 'left';
+            ctx.textBaseline = a[1] === 1 ? 'bottom' : a[1] === 0.5 ? 'middle' : 'top';
+          } else {
+            // Legacy behavior: no baseline set (alphabetic default), opts.align respected.
+            ctx.textAlign = opts.align || 'left';
+          }
+          ctx.fillText(item.text, px, py);
         } else if (item.type === 'bar') {
+          let px = resolveUDim(item.x, cw);
+          let py = resolveUDim(item.y, ch);
+          const pw = resolveUDim(item.w, cw);
+          const ph = resolveUDim(item.h, ch);
+          const a = opts.anchor;
+          if (a) { px -= (a[0] || 0) * pw; py -= (a[1] || 0) * ph; }
           ctx.fillStyle = item.bgColor;
-          ctx.fillRect(item.x, item.y, item.w, item.h);
+          ctx.fillRect(px, py, pw, ph);
           ctx.fillStyle = item.color;
-          ctx.fillRect(item.x, item.y, item.w * Math.max(0, item.value / item.max), item.h);
+          ctx.fillRect(px, py, pw * Math.max(0, item.value / item.max), ph);
         }
       }
       this._queue.length = 0;

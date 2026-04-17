@@ -38,23 +38,54 @@ function tint(THREE: typeof import('three'), hex: string, factor: number): strin
 
 /* ──────────────── ROOF TILES (10) ──────────────── */
 
+/**
+ * Build a beveled flat roof deck: a stack of plates that shrink as they
+ * rise, giving a truncated-pyramid / stepped-bevel silhouette. Each
+ * plate is split into 4 directional quadrants so the deck also gradates
+ * front-right bright → back-left dark.
+ *
+ * The visible bevel sides are the exposed rings between plates — those
+ * sides catch their +X/-X/+Z/-Z face shades from makeBox, so the bevel
+ * itself reads as a proper shaded edge (not just a color seam on a flat
+ * plane, which is what the previous quadrant-only version produced).
+ */
+function beveledDeck(
+  THREE: typeof import('three'),
+  color: string,
+  tile: number,
+  opts: { baseY: number; totalH: number; layers: number; shrinkPerLayer: number },
+): import('three').Group {
+  const g = new THREE.Group();
+  const { baseY, totalH, layers, shrinkPerLayer } = opts;
+  const layerH = totalH / layers;
+  const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+  const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+  const br = tint(THREE, color, QUAD_BACK_RIGHT);
+  const bl = tint(THREE, color, QUAD_BACK_LEFT);
+  for (let i = 0; i < layers; i++) {
+    const w = tile - i * shrinkPerLayer * 2;
+    if (w <= 0) break;
+    const h = w / 2;
+    const y = baseY + i * layerH + layerH / 2;
+    g.add(makeBox(THREE, { x: h, y: layerH, z: h }, fr, { y, x:  h / 2, z:  h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: layerH, z: h }, fl, { y, x: -h / 2, z:  h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: layerH, z: h }, br, { y, x:  h / 2, z: -h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: layerH, z: h }, bl, { y, x: -h / 2, z: -h / 2 }));
+  }
+  return g;
+}
+
 function flatRoof(color: string, trim: string): PieceDef['build'] {
   return ({ THREE, tile }) => {
     const g = new THREE.Group();
-    // Split the deck into 4 quadrants with directional tints so the top
-    // face (which is mostly what you see on a flat roof) bends visibly
-    // from front-right bright → back-left dark.
-    const h = tile / 2;
-    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
-    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
-    const br = tint(THREE, color, QUAD_BACK_RIGHT);
-    const bl = tint(THREE, color, QUAD_BACK_LEFT);
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fr, { y: 0.125, x:  h / 2, z:  h / 2 }));
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fl, { y: 0.125, x: -h / 2, z:  h / 2 }));
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, br, { y: 0.125, x:  h / 2, z: -h / 2 }));
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, bl, { y: 0.125, x: -h / 2, z: -h / 2 }));
+    // Stepped bevel: wide base → narrower top, four layers. Each layer's
+    // exposed perimeter ring picks up the darker +X / -Z / -X face shades
+    // from makeBox, giving a visible chamfered edge.
+    g.add(beveledDeck(THREE, color, tile, {
+      baseY: 0, totalH: 0.3, layers: 4, shrinkPerLayer: 0.08,
+    }));
     // cornice trim (single piece — thin border, no bending needed)
-    g.add(makeBox(THREE, { x: tile * 1.05, y: 0.1, z: tile * 1.05 }, trim, { y: 0.3 }));
+    g.add(makeBox(THREE, { x: tile * 1.05, y: 0.1, z: tile * 1.05 }, trim, { y: 0.35 }));
     return g;
   };
 }
@@ -322,20 +353,14 @@ function pyramidCap(color: string): PieceDef['build'] {
 function flatCap(color: string): PieceDef['build'] {
   return ({ THREE, tile }) => {
     const g = new THREE.Group();
-    // Same quadrant split as flatRoof so the parapet deck bends too.
-    const h = tile / 2;
-    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
-    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
-    const br = tint(THREE, color, QUAD_BACK_RIGHT);
-    const bl = tint(THREE, color, QUAD_BACK_LEFT);
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fr, { y: 0.125, x:  h / 2, z:  h / 2 }));
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fl, { y: 0.125, x: -h / 2, z:  h / 2 }));
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, br, { y: 0.125, x:  h / 2, z: -h / 2 }));
-    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, bl, { y: 0.125, x: -h / 2, z: -h / 2 }));
+    // Stepped-bevel deck (same recipe as flatRoof).
+    g.add(beveledDeck(THREE, color, tile, {
+      baseY: 0, totalH: 0.3, layers: 4, shrinkPerLayer: 0.08,
+    }));
     // parapet trim (single piece)
-    g.add(makeBox(THREE, { x: tile * 1.1, y: 0.1, z: tile * 1.1 }, color, { y: 0.3 }));
+    g.add(makeBox(THREE, { x: tile * 1.1, y: 0.1, z: tile * 1.1 }, color, { y: 0.35 }));
     // corner bollard
-    g.add(makeBox(THREE, { x: 0.3, y: 0.6, z: 0.3 }, '#ffd60a', { y: 0.55, x: tile * 0.3, z: tile * 0.3 }));
+    g.add(makeBox(THREE, { x: 0.3, y: 0.6, z: 0.3 }, '#ffd60a', { y: 0.6, x: tile * 0.3, z: tile * 0.3 }));
     return g;
   };
 }

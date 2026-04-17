@@ -1,15 +1,18 @@
 /**
  * Roblox-style play-mode controller for the Problocks studio.
  *
- * Spawns a capsule character into the existing BuildingCanvas scene,
- * hijacks the camera for a third-person follow, and handles WASD + jump
- * with AABB collision against floors, walls, and parts. The OrbitControls
- * camera/target is captured on start() and restored on stop() so the
- * student returns to exactly the editor view they left.
+ * Spawns a capsule character into the existing BuildingCanvas scene and
+ * handles WASD + jump with AABB collision against floors, walls, and parts.
  *
- * This is intentionally minimal — no animation, no ragdoll, no networking,
- * no scripted behavior on parts. Just "I built a thing, let me walk around
- * in it" like Roblox Studio's Play Solo.
+ * Camera model: there is no custom camera. OrbitControls stays enabled and
+ * its pivot is glued to the character — each frame we translate both the
+ * orbit target and the camera position by the character's delta, preserving
+ * whatever pose the user has orbited to. That gives the Roblox feel where
+ * the camera orbits around the character and the student can look top-down,
+ * behind-the-shoulder, or anywhere in between by just dragging the mouse.
+ *
+ * On start() we snap to a reasonable behind-and-above starting pose; on
+ * stop() we restore the exact editor camera the student had before Play.
  */
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -61,16 +64,12 @@ const TERMINAL_VEL = -60;
 const COYOTE_TIME = 0.12;   // can still jump for this long after walking off a ledge
 const JUMP_BUFFER = 0.15;   // queue a Space press if it lands just before grounding
 const STEP_HEIGHT = 0.45;   // auto-step onto obstacles up to this tall
-const CAM_DIST = 6;
-const CAM_SHOULDER = 0;     // 0 = centered; positive = over-the-right-shoulder
-const CAM_FOLLOW_RATE = 14; // exponential smoothing rate for camera position (higher = snappier)
-const LOOK_FOLLOW_RATE = 18; // exponential smoothing rate for look-at point
-const CAM_MIN_DIST = 1.2;   // pull-in floor when occluded so we never end up inside the head
-const CAM_MIN_GROUND = 0.4; // minimum clearance above ground (prevents floor clipping)
-const CAM_COLLIDE_PAD = 0.25; // shrink raycast hit by this so cam doesn't kiss the wall
 const BOB_SPEED = 11;
 const BOB_AMP = 0.08;
-const LOOK_SENS = 0.0022;
+
+// Starting camera offset from the character on Play. Behind (+Z), above (+Y),
+// roughly matching Roblox's default third-person pose.
+const START_CAM_OFFSET = new THREE.Vector3(0, 6, 10);
 
 export function createPlayController(refs: PlaySceneRefs): PlayController {
   let active = false;
@@ -84,38 +83,30 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   let legR: THREE.Group | null = null;
   const velocity = new THREE.Vector3();
   const keys: Record<string, boolean> = {};
-  let yaw = 0;
-  // Convention: pitch > 0 → camera ABOVE the target (looking down).
-  //             pitch < 0 → camera BELOW the target (looking up).
-  // Camera offset from target in spherical coords:
-  //   offset = (sin yaw * cos pitch, sin pitch, cos yaw * cos pitch) * CAM_DIST
-  // At yaw=0, pitch=0 → offset=(0,0,+dist) i.e. camera directly BEHIND the
-  // character on +Z, looking toward -Z at the target. W sends the character
-  // in (-sin yaw, -cos yaw) ground direction, i.e. away from the camera.
-  let pitch = 0.22;
   let grounded = false;
   let coyoteTimer = 0;   // counts up while airborne; jump OK if < COYOTE_TIME
   let jumpBuffer = 0;    // counts down after Space press; auto-jump on landing
   let bobPhase = 0;      // radians; drives walking head/body bob
   let renderedYaw = 0;   // smoothed rotation actually applied to the mesh
-  const camDesired = new THREE.Vector3();
-  const camSmooth = new THREE.Vector3();
-  const lookAtSmooth = new THREE.Vector3();
-  const lookAtTarget = new THREE.Vector3();
-  let camInitialized = false; // explicit so we don't snap if camera drifts to origin
+
+  // Saved editor camera state so we can restore the pre-play view on stop()
   const savedCamPos = new THREE.Vector3();
   const savedTarget = new THREE.Vector3();
-  let savedControlsEnabled = true;
-  // Reused for camera occlusion ray
-  const camRay = new THREE.Raycaster();
-  const camRayDir = new THREE.Vector3();
-  const camRayOrigin = new THREE.Vector3();
+
+  // Previous orbit pivot (character center) — each frame we translate both
+  // the camera and the orbit target by (newPivot - prevPivot) so the user's
+  // orbit pose is preserved while the character stays centered.
+  const prevPivot = new THREE.Vector3();
+  const newPivot = new THREE.Vector3();
+  const pivotDelta = new THREE.Vector3();
 
   // Temp vars reused every frame to avoid GC pressure
   const tmpBox = new THREE.Box3();
   const playerBox = new THREE.Box3();
   const tmpCenter = new THREE.Vector3();
   const tmpSize = new THREE.Vector3();
+  const camForward = new THREE.Vector3();
+  const camRight = new THREE.Vector3();
 
   function buildCharacter(): THREE.Group {
     const g = new THREE.Group();
@@ -204,25 +195,9 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       e.preventDefault();
       if (!wasDown) jumpBuffer = JUMP_BUFFER; // fresh press → buffer it
     }
-    if (e.code === 'Escape') {
-      // Let the Stop button own the transition — just unlock the pointer
-      if (document.pointerLockElement) document.exitPointerLock();
-    }
   }
   function onKeyUp(e: KeyboardEvent) {
     keys[e.code] = false;
-  }
-  function onMouseMove(e: MouseEvent) {
-    if (document.pointerLockElement !== refs.renderer.domElement) return;
-    yaw -= e.movementX * LOOK_SENS;
-    // Mouse down (movementY > 0) → look down more → camera rises → pitch UP.
-    pitch = Math.max(-1.1, Math.min(1.2, pitch + e.movementY * LOOK_SENS));
-  }
-  function onCanvasClick() {
-    if (!active) return;
-    if (document.pointerLockElement !== refs.renderer.domElement) {
-      refs.renderer.domElement.requestPointerLock?.();
-    }
   }
 
   function resolveCollisions() {
@@ -297,6 +272,15 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
     }
   }
 
+  function pivotFromCharacter(out: THREE.Vector3) {
+    if (!character) return out.set(0, 0, 0);
+    return out.set(
+      character.position.x,
+      character.position.y + CAP_HEIGHT * 0.5,
+      character.position.z,
+    );
+  }
+
   return {
     isActive: () => active,
 
@@ -308,36 +292,33 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       character.position.set(0, 0.1, 8);
       refs.scene.add(character);
       velocity.set(0, 0, 0);
-      yaw = 0;
-      pitch = -0.25;
       grounded = true;
       coyoteTimer = 0;
       jumpBuffer = 0;
       bobPhase = 0;
-      // Spawn facing away from the camera (yaw + π at yaw=0 → facing -Z,
-      // which is where W will send the character — no 180° spin on first input)
-      renderedYaw = Math.PI;
-      camSmooth.set(0, 0, 0);
-      lookAtSmooth.set(0, 0, 0);
-      camInitialized = false;
+      renderedYaw = Math.PI; // face away from the starting camera
       if (armL) armL.rotation.x = 0;
       if (armR) armR.rotation.x = 0;
       if (legL) legL.rotation.x = 0;
       if (legR) legR.rotation.x = 0;
 
+      // Remember where the editor camera was, so stop() can put it back.
       savedCamPos.copy(refs.camera.position);
       savedTarget.copy(refs.controls.target);
-      savedControlsEnabled = refs.controls.enabled;
-      refs.controls.enabled = false;
+
+      // Snap to a Roblox-style behind-and-above third-person pose.
+      pivotFromCharacter(newPivot);
+      refs.controls.target.copy(newPivot);
+      refs.camera.position.set(
+        newPivot.x + START_CAM_OFFSET.x,
+        newPivot.y + START_CAM_OFFSET.y,
+        newPivot.z + START_CAM_OFFSET.z,
+      );
+      refs.controls.update();
+      prevPivot.copy(newPivot);
 
       window.addEventListener('keydown', onKeyDown);
       window.addEventListener('keyup', onKeyUp);
-      window.addEventListener('mousemove', onMouseMove);
-      refs.renderer.domElement.addEventListener('click', onCanvasClick);
-
-      // Request pointer-lock — allowed because start() is called from the
-      // Play button's click handler (same transient user activation).
-      refs.renderer.domElement.requestPointerLock?.();
     },
 
     stop() {
@@ -360,18 +341,13 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       head = null;
       armL = armR = legL = legR = null;
 
-      refs.controls.enabled = savedControlsEnabled;
+      // Return the editor to its pre-play view.
       refs.camera.position.copy(savedCamPos);
       refs.controls.target.copy(savedTarget);
       refs.controls.update();
 
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('mousemove', onMouseMove);
-      refs.renderer.domElement.removeEventListener('click', onCanvasClick);
-      if (document.pointerLockElement === refs.renderer.domElement) {
-        document.exitPointerLock();
-      }
       for (const k of Object.keys(keys)) keys[k] = false;
     },
 
@@ -379,15 +355,20 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       if (!active || !character) return;
       const step = Math.min(dt, 1 / 30); // clamp large frames so we don't tunnel
 
-      // Yaw-aligned WASD → target horizontal velocity
+      // Camera-relative WASD. Forward is the flattened vector from the
+      // camera to the orbit target; right is forward rotated 90° clockwise
+      // around Y. This means whichever angle the user has orbited to, W
+      // always pushes the character in the direction they're looking.
+      camForward.subVectors(refs.controls.target, refs.camera.position);
+      camForward.y = 0;
+      if (camForward.lengthSq() < 1e-6) camForward.set(0, 0, -1);
+      camForward.normalize();
+      camRight.set(camForward.z, 0, -camForward.x);
+
       const fwd = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
       const str = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
-      const sy = Math.sin(yaw);
-      const cy = Math.cos(yaw);
-      const fx = -sy, fz = -cy;      // camera forward on ground plane
-      const rx = cy,  rz = -sy;      // camera right on ground plane
-      let wishX = fwd * fx + str * rx;
-      let wishZ = fwd * fz + str * rz;
+      let wishX = fwd * camForward.x + str * camRight.x;
+      let wishZ = fwd * camForward.z + str * camRight.z;
       const wishLen = Math.hypot(wishX, wishZ);
       if (wishLen > 0) {
         wishX = (wishX / wishLen) * MOVE_SPEED;
@@ -478,13 +459,11 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
         velocity.set(0, 0, 0);
       }
 
-      // Rotate mesh smoothly toward desired facing. While moving, face the
-      // direction of motion. While idle, face the same way the camera is
-      // looking (yaw + π) so the character's back stays toward the camera
-      // — NOT its face, which is what happens if you use yaw directly.
+      // Rotate mesh smoothly toward the direction of motion. When idle,
+      // hold the last facing — the camera can freely orbit around without
+      // dragging the character's spin along with it.
       let targetYaw = renderedYaw;
       if (inputActive) targetYaw = Math.atan2(wishX, wishZ);
-      else targetYaw = yaw + Math.PI;
       let diff = targetYaw - renderedYaw;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
@@ -516,72 +495,25 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
         if (legR) legR.rotation.x += (legAir - legR.rotation.x) * limbK;
       }
 
-      // Subtle torso + head bob synced to foot-plants, half amplitude vs before
+      // Subtle torso + head bob synced to foot-plants
       const bobY = moving ? Math.abs(Math.sin(bobPhase)) * BOB_AMP * speedRatio * 0.6 : 0;
       if (torso) torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2 + bobY;
       if (head) head.position.y = CAP_HEIGHT + HEAD_OFFSET + bobY * 0.85;
 
-      // Third-person camera — smoothed toward a position BEHIND the character.
-      // Camera forward vector (where the camera looks) is:
-      //   forward = (-sin(yaw)*cos(pitch),  sin(pitch), -cos(yaw)*cos(pitch))
-      // Camera position = head target − forward * CAM_DIST, so flipping the
-      // sign on X/Z puts the camera behind (opposite of the forward direction)
-      // and subtracting sin(pitch) raises the camera when looking down.
-      const headY = character.position.y + CAP_HEIGHT + HEAD_OFFSET;
-      const cp = Math.cos(pitch);
-      const sp = Math.sin(pitch);
-      const backX = sy * cp;   // behind-character unit vector on X
-      const backZ = cy * cp;   // behind-character unit vector on Z
-      const rightX = cy;       // camera's right on the ground plane
-      const rightZ = -sy;
-
-      // Pivot point the camera orbits — the smoothed head target. Using the
-      // smoothed look-at (computed below) as the pivot means head-bob/jump
-      // jitter never reaches the camera distance computation.
-      camRayOrigin.set(character.position.x, headY, character.position.z);
-
-      // Desired offset from pivot at full distance
-      const offX = backX * CAM_DIST + rightX * CAM_SHOULDER;
-      const offY = -sp * CAM_DIST + 0.2;
-      const offZ = backZ * CAM_DIST + rightZ * CAM_SHOULDER;
-      let dist = Math.hypot(offX, offY, offZ);
-
-      // Camera occlusion — cast from pivot toward desired cam position and
-      // pull in if anything (parts/floors/walls) blocks line of sight.
-      camRayDir.set(offX, offY, offZ).normalize();
-      camRay.set(camRayOrigin, camRayDir);
-      camRay.far = dist;
-      const hits = camRay.intersectObjects(
-        [refs.partGroup, refs.floorGroup, refs.wallGroup],
-        true,
-      );
-      if (hits.length > 0) {
-        dist = Math.max(CAM_MIN_DIST, hits[0].distance - CAM_COLLIDE_PAD);
+      // Roblox-style orbit follow: translate BOTH the orbit target and the
+      // camera by the character's delta this frame. OrbitControls treats the
+      // target as its pivot, so keeping it centered on the character means
+      // the student's right-drag / two-finger swipe orbits around the player,
+      // and pinch-zoom dollies toward the player — exactly the Roblox feel.
+      // We deliberately don't touch the camera's angle here — the user owns it.
+      pivotFromCharacter(newPivot);
+      pivotDelta.subVectors(newPivot, prevPivot);
+      if (pivotDelta.lengthSq() > 0) {
+        refs.camera.position.add(pivotDelta);
+        refs.controls.target.add(pivotDelta);
       }
-
-      camDesired.set(
-        camRayOrigin.x + camRayDir.x * dist,
-        camRayOrigin.y + camRayDir.y * dist,
-        camRayOrigin.z + camRayDir.z * dist,
-      );
-      // Never let the camera dip below ground clearance
-      if (camDesired.y < CAM_MIN_GROUND) camDesired.y = CAM_MIN_GROUND;
-
-      // Frame-rate-independent exponential smoothing (asymptotic, never overshoots)
-      const camK = 1 - Math.exp(-CAM_FOLLOW_RATE * step);
-      const lookK = 1 - Math.exp(-LOOK_FOLLOW_RATE * step);
-
-      if (!camInitialized) {
-        camSmooth.copy(camDesired);
-        lookAtSmooth.copy(camRayOrigin);
-        camInitialized = true;
-      } else {
-        camSmooth.lerp(camDesired, camK);
-        lookAtTarget.copy(camRayOrigin);
-        lookAtSmooth.lerp(lookAtTarget, lookK);
-      }
-      refs.camera.position.copy(camSmooth);
-      refs.camera.lookAt(lookAtSmooth);
+      prevPivot.copy(newPivot);
+      refs.controls.update();
     },
   };
 }

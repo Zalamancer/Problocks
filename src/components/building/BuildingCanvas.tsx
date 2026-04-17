@@ -509,8 +509,8 @@ export function BuildingCanvas() {
     }
 
     function onMove(e: MouseEvent) {
-      // No hover/ghost logic while play-mode is running — the cursor is in
-      // pointer-lock and the user is controlling the character.
+      // No hover/ghost logic while play-mode is running — the user is
+      // controlling the character and orbiting the camera, not placing parts.
       if (useSceneStore.getState().isPlaying) {
         refs!.ghost.visible = false;
         return;

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { useBuildingStore, type EdgeDir } from '@/store/building-store';
 import { useSceneStore, type ScenePart, type PartType } from '@/store/scene-store';
+import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 
 const TILE = 2;
 const WALL_HEIGHT = 3;
@@ -22,6 +23,7 @@ interface SceneRefs {
   wallGroup: THREE.Group;
   /** Parent of all ScenePart meshes — child.userData.id links back to the store. */
   partGroup: THREE.Group;
+  gizmo: UnifiedGizmo3D;
   raycaster: THREE.Raycaster;
   pointer: THREE.Vector2;
   animId: number;
@@ -99,6 +101,10 @@ export function BuildingCanvas() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Block browser gestures (back/forward swipe, pinch-zoom the page) so
+    // the canvas owns every wheel/trackpad event.
+    renderer.domElement.style.touchAction = 'none';
+    renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -110,8 +116,74 @@ export function BuildingCanvas() {
       MIDDLE: THREE.MOUSE.PAN,
       RIGHT: THREE.MOUSE.ROTATE,
     };
+    // We override wheel behavior below so OrbitControls' own dolly is
+    // disabled — otherwise every gesture would fight with zoom.
+    controls.enableZoom = false;
     controls.target.set(0, 0, 0);
     controls.update();
+
+    // --- Trackpad gestures on the canvas ---
+    // Two-finger swipe              → orbit
+    // Shift + two-finger swipe      → pan
+    // Pinch (ctrl/meta + wheel)     → zoom
+    // Also works with a mouse wheel: wheel orbits, shift-wheel pans,
+    // ctrl-wheel zooms — matches the same mental model.
+    const ORBIT_SPEED = 0.005;
+    const PAN_SPEED = 0.0015;
+    const ZOOM_SPEED = 0.01;
+    const MIN_PHI = 0.02;
+    const MAX_PHI = Math.PI - 0.02;
+
+    const tmpOffset = new THREE.Vector3();
+    const tmpSpherical = new THREE.Spherical();
+    const tmpRight = new THREE.Vector3();
+    const tmpUp = new THREE.Vector3();
+    const tmpMove = new THREE.Vector3();
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const dx = e.deltaX;
+      const dy = e.deltaY;
+
+      // Pinch-to-zoom (trackpad synthesizes ctrlKey) or explicit ctrl/meta + wheel.
+      if (e.ctrlKey || e.metaKey) {
+        tmpOffset.copy(camera.position).sub(controls.target);
+        const scale = Math.exp(dy * ZOOM_SPEED);
+        tmpOffset.multiplyScalar(scale);
+        // Clamp so you can't zoom inside-out.
+        const len = tmpOffset.length();
+        if (len > 0.5 && len < 400) {
+          camera.position.copy(controls.target).add(tmpOffset);
+        }
+        return;
+      }
+
+      // Shift → pan. Scale pan by distance so the world moves a consistent
+      // amount under the cursor regardless of zoom level.
+      if (e.shiftKey) {
+        tmpRight.setFromMatrixColumn(camera.matrix, 0);   // camera-local X
+        tmpUp.setFromMatrixColumn(camera.matrix, 1);      // camera-local Y
+        const distance = camera.position.distanceTo(controls.target);
+        tmpMove
+          .set(0, 0, 0)
+          .addScaledVector(tmpRight,  dx * PAN_SPEED * distance)
+          .addScaledVector(tmpUp,    -dy * PAN_SPEED * distance);
+        camera.position.add(tmpMove);
+        controls.target.add(tmpMove);
+        return;
+      }
+
+      // Default: orbit around the target.
+      tmpOffset.copy(camera.position).sub(controls.target);
+      tmpSpherical.setFromVector3(tmpOffset);
+      tmpSpherical.theta += dx * ORBIT_SPEED;
+      tmpSpherical.phi   += dy * ORBIT_SPEED;
+      tmpSpherical.phi = Math.max(MIN_PHI, Math.min(MAX_PHI, tmpSpherical.phi));
+      tmpOffset.setFromSpherical(tmpSpherical);
+      camera.position.copy(controls.target).add(tmpOffset);
+    }
+
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -173,6 +245,27 @@ export function BuildingCanvas() {
     ghost.visible = false;
     scene.add(ghost);
 
+    // Selection gizmo — attach/detach handled by the selection effect below.
+    // onCommit reads the live mesh transform and writes it back to the store.
+    let gizmo!: UnifiedGizmo3D;
+    gizmo = new UnifiedGizmo3D({
+      camera,
+      renderer,
+      controls,
+      onCommit: () => {
+        const target = gizmo.getTarget();
+        if (!target) return;
+        const id = target.userData.id as string | undefined;
+        if (!id) return;
+        useSceneStore.getState().updateSceneObject(id, {
+          position: { x: target.position.x, y: target.position.y, z: target.position.z },
+          rotation: { x: target.rotation.x, y: target.rotation.y, z: target.rotation.z },
+          scale: { x: target.scale.x, y: target.scale.y, z: target.scale.z },
+        });
+      },
+    });
+    scene.add(gizmo.group);
+
     const refs: SceneRefs = {
       scene,
       camera,
@@ -183,6 +276,7 @@ export function BuildingCanvas() {
       floorGroup,
       wallGroup,
       partGroup,
+      gizmo,
       raycaster: new THREE.Raycaster(),
       pointer: new THREE.Vector2(),
       animId: 0,
@@ -193,6 +287,7 @@ export function BuildingCanvas() {
       if (!sceneRef.current) return;
       sceneRef.current.animId = requestAnimationFrame(animate);
       sceneRef.current.controls.update();
+      sceneRef.current.gizmo.update();
       sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
     }
     animate();
@@ -209,8 +304,10 @@ export function BuildingCanvas() {
 
     return () => {
       ro.disconnect();
+      renderer.domElement.removeEventListener('wheel', onWheel);
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);
+        sceneRef.current.gizmo.dispose();
         sceneRef.current.renderer.dispose();
         const canvas = sceneRef.current.renderer.domElement;
         canvas.parentNode?.removeChild(canvas);
@@ -301,6 +398,16 @@ export function BuildingCanvas() {
     }
 
     function onMove(e: MouseEvent) {
+      // Let the gizmo update its hover highlight first. If it's actively
+      // dragging we still want the orbit/ghost code below to stay quiet —
+      // it already does because OrbitControls is disabled during drag.
+      setPointerFromEvent(e);
+      refs!.gizmo.updateHover(refs!.pointer);
+      if (refs!.gizmo.isDragging()) {
+        refs!.ghost.visible = false;
+        return;
+      }
+
       const world = worldFromEvent(e);
       if (!world) {
         refs!.ghost.visible = false;
@@ -311,6 +418,11 @@ export function BuildingCanvas() {
 
     function onDown(e: MouseEvent) {
       if (e.button !== 0) return;
+
+      // 0) Gizmo handle takes priority — if the user clicked a translate /
+      //    rotate / scale handle, start that drag and stop here.
+      setPointerFromEvent(e);
+      if (refs!.gizmo.tryPointerDown(refs!.pointer)) return;
 
       // 1) Click on an existing part always selects it — regardless of tool.
       //    (The only exceptions are 'eraser' which removes it, and 'part'
@@ -482,16 +594,22 @@ export function BuildingCanvas() {
   }, [parts]);
 
   // --- selection highlight: emissive glow on the selected part mesh ---
+  //     Also re-attaches the gizmo. This effect depends on `parts` so after
+  //     the meshes are rebuilt (on commit) the gizmo picks up the fresh mesh.
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
+    let selectedMesh: THREE.Mesh | null = null;
     for (const child of refs.partGroup.children) {
       const mesh = child as THREE.Mesh;
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const isSelected = mesh.userData.id === selectedPartId;
       mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
       mat.emissiveIntensity = isSelected ? 0.35 : 0;
+      if (isSelected) selectedMesh = mesh;
     }
+    if (selectedMesh) refs.gizmo.attach(selectedMesh);
+    else refs.gizmo.detach();
   }, [selectedPartId, parts]);
 
   return <div ref={containerRef} className="w-full h-full" />;

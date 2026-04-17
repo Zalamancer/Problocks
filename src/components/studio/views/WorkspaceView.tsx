@@ -52,6 +52,8 @@ function FloatingBuildToolbar() {
   const setLevel = useBuildingStore((s) => s.setLevel);
   const selectedPiece = useBuildingStore((s) => s.selectedPiece);
   const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
+  const cornerBend = useBuildingStore((s) => s.cornerBend);
+  const setCornerBend = useBuildingStore((s) => s.setCornerBend);
 
   const activeDef = TOOLS.find((t) => t.id === tool);
   const activeKind = activeDef?.pieceKind;
@@ -118,6 +120,26 @@ function FloatingBuildToolbar() {
         >
           <Trash2 size={15} />
         </button>
+      </div>
+
+      {/* Corner-bend slider — global fillet radius applied at every
+          perpendicular wall junction. 0 = sharp 90° corners, 1.0 = full
+          quarter-circle (walls completely consumed by the arc). */}
+      <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-zinc-900/90 backdrop-blur-xl border border-white/10 shadow-lg">
+        <span className="text-[11px] text-zinc-400 shrink-0">Bend</span>
+        <input
+          type="range"
+          min={0}
+          max={1.0}
+          step={0.05}
+          value={cornerBend}
+          onChange={(e) => setCornerBend(parseFloat(e.target.value))}
+          className="w-32 h-1 accent-green-500 cursor-pointer"
+          title="Wall corner bend radius (m). 0 = sharp, 1 = full quarter circle."
+        />
+        <span className="text-[11px] font-mono tabular-nums text-zinc-200 w-10 text-right">
+          {cornerBend.toFixed(2)}m
+        </span>
       </div>
 
       {/* Variant strip — shown whenever the active tool has variants */}

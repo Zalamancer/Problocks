@@ -77,6 +77,16 @@ interface BuildingState {
   /** Grid spans −extent…+extent tiles on both axes. */
   gridExtent: number;
 
+  /**
+   * Global fillet radius (meters) applied at every junction where two
+   * perpendicular wall edges share a vertex. 0 = sharp 90° corners
+   * (legacy rendering via buildPiece). > 0 = walls are trimmed back
+   * by `cornerBend` from the junction and a tangent quarter-arc bridges
+   * the gap. Capped at TILE/2 = 1.0 (full quarter circle).
+   */
+  cornerBend: number;
+  setCornerBend: (n: number) => void;
+
   /** Active piece id per kind — driven by the variant picker. */
   selectedPiece: Record<PieceKind, string>;
   setSelectedPiece: (kind: PieceKind, id: string) => void;
@@ -132,6 +142,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
 
   gridSize: 2,
   gridExtent: 10,
+
+  cornerBend: 0,
+  setCornerBend: (cornerBend) => set({ cornerBend: Math.max(0, Math.min(1.0, cornerBend)) }),
 
   selectedPiece: { ...DEFAULT_PIECE },
   setSelectedPiece: (kind, id) =>

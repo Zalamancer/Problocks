@@ -13,7 +13,7 @@ import { useQualityStore } from '@/store/quality-store';
 import { useLightingStore, rgbToHex, addRgb } from '@/store/lighting-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
-import { buildPiece, TILE, WALL_HEIGHT } from '@/lib/building-kit';
+import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK } from '@/lib/building-kit';
 
 const PART_DEFAULT_SIZE = 2;
 
@@ -164,6 +164,7 @@ export function BuildingCanvas() {
   const roofs = useBuildingStore((s) => s.roofs);
   const cornersRec = useBuildingStore((s) => s.corners);
   const stairsRec = useBuildingStore((s) => s.stairs);
+  const cornerBend = useBuildingStore((s) => s.cornerBend);
   const buildingSelection = useBuildingStore((s) => s.selection);
   const parts = useSceneStore((s) => s.sceneObjects);
   const selectedPartId = useSceneStore((s) => s.selectedPart?.id ?? null);
@@ -772,28 +773,184 @@ export function BuildingCanvas() {
     }
   }, [floors, quality]);
 
-  // Walls
+  // Walls — sharp-corner mode renders each wall via buildPiece (preserves
+  // window/door/textured variants). Bend mode (cornerBend > 0) walks every
+  // tile-vertex junction, trims the two perpendicular walls back by the
+  // bend radius, and emits a tangent quarter-arc bridge in their stead.
+  // Trade-off: bent walls render as solid tinted boxes (no window/door
+  // detail) because we can't trim arbitrary procedural geometry mid-build.
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
     disposeAndClear(refs.wallGroup);
+
+    if (cornerBend <= 0.001) {
+      for (const key of Object.keys(walls)) {
+        const edge = walls[key];
+        const [xs, ys, zs, dir] = key.split(',') as [string, string, string, EdgeDir];
+        const x = +xs, y = +ys, z = +zs;
+        const g = buildPiece(edge.asset, THREE);
+        const wp = wallWorldPlacement(x, y, z, dir);
+        if (edge.position) g.position.set(edge.position.x, edge.position.y, edge.position.z);
+        else g.position.set(wp.x, wp.y, wp.z);
+        if (edge.rotation) g.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
+        else g.rotation.y = wp.rotY;
+        if (edge.scale) g.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
+        g.visible = edge.visible ?? true;
+        g.userData.kind = 'wall';
+        g.userData.key = key;
+        refs.wallGroup.add(g);
+      }
+      return;
+    }
+
+    // ── Bending mode ──────────────────────────────────────────────────────
+    const r = Math.min(cornerBend, TILE / 2);
+
+    // Tile-vertex coordinate convention: vertex (vx,vz) sits at world
+    // (vx*TILE - TILE/2, vz*TILE - TILE/2). Per the store comment:
+    //   N edge of (x,z) → vertices (x,z) and (x+1,z), wall along +X
+    //   E edge of (x,z) → vertices (x+1,z) and (x+1,z+1), wall along +Z
+    type WInfo = {
+      key: string; x: number; y: number; z: number; dir: EdgeDir;
+      tint: string; pos?: { x: number; y: number; z: number };
+      rot?: { x: number; y: number; z: number }; scale?: { x: number; y: number; z: number };
+    };
+    const wallList: WInfo[] = [];
     for (const key of Object.keys(walls)) {
       const edge = walls[key];
-      const [xs, ys, zs, dir] = key.split(',') as [string, string, string, EdgeDir];
-      const x = +xs, y = +ys, z = +zs;
-      const g = buildPiece(edge.asset, THREE);
-      const wp = wallWorldPlacement(x, y, z, dir);
-      if (edge.position) g.position.set(edge.position.x, edge.position.y, edge.position.z);
-      else g.position.set(wp.x, wp.y, wp.z);
-      if (edge.rotation) g.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
-      else g.rotation.y = wp.rotY;
-      if (edge.scale) g.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
-      g.visible = edge.visible ?? true;
-      g.userData.kind = 'wall';
-      g.userData.key = key;
-      refs.wallGroup.add(g);
+      if (edge.visible === false) continue;
+      const [xs, ys, zs, dirRaw] = key.split(',') as [string, string, string, EdgeDir];
+      const tint = edge.color ?? getPiece(edge.asset)?.swatch ?? '#ffffff';
+      wallList.push({
+        key, x: +xs, y: +ys, z: +zs, dir: dirRaw,
+        tint, pos: edge.position, rot: edge.rotation, scale: edge.scale,
+      });
     }
-  }, [walls, quality]);
+
+    function endpointsOf(w: WInfo): [string, string] {
+      if (w.dir === 'N') return [`${w.x},${w.y},${w.z}`, `${w.x + 1},${w.y},${w.z}`];
+      return [`${w.x + 1},${w.y},${w.z}`, `${w.x + 1},${w.y},${w.z + 1}`];
+    }
+    /** Unit vector in xz from junction along this wall's interior. */
+    function dirAway(w: WInfo, isFirstEnd: boolean): { dx: number; dz: number } {
+      if (w.dir === 'N') return { dx: isFirstEnd ? 1 : -1, dz: 0 };
+      return { dx: 0, dz: isFirstEnd ? 1 : -1 };
+    }
+
+    const vertexMap = new Map<string, { idx: number; first: boolean }[]>();
+    function pushAt(vk: string, link: { idx: number; first: boolean }) {
+      let arr = vertexMap.get(vk);
+      if (!arr) { arr = []; vertexMap.set(vk, arr); }
+      arr.push(link);
+    }
+    for (let i = 0; i < wallList.length; i++) {
+      const [a, b] = endpointsOf(wallList[i]);
+      pushAt(a, { idx: i, first: true });
+      pushAt(b, { idx: i, first: false });
+    }
+
+    // trim[i] = [trimAtFirstEnd, trimAtSecondEnd] in meters
+    const trim: [number, number][] = wallList.map(() => [0, 0]);
+
+    for (const [vk, links] of vertexMap.entries()) {
+      if (links.length !== 2) continue; // only handle clean 2-way junctions
+      const wA = wallList[links[0].idx];
+      const wB = wallList[links[1].idx];
+      if (wA.dir === wB.dir) continue; // colinear, no fillet
+
+      // Trim each wall at the end touching this vertex.
+      trim[links[0].idx][links[0].first ? 0 : 1] = r;
+      trim[links[1].idx][links[1].first ? 0 : 1] = r;
+
+      // Junction world position
+      const [vxs, vys, vzs] = vk.split(',');
+      const vx = +vxs, vy = +vys, vz = +vzs;
+      const jx = vx * TILE - TILE / 2;
+      const jz = vz * TILE - TILE / 2;
+      const baseY = vy * WALL_HEIGHT;
+
+      const dA = dirAway(wA, links[0].first);
+      const dB = dirAway(wB, links[1].first);
+      // Arc center: J + r*(dA + dB) — tangent to both wall centerlines.
+      const cx = jx + r * (dA.dx + dB.dx);
+      const cz = jz + r * (dA.dz + dB.dz);
+      // Tangent points on each wall (where the trim ends and the arc begins)
+      const tAx = jx + r * dA.dx, tAz = jz + r * dA.dz;
+      const tBx = jx + r * dB.dx, tBz = jz + r * dB.dz;
+
+      const startAng = Math.atan2(tAz - cz, tAx - cx);
+      const endAng = Math.atan2(tBz - cz, tBx - cx);
+      let delta = endAng - startAng;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+
+      const SEG = 10;
+      const arcGroup = new THREE.Group();
+      arcGroup.userData.kind = 'wall-arc';
+      arcGroup.userData.junction = vk;
+      const arcMat = new THREE.MeshStandardMaterial({ color: wA.tint, roughness: 1 });
+      for (let s = 0; s < SEG; s++) {
+        const a0 = startAng + (s / SEG) * delta;
+        const a1 = startAng + ((s + 1) / SEG) * delta;
+        const aMid = (a0 + a1) / 2;
+        const x0 = cx + Math.cos(a0) * r, z0 = cz + Math.sin(a0) * r;
+        const x1 = cx + Math.cos(a1) * r, z1 = cz + Math.sin(a1) * r;
+        const chord = Math.hypot(x1 - x0, z1 - z0) + WALL_THICK * 0.35;
+        const seg = new THREE.Mesh(
+          new THREE.BoxGeometry(chord, WALL_HEIGHT, WALL_THICK),
+          arcMat,
+        );
+        seg.position.set(
+          cx + Math.cos(aMid) * r,
+          baseY + WALL_HEIGHT / 2,
+          cz + Math.sin(aMid) * r,
+        );
+        // Align segment's local +X with the tangent direction at aMid.
+        seg.rotation.y = -aMid - Math.PI / 2;
+        seg.castShadow = true;
+        seg.receiveShadow = true;
+        arcGroup.add(seg);
+      }
+      refs.wallGroup.add(arcGroup);
+    }
+
+    // Emit each wall as a single trimmed solid box.
+    for (let i = 0; i < wallList.length; i++) {
+      const w = wallList[i];
+      const [ts, te] = trim[i];
+      const length = TILE - ts - te;
+      if (length <= 0.01) continue;
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(length, WALL_HEIGHT, WALL_THICK),
+        new THREE.MeshStandardMaterial({ color: w.tint, roughness: 1 }),
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const baseY = w.y * WALL_HEIGHT + WALL_HEIGHT / 2;
+      if (w.dir === 'N') {
+        // wall sits at z = z*T - T/2, X-range slid inward by ts/te
+        const cxw = w.x * TILE - TILE / 2 + ts + length / 2;
+        const czw = w.z * TILE - TILE / 2;
+        mesh.position.set(cxw, baseY, czw);
+        mesh.rotation.y = 0;
+      } else {
+        const cxw = w.x * TILE + TILE / 2;
+        const czw = w.z * TILE - TILE / 2 + ts + length / 2;
+        mesh.position.set(cxw, baseY, czw);
+        mesh.rotation.y = -Math.PI / 2;
+      }
+      // Manual transforms (set via gizmo) override base placement for
+      // power-users who tuned a wall by hand. They were authored against
+      // an untrimmed wall, so the result may look off — accepted tradeoff.
+      if (w.pos) mesh.position.set(w.pos.x, w.pos.y, w.pos.z);
+      if (w.rot) mesh.rotation.set(w.rot.x, w.rot.y, w.rot.z);
+      if (w.scale) mesh.scale.set(w.scale.x, w.scale.y, w.scale.z);
+      mesh.userData.kind = 'wall';
+      mesh.userData.key = w.key;
+      refs.wallGroup.add(mesh);
+    }
+  }, [walls, quality, cornerBend]);
 
   // Roofs
   useEffect(() => {

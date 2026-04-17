@@ -91,6 +91,8 @@ export function BuildingToolbar() {
   const setLevel = useBuildingStore((s) => s.setLevel);
   const selectedPiece = useBuildingStore((s) => s.selectedPiece);
   const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
+  const cornerBend = useBuildingStore((s) => s.cornerBend);
+  const setCornerBend = useBuildingStore((s) => s.setCornerBend);
   const clear = useBuildingStore((s) => s.clear);
 
   const floorCount = Object.keys(useBuildingStore((s) => s.floors)).length;
@@ -164,6 +166,29 @@ export function BuildingToolbar() {
           </div>
           <p className="mt-1.5 text-[10px] text-zinc-500 leading-relaxed">
             Ground = L0. Each step raises placement by 3m (one wall-height).
+          </p>
+        </PanelSection>
+
+        {/* Global wall-corner bend — fillets every perpendicular wall
+            junction with a tangent quarter-arc. */}
+        <PanelSection title="Corner bend" collapsible defaultOpen>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={0}
+              max={1.0}
+              step={0.05}
+              value={cornerBend}
+              onChange={(e) => setCornerBend(parseFloat(e.target.value))}
+              className="flex-1 h-1 accent-green-500 cursor-pointer"
+            />
+            <span className="text-[11px] font-mono tabular-nums text-zinc-200 w-12 text-right">
+              {cornerBend.toFixed(2)}m
+            </span>
+          </div>
+          <p className="mt-1.5 text-[10px] text-zinc-500 leading-relaxed">
+            0 = sharp 90° · 1.0 = full quarter circle. Trims walls and
+            bridges with a tangent arc at perpendicular junctions.
           </p>
         </PanelSection>
 

@@ -70,42 +70,6 @@ function buttress(color: string): PieceDef['build'] {
   };
 }
 
-/**
- * Quarter-circle curved wall piece. Centered at the tile vertex with the
- * arc sweeping 90° from local +X to +Z (outside corner). Approximated as
- * a chain of small flat-shaded box segments so it stays in the Roblox-y
- * low-poly aesthetic and renders cheap on integrated GPUs. The user
- * adjusts the radius by uniformly scaling the placed corner via the
- * gizmo (X/Z scale = radius multiplier).
- */
-function curvedWall(color: string, radius = 1.0, segments = 12): PieceDef['build'] {
-  return ({ THREE, wallHeight, wallThick }) => {
-    const g = new THREE.Group();
-    const arcSpan = Math.PI / 2;
-    for (let i = 0; i < segments; i++) {
-      const a0 = (i / segments) * arcSpan;
-      const a1 = ((i + 1) / segments) * arcSpan;
-      const aMid = (a0 + a1) / 2;
-      const x0 = Math.cos(a0) * radius;
-      const z0 = Math.sin(a0) * radius;
-      const x1 = Math.cos(a1) * radius;
-      const z1 = Math.sin(a1) * radius;
-      // chord length + small overlap so adjacent segments seam-hide
-      const chordLen = Math.hypot(x1 - x0, z1 - z0) + wallThick * 0.25;
-      const seg = makeBox(
-        THREE,
-        { x: chordLen, y: wallHeight, z: wallThick },
-        color,
-        { x: Math.cos(aMid) * radius, y: wallHeight / 2, z: Math.sin(aMid) * radius },
-      );
-      // Rotate each segment so it sits tangent to the arc at its midpoint.
-      seg.rotation.y = -aMid;
-      g.add(seg);
-    }
-    return g;
-  };
-}
-
 function lamppost(postColor: string, lampColor: string): PieceDef['build'] {
   return ({ THREE, wallHeight }) => {
     const g = new THREE.Group();
@@ -141,14 +105,4 @@ export const CORNER_PIECES: PieceDef[] = [
   { id: 'cnr.buttress_stone',  kind: 'corner', label: 'Buttress',        swatch: '#4dc4ff', build: buttress('#4dc4ff') },
   { id: 'cnr.lamppost_black',  kind: 'corner', label: 'Lamp Post',       swatch: '#1a1a1a', build: lamppost('#1a1a1a', '#ffff00') },
   { id: 'cnr.buttress_wood',   kind: 'corner', label: 'Buttress Wood',   swatch: '#8b4a20', build: buttress('#8b4a20') },
-  // Curved wall corners — drop one at a tile vertex where two perpendicular
-  // walls meet, then rotate to point at the outside, then scale X/Z to dial
-  // in the bend radius. Multiple base radii so the variant grid covers tight,
-  // medium, and wide curves without needing to scale.
-  { id: 'cnr.curved_tight_white', kind: 'corner', label: 'Curve · Tight',   swatch: '#ffffff', build: curvedWall('#ffffff', 0.5) },
-  { id: 'cnr.curved_med_white',   kind: 'corner', label: 'Curve · Medium',  swatch: '#ffffff', build: curvedWall('#ffffff', 1.0) },
-  { id: 'cnr.curved_wide_white',  kind: 'corner', label: 'Curve · Wide',    swatch: '#ffffff', build: curvedWall('#ffffff', 1.5) },
-  { id: 'cnr.curved_med_red',     kind: 'corner', label: 'Curve · Red',     swatch: '#ff2e44', build: curvedWall('#ff2e44', 1.0) },
-  { id: 'cnr.curved_med_sky',     kind: 'corner', label: 'Curve · Sky',     swatch: '#4dc4ff', build: curvedWall('#4dc4ff', 1.0) },
-  { id: 'cnr.curved_med_wood',    kind: 'corner', label: 'Curve · Wood',    swatch: '#8b4a20', build: curvedWall('#8b4a20', 1.0) },
 ];

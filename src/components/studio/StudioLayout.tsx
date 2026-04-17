@@ -6,6 +6,8 @@ import { StudioTerminal } from './Terminal';
 import { GamePreview, type GamePreviewHandle, type GameObjectInfo } from './GamePreview';
 import { GameToolbar } from './GameToolbar';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
+import { BottomTabBar } from './BottomTabBar';
+import { SettingsPanel } from './panels/SettingsPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
 import { TimelineBar } from './views/TimelineBar';
 import { KanbanView } from './views/KanbanView';
@@ -48,8 +50,6 @@ function wallDefaultPos(key: string) {
   return { x: x * B_TILE + B_TILE / 2, y: B_WALL_HEIGHT / 2, z: z * B_TILE };
 }
 
-type ViewMode = 'canvas' | 'kanban' | '3d';
-
 function EmptyState({ onStart }: { onStart: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-8">
@@ -79,7 +79,8 @@ export function StudioLayout() {
   // page ("Create game" CTA); by the time the user reaches /studio the
   // project-board store has already been initialised and persisted.
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('3d');
+  const viewMode = useStudio((s) => s.viewMode);
+  const setViewMode = useStudio((s) => s.setViewMode);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -328,7 +329,11 @@ export function StudioLayout() {
                     onSwitchToPreview={() => setOpenFileName(null)}
                   />
                 );
-              })() : gameHtml && !terminalMaximized ? (
+              })() : viewMode === 'settings' ? (
+                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <SettingsPanel />
+                </div>
+              ) : gameHtml && !terminalMaximized ? (
                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                   <GameToolbar previewRef={previewRef} />
                   <GamePreview
@@ -414,6 +419,8 @@ export function StudioLayout() {
                 />
               );
             })()}
+
+            <BottomTabBar />
 
           </div>
 

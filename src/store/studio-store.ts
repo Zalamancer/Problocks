@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'settings';
+export type LeftPanelGroup = 'scene' | 'assets' | 'chat';
+export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings';
 export type Theme = 'dark' | 'light';
 export type FlowDirection = 'LR' | 'TB';
 
@@ -20,6 +21,9 @@ export interface StudioStore {
   leftPanelActiveGroup: LeftPanelGroup;
   toggleLeftPanel: () => void;
   setLeftPanelGroup: (group: LeftPanelGroup) => void;
+
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
 
   projectName: string;
   setProjectName: (name: string) => void;
@@ -51,6 +55,9 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   leftPanelActiveGroup: 'assets',
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
   setLeftPanelGroup: (group) => set({ leftPanelActiveGroup: group }),
+
+  viewMode: '3d',
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   projectName: 'Untitled Game',
   setProjectName: (name) => set({ projectName: name }),

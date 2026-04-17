@@ -23,7 +23,7 @@ export function TopMenuBar() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [hoverMode, setHoverMode] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const { projectName, theme, toggleTheme, games, activeGameId } = useStudio();
+  const { projectName, theme, toggleTheme, games, activeGameId, setViewMode } = useStudio();
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
 
   useEffect(() => {
@@ -131,7 +131,13 @@ export function TopMenuBar() {
         <PanelActionButton onClick={() => {}} variant="primary" icon={Upload} size="sm">
           Publish
         </PanelActionButton>
-        <IconButton icon={Settings} variant="ghost" size="sm" tooltip="Settings" />
+        <IconButton
+          icon={Settings}
+          variant="ghost"
+          size="sm"
+          tooltip="Settings"
+          onClick={() => setViewMode('settings')}
+        />
       </div>
     </div>
   );

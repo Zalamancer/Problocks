@@ -8,7 +8,33 @@ import { makeBox, type PieceDef } from './types';
  * We approximate sloped roofs by stacking thinner boxes at incremental
  * offsets ("stair-step" slope) — cheap, flat-shaded, reads as sloped
  * from gameplay cameras.
+ *
+ * Slope shading ("bending"): stair-step slopes are dominated visually by
+ * the +Y tops of each step, which all share shade 1.0 — so without help
+ * both sides of a gable look identical. To mimic the per-face wall
+ * shading on roofs, we split each step into halves (gable/shed) or
+ * quadrants (hip/pyramid/dome/tower) and pre-multiply each piece's base
+ * color by a directional factor. The back / left / back-left pieces get
+ * darker so the slope "bends" read correctly from any camera angle.
  */
+
+/* ──────────────── SLOPE SHADE HELPERS ──────────────── */
+
+/** Directional tint factors, aligned with FACE_SHADE directions. */
+const SLOPE_FRONT      = 1.00; // +Z half
+const SLOPE_BACK       = 0.65; // -Z half
+const SLOPE_RIGHT      = 0.90; // +X half
+const SLOPE_LEFT       = 0.74; // -X half
+// 4-way quadrants: combine directional shades (averaged, not multiplied,
+// so values stay in a comfortable range).
+const QUAD_FRONT_RIGHT = (SLOPE_FRONT + SLOPE_RIGHT) / 2; // 0.95
+const QUAD_FRONT_LEFT  = (SLOPE_FRONT + SLOPE_LEFT)  / 2; // 0.87
+const QUAD_BACK_RIGHT  = (SLOPE_BACK  + SLOPE_RIGHT) / 2; // 0.775
+const QUAD_BACK_LEFT   = (SLOPE_BACK  + SLOPE_LEFT)  / 2; // 0.695
+
+function tint(THREE: typeof import('three'), hex: string, factor: number): string {
+  return '#' + new THREE.Color(hex).multiplyScalar(factor).getHexString();
+}
 
 /* ──────────────── ROOF TILES (10) ──────────────── */
 
@@ -27,14 +53,28 @@ function gableRoof(color: string, ridgeAlong: 'x' | 'z'): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 8;
     const peakH = 1.2;
-    for (let i = 0; i < steps; i++) {
-      const r = i / (steps - 1);
-      const y = r * peakH;
-      const w = tile * (1 - r);
-      if (ridgeAlong === 'x') {
-        g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, color, { y }));
-      } else {
-        g.add(makeBox(THREE, { x: w, y: peakH / steps + 0.02, z: tile }, color, { y }));
+    const stepH = peakH / steps + 0.02;
+    if (ridgeAlong === 'x') {
+      const front = color;
+      const back = tint(THREE, color, SLOPE_BACK);
+      for (let i = 0; i < steps; i++) {
+        const r = i / (steps - 1);
+        const y = r * peakH;
+        const w = tile * (1 - r);
+        // front half (+Z)
+        g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, front, { y, z:  w / 4 }));
+        // back half (-Z)
+        g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, back,  { y, z: -w / 4 }));
+      }
+    } else {
+      const right = tint(THREE, color, SLOPE_RIGHT);
+      const left  = tint(THREE, color, SLOPE_LEFT);
+      for (let i = 0; i < steps; i++) {
+        const r = i / (steps - 1);
+        const y = r * peakH;
+        const w = tile * (1 - r);
+        g.add(makeBox(THREE, { x: w / 2, y: stepH, z: tile }, right, { y, x:  w / 4 }));
+        g.add(makeBox(THREE, { x: w / 2, y: stepH, z: tile }, left,  { y, x: -w / 4 }));
       }
     }
     return g;
@@ -46,11 +86,21 @@ function hipRoof(color: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 8;
     const peakH = 1.2;
+    const stepH = peakH / steps + 0.02;
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+    const br = tint(THREE, color, QUAD_BACK_RIGHT);
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const s = tile * (1 - r);
-      g.add(makeBox(THREE, { x: s, y: peakH / steps + 0.02, z: s }, color, { y }));
+      const h = s / 2;
+      // 4 quadrants around the center of this step
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fr, { y, x:  h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fl, { y, x: -h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, br, { y, x:  h / 2, z: -h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, bl, { y, x: -h / 2, z: -h / 2 }));
     }
     return g;
   };
@@ -61,14 +111,18 @@ function shedRoof(color: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 8;
     const peakH = 1.0;
+    const stepH = peakH / steps + 0.02;
+    // A shed slopes one way (up toward +Z-back here). Split each step in X
+    // so the right side is visibly brighter than the left — matches walls.
+    const right = tint(THREE, color, SLOPE_RIGHT);
+    const left  = tint(THREE, color, SLOPE_LEFT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
-      // each step shrinks on one side only
       const remaining = tile * (1 - r);
-      g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: remaining }, color, {
-        y, z: -tile / 2 + remaining / 2,
-      }));
+      const z = -tile / 2 + remaining / 2;
+      g.add(makeBox(THREE, { x: tile / 2, y: stepH, z: remaining }, right, { y, x:  tile / 4, z }));
+      g.add(makeBox(THREE, { x: tile / 2, y: stepH, z: remaining }, left,  { y, x: -tile / 4, z }));
     }
     return g;
   };
@@ -79,13 +133,17 @@ function thatchedGable(): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 10;
     const peakH = 1.4;
+    const stepH = peakH / steps + 0.025;
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const w = tile * (1 - r * 0.95);
       // alternate two golden-straw tones for texture
       const c = i % 2 ? '#ffd60a' : '#ffb800';
-      g.add(makeBox(THREE, { x: tile * 1.02, y: peakH / steps + 0.025, z: w }, c, { y }));
+      const front = c;
+      const back  = tint(THREE, c, SLOPE_BACK);
+      g.add(makeBox(THREE, { x: tile * 1.02, y: stepH, z: w / 2 }, front, { y, z:  w / 4 }));
+      g.add(makeBox(THREE, { x: tile * 1.02, y: stepH, z: w / 2 }, back,  { y, z: -w / 4 }));
     }
     return g;
   };
@@ -96,12 +154,20 @@ function domed(color: string, cap: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 10;
     const peakH = 1.5;
+    const stepH = peakH / steps + 0.02;
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+    const br = tint(THREE, color, QUAD_BACK_RIGHT);
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
-      // dome profile: sin falloff
       const s = tile * Math.cos((r * Math.PI) / 2);
-      g.add(makeBox(THREE, { x: s, y: peakH / steps + 0.02, z: s }, color, { y }));
+      const h = s / 2;
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fr, { y, x:  h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fl, { y, x: -h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, br, { y, x:  h / 2, z: -h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, bl, { y, x: -h / 2, z: -h / 2 }));
     }
     // finial cap
     g.add(makeBox(THREE, { x: 0.2, y: 0.3, z: 0.2 }, cap, { y: peakH + 0.1 }));
@@ -112,14 +178,18 @@ function domed(color: string, cap: string): PieceDef['build'] {
 function chimneyRoof(roofColor: string): PieceDef['build'] {
   return ({ THREE, tile }) => {
     const g = new THREE.Group();
-    // base flat-gable section
+    // base flat-gable section (split front/back halves)
     const steps = 6;
     const peakH = 0.8;
+    const stepH = peakH / steps + 0.02;
+    const front = roofColor;
+    const back  = tint(THREE, roofColor, SLOPE_BACK);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const w = tile * (1 - r);
-      g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, roofColor, { y }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, front, { y, z:  w / 4 }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, back,  { y, z: -w / 4 }));
     }
     // chimney
     g.add(makeBox(THREE, { x: 0.4, y: 1.2, z: 0.4 }, '#ff5252', { y: 0.6 + 0.05, x: tile * 0.25, z: tile * 0.25 }));
@@ -133,11 +203,15 @@ function skylight(roofColor: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 6;
     const peakH = 0.9;
+    const stepH = peakH / steps + 0.02;
+    const front = roofColor;
+    const back  = tint(THREE, roofColor, SLOPE_BACK);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const w = tile * (1 - r);
-      g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, roofColor, { y }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, front, { y, z:  w / 4 }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, back,  { y, z: -w / 4 }));
     }
     // glass pane
     const glass = new THREE.Mesh(
@@ -184,13 +258,24 @@ function hipCorner(color: string, trim: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 8;
     const peakH = 1.2;
+    const stepH = peakH / steps + 0.02;
+    // hipCorner shrinks diagonally toward -X/-Z, so each step is a single
+    // tinted block — pick the back-left quadrant shade so it reads as the
+    // corner receding into shadow.
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const s = tile * (1 - r);
-      // offset toward one corner so it reads as a hip corner
-      g.add(makeBox(THREE, { x: s, y: peakH / steps + 0.02, z: s }, color, {
-        y, x: -((tile - s) / 2), z: -((tile - s) / 2),
+      const h = s / 2;
+      // front-right half (brightest): at the outer corner
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fr, {
+        y, x: -((tile - s) / 2) + h / 2, z: -((tile - s) / 2) + h / 2,
+      }));
+      // back-left half (darker): at the recessed corner
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, bl, {
+        y, x: -((tile - s) / 2) - h / 2, z: -((tile - s) / 2) - h / 2,
       }));
     }
     // ridge cap
@@ -204,11 +289,20 @@ function pyramidCap(color: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 10;
     const peakH = 1.4;
+    const stepH = peakH / steps + 0.02;
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+    const br = tint(THREE, color, QUAD_BACK_RIGHT);
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const s = tile * (1 - r);
-      g.add(makeBox(THREE, { x: s, y: peakH / steps + 0.02, z: s }, color, { y }));
+      const h = s / 2;
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fr, { y, x:  h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fl, { y, x: -h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, br, { y, x:  h / 2, z: -h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, bl, { y, x: -h / 2, z: -h / 2 }));
     }
     return g;
   };
@@ -230,11 +324,15 @@ function gableEnd(color: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 8;
     const peakH = 1.2;
+    const stepH = peakH / steps + 0.02;
+    const right = tint(THREE, color, SLOPE_RIGHT);
+    const left  = tint(THREE, color, SLOPE_LEFT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const w = tile * (1 - r);
-      g.add(makeBox(THREE, { x: w, y: peakH / steps + 0.02, z: tile }, color, { y }));
+      g.add(makeBox(THREE, { x: w / 2, y: stepH, z: tile }, right, { y, x:  w / 4 }));
+      g.add(makeBox(THREE, { x: w / 2, y: stepH, z: tile }, left,  { y, x: -w / 4 }));
     }
     // pediment wall at the end
     g.add(makeBox(THREE, { x: tile, y: peakH, z: 0.15 }, '#ffffff', { y: peakH / 2, z: -tile / 2 + 0.1 }));
@@ -247,11 +345,15 @@ function eaveGutter(color: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 6;
     const peakH = 0.7;
+    const stepH = peakH / steps + 0.02;
+    const front = color;
+    const back  = tint(THREE, color, SLOPE_BACK);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const w = tile * (1 - r);
-      g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, color, { y }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, front, { y, z:  w / 4 }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, back,  { y, z: -w / 4 }));
     }
     // gutter lip along the front (Z = +tile/2)
     g.add(makeBox(THREE, { x: tile, y: 0.1, z: 0.12 }, '#ffd60a', { y: 0.1, z: tile / 2 + 0.05 }));
@@ -263,14 +365,18 @@ function eaveGutter(color: string): PieceDef['build'] {
 function dormer(color: string): PieceDef['build'] {
   return ({ THREE, tile }) => {
     const g = new THREE.Group();
-    // underlying gable
+    // underlying gable (split front/back halves)
     const steps = 7;
     const peakH = 1.0;
+    const stepH = peakH / steps + 0.02;
+    const front = color;
+    const back  = tint(THREE, color, SLOPE_BACK);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const w = tile * (1 - r);
-      g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, color, { y }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, front, { y, z:  w / 4 }));
+      g.add(makeBox(THREE, { x: tile, y: stepH, z: w / 2 }, back,  { y, z: -w / 4 }));
     }
     // dormer box
     g.add(makeBox(THREE, { x: 0.9, y: 0.9, z: 0.6 }, '#ffffff', { y: 0.45, z: tile * 0.25 }));
@@ -295,11 +401,20 @@ function towerCap(color: string, flag: string): PieceDef['build'] {
     const g = new THREE.Group();
     const steps = 12;
     const peakH = 2.0;
+    const stepH = peakH / steps + 0.02;
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+    const br = tint(THREE, color, QUAD_BACK_RIGHT);
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
     for (let i = 0; i < steps; i++) {
       const r = i / (steps - 1);
       const y = r * peakH;
       const s = tile * (1 - r);
-      g.add(makeBox(THREE, { x: s, y: peakH / steps + 0.02, z: s }, color, { y }));
+      const h = s / 2;
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fr, { y, x:  h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, fl, { y, x: -h / 2, z:  h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, br, { y, x:  h / 2, z: -h / 2 }));
+      g.add(makeBox(THREE, { x: h, y: stepH, z: h }, bl, { y, x: -h / 2, z: -h / 2 }));
     }
     // flagpole
     g.add(makeBox(THREE, { x: 0.06, y: 0.6, z: 0.06 }, '#2a2a2a', { y: peakH + 0.3 }));

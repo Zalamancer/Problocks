@@ -220,7 +220,7 @@ export function BuildingCanvas() {
     controls.minDistance = 1.5;
     controls.maxDistance = 150;
     controls.mouseButtons = {
-      LEFT: -1 as unknown as THREE.MOUSE,
+      LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: -1 as unknown as THREE.MOUSE,
       RIGHT: THREE.MOUSE.ROTATE,
     };
@@ -1262,34 +1262,62 @@ export function BuildingCanvas() {
     else refs.gizmo.detach();
   }, [selectedPartId, parts, buildingSelection, floors, walls, roofs, cornersRec, stairsRec]);
 
-  // Drag-drop of GLB assets from the asset panel
+  // Drag-drop of GLB assets from the asset panel.
+  // Handlers read `sceneRef.current` LIVE (not at effect-setup time) so that
+  // HMR / quality-setting rebuilds of the scene don't leave the drop handler
+  // pointing at a disposed renderer + camera.
   useEffect(() => {
-    const refs = sceneRef.current;
-    if (!refs) return;
     const el = containerRef.current;
     if (!el) return;
 
+    const MIME = 'application/x-problocks-asset';
+
+    function hasAssetType(dt: DataTransfer | null): boolean {
+      if (!dt) return false;
+      const types = dt.types;
+      if (!types) return false;
+      for (let i = 0; i < types.length; i++) {
+        if (types[i] === MIME) return true;
+      }
+      return false;
+    }
+
     function onDragOver(e: DragEvent) {
-      if (!e.dataTransfer) return;
-      if (!Array.from(e.dataTransfer.types).includes('application/x-problocks-asset')) return;
+      if (!hasAssetType(e.dataTransfer)) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     }
     function onDrop(e: DragEvent) {
       if (!e.dataTransfer) return;
-      const modelName = e.dataTransfer.getData('application/x-problocks-asset');
+      const modelName = e.dataTransfer.getData(MIME);
       if (!modelName) return;
       e.preventDefault();
-      const rect = refs!.renderer.domElement.getBoundingClientRect();
-      refs!.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      refs!.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      refs!.raycaster.setFromCamera(refs!.pointer, refs!.camera);
-      const hits = refs!.raycaster.intersectObject(refs!.ground);
-      if (!hits.length) return;
-      const pt = hits[0].point;
+      const refs = sceneRef.current;
+      if (!refs) {
+        console.warn('[drop] sceneRef not ready — asset drop ignored');
+        return;
+      }
+      const rect = refs.renderer.domElement.getBoundingClientRect();
+      refs.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      refs.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      refs.raycaster.setFromCamera(refs.pointer, refs.camera);
+      // Prefer the invisible level-plane (always matches the active level
+      // height, and is an infinite flat target) over the baseplate mesh so a
+      // drop outside the 128×128 baseplate still lands somewhere sensible.
+      let pt: THREE.Vector3 | null = null;
+      const planeHits = refs.raycaster.intersectObject(refs.levelPlane);
+      if (planeHits.length) pt = planeHits[0].point;
+      else {
+        const groundHits = refs.raycaster.intersectObject(refs.ground);
+        if (groundHits.length) pt = groundHits[0].point;
+      }
+      if (!pt) {
+        console.warn('[drop] raycast missed both levelPlane and ground');
+        return;
+      }
       useSceneStore.getState().addPart({
         name: modelName, partType: 'GLB', modelName,
-        position: { x: pt.x, y: 0, z: pt.z }, scale: { x: 1, y: 1, z: 1 },
+        position: { x: pt.x, y: pt.y, z: pt.z }, scale: { x: 1, y: 1, z: 1 },
       });
     }
     el.addEventListener('dragover', onDragOver);

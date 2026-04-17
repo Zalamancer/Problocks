@@ -598,7 +598,10 @@ export function BuildingCanvas() {
   //     the meshes are rebuilt (on commit) the gizmo picks up the fresh mesh.
   useEffect(() => {
     const refs = sceneRef.current;
-    if (!refs) return;
+    // Guard against HMR / StrictMode mid-cleanup states where refs may be
+    // present but individual fields (gizmo, partGroup) are missing or
+    // disposed. The init effect will re-populate and re-run this effect.
+    if (!refs || !refs.gizmo || !refs.partGroup) return;
     let selectedMesh: THREE.Mesh | null = null;
     for (const child of refs.partGroup.children) {
       const mesh = child as THREE.Mesh;

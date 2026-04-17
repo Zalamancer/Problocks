@@ -859,18 +859,26 @@ export function BuildingCanvas() {
       const x = +xs, y = +ys, z = +zs;
       const tint = cell.color ?? getPiece(cell.asset)?.swatch ?? '#ffffff';
 
-      type CornerDef = { sx: number; sz: number; vk: string; inDx: number; inDz: number };
+      // A floor at level y sits atop walls at level y-1 and may have walls
+      // at level y rising from it, so we match a corner against fillets at
+      // either y. Without this, upper-story floors ignore the wall bends
+      // directly beneath them when the user hasn't also placed walls at
+      // their own level yet.
+      type CornerDef = { sx: number; sz: number; cx: number; cz: number; inDx: number; inDz: number };
       const corners: CornerDef[] = [
-        { sx: -TILE / 2, sz: -TILE / 2, vk: `${x},${y},${z}`,         inDx: +1, inDz: +1 }, // NW
-        { sx: +TILE / 2, sz: -TILE / 2, vk: `${x + 1},${y},${z}`,     inDx: -1, inDz: +1 }, // NE
-        { sx: +TILE / 2, sz: +TILE / 2, vk: `${x + 1},${y},${z + 1}`, inDx: -1, inDz: -1 }, // SE
-        { sx: -TILE / 2, sz: +TILE / 2, vk: `${x},${y},${z + 1}`,     inDx: +1, inDz: -1 }, // SW
+        { sx: -TILE / 2, sz: -TILE / 2, cx: x,     cz: z,     inDx: +1, inDz: +1 }, // NW
+        { sx: +TILE / 2, sz: -TILE / 2, cx: x + 1, cz: z,     inDx: -1, inDz: +1 }, // NE
+        { sx: +TILE / 2, sz: +TILE / 2, cx: x + 1, cz: z + 1, inDx: -1, inDz: -1 }, // SE
+        { sx: -TILE / 2, sz: +TILE / 2, cx: x,     cz: z + 1, inDx: +1, inDz: -1 }, // SW
       ];
-      const rounded = corners.map((c) => {
-        const f = filletDir.get(c.vk);
+      const cornerRoundedAtY = (c: CornerDef, yy: number) => {
+        const f = filletDir.get(`${c.cx},${yy},${c.cz}`);
         if (!f) return false;
         return Math.sign(f.dx) === c.inDx && Math.sign(f.dz) === c.inDz;
-      });
+      };
+      const rounded = corners.map((c) =>
+        cornerRoundedAtY(c, y) || cornerRoundedAtY(c, y - 1),
+      );
       // Legs in walk order: NW→NE = +X, NE→SE = +Z, SE→SW = -X, SW→NW = -Z.
       const legDirs = [
         { dx: +1, dz:  0 },

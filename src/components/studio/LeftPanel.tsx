@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, Layers, Hammer } from 'lucide-react';
+import { FolderOpen, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
 import { IconButton } from '@/components/ui';
@@ -8,7 +8,6 @@ import type { LucideIcon } from 'lucide-react';
 import { AssetsPanel }   from './panels/AssetsPanel';
 import { ChatPanel }     from './panels/ChatPanel';
 import { ScenePanel }    from './panels/ScenePanel';
-import { BuildPanel }    from './panels/BuildPanel';
 
 interface TabGroupDef {
   id: LeftPanelGroup;
@@ -18,7 +17,6 @@ interface TabGroupDef {
 
 const TAB_GROUPS: TabGroupDef[] = [
   { id: 'scene',    label: 'Scene',    icon: Layers },
-  { id: 'build',    label: 'Build',    icon: Hammer },
   { id: 'assets',   label: 'Assets',   icon: FolderOpen },
   { id: 'chat',     label: 'Chat',     icon: MessageSquare },
 ];
@@ -26,7 +24,6 @@ const TAB_GROUPS: TabGroupDef[] = [
 function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onSceneSelect?: (id: string) => void }) {
   switch (group) {
     case 'scene':    return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
-    case 'build':    return <BuildPanel />;
     case 'assets':   return <AssetsPanel />;
     case 'chat':     return <ChatPanel />;
   }

@@ -461,6 +461,7 @@ export function StudioLayout() {
               part={buildingPart}
               onUpdate={handleBuildingPartUpdate}
               onDelete={handleBuildingPartDelete}
+              showBuilding
             />
           ) : lightingPanelOpen ? (
             <WorkspacePropertiesPanel />

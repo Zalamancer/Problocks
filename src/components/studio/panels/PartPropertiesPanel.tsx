@@ -5,6 +5,7 @@ import {
   PanelToggle, PanelActionButton, PanelColorSwatches,
 } from '@/components/ui';
 import type { ScenePart, TexturePreset, PartType } from '@/store/scene-store';
+import { useBuildingStore } from '@/store/building-store';
 
 const PART_TYPE_OPTIONS: { value: PartType; label: string }[] = [
   { value: 'Block',    label: 'Block' },
@@ -39,6 +40,10 @@ interface Props {
   part: ScenePart;
   onUpdate: (changes: Partial<ScenePart>) => void;
   onDelete: () => void;
+  /** True when the selection is a floor/wall/roof from the building-kit;
+   *  surfaces global Level + Bend controls alongside the piece properties
+   *  so the user can tweak placement without leaving the right panel. */
+  showBuilding?: boolean;
 }
 
 function Vec3Row({
@@ -71,7 +76,12 @@ function Vec3Row({
   );
 }
 
-export function PartPropertiesPanel({ part, onUpdate, onDelete }: Props) {
+export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: Props) {
+  const level = useBuildingStore((s) => s.level);
+  const setLevel = useBuildingStore((s) => s.setLevel);
+  const cornerBend = useBuildingStore((s) => s.cornerBend);
+  const setCornerBend = useBuildingStore((s) => s.setCornerBend);
+
   function set<K extends keyof ScenePart>(key: K, value: ScenePart[K]) {
     onUpdate({ [key]: value } as Partial<ScenePart>);
   }
@@ -92,6 +102,25 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete }: Props) {
 
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+
+        {/* ── Building (global placement controls) ── */}
+        {showBuilding && (
+          <PanelSection title="Building" collapsible defaultOpen>
+            <PanelSlider
+              label="Level"
+              value={level}
+              onChange={(v) => setLevel(Math.max(0, Math.round(v)))}
+              min={0} max={10} step={1} precision={0}
+            />
+            <PanelSlider
+              label="Bend"
+              value={cornerBend}
+              onChange={setCornerBend}
+              min={0} max={1} step={0.05} precision={2}
+              suffix="m"
+            />
+          </PanelSection>
+        )}
 
         {/* ── Part ── */}
         <PanelSection title="Part" collapsible defaultOpen>

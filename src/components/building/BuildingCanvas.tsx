@@ -223,7 +223,7 @@ export function BuildingCanvas() {
     const PAN_SPEED = 0.0015;
     // Roblox-style discrete zoom levels — ctrl/cmd+wheel snaps directly to
     // one of these camera distances. No easing: the snap is the discretization.
-    const ZOOM_LEVELS = [2, 4, 7, 11, 16, 24, 36, 55, 85, 128];
+    const ZOOM_LEVELS = [2, 2.5, 3.2, 4, 5, 6.3, 8, 10, 13, 16, 21, 27, 35, 45, 60, 80, 110];
     const MIN_PHI = 0.02;
     const MAX_PHI = Math.PI - 0.02;
 

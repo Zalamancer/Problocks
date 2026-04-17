@@ -25,6 +25,27 @@ import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
 import { resolveEffectiveTask } from '@/lib/templates/types';
 import type { TemplateId } from '@/lib/templates/types';
 import { useSceneStore, type ScenePart } from '@/store/scene-store';
+import { useBuildingStore } from '@/store/building-store';
+
+// Keep in sync with BuildingCanvas.tsx — used to reconstruct default
+// transforms for floor/wall meshes that haven't been gizmo-moved yet.
+const B_TILE = 2;
+const B_FLOOR_THICK = 0.1;
+const B_WALL_HEIGHT = 3;
+
+function floorDefaultPos(key: string) {
+  const [xs, zs] = key.split(',');
+  const x = parseInt(xs, 10);
+  const z = parseInt(zs, 10);
+  return { x: x * B_TILE, y: B_FLOOR_THICK / 2, z: z * B_TILE };
+}
+function wallDefaultPos(key: string) {
+  const [xs, zs, dir] = key.split(',');
+  const x = parseInt(xs, 10);
+  const z = parseInt(zs, 10);
+  if (dir === 'N') return { x: x * B_TILE, y: B_WALL_HEIGHT / 2, z: z * B_TILE - B_TILE / 2 };
+  return { x: x * B_TILE + B_TILE / 2, y: B_WALL_HEIGHT / 2, z: z * B_TILE };
+}
 
 type ViewMode = 'canvas' | 'kanban' | '3d';
 
@@ -64,6 +85,72 @@ export function StudioLayout() {
 
   // Scene store
   const { selectedPart, setSelectedPart, updateSelectedPart, setSceneObjects } = useSceneStore();
+
+  // Building store — selection of a floor or wall opens the right panel too.
+  const buildingSelection = useBuildingStore((s) => s.selection);
+  const floors = useBuildingStore((s) => s.floors);
+  const walls = useBuildingStore((s) => s.walls);
+  const setBuildingSelection = useBuildingStore((s) => s.setSelection);
+  const updateFloorTransform = useBuildingStore((s) => s.updateFloorTransform);
+  const updateWallTransform = useBuildingStore((s) => s.updateWallTransform);
+  const eraseFloor = useBuildingStore((s) => s.eraseFloor);
+  const eraseWall = useBuildingStore((s) => s.eraseWall);
+
+  // Synthesize a ScenePart-shaped object for the selected floor/wall so we
+  // can reuse PartPropertiesPanel. Unsupported fields (color, texture, etc.)
+  // get inert defaults and their onUpdate writes are ignored.
+  const buildingPart: ScenePart | null = (() => {
+    if (!buildingSelection) return null;
+    const record =
+      buildingSelection.kind === 'floor'
+        ? floors[buildingSelection.key]
+        : walls[buildingSelection.key];
+    if (!record) return null;
+    const defaultPos =
+      buildingSelection.kind === 'floor'
+        ? floorDefaultPos(buildingSelection.key)
+        : wallDefaultPos(buildingSelection.key);
+    return {
+      id: `${buildingSelection.kind}:${buildingSelection.key}`,
+      name: record.asset || buildingSelection.kind,
+      partType: 'Block',
+      position: record.position ?? defaultPos,
+      rotation: record.rotation ?? { x: 0, y: 0, z: 0 },
+      scale: record.scale ?? { x: 1, y: 1, z: 1 },
+      color: '#a1a1aa',
+      roughness: 0.9,
+      metalness: 0,
+      emissiveColor: '#000000',
+      emissiveIntensity: 0,
+      texture: 'None',
+      castShadow: true,
+      anchored: true,
+      visible: true,
+    };
+  })();
+
+  function handleBuildingPartUpdate(changes: Partial<ScenePart>) {
+    if (!buildingSelection) return;
+    const t: { position?: ScenePart['position']; rotation?: ScenePart['rotation']; scale?: ScenePart['scale'] } = {};
+    if (changes.position) t.position = changes.position;
+    if (changes.rotation) t.rotation = changes.rotation;
+    if (changes.scale) t.scale = changes.scale;
+    if (Object.keys(t).length === 0) return;
+    if (buildingSelection.kind === 'floor') updateFloorTransform(buildingSelection.key, t);
+    else updateWallTransform(buildingSelection.key, t);
+  }
+
+  function handleBuildingPartDelete() {
+    if (!buildingSelection) return;
+    if (buildingSelection.kind === 'floor') {
+      const [xs, zs] = buildingSelection.key.split(',');
+      eraseFloor(parseInt(xs, 10), parseInt(zs, 10));
+    } else {
+      const [xs, zs, dir] = buildingSelection.key.split(',') as [string, string, 'N' | 'E'];
+      eraseWall(parseInt(xs, 10), parseInt(zs, 10), dir);
+    }
+    setBuildingSelection(null);
+  }
 
   // Keyboard shortcuts
   useHotkeys({
@@ -317,6 +404,12 @@ export function StudioLayout() {
               part={selectedPart}
               onUpdate={handlePartUpdate}
               onDelete={handlePartDelete}
+            />
+          ) : buildingPart ? (
+            <PartPropertiesPanel
+              part={buildingPart}
+              onUpdate={handleBuildingPartUpdate}
+              onDelete={handleBuildingPartDelete}
             />
           ) : board && template && selectedTaskId ? (
             <TaskDetailPanel

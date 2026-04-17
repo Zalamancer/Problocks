@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { useBuildingStore, type EdgeDir } from '@/store/building-store';
 import { useSceneStore, type ScenePart, type PartType } from '@/store/scene-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
@@ -76,6 +77,7 @@ export function BuildingCanvas() {
   const tool = useBuildingStore((s) => s.tool);
   const floors = useBuildingStore((s) => s.floors);
   const walls = useBuildingStore((s) => s.walls);
+  const buildingSelection = useBuildingStore((s) => s.selection);
   const parts = useSceneStore((s) => s.sceneObjects);
   const selectedPartId = useSceneStore((s) => s.selectedPart?.id ?? null);
 
@@ -255,13 +257,25 @@ export function BuildingCanvas() {
       onCommit: () => {
         const target = gizmo.getTarget();
         if (!target) return;
-        const id = target.userData.id as string | undefined;
-        if (!id) return;
-        useSceneStore.getState().updateSceneObject(id, {
+        const xform = {
           position: { x: target.position.x, y: target.position.y, z: target.position.z },
           rotation: { x: target.rotation.x, y: target.rotation.y, z: target.rotation.z },
           scale: { x: target.scale.x, y: target.scale.y, z: target.scale.z },
-        });
+        };
+        const kind = target.userData.kind as 'part' | 'floor' | 'wall' | undefined;
+        if (kind === 'floor') {
+          const key = target.userData.key as string;
+          useBuildingStore.getState().updateFloorTransform(key, xform);
+          return;
+        }
+        if (kind === 'wall') {
+          const key = target.userData.key as string;
+          useBuildingStore.getState().updateWallTransform(key, xform);
+          return;
+        }
+        const id = target.userData.id as string | undefined;
+        if (!id) return;
+        useSceneStore.getState().updateSceneObject(id, xform);
       },
     });
     scene.add(gizmo.group);
@@ -339,7 +353,21 @@ export function BuildingCanvas() {
     /** Returns the top-level part mesh under the cursor (with userData.id), if any. */
     function partHitFromEvent(e: MouseEvent): THREE.Mesh | null {
       setPointerFromEvent(e);
-      const hits = refs!.raycaster.intersectObjects(refs!.partGroup.children, false);
+      const hits = refs!.raycaster.intersectObjects(refs!.partGroup.children, true);
+      if (!hits.length) return null;
+      // Walk up to the group/mesh that carries userData.id (GLB hits are deep).
+      let obj: THREE.Object3D | null = hits[0].object;
+      while (obj && !obj.userData.id) obj = obj.parent;
+      return (obj as THREE.Mesh) ?? null;
+    }
+
+    /** Returns a floor or wall mesh (top-level group child) under the cursor. */
+    function buildingHitFromEvent(e: MouseEvent): THREE.Mesh | null {
+      setPointerFromEvent(e);
+      const hits = refs!.raycaster.intersectObjects(
+        [...refs!.floorGroup.children, ...refs!.wallGroup.children],
+        false,
+      );
       return hits.length ? (hits[0].object as THREE.Mesh) : null;
     }
 
@@ -429,6 +457,7 @@ export function BuildingCanvas() {
       //    which should still spawn a new one nearby.)
       const hitPart = partHitFromEvent(e);
       const sceneStore = useSceneStore.getState();
+      const bStore = useBuildingStore.getState();
       if (hitPart && tool !== 'part') {
         const id = hitPart.userData.id as string | undefined;
         if (id) {
@@ -437,21 +466,40 @@ export function BuildingCanvas() {
           } else {
             const part = sceneStore.sceneObjects.find((p) => p.id === id) ?? null;
             sceneStore.setSelectedPart(part);
+            bStore.setSelection(null);
           }
           return;
+        }
+      }
+
+      // 1b) Select tool: click a floor/wall mesh → select for gizmo.
+      if (tool === 'select') {
+        const hitBuilding = buildingHitFromEvent(e);
+        if (hitBuilding) {
+          const kind = hitBuilding.userData.kind as 'floor' | 'wall' | undefined;
+          const key = hitBuilding.userData.key as string | undefined;
+          if (kind && key) {
+            bStore.setSelection({ kind, key });
+            sceneStore.setSelectedPart(null);
+            return;
+          }
         }
       }
 
       const world = worldFromEvent(e);
       if (!world) {
         // Clicking empty sky → deselect.
-        if (tool === 'select') sceneStore.setSelectedPart(null);
+        if (tool === 'select') {
+          sceneStore.setSelectedPart(null);
+          bStore.setSelection(null);
+        }
         return;
       }
-      const store = useBuildingStore.getState();
+      const store = bStore;
 
       if (tool === 'select') {
         sceneStore.setSelectedPart(null);
+        bStore.setSelection(null);
         return;
       }
 
@@ -518,6 +566,7 @@ export function BuildingCanvas() {
     }
     const mat = new THREE.MeshStandardMaterial({ color: 0x8b6f4a, roughness: 0.9 });
     for (const key of Object.keys(floors)) {
+      const cell = floors[key];
       const [xs, zs] = key.split(',');
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
@@ -525,9 +574,14 @@ export function BuildingCanvas() {
         new THREE.BoxGeometry(TILE, FLOOR_THICK, TILE),
         mat.clone(),
       );
-      mesh.position.set(x * TILE, FLOOR_THICK / 2, z * TILE);
+      const p = cell.position ?? { x: x * TILE, y: FLOOR_THICK / 2, z: z * TILE };
+      mesh.position.set(p.x, p.y, p.z);
+      if (cell.rotation) mesh.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
+      if (cell.scale) mesh.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
       mesh.receiveShadow = true;
       mesh.castShadow = true;
+      mesh.userData.kind = 'floor';
+      mesh.userData.key = key;
       group.add(mesh);
     }
   }, [floors]);
@@ -545,6 +599,7 @@ export function BuildingCanvas() {
     }
     const mat = new THREE.MeshStandardMaterial({ color: 0xc8b392, roughness: 0.8 });
     for (const key of Object.keys(walls)) {
+      const edge = walls[key];
       const [xs, zs, dir] = key.split(',') as [string, string, EdgeDir];
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
@@ -553,9 +608,14 @@ export function BuildingCanvas() {
         new THREE.BoxGeometry(size.x, size.y, size.z),
         mat.clone(),
       );
-      mesh.position.copy(pos);
+      if (edge.position) mesh.position.set(edge.position.x, edge.position.y, edge.position.z);
+      else mesh.position.copy(pos);
+      if (edge.rotation) mesh.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
+      if (edge.scale) mesh.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.userData.kind = 'wall';
+      mesh.userData.key = key;
       group.add(mesh);
     }
   }, [walls]);
@@ -566,12 +626,56 @@ export function BuildingCanvas() {
     if (!refs) return;
     const group = refs.partGroup;
     while (group.children.length) {
-      const c = group.children[0] as THREE.Mesh;
-      c.geometry.dispose();
-      (c.material as THREE.Material).dispose();
+      const c = group.children[0] as THREE.Object3D;
+      c.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.geometry) m.geometry.dispose();
+        if (m.material) {
+          if (Array.isArray(m.material)) m.material.forEach((mm) => mm.dispose());
+          else (m.material as THREE.Material).dispose();
+        }
+      });
       group.remove(c);
     }
+    const loader = new GLTFLoader();
     for (const p of parts) {
+      if (p.partType === 'GLB' && p.modelName) {
+        // Stand-in placeholder while the GLB streams in.
+        const placeholder = new THREE.Group();
+        placeholder.position.set(p.position.x, p.position.y, p.position.z);
+        placeholder.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z);
+        placeholder.scale.set(p.scale.x, p.scale.y, p.scale.z);
+        placeholder.visible = p.visible;
+        placeholder.userData.id = p.id;
+        placeholder.userData.kind = 'part';
+        group.add(placeholder);
+
+        loader.load(
+          `/assets/medieval/${p.modelName}.gltf`,
+          (gltf) => {
+            // If the group was torn down, drop the result.
+            if (!placeholder.parent) return;
+            gltf.scene.traverse((o) => {
+              if ((o as THREE.Mesh).isMesh) {
+                (o as THREE.Mesh).castShadow = p.castShadow;
+                (o as THREE.Mesh).receiveShadow = true;
+              }
+            });
+            placeholder.add(gltf.scene);
+          },
+          undefined,
+          () => {
+            // Fallback: show a tinted box so the user at least sees something.
+            const box = new THREE.Mesh(
+              new THREE.BoxGeometry(1, 1, 1),
+              new THREE.MeshStandardMaterial({ color: 0xff6b6b }),
+            );
+            placeholder.add(box);
+          },
+        );
+        continue;
+      }
+
       const mesh = new THREE.Mesh(
         geometryForPart(p.partType),
         new THREE.MeshStandardMaterial({
@@ -589,6 +693,7 @@ export function BuildingCanvas() {
       mesh.receiveShadow = true;
       mesh.visible = p.visible;
       mesh.userData.id = p.id;
+      mesh.userData.kind = 'part';
       group.add(mesh);
     }
   }, [parts]);
@@ -602,18 +707,90 @@ export function BuildingCanvas() {
     // present but individual fields (gizmo, partGroup) are missing or
     // disposed. The init effect will re-populate and re-run this effect.
     if (!refs || !refs.gizmo || !refs.partGroup) return;
-    let selectedMesh: THREE.Mesh | null = null;
+
+    let selectedObj: THREE.Object3D | null = null;
+
+    // Parts: highlight any Mesh child with an emissive tint.
     for (const child of refs.partGroup.children) {
+      const isSelected = child.userData.id === selectedPartId;
+      if (isSelected) selectedObj = child;
+      // Only a direct Mesh (primitive) has a tintable material.
       const mesh = child as THREE.Mesh;
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      const isSelected = mesh.userData.id === selectedPartId;
-      mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
-      mat.emissiveIntensity = isSelected ? 0.35 : 0;
-      if (isSelected) selectedMesh = mesh;
+      if (mesh.isMesh && mesh.material) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat.emissive) {
+          mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
+          mat.emissiveIntensity = isSelected ? 0.35 : 0;
+        }
+      }
     }
-    if (selectedMesh) refs.gizmo.attach(selectedMesh);
+
+    // Floors + walls: highlight the selected building mesh.
+    const buildingGroups = [refs.floorGroup, refs.wallGroup];
+    for (const g of buildingGroups) {
+      for (const child of g.children) {
+        const mesh = child as THREE.Mesh;
+        const isSelected =
+          !!buildingSelection &&
+          mesh.userData.kind === buildingSelection.kind &&
+          mesh.userData.key === buildingSelection.key;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat?.emissive) {
+          mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
+          mat.emissiveIntensity = isSelected ? 0.35 : 0;
+        }
+        if (isSelected) selectedObj = mesh;
+      }
+    }
+
+    if (selectedObj) refs.gizmo.attach(selectedObj);
     else refs.gizmo.detach();
-  }, [selectedPartId, parts]);
+  }, [selectedPartId, parts, buildingSelection, floors, walls]);
+
+  // --- drag-drop of assets from the left panel ---
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    function onDragOver(e: DragEvent) {
+      if (!e.dataTransfer) return;
+      if (!Array.from(e.dataTransfer.types).includes('application/x-problocks-asset')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+
+    function onDrop(e: DragEvent) {
+      if (!e.dataTransfer) return;
+      const modelName = e.dataTransfer.getData('application/x-problocks-asset');
+      if (!modelName) return;
+      e.preventDefault();
+
+      const rect = refs!.renderer.domElement.getBoundingClientRect();
+      refs!.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      refs!.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      refs!.raycaster.setFromCamera(refs!.pointer, refs!.camera);
+      const hits = refs!.raycaster.intersectObject(refs!.ground);
+      if (!hits.length) return;
+      const pt = hits[0].point;
+
+      useSceneStore.getState().addPart({
+        name: modelName,
+        partType: 'GLB',
+        modelName,
+        position: { x: pt.x, y: 0, z: pt.z },
+        scale: { x: 1, y: 1, z: 1 },
+      });
+    }
+
+    el.addEventListener('dragover', onDragOver);
+    el.addEventListener('drop', onDrop);
+    return () => {
+      el.removeEventListener('dragover', onDragOver);
+      el.removeEventListener('drop', onDrop);
+    };
+  }, []);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

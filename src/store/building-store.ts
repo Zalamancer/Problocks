@@ -17,12 +17,22 @@ import { create } from 'zustand';
 export type Tool = 'select' | 'part' | 'floor' | 'wall' | 'eraser';
 export type EdgeDir = 'N' | 'E';
 
-export interface FloorCell {
+export interface Transform3 {
+  position?: { x: number; y: number; z: number };
+  rotation?: { x: number; y: number; z: number };
+  scale?: { x: number; y: number; z: number };
+}
+export interface FloorCell extends Transform3 {
   asset: string;
 }
-export interface WallEdge {
+export interface WallEdge extends Transform3 {
   asset: string;
 }
+
+export type BuildingSelection =
+  | { kind: 'floor'; key: string }
+  | { kind: 'wall'; key: string }
+  | null;
 
 interface BuildingState {
   tool: Tool;
@@ -45,6 +55,13 @@ interface BuildingState {
   eraseFloor: (x: number, z: number) => void;
   placeWall: (x: number, z: number, dir: EdgeDir) => void;
   eraseWall: (x: number, z: number, dir: EdgeDir) => void;
+
+  /** Gizmo-writable transform overrides. If absent, grid placement is used. */
+  updateFloorTransform: (key: string, t: Transform3) => void;
+  updateWallTransform: (key: string, t: Transform3) => void;
+
+  selection: BuildingSelection;
+  setSelection: (s: BuildingSelection) => void;
 
   clear: () => void;
 }
@@ -89,5 +106,21 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       return { walls: next };
     }),
 
-  clear: () => set({ floors: {}, walls: {} }),
+  updateFloorTransform: (key, t) =>
+    set((s) => {
+      const cur = s.floors[key];
+      if (!cur) return s;
+      return { floors: { ...s.floors, [key]: { ...cur, ...t } } };
+    }),
+  updateWallTransform: (key, t) =>
+    set((s) => {
+      const cur = s.walls[key];
+      if (!cur) return s;
+      return { walls: { ...s.walls, [key]: { ...cur, ...t } } };
+    }),
+
+  selection: null,
+  setSelection: (selection) => set({ selection }),
+
+  clear: () => set({ floors: {}, walls: {}, selection: null }),
 }));

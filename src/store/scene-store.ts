@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type GizmoMode = 'select' | 'move' | 'rotate' | 'scale';
-export type PartType = 'Block' | 'Sphere' | 'Cylinder' | 'Wedge';
+export type PartType = 'Block' | 'Sphere' | 'Cylinder' | 'Wedge' | 'GLB';
 export type TexturePreset = 'None' | 'SmoothPlastic' | 'Brick' | 'Wood' | 'Metal' | 'Marble' | 'Neon' | 'Diamond';
 
 export interface ScenePart {
@@ -20,6 +20,8 @@ export interface ScenePart {
   castShadow: boolean;
   anchored: boolean;
   visible: boolean;
+  /** For partType === 'GLB', the asset name (without extension) under /assets/medieval/. */
+  modelName?: string;
 }
 
 interface SceneStore {
@@ -57,6 +59,7 @@ function defaultPart(overrides: Partial<ScenePart> = {}): ScenePart {
     castShadow: overrides.castShadow ?? true,
     anchored: overrides.anchored ?? true,
     visible: overrides.visible ?? true,
+    modelName: overrides.modelName,
   };
 }
 

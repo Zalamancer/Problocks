@@ -261,6 +261,11 @@ export function AssetsPanel() {
               return (
                 <button
                   key={asset.name}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-problocks-asset', asset.name);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
                   className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors ${
                     isSelected
@@ -292,6 +297,11 @@ export function AssetsPanel() {
               return (
                 <button
                   key={asset.name}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-problocks-asset', asset.name);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
                   className={`group relative flex flex-col rounded-lg overflow-hidden transition-colors ${
                     isSelected

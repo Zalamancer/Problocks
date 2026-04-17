@@ -1,9 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FolderOpen, FileText, Box, Search, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
-import { PanelSearchInput, PanelSelect } from '@/components/ui';
+import { Box, SlidersHorizontal, Shapes, Package } from 'lucide-react';
+import { PanelSearchInput, PanelSelect, PanelIconTabs } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
+import { PiecePreview } from '@/components/studio/PiecePreview';
+import { PIECES, type PieceKind } from '@/lib/building-kit';
+import { useBuildingStore, type Tool } from '@/store/building-store';
 
 interface AssetInfo {
   name: string;
@@ -99,7 +102,15 @@ function AssetExpandedStats({ asset }: { asset: AssetInfo }) {
   );
 }
 
+type AssetsTab = 'models' | 'parts';
+
+const ASSETS_TABS: { id: AssetsTab; label: string; icon: typeof Box }[] = [
+  { id: 'models', label: 'Models', icon: Package },
+  { id: 'parts',  label: 'Parts',  icon: Shapes },
+];
+
 export function AssetsPanel() {
+  const [tab, setTab] = useState<AssetsTab>('models');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [assets, setAssets] = useState<AssetInfo[]>([]);
@@ -162,6 +173,20 @@ export function AssetsPanel() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {/* White-pill sub-tabs — Models (GLTF assets) vs Parts (procedural
+          building-kit pieces). Uses the same PanelIconTabs animated pill
+          bar that LeftPanel uses. */}
+      <PanelIconTabs
+        tabs={ASSETS_TABS}
+        activeTab={tab}
+        onChange={(id) => setTab(id as AssetsTab)}
+      />
+
+      {tab === 'parts' ? (
+        <PartsView />
+      ) : (
+      <>
+
       {/* Scripts moved to Scene panel (Explorer-style, Roblox parity) */}
 
       {/* Search + Filter + conditional View/Category — balanced 8px rhythm */}
@@ -331,7 +356,115 @@ export function AssetsPanel() {
           </div>
         )}
       </div>
+      </>
+      )}
 
+    </div>
+  );
+}
+
+// ── Parts view ────────────────────────────────────────────────────────────
+// Procedural building-kit pieces shown with 3D thumbnails (PiecePreview).
+// Clicking a piece sets both the active tool AND the selected variant, so
+// the user can immediately start placing it on the workspace canvas.
+
+const PIECE_KIND_GROUPS: { kind: PieceKind; label: string }[] = [
+  { kind: 'floor',       label: 'Floors' },
+  { kind: 'wall',        label: 'Walls' },
+  { kind: 'wall-window', label: 'Windows' },
+  { kind: 'wall-door',   label: 'Doors' },
+  { kind: 'roof',        label: 'Roofs' },
+  { kind: 'roof-corner', label: 'Roof corners' },
+  { kind: 'corner',      label: 'Columns' },
+  { kind: 'stairs',      label: 'Stairs' },
+];
+
+const PIECE_KIND_TO_TOOL: Record<PieceKind, Tool> = {
+  floor:         'floor',
+  wall:          'wall',
+  'wall-window': 'wall-window',
+  'wall-door':   'wall-door',
+  roof:          'roof',
+  'roof-corner': 'roof-corner',
+  corner:        'corner',
+  stairs:        'stairs',
+};
+
+function PartsView() {
+  const [search, setSearch] = useState('');
+  const tool = useBuildingStore((s) => s.tool);
+  const setTool = useBuildingStore((s) => s.setTool);
+  const selectedPiece = useBuildingStore((s) => s.selectedPiece);
+  const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
+
+  const q = search.trim().toLowerCase();
+  const matches = (label: string, id: string) =>
+    !q || label.toLowerCase().includes(q) || id.toLowerCase().includes(q);
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="shrink-0 px-3 py-2">
+        <PanelSearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search parts..."
+        />
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
+        {PIECE_KIND_GROUPS.map(({ kind, label }) => {
+          const pieces = PIECES.filter((p) => p.kind === kind && matches(p.label, p.id));
+          if (pieces.length === 0) return null;
+          const activeId = selectedPiece[kind];
+          const kindToolActive = tool === PIECE_KIND_TO_TOOL[kind];
+          return (
+            <div key={kind} className="mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  {label}
+                </span>
+                <span className="text-[10px] font-mono text-zinc-600">
+                  {pieces.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {pieces.map((p) => {
+                  const isSelected = kindToolActive && activeId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setTool(PIECE_KIND_TO_TOOL[kind]);
+                        setSelectedPiece(kind, p.id);
+                      }}
+                      className={cn(
+                        'group relative flex flex-col rounded-lg overflow-hidden transition-colors [content-visibility:auto] [contain-intrinsic-size:0_140px]',
+                        isSelected
+                          ? 'bg-accent/10 border border-accent/40'
+                          : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent',
+                      )}
+                      title={p.label}
+                    >
+                      <div className="relative w-full aspect-square">
+                        <PiecePreview pieceId={p.id} fluid />
+                      </div>
+                      <span className="block w-full px-2 py-1 text-[12px] text-zinc-300 truncate text-left">
+                        {p.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {q && PIECES.every((p) => !matches(p.label, p.id)) && (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-xs text-zinc-600">No matching parts</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

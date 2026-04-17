@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useBuildingStore, type Tool } from '@/store/building-store';
-import { piecesByKind, type PieceDef, type PieceKind } from '@/lib/building-kit';
+import type { PieceKind } from '@/lib/building-kit';
 
 interface ToolDef {
   id: Tool;
@@ -41,14 +41,8 @@ export function BuildPanel() {
   const clear = useBuildingStore((s) => s.clear);
   const level = useBuildingStore((s) => s.level);
   const setLevel = useBuildingStore((s) => s.setLevel);
-  const selectedPiece = useBuildingStore((s) => s.selectedPiece);
-  const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
   const cornerBend = useBuildingStore((s) => s.cornerBend);
   const setCornerBend = useBuildingStore((s) => s.setCornerBend);
-
-  const activeDef = TOOLS.find((t) => t.id === tool);
-  const activeKind = activeDef?.pieceKind;
-  const variants: PieceDef[] = activeKind ? piecesByKind(activeKind) : [];
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
@@ -131,39 +125,12 @@ export function BuildPanel() {
         />
       </div>
 
-      {/* Variant list — shown whenever the active tool has variants */}
-      {activeKind && (
-        <div className="px-3 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 capitalize">
-            {activeKind.replace('-', ' ')} variants
-          </div>
-          <div className="flex flex-col gap-1">
-            {variants.map((v) => {
-              const active = v.id === selectedPiece[activeKind];
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  title={v.label}
-                  onClick={() => setSelectedPiece(activeKind, v.id)}
-                  className={`flex items-center gap-2 h-8 px-2 rounded-lg border transition-colors text-[12px] ${
-                    active
-                      ? 'bg-green-500/20 border-green-500/60 text-green-200'
-                      : 'bg-white/[0.03] border-white/5 text-zinc-300 hover:text-white hover:bg-white/[0.07]'
-                  }`}
-                >
-                  <span
-                    className="w-4 h-4 rounded border border-black/30 shrink-0"
-                    style={{ background: v.swatch }}
-                    aria-hidden
-                  />
-                  <span className="truncate">{v.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Variant picker moved to Assets → Parts sub-tab — clicking a part
+          there sets tool + variant in one go. */}
+      <div className="px-3 py-3 text-[11px] text-zinc-500 leading-relaxed">
+        Pick a piece in <span className="text-zinc-300">Assets → Parts</span> to set
+        the active tool and variant.
+      </div>
     </div>
   );
 }

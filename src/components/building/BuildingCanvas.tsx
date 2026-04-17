@@ -1496,9 +1496,13 @@ export function BuildingCanvas() {
       }
     }
 
-    if (selectedObj) refs.gizmo.attach(selectedObj);
+    // Gizmo only attaches in Select mode — while any placement tool is
+    // active the selection can still change (auto-select on insert) but
+    // we don't want the translate/rotate/scale handles covering the
+    // piece the user is about to place next.
+    if (selectedObj && tool === 'select') refs.gizmo.attach(selectedObj);
     else refs.gizmo.detach();
-  }, [selectedPartId, parts, buildingSelection, floors, walls, roofs, cornersRec, stairsRec]);
+  }, [selectedPartId, parts, buildingSelection, floors, walls, roofs, cornersRec, stairsRec, tool]);
 
   // Drag-drop of GLB assets from the asset panel.
   // Handlers read `sceneRef.current` LIVE (not at effect-setup time) so that

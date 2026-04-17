@@ -7,6 +7,7 @@ import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
 import { PiecePreview } from '@/components/studio/PiecePreview';
 import { PIECES, type PieceKind } from '@/lib/building-kit';
 import { useBuildingStore, type Tool } from '@/store/building-store';
+import { useStudio, type AssetsTab } from '@/store/studio-store';
 
 interface AssetInfo {
   name: string;
@@ -102,15 +103,14 @@ function AssetExpandedStats({ asset }: { asset: AssetInfo }) {
   );
 }
 
-type AssetsTab = 'models' | 'parts';
-
 const ASSETS_TABS: { id: AssetsTab; label: string; icon: typeof Box }[] = [
   { id: 'models', label: 'Models', icon: Package },
   { id: 'parts',  label: 'Parts',  icon: Shapes },
 ];
 
 export function AssetsPanel() {
-  const [tab, setTab] = useState<AssetsTab>('models');
+  const tab = useStudio((s) => s.assetsActiveTab);
+  const setTab = useStudio((s) => s.setAssetsActiveTab);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [assets, setAssets] = useState<AssetInfo[]>([]);

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type LeftPanelGroup = 'scene' | 'assets' | 'chat';
+export type AssetsTab = 'models' | 'parts';
 export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings';
 export type Theme = 'dark' | 'light';
 export type FlowDirection = 'LR' | 'TB';
@@ -19,8 +20,10 @@ export interface GeneratedGame {
 export interface StudioStore {
   leftPanelCollapsed: boolean;
   leftPanelActiveGroup: LeftPanelGroup;
+  assetsActiveTab: AssetsTab;
   toggleLeftPanel: () => void;
   setLeftPanelGroup: (group: LeftPanelGroup) => void;
+  setAssetsActiveTab: (tab: AssetsTab) => void;
 
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
@@ -53,8 +56,10 @@ export interface StudioStore {
 export const useStudio = create<StudioStore>()(persist((set) => ({
   leftPanelCollapsed: false,
   leftPanelActiveGroup: 'assets',
+  assetsActiveTab: 'models',
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
   setLeftPanelGroup: (group) => set({ leftPanelActiveGroup: group }),
+  setAssetsActiveTab: (tab) => set({ assetsActiveTab: tab }),
 
   viewMode: '3d',
   setViewMode: (mode) => set({ viewMode: mode }),

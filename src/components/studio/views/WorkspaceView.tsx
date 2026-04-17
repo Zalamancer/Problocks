@@ -6,6 +6,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { BuildingCanvas } from '@/components/building/BuildingCanvas';
 import { useBuildingStore, type Tool } from '@/store/building-store';
+import { useStudio } from '@/store/studio-store';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and a minimal
@@ -16,10 +17,16 @@ import { useBuildingStore, type Tool } from '@/store/building-store';
  * without a way to switch between Select, Eraser, or drop the scene.
  */
 export function WorkspaceView() {
+  // Toolbar is placement-mode UX, so it only shows while the user is
+  // actively browsing Assets → Parts. In every other left-panel context
+  // (Scene, Models, Chat) the viewport stays uncluttered.
+  const showToolbar = useStudio(
+    (s) => s.leftPanelActiveGroup === 'assets' && s.assetsActiveTab === 'parts',
+  );
   return (
     <div className="relative w-full h-full">
       <BuildingCanvas />
-      <FloatingBuildToolbar />
+      {showToolbar && <FloatingBuildToolbar />}
       <HintBadge />
     </div>
   );

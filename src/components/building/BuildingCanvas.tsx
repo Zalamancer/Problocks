@@ -31,6 +31,37 @@ interface SceneRefs {
   animId: number;
 }
 
+/**
+ * Build a surface material. Drops from PBR (MeshStandardMaterial) to
+ * MeshLambertMaterial when the quality tier disables pbrMaterials —
+ * Lambert is ~3× cheaper on integrated GPUs and visually similar for
+ * opaque non-metal surfaces.
+ */
+function makeSurfaceMaterial(params: {
+  color: string | number | THREE.Color;
+  roughness: number;
+  metalness: number;
+  emissive: string | number | THREE.Color;
+  emissiveIntensity: number;
+  pbr: boolean;
+}): THREE.Material {
+  const { color, emissive, emissiveIntensity, pbr, roughness, metalness } = params;
+  if (pbr) {
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color as THREE.ColorRepresentation),
+      roughness,
+      metalness,
+      emissive: new THREE.Color(emissive as THREE.ColorRepresentation),
+      emissiveIntensity,
+    });
+  }
+  return new THREE.MeshLambertMaterial({
+    color: new THREE.Color(color as THREE.ColorRepresentation),
+    emissive: new THREE.Color(emissive as THREE.ColorRepresentation),
+    emissiveIntensity,
+  });
+}
+
 /** Build geometry for a scene part. Scale is applied on the mesh afterwards. */
 function geometryForPart(type: PartType): THREE.BufferGeometry {
   switch (type) {
@@ -577,12 +608,13 @@ export function BuildingCanvas() {
       const [xs, zs] = key.split(',');
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
-      const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(cell.color ?? '#8b6f4a'),
+      const material = makeSurfaceMaterial({
+        color: cell.color ?? '#8b6f4a',
         roughness: cell.roughness ?? 0.9,
         metalness: cell.metalness ?? 0,
-        emissive: new THREE.Color(cell.emissiveColor ?? '#000000'),
+        emissive: cell.emissiveColor ?? '#000000',
         emissiveIntensity: cell.emissiveIntensity ?? 0,
+        pbr: quality.pbrMaterials,
       });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(TILE, FLOOR_THICK, TILE),
@@ -618,12 +650,13 @@ export function BuildingCanvas() {
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
       const { pos, size } = wallPlacement(x, z, dir);
-      const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(edge.color ?? '#c8b392'),
+      const material = makeSurfaceMaterial({
+        color: edge.color ?? '#c8b392',
         roughness: edge.roughness ?? 0.8,
         metalness: edge.metalness ?? 0,
-        emissive: new THREE.Color(edge.emissiveColor ?? '#000000'),
+        emissive: edge.emissiveColor ?? '#000000',
         emissiveIntensity: edge.emissiveIntensity ?? 0,
+        pbr: quality.pbrMaterials,
       });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(size.x, size.y, size.z),
@@ -700,12 +733,13 @@ export function BuildingCanvas() {
 
       const mesh = new THREE.Mesh(
         geometryForPart(p.partType),
-        new THREE.MeshStandardMaterial({
+        makeSurfaceMaterial({
           color: p.color,
           roughness: p.roughness,
           metalness: p.metalness,
-          emissive: new THREE.Color(p.emissiveColor),
+          emissive: p.emissiveColor,
           emissiveIntensity: p.emissiveIntensity,
+          pbr: quality.pbrMaterials,
         }),
       );
       mesh.position.set(p.position.x, p.position.y, p.position.z);

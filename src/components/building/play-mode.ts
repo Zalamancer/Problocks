@@ -363,7 +363,7 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       camForward.y = 0;
       if (camForward.lengthSq() < 1e-6) camForward.set(0, 0, -1);
       camForward.normalize();
-      camRight.set(camForward.z, 0, -camForward.x);
+      camRight.set(-camForward.z, 0, camForward.x);
 
       const fwd = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
       const str = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);

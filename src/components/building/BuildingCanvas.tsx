@@ -243,8 +243,9 @@ export function BuildingCanvas() {
 
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    // Warm hemisphere fill + sun gives Roblox-style bright, saturated look.
+    scene.add(new THREE.HemisphereLight(0xfff6e6, 0x5a7a3a, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff3d6, 1.35);
     sun.position.set(10, 18, 8);
     sun.castShadow = quality.shadows;
     sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
@@ -264,7 +265,7 @@ export function BuildingCanvas() {
     const baseSize = 128;
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(baseSize, baseSize).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0x6aaa4d, roughness: 1 }),
+      new THREE.MeshStandardMaterial({ color: 0x7ec850, roughness: 0.75, metalness: 0 }),
     );
     ground.position.y = 0;
     ground.receiveShadow = quality.shadows;
@@ -272,7 +273,7 @@ export function BuildingCanvas() {
     scene.add(ground);
 
     // Build-area grid sits slightly above the baseplate to avoid z-fight.
-    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x2f5a22, 0x558c3d);
+    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x4a8530, 0x9ede62);
     grid.position.y = 0.01;
     (grid.material as THREE.Material).depthWrite = false;
     (grid.material as THREE.Material).transparent = true;
@@ -652,8 +653,8 @@ export function BuildingCanvas() {
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
       const material = makeSurfaceMaterial({
-        color: cell.color ?? '#8b6f4a',
-        roughness: cell.roughness ?? 0.9,
+        color: cell.color ?? '#d4a056',
+        roughness: cell.roughness ?? 0.55,
         metalness: cell.metalness ?? 0,
         emissive: cell.emissiveColor ?? '#000000',
         emissiveIntensity: cell.emissiveIntensity ?? 0,
@@ -694,8 +695,8 @@ export function BuildingCanvas() {
       const z = parseInt(zs, 10);
       const { pos, size } = wallPlacement(x, z, dir);
       const material = makeSurfaceMaterial({
-        color: edge.color ?? '#c8b392',
-        roughness: edge.roughness ?? 0.8,
+        color: edge.color ?? '#d45a4a',
+        roughness: edge.roughness ?? 0.5,
         metalness: edge.metalness ?? 0,
         emissive: edge.emissiveColor ?? '#000000',
         emissiveIntensity: edge.emissiveIntensity ?? 0,

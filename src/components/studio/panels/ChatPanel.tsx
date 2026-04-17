@@ -3,14 +3,19 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageSquare, Sparkles, Square } from 'lucide-react';
 import { PanelTextarea, PanelActionButton } from '@/components/ui';
 import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-store';
-import { useBuildingStore, type EdgeDir } from '@/store/building-store';
+import { useBuildingStore, type EdgeDir, type Facing } from '@/store/building-store';
+import type { PieceKind } from '@/lib/building-kit';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
+type WallKind = 'wall' | 'wall-window' | 'wall-door';
+type CornerKind = 'corner' | 'roof-corner';
+
 type StudioAction =
+  // parts
   | {
       type: 'addPart';
       name?: string;
@@ -31,11 +36,25 @@ type StudioAction =
     }
   | { type: 'removePart'; id: string }
   | { type: 'clearParts' }
-  | { type: 'placeFloor'; x: number; z: number }
-  | { type: 'eraseFloor'; x: number; z: number }
-  | { type: 'placeWall'; x: number; z: number; dir: EdgeDir }
-  | { type: 'eraseWall'; x: number; z: number; dir: EdgeDir }
+  // building — floors
+  | { type: 'placeFloor'; x: number; z: number; y?: number; asset?: string }
+  | { type: 'eraseFloor'; x: number; z: number; y?: number }
+  // building — walls
+  | { type: 'placeWall'; x: number; z: number; y?: number; dir: EdgeDir; kind?: WallKind; asset?: string }
+  | { type: 'eraseWall'; x: number; z: number; y?: number; dir: EdgeDir }
+  // building — roofs
+  | { type: 'placeRoof'; x: number; z: number; y?: number; asset?: string }
+  | { type: 'eraseRoof'; x: number; z: number; y?: number }
+  // building — corners
+  | { type: 'placeCorner'; x: number; z: number; y?: number; kind?: CornerKind; asset?: string }
+  | { type: 'eraseCorner'; x: number; z: number; y?: number }
+  // building — stairs
+  | { type: 'placeStairs'; x: number; z: number; y?: number; facing: Facing; asset?: string }
+  | { type: 'eraseStairs'; x: number; z: number; y?: number; facing: Facing }
+  // bulk
   | { type: 'clearBuilding' }
+  // selection defaults (so later place* actions without asset inherit)
+  | { type: 'setSelectedPiece'; kind: PieceKind; asset: string }
   | { type: 'setFloorAsset'; asset: string }
   | { type: 'setWallAsset'; asset: string };
 
@@ -50,15 +69,29 @@ function shortDescribe(a: StudioAction): string {
     case 'clearParts':
       return '🧹 Clear parts';
     case 'placeFloor':
-      return `🟫 Floor (${a.x},${a.z})`;
+      return `🟫 Floor (${a.x},${a.z}${a.y ? `,L${a.y}` : ''})${a.asset ? ` ${a.asset}` : ''}`;
     case 'eraseFloor':
       return `✖️ Floor (${a.x},${a.z})`;
     case 'placeWall':
-      return `🧱 Wall (${a.x},${a.z},${a.dir})`;
+      return `🧱 Wall (${a.x},${a.z},${a.dir})${a.kind && a.kind !== 'wall' ? ` ${a.kind}` : ''}${a.asset ? ` ${a.asset}` : ''}`;
     case 'eraseWall':
       return `✖️ Wall (${a.x},${a.z},${a.dir})`;
+    case 'placeRoof':
+      return `🏠 Roof (${a.x},${a.z}${a.y ? `,L${a.y}` : ''})${a.asset ? ` ${a.asset}` : ''}`;
+    case 'eraseRoof':
+      return `✖️ Roof (${a.x},${a.z})`;
+    case 'placeCorner':
+      return `◧ Corner (${a.x},${a.z})${a.asset ? ` ${a.asset}` : ''}`;
+    case 'eraseCorner':
+      return `✖️ Corner (${a.x},${a.z})`;
+    case 'placeStairs':
+      return `🪜 Stairs (${a.x},${a.z},${a.facing})${a.asset ? ` ${a.asset}` : ''}`;
+    case 'eraseStairs':
+      return `✖️ Stairs (${a.x},${a.z},${a.facing})`;
     case 'clearBuilding':
       return '🧹 Clear building';
+    case 'setSelectedPiece':
+      return `🎨 ${a.kind} → ${a.asset}`;
     case 'setFloorAsset':
       return `🎨 Floor asset → ${a.asset}`;
     case 'setWallAsset':
@@ -74,7 +107,7 @@ export function ChatPanel() {
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Scene/building store actions (read stably via getState inside callback)
+  // Scene/building store actions (stable references)
   const addPart = useSceneStore((s) => s.addPart);
   const updateSceneObject = useSceneStore((s) => s.updateSceneObject);
   const removePart = useSceneStore((s) => s.removePart);
@@ -84,6 +117,12 @@ export function ChatPanel() {
   const eraseFloor = useBuildingStore((s) => s.eraseFloor);
   const placeWall = useBuildingStore((s) => s.placeWall);
   const eraseWall = useBuildingStore((s) => s.eraseWall);
+  const placeRoof = useBuildingStore((s) => s.placeRoof);
+  const eraseRoof = useBuildingStore((s) => s.eraseRoof);
+  const placeCorner = useBuildingStore((s) => s.placeCorner);
+  const eraseCorner = useBuildingStore((s) => s.eraseCorner);
+  const placeStairs = useBuildingStore((s) => s.placeStairs);
+  const eraseStairs = useBuildingStore((s) => s.eraseStairs);
   const clearBuilding = useBuildingStore((s) => s.clear);
   const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
 
@@ -121,20 +160,48 @@ export function ChatPanel() {
         case 'clearParts':
           setSceneObjects([]);
           break;
+
         case 'placeFloor':
-          placeFloor(action.x, 0, action.z);
+          placeFloor(action.x, action.y ?? 0, action.z, action.asset);
           break;
         case 'eraseFloor':
-          eraseFloor(action.x, 0, action.z);
+          eraseFloor(action.x, action.y ?? 0, action.z);
           break;
+
         case 'placeWall':
-          placeWall(action.x, 0, action.z, action.dir);
+          placeWall(action.x, action.y ?? 0, action.z, action.dir, action.kind, action.asset);
           break;
         case 'eraseWall':
-          eraseWall(action.x, 0, action.z, action.dir);
+          eraseWall(action.x, action.y ?? 0, action.z, action.dir);
           break;
+
+        case 'placeRoof':
+          placeRoof(action.x, action.y ?? 0, action.z, action.asset);
+          break;
+        case 'eraseRoof':
+          eraseRoof(action.x, action.y ?? 0, action.z);
+          break;
+
+        case 'placeCorner':
+          placeCorner(action.x, action.y ?? 0, action.z, action.kind, action.asset);
+          break;
+        case 'eraseCorner':
+          eraseCorner(action.x, action.y ?? 0, action.z);
+          break;
+
+        case 'placeStairs':
+          placeStairs(action.x, action.y ?? 0, action.z, action.facing, action.asset);
+          break;
+        case 'eraseStairs':
+          eraseStairs(action.x, action.y ?? 0, action.z, action.facing);
+          break;
+
         case 'clearBuilding':
           clearBuilding();
+          break;
+
+        case 'setSelectedPiece':
+          setSelectedPiece(action.kind, action.asset);
           break;
         case 'setFloorAsset':
           setSelectedPiece('floor', action.asset);
@@ -153,6 +220,12 @@ export function ChatPanel() {
       eraseFloor,
       placeWall,
       eraseWall,
+      placeRoof,
+      eraseRoof,
+      placeCorner,
+      eraseCorner,
+      placeStairs,
+      eraseStairs,
       clearBuilding,
       setSelectedPiece,
     ],
@@ -162,9 +235,9 @@ export function ChatPanel() {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
 
-    // Snapshot current scene state for the agent
+    // Snapshot current scene + building state for the agent
     const sceneState = useSceneStore.getState();
-    const buildingState = useBuildingStore.getState();
+    const b = useBuildingStore.getState();
     const snapshot = {
       parts: sceneState.sceneObjects.map((p) => ({
         id: p.id,
@@ -174,9 +247,13 @@ export function ChatPanel() {
         color: p.color,
         scale: p.scale,
       })),
-      floors: Object.keys(buildingState.floors),
-      walls: Object.keys(buildingState.walls),
-      gridSize: buildingState.gridSize,
+      floors: Object.keys(b.floors),
+      walls: Object.keys(b.walls),
+      roofs: Object.keys(b.roofs),
+      corners: Object.keys(b.corners),
+      stairs: Object.keys(b.stairs),
+      gridSize: b.gridSize,
+      selectedPiece: b.selectedPiece,
     };
 
     const next: Message[] = [...messages, { role: 'user', content: trimmed }];
@@ -301,7 +378,8 @@ export function ChatPanel() {
                 Tell the AI what to build in your workspace
               </p>
               <p className="text-[10px] text-gray-700 mt-2">
-                e.g. &ldquo;place 5 red blocks in a row&rdquo; &middot; &ldquo;build a 4x4 floor&rdquo;
+                e.g. &ldquo;build a red brick house with a gable roof&rdquo; &middot;
+                &ldquo;place a spiral staircase at 0,0&rdquo;
               </p>
             </div>
           </div>

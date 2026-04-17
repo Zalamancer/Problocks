@@ -97,15 +97,17 @@ interface BuildingState {
   corners: Record<string, CornerCell>;
   stairs:  Record<string, StairsCell>;
 
-  placeFloor:  (x: number, y: number, z: number) => void;
+  placeFloor:  (x: number, y: number, z: number, assetOverride?: string) => void;
   eraseFloor:  (x: number, y: number, z: number) => void;
-  placeWall:   (x: number, y: number, z: number, dir: EdgeDir) => void;
+  /** `kindOverride` forces wall kind regardless of current tool (used by AI agent). */
+  placeWall:   (x: number, y: number, z: number, dir: EdgeDir, kindOverride?: 'wall' | 'wall-window' | 'wall-door', assetOverride?: string) => void;
   eraseWall:   (x: number, y: number, z: number, dir: EdgeDir) => void;
-  placeRoof:   (x: number, y: number, z: number) => void;
+  placeRoof:   (x: number, y: number, z: number, assetOverride?: string) => void;
   eraseRoof:   (x: number, y: number, z: number) => void;
-  placeCorner: (x: number, y: number, z: number) => void;
+  /** `kindOverride` lets caller pick 'corner' vs 'roof-corner' without flipping the tool. */
+  placeCorner: (x: number, y: number, z: number, kindOverride?: 'corner' | 'roof-corner', assetOverride?: string) => void;
   eraseCorner: (x: number, y: number, z: number) => void;
-  placeStairs: (x: number, y: number, z: number, facing: Facing) => void;
+  placeStairs: (x: number, y: number, z: number, facing: Facing, assetOverride?: string) => void;
   eraseStairs: (x: number, y: number, z: number, facing: Facing) => void;
 
   updateFloorTransform:  (key: string, t: Transform3) => void;
@@ -152,41 +154,47 @@ export const useBuildingStore = create<BuildingState>((set) => ({
 
   floors: {}, walls: {}, roofs: {}, corners: {}, stairs: {},
 
-  placeFloor: (x, y, z) =>
+  placeFloor: (x, y, z, assetOverride) =>
     set((s) => ({
-      floors: { ...s.floors, [`${x},${y},${z}`]: { asset: s.selectedPiece.floor } },
+      floors: { ...s.floors, [`${x},${y},${z}`]: { asset: assetOverride ?? s.selectedPiece.floor } },
     })),
   eraseFloor: (x, y, z) =>
     set((s) => ({ floors: del(s.floors, `${x},${y},${z}`) })),
 
-  placeWall: (x, y, z, dir) =>
+  placeWall: (x, y, z, dir, kindOverride, assetOverride) =>
     set((s) => {
-      const kind = s.tool === 'wall-window' || s.tool === 'wall-door' ? s.tool : 'wall';
-      const asset = s.selectedPiece[kind];
+      const kind =
+        kindOverride ??
+        (s.tool === 'wall-window' || s.tool === 'wall-door' ? s.tool : 'wall');
+      const asset = assetOverride ?? s.selectedPiece[kind];
       return { walls: { ...s.walls, [`${x},${y},${z},${dir}`]: { asset } } };
     }),
   eraseWall: (x, y, z, dir) =>
     set((s) => ({ walls: del(s.walls, `${x},${y},${z},${dir}`) })),
 
-  placeRoof: (x, y, z) =>
+  placeRoof: (x, y, z, assetOverride) =>
     set((s) => ({
-      roofs: { ...s.roofs, [`${x},${y},${z}`]: { asset: s.selectedPiece.roof } },
+      roofs: { ...s.roofs, [`${x},${y},${z}`]: { asset: assetOverride ?? s.selectedPiece.roof } },
     })),
   eraseRoof: (x, y, z) =>
     set((s) => ({ roofs: del(s.roofs, `${x},${y},${z}`) })),
 
-  placeCorner: (x, y, z) =>
+  placeCorner: (x, y, z, kindOverride, assetOverride) =>
     set((s) => {
-      const kind: PieceKind = s.tool === 'roof-corner' ? 'roof-corner' : 'corner';
-      const asset = s.selectedPiece[kind];
+      const kind: PieceKind =
+        kindOverride ?? (s.tool === 'roof-corner' ? 'roof-corner' : 'corner');
+      const asset = assetOverride ?? s.selectedPiece[kind];
       return { corners: { ...s.corners, [`${x},${y},${z}`]: { asset } } };
     }),
   eraseCorner: (x, y, z) =>
     set((s) => ({ corners: del(s.corners, `${x},${y},${z}`) })),
 
-  placeStairs: (x, y, z, facing) =>
+  placeStairs: (x, y, z, facing, assetOverride) =>
     set((s) => ({
-      stairs: { ...s.stairs, [`${x},${y},${z},${facing}`]: { asset: s.selectedPiece.stairs, facing } },
+      stairs: {
+        ...s.stairs,
+        [`${x},${y},${z},${facing}`]: { asset: assetOverride ?? s.selectedPiece.stairs, facing },
+      },
     })),
   eraseStairs: (x, y, z, facing) =>
     set((s) => ({ stairs: del(s.stairs, `${x},${y},${z},${facing}`) })),

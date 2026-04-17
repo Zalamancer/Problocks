@@ -17,6 +17,8 @@
  */
 import { spawn } from 'child_process';
 import { homedir } from 'os';
+import { PIECES } from '@/lib/building-kit';
+import type { PieceKind } from '@/lib/building-kit';
 
 function cliEnv() {
   return {
@@ -78,9 +80,36 @@ interface SceneSnapshot {
     color: string;
     scale: { x: number; y: number; z: number };
   }>;
-  floors: string[]; // list of "x,z" keys
-  walls: string[]; // list of "x,z,dir" keys
+  floors: string[];   // "x,y,z"
+  walls: string[];    // "x,y,z,dir"
+  roofs: string[];    // "x,y,z"
+  corners: string[];  // "x,y,z"
+  stairs: string[];   // "x,y,z,facing"
   gridSize: number;
+  selectedPiece: Record<PieceKind, string>;
+}
+
+// --- Asset catalog (served to the model so it can pick real piece ids) ---
+
+function catalogByKind(): string {
+  const order: PieceKind[] = [
+    'floor',
+    'wall',
+    'wall-window',
+    'wall-door',
+    'roof',
+    'roof-corner',
+    'corner',
+    'stairs',
+  ];
+  return order
+    .map((kind) => {
+      const list = PIECES.filter((p) => p.kind === kind)
+        .map((p) => `    - ${p.id}  (${p.label})`)
+        .join('\n');
+      return `  ${kind}:\n${list}`;
+    })
+    .join('\n');
 }
 
 // --- Prompt ---
@@ -104,12 +133,14 @@ const STUDIO_PROMPT = (
         .join('\n')
     : '  (scene is empty)';
 
-  const floorsDump = scene.floors.length
-    ? `  ${scene.floors.slice(0, 40).join(', ')}${scene.floors.length > 40 ? `, +${scene.floors.length - 40} more` : ''}`
-    : '  (no floor tiles)';
-  const wallsDump = scene.walls.length
-    ? `  ${scene.walls.slice(0, 40).join(', ')}${scene.walls.length > 40 ? `, +${scene.walls.length - 40} more` : ''}`
-    : '  (no walls)';
+  const dump = (label: string, arr: string[]) =>
+    arr.length
+      ? `  ${label}: ${arr.slice(0, 40).join(', ')}${arr.length > 40 ? `, +${arr.length - 40} more` : ''}`
+      : `  ${label}: (none)`;
+
+  const selected = Object.entries(scene.selectedPiece)
+    .map(([k, v]) => `    ${k} = ${v}`)
+    .join('\n');
 
   return `You are the Problocks Studio Agent. You edit a 3D scene directly —
 you do NOT write HTML or build a standalone game. Your output is a sequence
@@ -117,58 +148,90 @@ of ACTION lines that mutate the live scene.
 
 ${history ? `Previous conversation:\n${history}\n\n` : ''}Current user message: "${userMsg}"
 
-Current scene:
-  Parts:
+## Current scene
+
+Parts:
 ${partsDump}
 
-  Floor tiles (grid coords, tile = ${scene.gridSize}m):
-${floorsDump}
+Building tiles (grid coords, tile size = ${scene.gridSize}m, y = level index):
+${dump('floors', scene.floors)}
+${dump('walls', scene.walls)}
+${dump('roofs', scene.roofs)}
+${dump('corners', scene.corners)}
+${dump('stairs', scene.stairs)}
 
-  Walls (grid coords + dir, N or E):
-${wallsDump}
+Currently selected piece per kind (used when an action omits "asset"):
+${selected}
+
+## Available asset ids (use EXACTLY these strings for "asset")
+
+${catalogByKind()}
 
 ## Output format
 
 Every mutation is ONE LINE starting with "ACTION: " followed by a single JSON
 object. Narration text can appear between ACTION lines; keep it short.
 
-Supported actions:
+### Free-form parts (scene-store)
 
   {"type":"addPart","name":"Tower","partType":"Block","position":{"x":0,"y":0.5,"z":0},"scale":{"x":1,"y":1,"z":1},"color":"#ff4444"}
     — partType: "Block" | "Sphere" | "Cylinder" | "Wedge"
-    — position/scale default sensibly; color is hex like "#3af".
 
   {"type":"updatePart","id":"<existing-id>","color":"#00ff00","position":{"x":2,"y":0.5,"z":0}}
-    — any subset of addPart fields (except partType) can be updated.
-
   {"type":"removePart","id":"<existing-id>"}
-
   {"type":"clearParts"}
-    — remove ALL parts. Use sparingly.
 
-  {"type":"placeFloor","x":0,"z":0}
-    — add a floor tile at grid (x,z). Integer coords.
+### Grid building (building-store)
 
-  {"type":"eraseFloor","x":0,"z":0}
+All placements take integer grid coords (x, z) and optional y level (default 0).
+"asset" is optional; if omitted the currently-selected piece of that kind is used.
 
-  {"type":"placeWall","x":0,"z":0,"dir":"N"}
-    — dir is "N" (north edge of tile) or "E" (east edge of tile).
+  {"type":"placeFloor","x":0,"z":0,"y":0,"asset":"floor.wood_dark"}
+  {"type":"eraseFloor","x":0,"z":0,"y":0}
 
-  {"type":"eraseWall","x":0,"z":0,"dir":"N"}
+  {"type":"placeWall","x":0,"z":0,"y":0,"dir":"N","kind":"wall","asset":"wall.brick_red"}
+    — dir: "N" (north edge) or "E" (east edge)
+    — kind: "wall" | "wall-window" | "wall-door" (default "wall")
+    — asset MUST match the chosen kind
+
+  {"type":"eraseWall","x":0,"z":0,"y":0,"dir":"N"}
+
+  {"type":"placeRoof","x":0,"z":0,"y":1,"asset":"roof.gable_x"}
+  {"type":"eraseRoof","x":0,"z":0,"y":1}
+
+  {"type":"placeCorner","x":0,"z":0,"y":0,"kind":"corner","asset":"cnr.doric_round"}
+    — kind: "corner" | "roof-corner" (default "corner")
+    — corners sit at TILE VERTICES, so x/z range is 0..gridExtent inclusive
+
+  {"type":"eraseCorner","x":0,"z":0,"y":0}
+
+  {"type":"placeStairs","x":0,"z":0,"y":0,"facing":"N","asset":"stairs.straight_wood"}
+    — facing: "N" | "S" | "E" | "W"
+
+  {"type":"eraseStairs","x":0,"z":0,"y":0,"facing":"N"}
 
   {"type":"clearBuilding"}
-    — clear all floors and walls.
+    — removes ALL floors/walls/roofs/corners/stairs at every level
 
-  {"type":"setFloorAsset","asset":"Floor_WoodDark"}
-  {"type":"setWallAsset","asset":"Wall_Brick"}
-    — change the asset future placements will use.
+### Selecting the default piece (used when a later placement omits "asset")
+
+  {"type":"setSelectedPiece","kind":"floor","asset":"floor.grass"}
+    — kind is any PieceKind above; asset must belong to that kind.
+
+Legacy aliases (still supported):
+  {"type":"setFloorAsset","asset":"floor.wood_dark"}  → setSelectedPiece kind=floor
+  {"type":"setWallAsset","asset":"wall.brick_red"}    → setSelectedPiece kind=wall
 
 ## Rules
 
 - Output ACTION lines with valid JSON only — no comments, no trailing commas.
-- Place parts on or slightly above y=0.5 (the ground plane) unless stacking.
-- Units: parts use meters for position; tile grid is integer indices.
-- When building rooms, place floors first then walls on the boundary edges.
+- Use ONLY asset ids from the catalog above. Never invent new ids.
+- Match asset to kind: a "wall-window" action must use a "wallwin.*" id, a
+  "wall-door" action must use a "walldoor.*" id, roofs use "roof.*", etc.
+- Units: parts use meters for position; building uses integer grid indices.
+- Building a room: place floors first, then walls on the boundary edges
+  (N edges on the north side, E edges on the east side of the row), then
+  roofs one level up (y=1), then corners at the 4 outer vertices.
 - If the user asks to "clear" or "start over", emit clearParts AND clearBuilding.
 - For referring to existing parts, ALWAYS use the id from the scene dump above.
 - Keep narration to one or two short sentences; the user mostly wants the scene to change.

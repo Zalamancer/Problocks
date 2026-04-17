@@ -32,8 +32,24 @@ export interface PlayController {
 }
 
 const CAP_RADIUS = 0.45;
-const CAP_HEIGHT = 1.8;     // total capsule height (feet at y=0 of the group)
-const HEAD_OFFSET = 0.35;   // head above capsule top
+const CAP_HEIGHT = 1.8;     // body height used for AABB collision (feet → top of torso)
+const HEAD_OFFSET = 0.3;    // head center offset above CAP_HEIGHT
+// Roblox-R6-ish blocky character proportions — everything below sums to CAP_HEIGHT
+const LEG_HEIGHT = 0.85;
+const LEG_WIDTH = 0.42;
+const LEG_DEPTH = 0.5;
+const HIP_SPACING = 0.22;   // half-distance between the two legs (centers)
+const TORSO_HEIGHT = 0.95;
+const TORSO_WIDTH = 1.0;
+const TORSO_DEPTH = 0.5;
+const HEAD_SIZE = 0.55;
+const ARM_LENGTH = 0.9;
+const ARM_THICKNESS = 0.32;
+const ARM_DEPTH = 0.4;
+const SHOULDER_Y = LEG_HEIGHT + TORSO_HEIGHT - 0.12;   // pivot for arm swing
+const SHOULDER_X = TORSO_WIDTH / 2 + ARM_THICKNESS / 2 - 0.02; // tucked just outside torso
+const LIMB_SWING = 0.75;    // radians — peak leg swing at full speed
+const ARM_SWING = 0.55;
 const MOVE_SPEED = 9;
 const ACCEL = 60;           // horizontal units/sec² ramp toward target velocity
 const DECEL = 80;           // horizontal units/sec² ramp toward zero when idle
@@ -55,8 +71,13 @@ const LOOK_SENS = 0.0022;
 export function createPlayController(refs: PlaySceneRefs): PlayController {
   let active = false;
   let character: THREE.Group | null = null;
-  let body: THREE.Mesh | null = null; // reference kept so we can bob the torso
+  let torso: THREE.Mesh | null = null;
   let head: THREE.Mesh | null = null;
+  // Pivot groups — rotating these swings the limb from shoulder / hip
+  let armL: THREE.Group | null = null;
+  let armR: THREE.Group | null = null;
+  let legL: THREE.Group | null = null;
+  let legR: THREE.Group | null = null;
   const velocity = new THREE.Vector3();
   const keys: Record<string, boolean> = {};
   let yaw = 0;
@@ -82,28 +103,80 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   function buildCharacter(): THREE.Group {
     const g = new THREE.Group();
     g.name = 'play-character';
-    const cyl = CAP_HEIGHT - CAP_RADIUS * 2;
-    body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(CAP_RADIUS, cyl, 8, 16),
-      new THREE.MeshStandardMaterial({ color: 0x3a7be2, roughness: 0.6 }),
+
+    const skin = new THREE.MeshStandardMaterial({ color: 0xf0c090, roughness: 0.8 });
+    const shirt = new THREE.MeshStandardMaterial({ color: 0x3a7be2, roughness: 0.6 });
+    const pants = new THREE.MeshStandardMaterial({ color: 0x2a4158, roughness: 0.85 });
+    const shoes = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 1.0 });
+
+    // Torso (shirt)
+    torso = new THREE.Mesh(
+      new THREE.BoxGeometry(TORSO_WIDTH, TORSO_HEIGHT, TORSO_DEPTH),
+      shirt,
     );
-    body.position.y = CAP_HEIGHT / 2;
-    body.castShadow = true;
-    g.add(body);
-    head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, 0.55, 0.55),
-      new THREE.MeshStandardMaterial({ color: 0xf0c090, roughness: 0.8 }),
-    );
+    torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2;
+    torso.castShadow = true;
+    g.add(torso);
+
+    // Head (skin) — eyes + mouth are children so they bob with the head
+    head = new THREE.Mesh(new THREE.BoxGeometry(HEAD_SIZE, HEAD_SIZE, HEAD_SIZE), skin);
     head.position.y = CAP_HEIGHT + HEAD_OFFSET;
     head.castShadow = true;
     g.add(head);
-    // Eyes so the character has a readable "front"
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), eyeMat);
-    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), eyeMat);
-    eyeL.position.set(-0.14, CAP_HEIGHT + HEAD_OFFSET + 0.05, 0.28);
-    eyeR.position.set(0.14, CAP_HEIGHT + HEAD_OFFSET + 0.05, 0.28);
-    g.add(eyeL, eyeR);
+
+    const faceMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), faceMat);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), faceMat);
+    eyeL.position.set(-0.14, 0.05, HEAD_SIZE / 2 + 0.001);
+    eyeR.position.set(0.14, 0.05, HEAD_SIZE / 2 + 0.001);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.02), faceMat);
+    mouth.position.set(0, -0.1, HEAD_SIZE / 2 + 0.001);
+    head.add(eyeL, eyeR, mouth);
+
+    // Arms — each lives inside a pivot group at the shoulder so rotating the
+    // group swings the arm. Mesh origin is offset down by half the arm length
+    // so the arm hangs below the shoulder at rest.
+    const armGeom = new THREE.BoxGeometry(ARM_THICKNESS, ARM_LENGTH, ARM_DEPTH);
+    const armMeshL = new THREE.Mesh(armGeom, skin);
+    armMeshL.position.y = -ARM_LENGTH / 2;
+    armMeshL.castShadow = true;
+    armL = new THREE.Group();
+    armL.position.set(-SHOULDER_X, SHOULDER_Y, 0);
+    armL.add(armMeshL);
+    g.add(armL);
+
+    const armMeshR = new THREE.Mesh(armGeom.clone(), skin);
+    armMeshR.position.y = -ARM_LENGTH / 2;
+    armMeshR.castShadow = true;
+    armR = new THREE.Group();
+    armR.position.set(SHOULDER_X, SHOULDER_Y, 0);
+    armR.add(armMeshR);
+    g.add(armR);
+
+    // Legs — pants body + tiny shoe block at the foot.
+    function makeLeg(sign: number): THREE.Group {
+      const pivot = new THREE.Group();
+      pivot.position.set(sign * HIP_SPACING, LEG_HEIGHT, 0);
+      const legMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH),
+        pants,
+      );
+      legMesh.position.y = -LEG_HEIGHT / 2;
+      legMesh.castShadow = true;
+      pivot.add(legMesh);
+      const shoe = new THREE.Mesh(
+        new THREE.BoxGeometry(LEG_WIDTH + 0.02, 0.12, LEG_DEPTH + 0.1),
+        shoes,
+      );
+      shoe.position.set(0, -LEG_HEIGHT + 0.06, 0.04);
+      shoe.castShadow = true;
+      pivot.add(shoe);
+      return pivot;
+    }
+    legL = makeLeg(-1);
+    legR = makeLeg(1);
+    g.add(legL, legR);
+
     return g;
   }
 
@@ -226,6 +299,10 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       renderedYaw = 0;
       camSmooth.set(0, 0, 0);
       lookAtSmooth.set(0, 0, 0);
+      if (armL) armL.rotation.x = 0;
+      if (armR) armR.rotation.x = 0;
+      if (legL) legL.rotation.x = 0;
+      if (legR) legR.rotation.x = 0;
 
       savedCamPos.copy(refs.camera.position);
       savedTarget.copy(refs.controls.target);
@@ -258,6 +335,9 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
         });
       }
       character = null;
+      torso = null;
+      head = null;
+      armL = armR = legL = legR = null;
 
       refs.controls.enabled = savedControlsEnabled;
       refs.camera.position.copy(savedCamPos);
@@ -388,18 +468,34 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       renderedYaw += diff * rotK;
       character.rotation.y = renderedYaw;
 
-      // Subtle walk bob — only when actually moving on the ground
+      // Walk cycle — swing legs/arms from their pivot groups and bob torso+head
       const speed = Math.hypot(velocity.x, velocity.z);
-      const moving = speed > 0.5 && grounded;
-      if (moving) {
-        bobPhase += step * BOB_SPEED * (speed / MOVE_SPEED);
-      } else {
-        // Ease bob back to rest so stopping doesn't snap
-        bobPhase += (0 - (bobPhase % (Math.PI * 2))) * Math.min(1, step * 6);
+      const onGround = grounded && velocity.y <= 0.1;
+      const moving = speed > 0.5 && onGround;
+      const speedRatio = Math.min(1, speed / MOVE_SPEED);
+      if (moving) bobPhase += step * BOB_SPEED * speedRatio;
+
+      const swingTarget = moving ? Math.sin(bobPhase) * speedRatio : 0;
+      const limbK = Math.min(1, step * 14); // how fast limb rotation eases to target
+      if (legL) legL.rotation.x += (swingTarget * LIMB_SWING - legL.rotation.x) * limbK;
+      if (legR) legR.rotation.x += (-swingTarget * LIMB_SWING - legR.rotation.x) * limbK;
+      if (armL) armL.rotation.x += (-swingTarget * ARM_SWING - armL.rotation.x) * limbK;
+      if (armR) armR.rotation.x += (swingTarget * ARM_SWING - armR.rotation.x) * limbK;
+
+      // Jumping / falling pose — raise arms slightly, tuck legs a bit
+      if (!onGround) {
+        const airTarget = velocity.y > 0 ? -0.6 : 0.3;
+        if (armL) armL.rotation.x += (airTarget - armL.rotation.x) * limbK;
+        if (armR) armR.rotation.x += (airTarget - armR.rotation.x) * limbK;
+        const legAir = velocity.y > 0 ? -0.25 : 0.15;
+        if (legL) legL.rotation.x += (legAir - legL.rotation.x) * limbK;
+        if (legR) legR.rotation.x += (legAir - legR.rotation.x) * limbK;
       }
-      const bobY = Math.sin(bobPhase) * BOB_AMP * (moving ? 1 : 0);
-      if (body) body.position.y = CAP_HEIGHT / 2 + bobY;
-      if (head) head.position.y = CAP_HEIGHT + HEAD_OFFSET + bobY * 0.8;
+
+      // Subtle torso + head bob synced to foot-plants, half amplitude vs before
+      const bobY = moving ? Math.abs(Math.sin(bobPhase)) * BOB_AMP * speedRatio * 0.6 : 0;
+      if (torso) torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2 + bobY;
+      if (head) head.position.y = CAP_HEIGHT + HEAD_OFFSET + bobY * 0.85;
 
       // Third-person shoulder camera — smoothed toward the desired position
       const headY = character.position.y + CAP_HEIGHT + HEAD_OFFSET;

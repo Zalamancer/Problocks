@@ -87,6 +87,8 @@ interface SceneSnapshot {
   stairs: string[];   // "x,y,z,facing"
   gridSize: number;
   selectedPiece: Record<PieceKind, string>;
+  /** User-enabled imported GLB model names (from /assets/medieval/). */
+  libraryAssets?: string[];
 }
 
 // --- Asset catalog (served to the model so it can pick real piece ids) ---
@@ -142,6 +144,29 @@ const STUDIO_PROMPT = (
     .map(([k, v]) => `    ${k} = ${v}`)
     .join('\n');
 
+  const lib = scene.libraryAssets ?? [];
+  const librarySection = lib.length
+    ? `## User's imported model library (AI-enabled GLB models)
+
+These are the ONLY custom 3D models the user has enabled for you. Use them
+by emitting addPart with partType:"GLB" and modelName set to EXACTLY one
+of these names (no path, no extension):
+
+${lib.map((n) => `  - ${n}`).join('\n')}
+
+Prefer these imported models over generic Block/Sphere parts when the user
+asks for something that matches (e.g. a cart → Prop_Wagon, a fence →
+Prop_WoodenFence_*). Combine multiple to build scenes.
+`
+    : `## User's imported model library
+
+The user has not enabled any imported GLB models for AI use. Do NOT invent
+GLB modelName values — only create parts with partType "Block" | "Sphere"
+| "Cylinder" | "Wedge", or place building tiles from the piece catalog
+below. If the user wants a custom model, tell them to open the + palette
+drop-up → Library tab and enable the assets they want.
+`;
+
   return `You are the Problocks Studio Agent. You edit a 3D scene directly —
 you do NOT write HTML or build a standalone game. Your output is a sequence
 of ACTION lines that mutate the live scene.
@@ -163,7 +188,8 @@ ${dump('stairs', scene.stairs)}
 Currently selected piece per kind (used when an action omits "asset"):
 ${selected}
 
-## Available asset ids (use EXACTLY these strings for "asset")
+${librarySection}
+## Available piece ids (use EXACTLY these strings for "asset")
 
 ${catalogByKind()}
 
@@ -175,7 +201,10 @@ object. Narration text can appear between ACTION lines; keep it short.
 ### Free-form parts (scene-store)
 
   {"type":"addPart","name":"Tower","partType":"Block","position":{"x":0,"y":0.5,"z":0},"scale":{"x":1,"y":1,"z":1},"color":"#ff4444"}
-    — partType: "Block" | "Sphere" | "Cylinder" | "Wedge"
+    — partType: "Block" | "Sphere" | "Cylinder" | "Wedge" | "GLB"
+    — for partType:"GLB" add "modelName":"<exact library name from the section above>"
+      color is ignored for GLBs. Example:
+      {"type":"addPart","partType":"GLB","modelName":"Prop_Wagon","position":{"x":4,"y":0,"z":2}}
 
   {"type":"updatePart","id":"<existing-id>","color":"#00ff00","position":{"x":2,"y":0.5,"z":0}}
   {"type":"removePart","id":"<existing-id>"}

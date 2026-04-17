@@ -6,6 +6,7 @@ import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-stor
 import { useBuildingStore, type EdgeDir, type Facing } from '@/store/building-store';
 import type { PieceKind } from '@/lib/building-kit';
 import { ChatAssetPicker } from './ChatAssetPicker';
+import { useAILibraryStore, enabledLibraryList } from '@/store/ai-library-store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -25,6 +26,8 @@ type StudioAction =
       rotation?: { x: number; y: number; z: number };
       scale?: { x: number; y: number; z: number };
       color?: string;
+      /** For partType === 'GLB', the enabled library asset name. */
+      modelName?: string;
     }
   | {
       type: 'updatePart';
@@ -62,7 +65,9 @@ type StudioAction =
 function shortDescribe(a: StudioAction): string {
   switch (a.type) {
     case 'addPart':
-      return `➕ Part${a.name ? ` "${a.name}"` : ''}${a.color ? ` ${a.color}` : ''}`;
+      return a.partType === 'GLB' && a.modelName
+        ? `➕ GLB ${a.modelName}`
+        : `➕ Part${a.name ? ` "${a.name}"` : ''}${a.color ? ` ${a.color}` : ''}`;
     case 'updatePart':
       return `✏️ Update ${a.id}`;
     case 'removePart':
@@ -143,6 +148,7 @@ export function ChatPanel() {
             rotation: action.rotation,
             scale: action.scale,
             color: action.color,
+            modelName: action.modelName,
           });
           break;
         case 'updatePart': {
@@ -236,9 +242,10 @@ export function ChatPanel() {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
 
-    // Snapshot current scene + building state for the agent
+    // Snapshot current scene + building state + AI-enabled library for the agent
     const sceneState = useSceneStore.getState();
     const b = useBuildingStore.getState();
+    const libEnabled = useAILibraryStore.getState().enabled;
     const snapshot = {
       parts: sceneState.sceneObjects.map((p) => ({
         id: p.id,
@@ -255,6 +262,7 @@ export function ChatPanel() {
       stairs: Object.keys(b.stairs),
       gridSize: b.gridSize,
       selectedPiece: b.selectedPiece,
+      libraryAssets: enabledLibraryList(libEnabled),
     };
 
     const next: Message[] = [...messages, { role: 'user', content: trimmed }];

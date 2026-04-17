@@ -296,7 +296,9 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       coyoteTimer = 0;
       jumpBuffer = 0;
       bobPhase = 0;
-      renderedYaw = 0;
+      // Spawn facing away from the camera (yaw + π at yaw=0 → facing -Z,
+      // which is where W will send the character — no 180° spin on first input)
+      renderedYaw = Math.PI;
       camSmooth.set(0, 0, 0);
       lookAtSmooth.set(0, 0, 0);
       if (armL) armL.rotation.x = 0;
@@ -457,10 +459,13 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
         velocity.set(0, 0, 0);
       }
 
-      // Rotate mesh smoothly toward desired facing
+      // Rotate mesh smoothly toward desired facing. While moving, face the
+      // direction of motion. While idle, face the same way the camera is
+      // looking (yaw + π) so the character's back stays toward the camera
+      // — NOT its face, which is what happens if you use yaw directly.
       let targetYaw = renderedYaw;
       if (inputActive) targetYaw = Math.atan2(wishX, wishZ);
-      else targetYaw = yaw;
+      else targetYaw = yaw + Math.PI;
       let diff = targetYaw - renderedYaw;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
@@ -497,19 +502,22 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       if (torso) torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2 + bobY;
       if (head) head.position.y = CAP_HEIGHT + HEAD_OFFSET + bobY * 0.85;
 
-      // Third-person shoulder camera — smoothed toward the desired position
+      // Third-person camera — smoothed toward a position BEHIND the character.
+      // Camera forward vector (where the camera looks) is:
+      //   forward = (-sin(yaw)*cos(pitch),  sin(pitch), -cos(yaw)*cos(pitch))
+      // Camera position = head target − forward * CAM_DIST, so flipping the
+      // sign on X/Z puts the camera behind (opposite of the forward direction)
+      // and subtracting sin(pitch) raises the camera when looking down.
       const headY = character.position.y + CAP_HEIGHT + HEAD_OFFSET;
       const cp = Math.cos(pitch);
       const sp = Math.sin(pitch);
-      // Desired eye position: back along camera forward, then offset to the
-      // right by CAM_SHOULDER to give the Roblox over-the-shoulder framing.
-      const backX = -sy * cp;
-      const backZ = -cy * cp;
-      const rightX = cy;
+      const backX = sy * cp;   // behind-character unit vector on X
+      const backZ = cy * cp;   // behind-character unit vector on Z
+      const rightX = cy;       // camera's right on the ground plane
       const rightZ = -sy;
       camDesired.set(
         character.position.x + backX * CAM_DIST + rightX * CAM_SHOULDER,
-        headY + sp * CAM_DIST + 1.0,
+        headY - sp * CAM_DIST + 0.2,
         character.position.z + backZ * CAM_DIST + rightZ * CAM_SHOULDER,
       );
       const camK = Math.min(1, CAM_LERP * step);

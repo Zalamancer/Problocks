@@ -140,7 +140,7 @@ export function BuildingCanvas() {
     if (!container || sceneRef.current) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87c3ed); // Roblox-style sky blue
+    scene.background = new THREE.Color(0x9ed7ff); // Roblox-style bright sky blue
 
     const camera = new THREE.PerspectiveCamera(
       55,
@@ -157,6 +157,12 @@ export function BuildingCanvas() {
     renderer.shadowMap.enabled = quality.shadows;
     renderer.shadowMap.type =
       quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
+    // Roblox-style bright, saturated output: sRGB display space + slight
+    // over-exposure with no filmic curve so colors stay punchy and don't
+    // get crushed into darks.
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.toneMappingExposure = 1.25;
     // Block browser gestures (back/forward swipe, pinch-zoom the page) so
     // the canvas owns every wheel/trackpad event.
     renderer.domElement.style.touchAction = 'none';
@@ -243,9 +249,12 @@ export function BuildingCanvas() {
 
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-    // Warm hemisphere fill + sun gives Roblox-style bright, saturated look.
-    scene.add(new THREE.HemisphereLight(0xfff6e6, 0x5a7a3a, 0.85));
-    const sun = new THREE.DirectionalLight(0xfff3d6, 1.35);
+    // Roblox-style lighting: very bright hemisphere fill so shadows stay
+    // milky rather than black, plus a softer warm sun so the scene reads
+    // as playful/unreal. Shadows intentionally de-emphasized.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb9e08a, 1.4));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const sun = new THREE.DirectionalLight(0xfff2d0, 1.1);
     sun.position.set(10, 18, 8);
     sun.castShadow = quality.shadows;
     sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
@@ -265,7 +274,7 @@ export function BuildingCanvas() {
     const baseSize = 128;
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(baseSize, baseSize).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0x7ec850, roughness: 0.75, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ color: 0x9bc940, roughness: 0.6, metalness: 0 }),
     );
     ground.position.y = 0;
     ground.receiveShadow = quality.shadows;
@@ -273,7 +282,7 @@ export function BuildingCanvas() {
     scene.add(ground);
 
     // Build-area grid sits slightly above the baseplate to avoid z-fight.
-    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x4a8530, 0x9ede62);
+    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x5a9e2d, 0xbde676);
     grid.position.y = 0.01;
     (grid.material as THREE.Material).depthWrite = false;
     (grid.material as THREE.Material).transparent = true;
@@ -653,8 +662,8 @@ export function BuildingCanvas() {
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
       const material = makeSurfaceMaterial({
-        color: cell.color ?? '#d4a056',
-        roughness: cell.roughness ?? 0.55,
+        color: cell.color ?? '#f0a93a',
+        roughness: cell.roughness ?? 0.35,
         metalness: cell.metalness ?? 0,
         emissive: cell.emissiveColor ?? '#000000',
         emissiveIntensity: cell.emissiveIntensity ?? 0,
@@ -695,8 +704,8 @@ export function BuildingCanvas() {
       const z = parseInt(zs, 10);
       const { pos, size } = wallPlacement(x, z, dir);
       const material = makeSurfaceMaterial({
-        color: edge.color ?? '#d45a4a',
-        roughness: edge.roughness ?? 0.5,
+        color: edge.color ?? '#ed2b2b',
+        roughness: edge.roughness ?? 0.3,
         metalness: edge.metalness ?? 0,
         emissive: edge.emissiveColor ?? '#000000',
         emissiveIntensity: edge.emissiveIntensity ?? 0,

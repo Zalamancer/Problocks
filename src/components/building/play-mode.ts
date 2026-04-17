@@ -62,7 +62,7 @@ const COYOTE_TIME = 0.12;   // can still jump for this long after walking off a 
 const JUMP_BUFFER = 0.15;   // queue a Space press if it lands just before grounding
 const STEP_HEIGHT = 0.45;   // auto-step onto obstacles up to this tall
 const CAM_DIST = 6;
-const CAM_SHOULDER = 0.6;   // sideways shoulder offset like Roblox shift-lock
+const CAM_SHOULDER = 0;     // 0 = centered; positive = over-the-right-shoulder
 const CAM_LERP = 12;        // cam follow smoothness
 const BOB_SPEED = 11;
 const BOB_AMP = 0.08;

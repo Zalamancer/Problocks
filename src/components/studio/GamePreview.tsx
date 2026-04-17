@@ -114,6 +114,17 @@ export function GamePreview({
     setIframeFocused(true);
   }, []);
 
+  // Auto-focus iframe immediately so click-to-select works in edit mode
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (iframeRef.current && !iframeFocused) {
+        iframeRef.current.focus();
+        setIframeFocused(true);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen().catch(() => {});

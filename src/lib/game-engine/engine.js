@@ -92,6 +92,9 @@ export function createEngine(canvas, config = {}) {
     particles, scenes, time, camera, three, world, ui, state, loader,
   };
 
+  // Give entity system access to game for init() calls
+  entities._game = game;
+
   // Gravity from config
   if (config.gravity != null) physics.setGravity(config.gravity);
 

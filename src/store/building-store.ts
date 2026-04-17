@@ -22,12 +22,25 @@ export interface Transform3 {
   rotation?: { x: number; y: number; z: number };
   scale?: { x: number; y: number; z: number };
 }
-export interface FloorCell extends Transform3 {
+/** Optional appearance overrides for floors/walls — all default in rebuild. */
+export interface Appearance {
+  color?: string;
+  roughness?: number;
+  metalness?: number;
+  emissiveColor?: string;
+  emissiveIntensity?: number;
+  castShadow?: boolean;
+  visible?: boolean;
+}
+export interface FloorCell extends Transform3, Appearance {
   asset: string;
 }
-export interface WallEdge extends Transform3 {
+export interface WallEdge extends Transform3, Appearance {
   asset: string;
 }
+
+export type FloorPatch = Transform3 & Appearance & { asset?: string };
+export type WallPatch = Transform3 & Appearance & { asset?: string };
 
 export type BuildingSelection =
   | { kind: 'floor'; key: string }
@@ -59,6 +72,9 @@ interface BuildingState {
   /** Gizmo-writable transform overrides. If absent, grid placement is used. */
   updateFloorTransform: (key: string, t: Transform3) => void;
   updateWallTransform: (key: string, t: Transform3) => void;
+  /** Generic patch — transform OR appearance OR both. */
+  updateFloor: (key: string, patch: FloorPatch) => void;
+  updateWall: (key: string, patch: WallPatch) => void;
 
   selection: BuildingSelection;
   setSelection: (s: BuildingSelection) => void;
@@ -117,6 +133,18 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       const cur = s.walls[key];
       if (!cur) return s;
       return { walls: { ...s.walls, [key]: { ...cur, ...t } } };
+    }),
+  updateFloor: (key, patch) =>
+    set((s) => {
+      const cur = s.floors[key];
+      if (!cur) return s;
+      return { floors: { ...s.floors, [key]: { ...cur, ...patch } } };
+    }),
+  updateWall: (key, patch) =>
+    set((s) => {
+      const cur = s.walls[key];
+      if (!cur) return s;
+      return { walls: { ...s.walls, [key]: { ...cur, ...patch } } };
     }),
 
   selection: null,

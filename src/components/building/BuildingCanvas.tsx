@@ -564,22 +564,29 @@ export function BuildingCanvas() {
       (c.material as THREE.Material).dispose();
       group.remove(c);
     }
-    const mat = new THREE.MeshStandardMaterial({ color: 0x8b6f4a, roughness: 0.9 });
     for (const key of Object.keys(floors)) {
       const cell = floors[key];
       const [xs, zs] = key.split(',');
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(cell.color ?? '#8b6f4a'),
+        roughness: cell.roughness ?? 0.9,
+        metalness: cell.metalness ?? 0,
+        emissive: new THREE.Color(cell.emissiveColor ?? '#000000'),
+        emissiveIntensity: cell.emissiveIntensity ?? 0,
+      });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(TILE, FLOOR_THICK, TILE),
-        mat.clone(),
+        material,
       );
       const p = cell.position ?? { x: x * TILE, y: FLOOR_THICK / 2, z: z * TILE };
       mesh.position.set(p.x, p.y, p.z);
       if (cell.rotation) mesh.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
       if (cell.scale) mesh.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
       mesh.receiveShadow = true;
-      mesh.castShadow = true;
+      mesh.castShadow = cell.castShadow ?? true;
+      mesh.visible = cell.visible ?? true;
       mesh.userData.kind = 'floor';
       mesh.userData.key = key;
       group.add(mesh);
@@ -597,22 +604,29 @@ export function BuildingCanvas() {
       (c.material as THREE.Material).dispose();
       group.remove(c);
     }
-    const mat = new THREE.MeshStandardMaterial({ color: 0xc8b392, roughness: 0.8 });
     for (const key of Object.keys(walls)) {
       const edge = walls[key];
       const [xs, zs, dir] = key.split(',') as [string, string, EdgeDir];
       const x = parseInt(xs, 10);
       const z = parseInt(zs, 10);
       const { pos, size } = wallPlacement(x, z, dir);
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(edge.color ?? '#c8b392'),
+        roughness: edge.roughness ?? 0.8,
+        metalness: edge.metalness ?? 0,
+        emissive: new THREE.Color(edge.emissiveColor ?? '#000000'),
+        emissiveIntensity: edge.emissiveIntensity ?? 0,
+      });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(size.x, size.y, size.z),
-        mat.clone(),
+        material,
       );
       if (edge.position) mesh.position.set(edge.position.x, edge.position.y, edge.position.z);
       else mesh.position.copy(pos);
       if (edge.rotation) mesh.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
       if (edge.scale) mesh.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
-      mesh.castShadow = true;
+      mesh.castShadow = edge.castShadow ?? true;
+      mesh.visible = edge.visible ?? true;
       mesh.receiveShadow = true;
       mesh.userData.kind = 'wall';
       mesh.userData.key = key;

@@ -91,8 +91,8 @@ export function StudioLayout() {
   const floors = useBuildingStore((s) => s.floors);
   const walls = useBuildingStore((s) => s.walls);
   const setBuildingSelection = useBuildingStore((s) => s.setSelection);
-  const updateFloorTransform = useBuildingStore((s) => s.updateFloorTransform);
-  const updateWallTransform = useBuildingStore((s) => s.updateWallTransform);
+  const updateFloor = useBuildingStore((s) => s.updateFloor);
+  const updateWall = useBuildingStore((s) => s.updateWall);
   const eraseFloor = useBuildingStore((s) => s.eraseFloor);
   const eraseWall = useBuildingStore((s) => s.eraseWall);
 
@@ -110,6 +110,7 @@ export function StudioLayout() {
       buildingSelection.kind === 'floor'
         ? floorDefaultPos(buildingSelection.key)
         : wallDefaultPos(buildingSelection.key);
+    const isFloor = buildingSelection.kind === 'floor';
     return {
       id: `${buildingSelection.kind}:${buildingSelection.key}`,
       name: record.asset || buildingSelection.kind,
@@ -117,27 +118,38 @@ export function StudioLayout() {
       position: record.position ?? defaultPos,
       rotation: record.rotation ?? { x: 0, y: 0, z: 0 },
       scale: record.scale ?? { x: 1, y: 1, z: 1 },
-      color: '#a1a1aa',
-      roughness: 0.9,
-      metalness: 0,
-      emissiveColor: '#000000',
-      emissiveIntensity: 0,
+      color: record.color ?? (isFloor ? '#8b6f4a' : '#c8b392'),
+      roughness: record.roughness ?? (isFloor ? 0.9 : 0.8),
+      metalness: record.metalness ?? 0,
+      emissiveColor: record.emissiveColor ?? '#000000',
+      emissiveIntensity: record.emissiveIntensity ?? 0,
       texture: 'None',
-      castShadow: true,
+      castShadow: record.castShadow ?? true,
       anchored: true,
-      visible: true,
+      visible: record.visible ?? true,
     };
   })();
 
   function handleBuildingPartUpdate(changes: Partial<ScenePart>) {
     if (!buildingSelection) return;
-    const t: { position?: ScenePart['position']; rotation?: ScenePart['rotation']; scale?: ScenePart['scale'] } = {};
-    if (changes.position) t.position = changes.position;
-    if (changes.rotation) t.rotation = changes.rotation;
-    if (changes.scale) t.scale = changes.scale;
-    if (Object.keys(t).length === 0) return;
-    if (buildingSelection.kind === 'floor') updateFloorTransform(buildingSelection.key, t);
-    else updateWallTransform(buildingSelection.key, t);
+    const patch: Record<string, unknown> = {};
+    // Transform
+    if (changes.position) patch.position = changes.position;
+    if (changes.rotation) patch.rotation = changes.rotation;
+    if (changes.scale) patch.scale = changes.scale;
+    // Appearance
+    if (changes.color !== undefined) patch.color = changes.color;
+    if (changes.roughness !== undefined) patch.roughness = changes.roughness;
+    if (changes.metalness !== undefined) patch.metalness = changes.metalness;
+    if (changes.emissiveColor !== undefined) patch.emissiveColor = changes.emissiveColor;
+    if (changes.emissiveIntensity !== undefined) patch.emissiveIntensity = changes.emissiveIntensity;
+    if (changes.castShadow !== undefined) patch.castShadow = changes.castShadow;
+    if (changes.visible !== undefined) patch.visible = changes.visible;
+    // `texture` just drives roughness/metalness in PartPropertiesPanel —
+    // those are already forwarded as separate fields, so we can ignore it.
+    if (Object.keys(patch).length === 0) return;
+    if (buildingSelection.kind === 'floor') updateFloor(buildingSelection.key, patch);
+    else updateWall(buildingSelection.key, patch);
   }
 
   function handleBuildingPartDelete() {

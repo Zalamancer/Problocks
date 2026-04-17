@@ -21,6 +21,7 @@ import {
 import { useSceneStore, type PartType } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
+import { useLightingStore } from '@/store/lighting-store';
 
 // ── Unified layer item type ─────────────────────────────────────────────
 interface LayerItem {
@@ -99,6 +100,9 @@ export function ScenePanel({ onSelect }: Props) {
   const openFileName = useStudio((s) => s.openFileName);
   const setOpenFileName = useStudio((s) => s.setOpenFileName);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+
+  const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
+  const setLightingPanelOpen = useLightingStore((s) => s.setPanelOpen);
 
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
@@ -286,28 +290,53 @@ export function ScenePanel({ onSelect }: Props) {
               const CategoryIcon = CATEGORY_ICONS[cat] || Box;
               const iconBg = CATEGORY_ICON_BG[cat] || 'bg-zinc-700/40 text-zinc-300';
 
+              const isWorkspace = cat === 'part';
+              const workspaceSelected = isWorkspace && lightingPanelOpen;
+              const handleHeaderClick = () => {
+                if (isWorkspace) {
+                  // Clicking "Workspace" opens the lighting panel on the right
+                  // and clears any part/building selection so it wins the
+                  // right-panel slot. Chevron (below) still toggles collapse.
+                  setSelectedPart(null);
+                  setBuildingSelection(null);
+                  setLightingPanelOpen(!lightingPanelOpen);
+                } else {
+                  toggleCategory(cat);
+                }
+              };
+
               return (
                 <div key={cat} className="flex flex-col gap-1.5">
                   {/* Category header */}
-                  <button
-                    onClick={() => toggleCategory(cat)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-zinc-800/60 transition-all group"
+                  <div
+                    onClick={handleHeaderClick}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all group ${
+                      workspaceSelected ? 'bg-accent/15 shadow-sm shadow-accent/10' : 'hover:bg-zinc-800/60'
+                    }`}
                   >
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
                       <CategoryIcon size={15} />
                     </div>
                     <div className="flex-1 min-w-0 text-left">
-                      <div className="text-sm font-semibold text-zinc-100 truncate">
+                      <div className={`text-sm font-semibold truncate ${workspaceSelected ? 'text-white' : 'text-zinc-100'}`}>
                         {CATEGORY_LABELS[cat]}
                       </div>
                       <div className="text-xs text-zinc-500 truncate">
                         {items.length} {items.length === 1 ? 'item' : 'items'} · {CATEGORY_SUBLABELS[cat]}
                       </div>
                     </div>
-                    <div className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 group-hover:text-zinc-300 group-hover:bg-white/5 transition-colors">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleCategory(cat);
+                      }}
+                      className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 group-hover:text-zinc-300 group-hover:bg-white/5 transition-colors"
+                      aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                    >
                       {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                    </div>
-                  </button>
+                    </button>
+                  </div>
 
                   {/* Layer rows */}
                   {!isCollapsed && (

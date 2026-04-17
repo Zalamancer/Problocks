@@ -22,6 +22,8 @@ import { getTemplate } from '@/lib/templates';
 import { getGameHtml } from '@/lib/game-engine';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
+import { WorkspacePropertiesPanel } from './panels/WorkspacePropertiesPanel';
+import { useLightingStore } from '@/store/lighting-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
 import { resolveEffectiveTask } from '@/lib/templates/types';
@@ -97,6 +99,10 @@ export function StudioLayout() {
   // Quality tier — forwarded to the game bundler so generated iframes honor
   // the same shadow/antialias/pixelRatio settings as the studio.
   const gameQuality = useQualityStore((s) => s.settings);
+
+  // Lighting panel open — surfaced in the right panel when the user clicks
+  // the "Workspace" category in the left-panel scene hierarchy.
+  const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
 
   // Building store — selection of a floor or wall opens the right panel too.
   const buildingSelection = useBuildingStore((s) => s.selection);
@@ -434,7 +440,9 @@ export function StudioLayout() {
           </div>
 
           {/* Right panel — part properties when a part is selected (native
-              workspace OR running iframe game); task detail otherwise. */}
+              workspace OR running iframe game); workspace lighting when the
+              user clicked "Workspace" in the scene hierarchy; task detail
+              otherwise. */}
           {selectedPart ? (
             <PartPropertiesPanel
               part={selectedPart}
@@ -447,6 +455,8 @@ export function StudioLayout() {
               onUpdate={handleBuildingPartUpdate}
               onDelete={handleBuildingPartDelete}
             />
+          ) : lightingPanelOpen ? (
+            <WorkspacePropertiesPanel />
           ) : board && template && selectedTaskId ? (
             <TaskDetailPanel
               templateTaskId={selectedTaskId}

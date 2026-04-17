@@ -12,47 +12,39 @@ import {
 } from '@/store/lighting-store';
 
 /**
- * Floating lighting/atmosphere panel — Roblox-like controls for live-tweaking
- * the scene's look without leaving the workspace. Fields map 1:1 to
- * Roblox Studio's Lighting + Atmosphere instances; see lighting-store.ts.
+ * Right-panel view shown when the user selects "Workspace" in the left-panel
+ * scene hierarchy. Hosts the Roblox-style Lighting + Atmosphere controls that
+ * used to live in the floating LightingPanel over the 3D viewport.
  */
-export function LightingPanel() {
-  const panelOpen = useLightingStore((s) => s.panelOpen);
-  const setPanelOpen = useLightingStore((s) => s.setPanelOpen);
+export function WorkspacePropertiesPanel() {
   const preset = useLightingStore((s) => s.preset);
   const config = useLightingStore((s) => s.config);
   const setPreset = useLightingStore((s) => s.setPreset);
   const setField = useLightingStore((s) => s.setField);
   const setAtm = useLightingStore((s) => s.setAtmosphereField);
   const reset = useLightingStore((s) => s.reset);
-
-  if (!panelOpen) return null;
+  const setPanelOpen = useLightingStore((s) => s.setPanelOpen);
 
   return (
-    <aside
-      className="absolute top-3 right-3 z-20 w-[300px] max-h-[calc(100vh-24px)] flex flex-col bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-xl"
-      onMouseDown={(e) => e.stopPropagation()}
-      onWheel={(e) => e.stopPropagation()}
-    >
+    <aside className="w-full md:w-[260px] flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden shrink-0">
       {/* Header */}
-      <header className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10">
-        <div className="flex items-center gap-2 text-zinc-100">
-          <Sun size={14} className="text-amber-300" />
-          <span className="text-[12px] font-medium">Lighting</span>
-        </div>
+      <div className="shrink-0 px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
+        <Sun size={14} className="text-amber-300 shrink-0" />
+        <span className="text-zinc-200 text-sm font-semibold truncate flex-1">Workspace</span>
+        <span className="text-zinc-600 text-xs">Lighting</span>
         <button
           type="button"
           onClick={() => setPanelOpen(false)}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10"
+          className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/10"
           title="Close"
         >
           <X size={13} />
         </button>
-      </header>
+      </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Preset */}
-        <PanelSection title="Preset">
+      {/* Scrollable content */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+        <PanelSection title="Preset" collapsible defaultOpen>
           <PanelSelect
             label="Preset"
             value={preset}
@@ -68,7 +60,6 @@ export function LightingPanel() {
           />
         </PanelSection>
 
-        {/* Lighting core */}
         <PanelSection title="Lighting" collapsible defaultOpen>
           <PanelSlider
             label="Brightness"
@@ -102,7 +93,6 @@ export function LightingPanel() {
           />
         </PanelSection>
 
-        {/* Ambient colors */}
         <PanelSection title="Ambient Colors (RGB 0-255)" collapsible defaultOpen={false}>
           <RgbRow label="Ambient"         value={config.ambient}         onChange={(v) => setField('ambient', v)} />
           <RgbRow label="OutdoorAmbient"  value={config.outdoorAmbient}  onChange={(v) => setField('outdoorAmbient', v)} />
@@ -111,7 +101,6 @@ export function LightingPanel() {
           <RgbRow label="SkyColor"        value={config.skyColor}        onChange={(v) => setField('skyColor', v)} />
         </PanelSection>
 
-        {/* Atmosphere */}
         <PanelSection title="Atmosphere" collapsible defaultOpen={false}>
           <PanelSlider
             label="Density"
@@ -142,8 +131,8 @@ export function LightingPanel() {
         </PanelSection>
       </div>
 
-      {/* Footer */}
-      <footer className="shrink-0 px-3 py-2 border-t border-white/10">
+      {/* Sticky footer */}
+      <footer className="shrink-0 px-4 py-3 border-t border-white/[0.05]">
         <PanelActionButton onClick={reset} variant="secondary" fullWidth>
           Reset to Poppy
         </PanelActionButton>

@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { useBuildingStore, type EdgeDir } from '@/store/building-store';
 import { useSceneStore, type ScenePart, type PartType } from '@/store/scene-store';
+import { useQualityStore } from '@/store/quality-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 
 const TILE = 2;
@@ -80,8 +81,10 @@ export function BuildingCanvas() {
   const buildingSelection = useBuildingStore((s) => s.selection);
   const parts = useSceneStore((s) => s.sceneObjects);
   const selectedPartId = useSceneStore((s) => s.selectedPart?.id ?? null);
+  const quality = useQualityStore((s) => s.settings);
 
-  // --- init scene once ---
+  // --- init scene (re-runs when the quality tier changes so we can rebuild
+  //     the renderer with a different antialias/pixelRatio/shadow config) ---
   useEffect(() => {
     const container = containerRef.current;
     if (!container || sceneRef.current) return;
@@ -98,11 +101,12 @@ export function BuildingCanvas() {
     camera.position.set(18, 22, 24);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: quality.antialias });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.maxPixelRatio));
+    renderer.shadowMap.enabled = quality.shadows;
+    renderer.shadowMap.type =
+      quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
     // Block browser gestures (back/forward swipe, pinch-zoom the page) so
     // the canvas owns every wheel/trackpad event.
     renderer.domElement.style.touchAction = 'none';
@@ -125,10 +129,10 @@ export function BuildingCanvas() {
     controls.update();
 
     // --- Trackpad gestures on the canvas ---
-    // Two-finger swipe              → orbit
-    // Shift + two-finger swipe      → pan
-    // Pinch (ctrl/meta + wheel)     → zoom
-    // Also works with a mouse wheel: wheel orbits, shift-wheel pans,
+    // Two-finger swipe                  → orbit
+    // Click-hold + two-finger swipe     → pan (any mouse button held)
+    // Pinch (ctrl/meta + wheel)         → zoom
+    // Also works with a mouse wheel: wheel orbits, click+wheel pans,
     // ctrl-wheel zooms — matches the same mental model.
     const ORBIT_SPEED = 0.005;
     const PAN_SPEED = 0.0015;
@@ -160,9 +164,11 @@ export function BuildingCanvas() {
         return;
       }
 
-      // Shift → pan. Scale pan by distance so the world moves a consistent
-      // amount under the cursor regardless of zoom level.
-      if (e.shiftKey) {
+      // Mouse/trackpad click held during swipe → pan. Scale pan by distance so
+      // the world moves a consistent amount under the cursor regardless of
+      // zoom level. `e.buttons` is a bitmask of currently-held buttons, so
+      // any held button (including a trackpad click) triggers panning.
+      if (e.buttons !== 0) {
         tmpRight.setFromMatrixColumn(camera.matrix, 0);   // camera-local X
         tmpUp.setFromMatrixColumn(camera.matrix, 1);      // camera-local Y
         const distance = camera.position.distanceTo(controls.target);
@@ -190,8 +196,8 @@ export function BuildingCanvas() {
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(10, 18, 8);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.castShadow = quality.shadows;
+    sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
     sun.shadow.camera.left = -30;
     sun.shadow.camera.right = 30;
     sun.shadow.camera.top = 30;
@@ -211,7 +217,7 @@ export function BuildingCanvas() {
       new THREE.MeshStandardMaterial({ color: 0x6aaa4d, roughness: 1 }),
     );
     ground.position.y = 0;
-    ground.receiveShadow = true;
+    ground.receiveShadow = quality.shadows;
     ground.name = 'baseplate';
     scene.add(ground);
 
@@ -328,7 +334,9 @@ export function BuildingCanvas() {
         sceneRef.current = null;
       }
     };
-  }, []);
+    // Re-init when the quality tier flips so the renderer picks up the new
+    // antialias/pixelRatio/shadowType values (those can't be toggled live).
+  }, [quality]);
 
   // --- pointer handlers (rebind when tool changes) ---
   useEffect(() => {
@@ -584,14 +592,14 @@ export function BuildingCanvas() {
       mesh.position.set(p.x, p.y, p.z);
       if (cell.rotation) mesh.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
       if (cell.scale) mesh.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
-      mesh.receiveShadow = true;
-      mesh.castShadow = cell.castShadow ?? true;
+      mesh.receiveShadow = quality.shadows;
+      mesh.castShadow = quality.shadows && (cell.castShadow ?? true);
       mesh.visible = cell.visible ?? true;
       mesh.userData.kind = 'floor';
       mesh.userData.key = key;
       group.add(mesh);
     }
-  }, [floors]);
+  }, [floors, quality]);
 
   // --- rebuild wall meshes when data changes ---
   useEffect(() => {
@@ -625,14 +633,14 @@ export function BuildingCanvas() {
       else mesh.position.copy(pos);
       if (edge.rotation) mesh.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
       if (edge.scale) mesh.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
-      mesh.castShadow = edge.castShadow ?? true;
+      mesh.castShadow = quality.shadows && (edge.castShadow ?? true);
       mesh.visible = edge.visible ?? true;
-      mesh.receiveShadow = true;
+      mesh.receiveShadow = quality.shadows;
       mesh.userData.kind = 'wall';
       mesh.userData.key = key;
       group.add(mesh);
     }
-  }, [walls]);
+  }, [walls, quality]);
 
   // --- rebuild part meshes when scene parts change ---
   useEffect(() => {
@@ -671,8 +679,8 @@ export function BuildingCanvas() {
             if (!placeholder.parent) return;
             gltf.scene.traverse((o) => {
               if ((o as THREE.Mesh).isMesh) {
-                (o as THREE.Mesh).castShadow = p.castShadow;
-                (o as THREE.Mesh).receiveShadow = true;
+                (o as THREE.Mesh).castShadow = quality.shadows && p.castShadow;
+                (o as THREE.Mesh).receiveShadow = quality.shadows;
               }
             });
             placeholder.add(gltf.scene);
@@ -703,14 +711,14 @@ export function BuildingCanvas() {
       mesh.position.set(p.position.x, p.position.y, p.position.z);
       mesh.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z);
       mesh.scale.set(p.scale.x, p.scale.y, p.scale.z);
-      mesh.castShadow = p.castShadow;
-      mesh.receiveShadow = true;
+      mesh.castShadow = quality.shadows && p.castShadow;
+      mesh.receiveShadow = quality.shadows;
       mesh.visible = p.visible;
       mesh.userData.id = p.id;
       mesh.userData.kind = 'part';
       group.add(mesh);
     }
-  }, [parts]);
+  }, [parts, quality]);
 
   // --- selection highlight: emissive glow on the selected part mesh ---
   //     Also re-attaches the gizmo. This effect depends on `parts` so after

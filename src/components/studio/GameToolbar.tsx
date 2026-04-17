@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Copy, Trash2, ChevronDown } from 'lucide-react';
 import { useSceneStore, type PartType } from '@/store/scene-store';
+import { useBuildingStore } from '@/store/building-store';
 import type { GamePreviewHandle } from './GamePreview';
 
 const PART_TYPES: { type: PartType; emoji: string }[] = [
@@ -48,7 +49,11 @@ export function GameToolbar({ previewRef }: Props) {
       return;
     }
     // Native editor: place part directly in the scene store; BuildingCanvas
-    // will render it and auto-select so gizmo picks it up.
+    // will render it and auto-select so gizmo picks it up. Gizmo is gated to
+    // the Select tool, so flip the build tool to 'select' on insert — user's
+    // intent on inserting a new primitive is to position/edit it, not place
+    // more building pieces.
+    useBuildingStore.getState().setTool('select');
     useSceneStore.getState().addPart({
       partType: type,
       color,
@@ -63,6 +68,7 @@ export function GameToolbar({ previewRef }: Props) {
     }
     const sp = useSceneStore.getState().selectedPart;
     if (!sp) return;
+    useBuildingStore.getState().setTool('select');
     useSceneStore.getState().addPart({
       partType: sp.partType,
       color: sp.color,

@@ -32,11 +32,9 @@ import { useSceneStore, type ScenePart } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { useQualityStore } from '@/store/quality-store';
 
-// Keep in sync with BuildingCanvas.tsx — used to reconstruct default
-// transforms for floor/wall meshes that haven't been gizmo-moved yet.
-const B_TILE = 2;
-const B_FLOOR_THICK = 0.1;
-const B_WALL_HEIGHT = 3;
+// Uses the canonical building-kit constants so floor/wall default
+// transforms here never drift from BuildingCanvas's grid math.
+import { TILE as B_TILE, WALL_HEIGHT as B_WALL_HEIGHT, FLOOR_THICK as B_FLOOR_THICK } from '@/lib/building-kit';
 
 function floorDefaultPos(key: string) {
   const [xs, ys, zs] = key.split(',');
@@ -435,7 +433,10 @@ export function StudioLayout() {
               );
             })()}
 
-            <BottomTabBar />
+            <BottomTabBar
+              terminalOpen={terminalOpen}
+              onToggleTerminal={() => setTerminalOpen((o) => !o)}
+            />
 
           </div>
 

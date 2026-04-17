@@ -1,5 +1,5 @@
 'use client';
-import { Box, Kanban, Workflow, Settings } from 'lucide-react';
+import { Box, Kanban, Workflow, Settings, TerminalSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type ViewMode } from '@/store/studio-store';
@@ -18,7 +18,12 @@ const TABS: TabDef[] = [
   { id: 'settings', label: 'Settings',  icon: Settings, shortcut: '' },
 ];
 
-export function BottomTabBar() {
+interface BottomTabBarProps {
+  terminalOpen?: boolean;
+  onToggleTerminal?: () => void;
+}
+
+export function BottomTabBar({ terminalOpen, onToggleTerminal }: BottomTabBarProps = {}) {
   const viewMode = useStudio((s) => s.viewMode);
   const setViewMode = useStudio((s) => s.setViewMode);
 
@@ -45,6 +50,23 @@ export function BottomTabBar() {
           </button>
         );
       })}
+
+      {onToggleTerminal && (
+        <button
+          type="button"
+          onClick={onToggleTerminal}
+          title={`Terminal (${typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac') ? '⌘J' : 'Ctrl+J'})`}
+          className={cn(
+            'ml-auto flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-medium transition-colors',
+            terminalOpen
+              ? 'bg-accent/15 text-accent'
+              : 'text-zinc-400 hover:text-white hover:bg-panel-surface',
+          )}
+        >
+          <TerminalSquare size={13} className="shrink-0" />
+          <span>Terminal</span>
+        </button>
+      )}
     </div>
   );
 }

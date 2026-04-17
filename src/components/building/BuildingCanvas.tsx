@@ -1128,12 +1128,19 @@ export function BuildingCanvas() {
     }
   }, [walls, quality, cornerBend]);
 
-  // Roofs
+  // Roofs — sharp-corner mode renders each tile via buildPiece (preserves
+  // sloped gable/hip/dome/etc. geometry). Bend mode (cornerBend > 0) only
+  // rewrites FLAT roofs (roof.flat_*, roofcnr.flat_cap) into stepped
+  // ExtrudeGeometry decks whose perimeter corners match the wall fillets
+  // below — same recipe the floors use. Sloped roofs still render via
+  // buildPiece in bend mode because rounding their silhouette would
+  // require per-kind geometry rewrites.
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
     disposeAndClear(refs.roofGroup);
-    for (const key of Object.keys(roofs)) {
+
+    const placeViaBuild = (key: string) => {
       const cell = roofs[key];
       const [xs, ys, zs] = key.split(',');
       const x = +xs, y = +ys, z = +zs;
@@ -1146,8 +1153,154 @@ export function BuildingCanvas() {
       g.userData.kind = 'roof';
       g.userData.key = key;
       refs.roofGroup.add(g);
+    };
+
+    if (cornerBend <= 0.001) {
+      for (const key of Object.keys(roofs)) placeViaBuild(key);
+      return;
     }
-  }, [roofs, quality]);
+
+    const r = Math.min(cornerBend, TILE / 2);
+
+    // Fillet-direction map — same construction as floors above, so the
+    // roof corners line up pixel-for-pixel with the floor corners and
+    // the wall arc bridges.
+    type WInfo = { x: number; y: number; z: number; dir: EdgeDir };
+    const wallList: WInfo[] = [];
+    for (const key of Object.keys(walls)) {
+      const edge = walls[key];
+      if (edge.visible === false) continue;
+      const [xs, ys, zs, dirRaw] = key.split(',') as [string, string, string, EdgeDir];
+      wallList.push({ x: +xs, y: +ys, z: +zs, dir: dirRaw });
+    }
+    const endpointsOfW = (w: WInfo): [string, string] =>
+      w.dir === 'N'
+        ? [`${w.x},${w.y},${w.z}`, `${w.x + 1},${w.y},${w.z}`]
+        : [`${w.x + 1},${w.y},${w.z}`, `${w.x + 1},${w.y},${w.z + 1}`];
+    const dirAwayW = (w: WInfo, isFirst: boolean): { dx: number; dz: number } =>
+      w.dir === 'N'
+        ? { dx: isFirst ? 1 : -1, dz: 0 }
+        : { dx: 0, dz: isFirst ? 1 : -1 };
+
+    const vmap = new Map<string, { idx: number; first: boolean }[]>();
+    for (let i = 0; i < wallList.length; i++) {
+      const [a, b] = endpointsOfW(wallList[i]);
+      let arrA = vmap.get(a); if (!arrA) { arrA = []; vmap.set(a, arrA); }
+      arrA.push({ idx: i, first: true });
+      let arrB = vmap.get(b); if (!arrB) { arrB = []; vmap.set(b, arrB); }
+      arrB.push({ idx: i, first: false });
+    }
+    const filletDir = new Map<string, { dx: number; dz: number }>();
+    for (const [vk, links] of vmap.entries()) {
+      if (links.length !== 2) continue;
+      const wA = wallList[links[0].idx];
+      const wB = wallList[links[1].idx];
+      if (wA.dir === wB.dir) continue;
+      const dA = dirAwayW(wA, links[0].first);
+      const dB = dirAwayW(wB, links[1].first);
+      filletDir.set(vk, { dx: dA.dx + dB.dx, dz: dA.dz + dB.dz });
+    }
+
+    // A roof at level y sits on top of walls at level y (its base plane is
+    // at y*WALL_HEIGHT + WALL_HEIGHT, which is exactly the top of a wall
+    // at that level). So we only check junctions at y — unlike floors,
+    // which straddle two levels and check both.
+    for (const key of Object.keys(roofs)) {
+      const cell = roofs[key];
+      if (cell.visible === false) { placeViaBuild(key); continue; }
+
+      const isFlat =
+        cell.asset.startsWith('roof.flat_') || cell.asset === 'roofcnr.flat_cap';
+      if (!isFlat) {
+        // Sloped roofs are not rounded in bend mode — fall back to normal
+        // piece render. Matches the "preserve sloped geometry" tradeoff.
+        placeViaBuild(key);
+        continue;
+      }
+
+      const [xs, ys, zs] = key.split(',');
+      const x = +xs, y = +ys, z = +zs;
+      const tint = cell.color ?? getPiece(cell.asset)?.swatch ?? '#ffffff';
+
+      type CornerDef = { sx: number; sz: number; cx: number; cz: number; inDx: number; inDz: number };
+      const corners: CornerDef[] = [
+        { sx: -TILE / 2, sz: -TILE / 2, cx: x,     cz: z,     inDx: +1, inDz: +1 }, // NW
+        { sx: +TILE / 2, sz: -TILE / 2, cx: x + 1, cz: z,     inDx: -1, inDz: +1 }, // NE
+        { sx: +TILE / 2, sz: +TILE / 2, cx: x + 1, cz: z + 1, inDx: -1, inDz: -1 }, // SE
+        { sx: -TILE / 2, sz: +TILE / 2, cx: x,     cz: z + 1, inDx: +1, inDz: -1 }, // SW
+      ];
+      const cornerRoundedAtY = (c: CornerDef, yy: number) => {
+        const f = filletDir.get(`${c.cx},${yy},${c.cz}`);
+        if (!f) return false;
+        return Math.sign(f.dx) === c.inDx && Math.sign(f.dz) === c.inDz;
+      };
+      const rounded = corners.map((c) => cornerRoundedAtY(c, y));
+      const legDirs = [
+        { dx: +1, dz:  0 },
+        { dx:  0, dz: +1 },
+        { dx: -1, dz:  0 },
+        { dx:  0, dz: -1 },
+      ];
+
+      // Rounded-rectangle shape builder — same structure as floors, walks
+      // NW→NE→SE→SW→NW and inserts a quarter-arc where `rounded[i]` is set.
+      const buildShape = (): THREE.Shape => {
+        const shape = new THREE.Shape();
+        const start = rounded[0]
+          ? { x: corners[0].sx + r * legDirs[0].dx, z: corners[0].sz + r * legDirs[0].dz }
+          : { x: corners[0].sx, z: corners[0].sz };
+        shape.moveTo(start.x, start.z);
+        for (let i = 0; i < 4; i++) {
+          const next = (i + 1) % 4;
+          const leg = legDirs[i];
+          const nextLeg = legDirs[next];
+          const ec = corners[next];
+          const entry = rounded[next]
+            ? { x: ec.sx - r * leg.dx, z: ec.sz - r * leg.dz }
+            : { x: ec.sx, z: ec.sz };
+          shape.lineTo(entry.x, entry.z);
+          if (rounded[next]) {
+            const acx = ec.sx + r * (-leg.dx + nextLeg.dx);
+            const acz = ec.sz + r * (-leg.dz + nextLeg.dz);
+            const exit = { x: ec.sx + r * nextLeg.dx, z: ec.sz + r * nextLeg.dz };
+            const a0 = Math.atan2(entry.z - acz, entry.x - acx);
+            const a1 = Math.atan2(exit.z - acz, exit.x - acx);
+            let dA = a1 - a0;
+            while (dA >  Math.PI) dA -= 2 * Math.PI;
+            while (dA < -Math.PI) dA += 2 * Math.PI;
+            shape.absarc(acx, acz, r, a0, a0 + dA, dA < 0);
+          }
+        }
+        shape.closePath();
+        return shape;
+      };
+
+      const shape = buildShape();
+      // Single plate (no stepped bevel in bend mode) — same tradeoff as
+      // floors losing their pattern when bent. User's priority here is
+      // matching the wall radius; the stepped bevel returns when
+      // cornerBend goes back to 0.
+      const DECK_THICK = 0.25;
+      const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: DECK_THICK,
+        bevelEnabled: false,
+        curveSegments: 16,
+      });
+      geo.rotateX(Math.PI / 2);
+      const baseY = y * WALL_HEIGHT + WALL_HEIGHT;
+      geo.translate(x * TILE, baseY + DECK_THICK, z * TILE);
+
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({ color: tint, roughness: 1 }),
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.kind = 'roof';
+      mesh.userData.key = key;
+      refs.roofGroup.add(mesh);
+    }
+  }, [roofs, walls, quality, cornerBend]);
 
   // Corners (wall + roof corners share the same record)
   useEffect(() => {

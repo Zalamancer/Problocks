@@ -13,9 +13,28 @@ export interface GameFiles {
 }
 
 /**
+ * Serializable subset of quality settings that the framework's
+ * setup3dRenderer reads off `config.quality`. Only the fields that
+ * actually influence the generated game are listed.
+ */
+export interface BundleQuality {
+  shadows?: boolean;
+  shadowType?: 'pcf-soft' | 'basic' | 'off';
+  shadowMapSize?: number;
+  antialias?: boolean;
+  maxPixelRatio?: number;
+}
+
+export interface BundleOptions {
+  /** Quality tier settings to inject as `config.quality`. When omitted the
+   *  generated HTML uses framework defaults (high tier). */
+  quality?: BundleQuality;
+}
+
+/**
  * Bundle framework + game files into a single runnable HTML string.
  */
-export function bundleGame(files: GameFiles): string {
+export function bundleGame(files: GameFiles, options: BundleOptions = {}): string {
   const framework = FRAMEWORK_SOURCE;
 
   // Collect all game script files (excluding config)
@@ -71,6 +90,9 @@ ${entityFiles.map(f => `// ── ${f.name} ──\n${f.src}`).join('\n\n')}
   try {
     const canvas = document.getElementById('game');
     const config = typeof CONFIG !== 'undefined' ? CONFIG : {};
+    // Quality tier injected by the host studio. Framework reads these in
+    // setup3dRenderer — see renderer3d.js / framework-source.ts.
+    if (!config.quality) config.quality = ${JSON.stringify(options.quality || {})};
     const game = createEngine(canvas, config);
 
     // Register all entity definitions (objects with a 'type' property)
@@ -156,11 +178,18 @@ export function isMultiFileGame(game: { html?: string; files?: Record<string, st
 }
 
 /**
- * Get the HTML for a game — handles both legacy single-file and new multi-file
+ * Get the HTML for a game — handles both legacy single-file and new multi-file.
+ * When `options.quality` is passed it's injected into the generated bundle so
+ * iframes can honor the studio's quality tier on low-end hardware. Legacy
+ * single-file games (raw html) are returned untouched since we can't safely
+ * rewrite unknown markup.
  */
-export function getGameHtml(game: { html?: string; files?: Record<string, string> }): string {
+export function getGameHtml(
+  game: { html?: string; files?: Record<string, string> },
+  options: BundleOptions = {},
+): string {
   if (game.files && Object.keys(game.files).length > 0) {
-    return bundleGame(game.files as GameFiles);
+    return bundleGame(game.files as GameFiles, options);
   }
   return game.html || '';
 }

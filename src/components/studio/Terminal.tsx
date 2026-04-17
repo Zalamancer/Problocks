@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send, Copy, Check } from 'lucide-react';
 import { getGameHtml } from '@/lib/game-engine';
+import { useQualityStore } from '@/store/quality-store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -43,10 +44,12 @@ export function StudioTerminal({
   const lastResponseRef = useRef<string>('');
   const hasShownResume = useRef(false);
   const receivedGameEventRef = useRef(false);
+  const gameQuality = useQualityStore((s) => s.settings);
 
-  // Show "continue working on" message once store hydrates and activeGameName arrives
+  // Show context-appropriate welcome message based on active game
   useEffect(() => {
-    if (activeGameName && !hasShownResume.current && !isStreaming) {
+    if (isStreaming) return;
+    if (activeGameName && !hasShownResume.current) {
       hasShownResume.current = true;
       setLines([
         { type: 'system', text: '  Problocks Game Engine' },
@@ -54,6 +57,16 @@ export function StudioTerminal({
         { type: 'system', text: '  Describe changes to update your game.' },
         { type: 'system', text: '' },
       ]);
+    } else if (!activeGameName && hasShownResume.current) {
+      // Active game cleared (new game) — reset terminal
+      hasShownResume.current = false;
+      setLines([
+        { type: 'system', text: '  Problocks Game Engine' },
+        { type: 'system', text: '  Describe a game and I\'ll build it instantly.' },
+        { type: 'system', text: '  Example: "make a space shooter with power-ups"' },
+        { type: 'system', text: '' },
+      ]);
+      setMessages([]);
     }
   }, [activeGameName, isStreaming]);
 
@@ -181,10 +194,31 @@ export function StudioTerminal({
               ]);
             }
 
+            // Per-file streaming events
+            if (parsed.fileStart) {
+              setLines((prev) => [
+                ...prev,
+                { type: 'status', text: `  📝 Writing ${parsed.fileStart}...` },
+              ]);
+            }
+            if (parsed.fileDone) {
+              setLines((prev) => {
+                // Replace the "Writing X..." line with "✅ X (N lines)"
+                const updated = [...prev];
+                for (let i = updated.length - 1; i >= 0; i--) {
+                  if (updated[i].text.includes(`Writing ${parsed.fileDone}`)) {
+                    updated[i] = { type: 'status', text: `  ✅ ${parsed.fileDone} (${parsed.lines}L)` };
+                    break;
+                  }
+                }
+                return updated;
+              });
+            }
+
             // Multi-file game event — bundle files into HTML
             if (parsed.game) {
               const { title, files } = parsed.game as { title: string; files: Record<string, string> };
-              const html = getGameHtml({ files });
+              const html = getGameHtml({ files }, { quality: gameQuality });
               receivedGameEventRef.current = true;
 
               if (onGameGenerated) {

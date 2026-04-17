@@ -26,6 +26,7 @@ import { resolveEffectiveTask } from '@/lib/templates/types';
 import type { TemplateId } from '@/lib/templates/types';
 import { useSceneStore, type ScenePart } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
+import { useQualityStore } from '@/store/quality-store';
 
 // Keep in sync with BuildingCanvas.tsx — used to reconstruct default
 // transforms for floor/wall meshes that haven't been gizmo-moved yet.
@@ -85,6 +86,10 @@ export function StudioLayout() {
 
   // Scene store
   const { selectedPart, setSelectedPart, updateSelectedPart, setSceneObjects } = useSceneStore();
+
+  // Quality tier — forwarded to the game bundler so generated iframes honor
+  // the same shadow/antialias/pixelRatio settings as the studio.
+  const gameQuality = useQualityStore((s) => s.settings);
 
   // Building store — selection of a floor or wall opens the right panel too.
   const buildingSelection = useBuildingStore((s) => s.selection);
@@ -202,7 +207,7 @@ export function StudioLayout() {
   function handleGameGenerated(html: string, files?: Record<string, string>) {
     if (files) {
       // Multi-file game — store files, generate HTML from bundler for preview
-      const bundledHtml = getGameHtml({ files });
+      const bundledHtml = getGameHtml({ files }, { quality: gameQuality });
       setGameHtml(bundledHtml);
       if (activeGameId) {
         updateGame(activeGameId, bundledHtml);
@@ -275,7 +280,7 @@ export function StudioLayout() {
       const active = games.find((g) => g.id === activeGameId);
       if (active) {
         if (active.files && Object.keys(active.files).length > 0) {
-          setGameHtml(getGameHtml({ files: active.files }));
+          setGameHtml(getGameHtml({ files: active.files }, { quality: gameQuality }));
         } else {
           setGameHtml(active.html);
         }

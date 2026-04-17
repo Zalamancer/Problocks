@@ -48,8 +48,8 @@ export function LivePreview({ assetUrls = [], onReady }: LivePreviewProps) {
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
+    // Damping disabled — camera stops instantly on mouse release (no coast).
+    controls.enableDamping = false;
     controls.target.set(0, 0.5, 0);
     controls.update();
 

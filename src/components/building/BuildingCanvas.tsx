@@ -207,8 +207,9 @@ export function BuildingCanvas() {
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
+    // Damping disabled so the camera stops instantly on mouse release —
+    // matches the "no slide" feel of the character controller.
+    controls.enableDamping = false;
     controls.mouseButtons = {
       LEFT: -1 as unknown as THREE.MOUSE,
       MIDDLE: THREE.MOUSE.PAN,

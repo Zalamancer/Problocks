@@ -1,9 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FolderOpen, FileCode, FileText, Box, Search, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
+import { FolderOpen, FileText, Box, Search, Triangle, Layers, LayoutGrid, List, SlidersHorizontal } from 'lucide-react';
 import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { useStudio } from '@/store/studio-store';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
 
 interface AssetInfo {
@@ -121,13 +120,6 @@ export function AssetsPanel() {
     vertsRange !== 'any' ||
     sizeRange !== 'any';
 
-  const games = useStudio((s) => s.games);
-  const activeGameId = useStudio((s) => s.activeGameId);
-  const openFileName = useStudio((s) => s.openFileName);
-  const setOpenFileName = useStudio((s) => s.setOpenFileName);
-
-  const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
-
   // Load asset stats
   useEffect(() => {
     fetch('/assets/medieval/stats.json')
@@ -168,36 +160,9 @@ export function AssetsPanel() {
     return acc;
   }, {} as Record<string, number>);
 
-  // Code files for the active game
-  const codeFiles = activeGame?.files ? Object.keys(activeGame.files).sort((a, b) => {
-    if (a === 'config.js') return -1;
-    if (b === 'config.js') return 1;
-    return a.localeCompare(b);
-  }) : [];
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Code files section */}
-      {codeFiles.length > 0 && (
-        <div className="shrink-0 px-3 py-1.5 border-b border-white/[0.04]">
-          <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1.5">Scripts</div>
-          <div className="flex flex-wrap gap-1">
-            {codeFiles.map(name => (
-              <button
-                key={name}
-                onClick={() => setOpenFileName(openFileName === name ? null : name)}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
-                  openFileName === name
-                    ? 'bg-accent/15 text-accent border border-accent/20'
-                    : 'bg-white/[0.04] text-zinc-500 hover:text-zinc-300 border border-transparent'
-                }`}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Scripts moved to Scene panel (Explorer-style, Roblox parity) */}
 
       {/* Search + Filter + conditional View/Category — balanced 8px rhythm */}
       <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">

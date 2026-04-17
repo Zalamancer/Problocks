@@ -219,70 +219,46 @@ export function BuildingCanvas() {
     controls.target.set(0, 0, 0);
     controls.update();
 
-    const ORBIT_SPEED = 0.005;
     const PAN_SPEED = 0.0015;
-    // Roblox-style discrete zoom levels — ctrl/cmd+wheel snaps directly to
-    // one of these camera distances. No easing: the snap is the discretization.
-    const ZOOM_LEVELS = [2, 2.5, 3.2, 4, 5, 6.3, 8, 10, 13, 16, 21, 27, 35, 45, 60, 80, 110];
-    const MIN_PHI = 0.02;
-    const MAX_PHI = Math.PI - 0.02;
+    // Continuous zoom: each wheel tick multiplies the camera→target distance
+    // by pow(ZOOM_FACTOR_PER_UNIT, deltaY). Smaller number = gentler pinch.
+    const ZOOM_FACTOR_PER_UNIT = 1.0015;
+    const ZOOM_MIN = 1.5;
+    const ZOOM_MAX = 150;
 
     const tmpOffset = new THREE.Vector3();
-    const tmpSpherical = new THREE.Spherical();
     const tmpRight = new THREE.Vector3();
     const tmpUp = new THREE.Vector3();
     const tmpMove = new THREE.Vector3();
-
-    function snapToZoomLevel(dist: number, step: number): number {
-      let best = 0;
-      let bestDelta = Infinity;
-      for (let i = 0; i < ZOOM_LEVELS.length; i++) {
-        const d = Math.abs(ZOOM_LEVELS[i] - dist);
-        if (d < bestDelta) { bestDelta = d; best = i; }
-      }
-      const idx = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, best + step));
-      return ZOOM_LEVELS[idx];
-    }
 
     function onWheel(e: WheelEvent) {
       e.preventDefault();
       const dx = e.deltaX;
       const dy = e.deltaY;
 
-      // Ctrl/Cmd + wheel → snap camera distance to next/prev ZOOM_LEVEL
+      // Pinch (trackpad) or Ctrl/Cmd + wheel → smooth continuous dolly
       if (e.ctrlKey || e.metaKey) {
         tmpOffset.copy(camera.position).sub(controls.target);
         const curDist = tmpOffset.length();
-        const step = dy > 0 ? 1 : -1; // wheel-down = zoom out one level
-        const newDist = snapToZoomLevel(curDist, step);
         if (curDist > 0) {
+          const factor = Math.pow(ZOOM_FACTOR_PER_UNIT, dy);
+          let newDist = curDist * factor;
+          newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newDist));
           tmpOffset.multiplyScalar(newDist / curDist);
           camera.position.copy(controls.target).add(tmpOffset);
         }
         return;
       }
 
-      // Middle-mouse held during wheel → pan
-      if (e.buttons !== 0) {
-        tmpRight.setFromMatrixColumn(camera.matrix, 0);
-        tmpUp.setFromMatrixColumn(camera.matrix, 1);
-        const distance = camera.position.distanceTo(controls.target);
-        tmpMove.set(0, 0, 0)
-          .addScaledVector(tmpRight,  dx * PAN_SPEED * distance)
-          .addScaledVector(tmpUp,    -dy * PAN_SPEED * distance);
-        camera.position.add(tmpMove);
-        controls.target.add(tmpMove);
-        return;
-      }
-
-      // Trackpad / wheel orbit — apply directly (no damping)
-      tmpOffset.copy(camera.position).sub(controls.target);
-      tmpSpherical.setFromVector3(tmpOffset);
-      tmpSpherical.theta += dx * ORBIT_SPEED;
-      tmpSpherical.phi   += dy * ORBIT_SPEED;
-      tmpSpherical.phi = Math.max(MIN_PHI, Math.min(MAX_PHI, tmpSpherical.phi));
-      tmpOffset.setFromSpherical(tmpSpherical);
-      camera.position.copy(controls.target).add(tmpOffset);
+      // Plain wheel / two-finger trackpad swipe → pan. Orbit is right-mouse only.
+      tmpRight.setFromMatrixColumn(camera.matrix, 0);
+      tmpUp.setFromMatrixColumn(camera.matrix, 1);
+      const distance = camera.position.distanceTo(controls.target);
+      tmpMove.set(0, 0, 0)
+        .addScaledVector(tmpRight,  dx * PAN_SPEED * distance)
+        .addScaledVector(tmpUp,    -dy * PAN_SPEED * distance);
+      camera.position.add(tmpMove);
+      controls.target.add(tmpMove);
     }
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 

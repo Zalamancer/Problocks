@@ -200,6 +200,10 @@ export function BuildingCanvas() {
     renderer.shadowMap.type =
       quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Enable per-material clipping planes — used by the cornerBend > 0 wall
+    // pipeline to trim full-variant pieces at junctions (instead of replacing
+    // them with a flat box that loses all the trim/stone/window detail).
+    renderer.localClippingEnabled = true;
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.toneMappingExposure = 1.0; // overridden by lighting-store effect below
     renderer.domElement.style.touchAction = 'none';
@@ -960,7 +964,7 @@ export function BuildingCanvas() {
     //   E edge of (x,z) → vertices (x+1,z) and (x+1,z+1), wall along +Z
     type WInfo = {
       key: string; x: number; y: number; z: number; dir: EdgeDir;
-      tint: string; pos?: { x: number; y: number; z: number };
+      asset: string; tint: string; pos?: { x: number; y: number; z: number };
       rot?: { x: number; y: number; z: number }; scale?: { x: number; y: number; z: number };
     };
     const wallList: WInfo[] = [];
@@ -971,7 +975,7 @@ export function BuildingCanvas() {
       const tint = edge.color ?? getPiece(edge.asset)?.swatch ?? '#ffffff';
       wallList.push({
         key, x: +xs, y: +ys, z: +zs, dir: dirRaw,
-        tint, pos: edge.position, rot: edge.rotation, scale: edge.scale,
+        asset: edge.asset, tint, pos: edge.position, rot: edge.rotation, scale: edge.scale,
       });
     }
 
@@ -1099,48 +1103,77 @@ export function BuildingCanvas() {
       refs.wallGroup.add(buildArcSegment(midAng, endAng, wB.tint, wB.key));
     }
 
-    // Emit each wall as a single trimmed solid box.
+    // Attach world-space clipping planes to every material in a Group so the
+    // wall's trimmed ends (the part the arc bridge replaces) are hidden while
+    // all the variant detail meshes (baseboards, beams, stones, window frames,
+    // door slabs, …) stay intact. Three.js clipping requires
+    // renderer.localClippingEnabled = true (set in the renderer setup).
+    const attachClip = (group: THREE.Group, planes: THREE.Plane[]) => {
+      group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !m.material) return;
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        for (const mat of mats) {
+          (mat as THREE.Material).clippingPlanes = planes;
+          (mat as THREE.Material).clipShadows = true;
+        }
+      });
+    };
+
+    // Emit each wall as its full variant geometry placed at the SAME world
+    // position/rotation as sharp mode, then clipped at the trimmed ends. Using
+    // sharp-mode placement is what makes the per-face FACE_SHADE baked into
+    // each variant's makeBox materials orient identically — the front face
+    // (shade 0.90) faces the same world direction in both modes, so colors
+    // visually match. Trims are realised purely by the clipping planes.
     for (let i = 0; i < wallList.length; i++) {
       const w = wallList[i];
       const [ts, te] = trim[i];
       const length = TILE - ts - te;
       if (length <= 0.01) continue;
-      // Per-face baked shading (matches makeBox in building-kit/types.ts) so
-      // the trimmed bend-mode wall keeps the same "ambient" look as the
-      // sharp-mode pieces — sides/back darker than front/top.
-      const tintC = new THREE.Color(w.tint);
-      const mats = FACE_SHADE.map((s) => new THREE.MeshStandardMaterial({
-        color: tintC.clone().multiplyScalar(s),
-        roughness: 1,
-      }));
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(length, WALL_HEIGHT, WALL_THICK),
-        mats,
-      );
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      const baseY = w.y * WALL_HEIGHT + WALL_HEIGHT / 2;
+
+      const piece = buildPiece(w.asset, THREE);
+      const wp = wallWorldPlacement(w.x, w.y, w.z, w.dir);
+      if (w.pos) piece.position.set(w.pos.x, w.pos.y, w.pos.z);
+      else piece.position.set(wp.x, wp.y, wp.z);
+      if (w.rot) piece.rotation.set(w.rot.x, w.rot.y, w.rot.z);
+      else piece.rotation.y = wp.rotY;
+      if (w.scale) piece.scale.set(w.scale.x, w.scale.y, w.scale.z);
+
+      // Build world-space cut planes for the trimmed ends. Plane(normal, c) keeps
+      // points where normal·p + c >= 0, so the kept side is the "interior" of the
+      // remaining wall segment. We omit a plane for any end with no trim so we
+      // don't waste a clip pass and don't accidentally cut neighboring pieces if
+      // the user manually moved this wall via gizmo.
+      //   N edges run along world X. First end = vertex (x,z) = world X = x*T - T/2.
+      //                              Second end = vertex (x+1,z) = world X = x*T + T/2.
+      //   E edges run along world Z. First end = vertex (x+1,z) = world Z = z*T - T/2.
+      //                              Second end = vertex (x+1,z+1) = world Z = z*T + T/2.
+      const planes: THREE.Plane[] = [];
       if (w.dir === 'N') {
-        // wall sits at z = z*T - T/2, X-range slid inward by ts/te
-        const cxw = w.x * TILE - TILE / 2 + ts + length / 2;
-        const czw = w.z * TILE - TILE / 2;
-        mesh.position.set(cxw, baseY, czw);
-        mesh.rotation.y = 0;
+        if (ts > 0.001) {
+          const cutX = w.x * TILE - TILE / 2 + ts;
+          planes.push(new THREE.Plane(new THREE.Vector3(1, 0, 0), -cutX));
+        }
+        if (te > 0.001) {
+          const cutX = w.x * TILE + TILE / 2 - te;
+          planes.push(new THREE.Plane(new THREE.Vector3(-1, 0, 0), cutX));
+        }
       } else {
-        const cxw = w.x * TILE + TILE / 2;
-        const czw = w.z * TILE - TILE / 2 + ts + length / 2;
-        mesh.position.set(cxw, baseY, czw);
-        mesh.rotation.y = -Math.PI / 2;
+        if (ts > 0.001) {
+          const cutZ = w.z * TILE - TILE / 2 + ts;
+          planes.push(new THREE.Plane(new THREE.Vector3(0, 0, 1), -cutZ));
+        }
+        if (te > 0.001) {
+          const cutZ = w.z * TILE + TILE / 2 - te;
+          planes.push(new THREE.Plane(new THREE.Vector3(0, 0, -1), cutZ));
+        }
       }
-      // Manual transforms (set via gizmo) override base placement for
-      // power-users who tuned a wall by hand. They were authored against
-      // an untrimmed wall, so the result may look off — accepted tradeoff.
-      if (w.pos) mesh.position.set(w.pos.x, w.pos.y, w.pos.z);
-      if (w.rot) mesh.rotation.set(w.rot.x, w.rot.y, w.rot.z);
-      if (w.scale) mesh.scale.set(w.scale.x, w.scale.y, w.scale.z);
-      mesh.userData.kind = 'wall';
-      mesh.userData.key = w.key;
-      refs.wallGroup.add(mesh);
+      if (planes.length) attachClip(piece, planes);
+
+      piece.userData.kind = 'wall';
+      piece.userData.key = w.key;
+      refs.wallGroup.add(piece);
     }
   }, [walls, quality, cornerBend]);
 

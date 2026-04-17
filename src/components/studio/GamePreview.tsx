@@ -127,7 +127,11 @@ export function GamePreview({
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch(() => {});
+      // Fullscreen the iframe itself so the game fills the screen with no toolbar chrome
+      iframeRef.current?.requestFullscreen().catch(() => {
+        // Fallback to container fullscreen if iframe fullscreen is blocked
+        containerRef.current?.requestFullscreen().catch(() => {});
+      });
     } else {
       document.exitFullscreen();
     }
@@ -190,6 +194,7 @@ export function GamePreview({
           key={key}
           srcDoc={html}
           sandbox="allow-scripts allow-same-origin allow-pointer-lock"
+          allow="fullscreen; pointer-lock"
           allowFullScreen
           tabIndex={0}
           className="w-full h-full border-0"

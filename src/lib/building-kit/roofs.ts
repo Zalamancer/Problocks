@@ -41,8 +41,19 @@ function tint(THREE: typeof import('three'), hex: string, factor: number): strin
 function flatRoof(color: string, trim: string): PieceDef['build'] {
   return ({ THREE, tile }) => {
     const g = new THREE.Group();
-    g.add(makeBox(THREE, { x: tile, y: 0.25, z: tile }, color, { y: 0.125 }));
-    // cornice trim
+    // Split the deck into 4 quadrants with directional tints so the top
+    // face (which is mostly what you see on a flat roof) bends visibly
+    // from front-right bright → back-left dark.
+    const h = tile / 2;
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+    const br = tint(THREE, color, QUAD_BACK_RIGHT);
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fr, { y: 0.125, x:  h / 2, z:  h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fl, { y: 0.125, x: -h / 2, z:  h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, br, { y: 0.125, x:  h / 2, z: -h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, bl, { y: 0.125, x: -h / 2, z: -h / 2 }));
+    // cornice trim (single piece — thin border, no bending needed)
     g.add(makeBox(THREE, { x: tile * 1.05, y: 0.1, z: tile * 1.05 }, trim, { y: 0.3 }));
     return g;
   };
@@ -311,7 +322,17 @@ function pyramidCap(color: string): PieceDef['build'] {
 function flatCap(color: string): PieceDef['build'] {
   return ({ THREE, tile }) => {
     const g = new THREE.Group();
-    g.add(makeBox(THREE, { x: tile, y: 0.25, z: tile }, color, { y: 0.125 }));
+    // Same quadrant split as flatRoof so the parapet deck bends too.
+    const h = tile / 2;
+    const fr = tint(THREE, color, QUAD_FRONT_RIGHT);
+    const fl = tint(THREE, color, QUAD_FRONT_LEFT);
+    const br = tint(THREE, color, QUAD_BACK_RIGHT);
+    const bl = tint(THREE, color, QUAD_BACK_LEFT);
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fr, { y: 0.125, x:  h / 2, z:  h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, fl, { y: 0.125, x: -h / 2, z:  h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, br, { y: 0.125, x:  h / 2, z: -h / 2 }));
+    g.add(makeBox(THREE, { x: h, y: 0.25, z: h }, bl, { y: 0.125, x: -h / 2, z: -h / 2 }));
+    // parapet trim (single piece)
     g.add(makeBox(THREE, { x: tile * 1.1, y: 0.1, z: tile * 1.1 }, color, { y: 0.3 }));
     // corner bollard
     g.add(makeBox(THREE, { x: 0.3, y: 0.6, z: 0.3 }, '#ffd60a', { y: 0.55, x: tile * 0.3, z: tile * 0.3 }));

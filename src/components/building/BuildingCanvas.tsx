@@ -253,8 +253,8 @@ export function BuildingCanvas() {
       // a Roblox / Minecraft feel: swipe up = look up, swipe right = look right.
       sphOffset.copy(camera.position).sub(controls.target);
       spherical.setFromVector3(sphOffset);
-      spherical.theta -= e.deltaX * ORBIT_SPEED;
-      spherical.phi   -= e.deltaY * ORBIT_SPEED;
+      spherical.theta += e.deltaX * ORBIT_SPEED;
+      spherical.phi   += e.deltaY * ORBIT_SPEED;
       spherical.phi = Math.max(POLAR_EPS, Math.min(Math.PI - POLAR_EPS, spherical.phi));
       sphOffset.setFromSpherical(spherical);
       camera.position.copy(controls.target).add(sphOffset);

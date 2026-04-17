@@ -206,61 +206,16 @@ export function BuildingCanvas() {
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
 
+    // Camera is fully static — OrbitControls is kept only because play-mode.ts
+    // reads refs.controls.target as the orbit pivot and calls controls.update().
+    // All user-driven camera movement (orbit / pan / zoom / wheel) is disabled.
     const controls = new OrbitControls(camera, renderer.domElement);
-    // Damping disabled so the camera stops instantly on mouse release —
-    // matches the "no slide" feel of the character controller.
     controls.enableDamping = false;
-    controls.mouseButtons = {
-      LEFT: -1 as unknown as THREE.MOUSE,
-      MIDDLE: THREE.MOUSE.PAN,
-      RIGHT: THREE.MOUSE.ROTATE,
-    };
+    controls.enableRotate = false;
+    controls.enablePan = false;
     controls.enableZoom = false;
     controls.target.set(0, 0, 0);
     controls.update();
-
-    const PAN_SPEED = 0.0015;
-    // Continuous zoom: each wheel tick multiplies the camera→target distance
-    // by pow(ZOOM_FACTOR_PER_UNIT, deltaY). Smaller number = gentler pinch.
-    const ZOOM_FACTOR_PER_UNIT = 1.0015;
-    const ZOOM_MIN = 1.5;
-    const ZOOM_MAX = 150;
-
-    const tmpOffset = new THREE.Vector3();
-    const tmpRight = new THREE.Vector3();
-    const tmpUp = new THREE.Vector3();
-    const tmpMove = new THREE.Vector3();
-
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      const dx = e.deltaX;
-      const dy = e.deltaY;
-
-      // Pinch (trackpad) or Ctrl/Cmd + wheel → smooth continuous dolly
-      if (e.ctrlKey || e.metaKey) {
-        tmpOffset.copy(camera.position).sub(controls.target);
-        const curDist = tmpOffset.length();
-        if (curDist > 0) {
-          const factor = Math.pow(ZOOM_FACTOR_PER_UNIT, dy);
-          let newDist = curDist * factor;
-          newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newDist));
-          tmpOffset.multiplyScalar(newDist / curDist);
-          camera.position.copy(controls.target).add(tmpOffset);
-        }
-        return;
-      }
-
-      // Plain wheel / two-finger trackpad swipe → pan. Orbit is right-mouse only.
-      tmpRight.setFromMatrixColumn(camera.matrix, 0);
-      tmpUp.setFromMatrixColumn(camera.matrix, 1);
-      const distance = camera.position.distanceTo(controls.target);
-      tmpMove.set(0, 0, 0)
-        .addScaledVector(tmpRight,  dx * PAN_SPEED * distance)
-        .addScaledVector(tmpUp,    -dy * PAN_SPEED * distance);
-      camera.position.add(tmpMove);
-      controls.target.add(tmpMove);
-    }
-    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
     // Roblox-style lighting — all values live-driven by useLightingStore.
     const hemisphere = new THREE.HemisphereLight(0xffffff, 0xffffff, 0);
@@ -389,7 +344,6 @@ export function BuildingCanvas() {
 
     return () => {
       ro.disconnect();
-      renderer.domElement.removeEventListener('wheel', onWheel);
       if (playRef.current) { playRef.current.stop(); playRef.current = null; }
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);

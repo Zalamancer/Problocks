@@ -10,15 +10,30 @@ import {
   Monitor,
   Sparkles,
   Plug,
+  SlidersHorizontal,
+  Code2,
+  Palette,
+  RotateCcw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   PanelToggle,
   PanelActionButton,
   PanelSelect,
+  PanelSlider,
+  PanelSection,
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useQualityStore, type QualityTier } from '@/store/quality-store';
+import {
+  useEditorSettings,
+  EDITOR_THEME_PRESETS,
+  resolveThemeColors,
+  type EditorThemePreset,
+  type AutoIndentRule,
+  type CameraSpeedAdjustBinding,
+  type EditorThemeColors,
+} from '@/store/editor-settings-store';
 
 const PRESET_OPTIONS: { value: Exclude<QualityTier, 'custom'>; label: string }[] = [
   { value: 'low',    label: 'Low — Chromebooks / old laptops' },
@@ -52,6 +67,9 @@ const BLUR_OPTIONS = [
 
 type SectionId =
   | 'project'
+  | 'studio'
+  | 'script-editor'
+  | 'editor-theme'
   | 'performance'
   | 'shadows'
   | 'rendering'
@@ -66,12 +84,46 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: 'project',      label: 'Project',      icon: FolderKanban, description: 'Game, credits, classroom' },
-  { id: 'performance',  label: 'Performance',  icon: Gauge,        description: 'Quality preset' },
-  { id: 'shadows',      label: 'Shadows',      icon: Sun,          description: 'Casting, resolution, softness' },
-  { id: 'rendering',    label: 'Rendering',    icon: Monitor,      description: 'AA, pixel ratio, materials' },
-  { id: 'interface',    label: 'Interface',    icon: Sparkles,     description: 'Blur, transitions' },
-  { id: 'integrations', label: 'Integrations', icon: Plug,         description: 'Classroom, credits' },
+  { id: 'project',       label: 'Project',       icon: FolderKanban,      description: 'Game, credits, classroom' },
+  { id: 'studio',        label: 'Studio',        icon: SlidersHorizontal, description: 'Auto-save, camera, diagnostics' },
+  { id: 'script-editor', label: 'Script Editor', icon: Code2,             description: 'Font, tabs, whitespace, indent' },
+  { id: 'editor-theme',  label: 'Editor Theme',  icon: Palette,           description: 'Preset + syntax colors' },
+  { id: 'performance',   label: 'Performance',   icon: Gauge,             description: 'Quality preset' },
+  { id: 'shadows',       label: 'Shadows',       icon: Sun,               description: 'Casting, resolution, softness' },
+  { id: 'rendering',     label: 'Rendering',     icon: Monitor,           description: 'AA, pixel ratio, materials' },
+  { id: 'interface',     label: 'Interface',     icon: Sparkles,          description: 'Blur, transitions' },
+  { id: 'integrations',  label: 'Integrations',  icon: Plug,              description: 'Classroom, credits' },
+];
+
+const CAMERA_BINDING_OPTIONS: { value: CameraSpeedAdjustBinding; label: string }[] = [
+  { value: 'shift', label: 'Shift' },
+  { value: 'ctrl',  label: 'Ctrl / ⌘' },
+  { value: 'off',   label: 'Off' },
+];
+
+const AUTO_INDENT_OPTIONS: { value: AutoIndentRule; label: string }[] = [
+  { value: 'none',     label: 'None' },
+  { value: 'absolute', label: 'Absolute' },
+  { value: 'relative', label: 'Relative (match previous line)' },
+];
+
+const THEME_PRESET_OPTIONS: { value: EditorThemePreset; label: string }[] = (
+  Object.entries(EDITOR_THEME_PRESETS) as [EditorThemePreset, (typeof EDITOR_THEME_PRESETS)[EditorThemePreset]][]
+).map(([value, def]) => ({ value, label: def.label }));
+
+const THEME_SWATCH_KEYS: { key: keyof EditorThemeColors; label: string }[] = [
+  { key: 'background',                label: 'Background' },
+  { key: 'textColor',                 label: 'Text' },
+  { key: 'keywordColor',              label: 'Keyword' },
+  { key: 'stringColor',               label: 'String' },
+  { key: 'numberColor',               label: 'Number' },
+  { key: 'commentColor',              label: 'Comment' },
+  { key: 'operatorColor',             label: 'Operator' },
+  { key: 'functionNameColor',         label: 'Function name' },
+  { key: 'currentLineHighlightColor', label: 'Current-line highlight' },
+  { key: 'selectionBackgroundColor',  label: 'Selection' },
+  { key: 'errorColor',                label: 'Error' },
+  { key: 'warningColor',              label: 'Warning' },
 ];
 
 export function SettingsPanel() {
@@ -143,13 +195,348 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
 
 function SectionContent({ id }: { id: SectionId }) {
   switch (id) {
-    case 'project':      return <ProjectSection />;
-    case 'performance':  return <PerformanceSection />;
-    case 'shadows':      return <ShadowsSection />;
-    case 'rendering':    return <RenderingSection />;
-    case 'interface':    return <InterfaceSection />;
-    case 'integrations': return <IntegrationsSection />;
+    case 'project':       return <ProjectSection />;
+    case 'studio':        return <StudioSection />;
+    case 'script-editor': return <ScriptEditorSection />;
+    case 'editor-theme':  return <EditorThemeSection />;
+    case 'performance':   return <PerformanceSection />;
+    case 'shadows':       return <ShadowsSection />;
+    case 'rendering':     return <RenderingSection />;
+    case 'interface':     return <InterfaceSection />;
+    case 'integrations':  return <IntegrationsSection />;
   }
+}
+
+function StudioSection() {
+  const studio = useEditorSettings((s) => s.studio);
+  const setStudio = useEditorSettings((s) => s.setStudio);
+
+  return (
+    <div className="flex flex-col">
+      <SectionHeader
+        title="Studio"
+        subtitle="General editor preferences — mirrors Roblox Studio → Studio Settings."
+      />
+      <div className="px-6 py-5 max-w-xl flex flex-col gap-4">
+        <PanelSection collapsible title="Saving & recovery">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelToggle
+              label="Always save script changes"
+              checked={studio.alwaysSaveScriptChanges}
+              onChange={(v) => setStudio('alwaysSaveScriptChanges', v)}
+              description="Auto-save when the place is saved"
+            />
+            <PanelToggle
+              label="Auto-recovery"
+              checked={studio.autoRecoveryEnabled}
+              onChange={(v) => setStudio('autoRecoveryEnabled', v)}
+              description="Write a background snapshot periodically"
+            />
+            <PanelSlider
+              label="Auto-recovery interval"
+              value={studio.autoRecoveryIntervalMinutes}
+              onChange={(v) => setStudio('autoRecoveryIntervalMinutes', v)}
+              min={1}
+              max={30}
+              step={1}
+              suffix=" min"
+            />
+          </div>
+        </PanelSection>
+
+        <PanelSection collapsible title="Camera">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelSlider
+              label="Camera speed"
+              value={studio.cameraSpeed}
+              onChange={(v) => setStudio('cameraSpeed', v)}
+              min={0.1}
+              max={5}
+              step={0.1}
+              precision={1}
+              suffix="×"
+            />
+            <PanelSlider
+              label="Shift multiplier"
+              value={studio.cameraShiftSpeed}
+              onChange={(v) => setStudio('cameraShiftSpeed', v)}
+              min={1}
+              max={10}
+              step={0.1}
+              precision={1}
+              suffix="×"
+            />
+            <PanelSelect
+              label="Speed adjust binding"
+              value={studio.cameraSpeedAdjustBinding}
+              onChange={(v) => setStudio('cameraSpeedAdjustBinding', v as CameraSpeedAdjustBinding)}
+              options={CAMERA_BINDING_OPTIONS}
+              fullWidth
+            />
+            <PanelToggle
+              label="Zoom to mouse position"
+              checked={studio.cameraZoomToMousePosition}
+              onChange={(v) => setStudio('cameraZoomToMousePosition', v)}
+              description="Wheel zooms toward the cursor instead of the viewport center"
+            />
+          </div>
+        </PanelSection>
+
+        <PanelSection collapsible title="Diagnostics">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelToggle
+              label="Show diagnostics bar"
+              checked={studio.showDiagnosticsBar}
+              onChange={(v) => setStudio('showDiagnosticsBar', v)}
+              description="Bottom-of-viewport FPS / frame-time HUD"
+            />
+          </div>
+        </PanelSection>
+      </div>
+    </div>
+  );
+}
+
+function ScriptEditorSection() {
+  const editor = useEditorSettings((s) => s.scriptEditor);
+  const setEditor = useEditorSettings((s) => s.setScriptEditor);
+
+  return (
+    <div className="flex flex-col">
+      <SectionHeader
+        title="Script Editor"
+        subtitle="Font, indentation, and editor behavior."
+      />
+      <div className="px-6 py-5 max-w-xl flex flex-col gap-4">
+        <PanelSection collapsible title="Typography">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelSlider
+              label="Font size"
+              value={editor.fontSize}
+              onChange={(v) => setEditor('fontSize', v)}
+              min={10}
+              max={24}
+              step={1}
+              suffix="px"
+            />
+            <PanelSlider
+              label="Tab width"
+              value={editor.tabWidth}
+              onChange={(v) => setEditor('tabWidth', v)}
+              min={1}
+              max={8}
+              step={1}
+              suffix=" cols"
+            />
+            <PanelToggle
+              label="Indent using spaces"
+              checked={editor.indentUsingSpaces}
+              onChange={(v) => setEditor('indentUsingSpaces', v)}
+              description="Insert spaces instead of tab characters"
+            />
+            <PanelToggle
+              label="Text wrapping"
+              checked={editor.textWrapping}
+              onChange={(v) => setEditor('textWrapping', v)}
+              description="Soft-wrap long lines"
+            />
+          </div>
+        </PanelSection>
+
+        <PanelSection collapsible title="Display">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelToggle
+              label="Show whitespace"
+              checked={editor.showWhitespace}
+              onChange={(v) => setEditor('showWhitespace', v)}
+              description="Render space / tab / newline glyphs"
+            />
+            <PanelToggle
+              label="Highlight current line"
+              checked={editor.highlightCurrentLine}
+              onChange={(v) => setEditor('highlightCurrentLine', v)}
+            />
+            <PanelToggle
+              label="Indentation rulers"
+              checked={editor.enableIndentationRulers}
+              onChange={(v) => setEditor('enableIndentationRulers', v)}
+              description="Vertical guides at each indent level"
+            />
+            <PanelToggle
+              label="Scroll past last line"
+              checked={editor.scrollPastLastLine}
+              onChange={(v) => setEditor('scrollPastLastLine', v)}
+              description="Allow scrolling past the end of the file"
+            />
+          </div>
+        </PanelSection>
+
+        <PanelSection collapsible title="Editing">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelToggle
+              label="Autocomplete"
+              checked={editor.enableAutocomplete}
+              onChange={(v) => setEditor('enableAutocomplete', v)}
+            />
+            <PanelToggle
+              label="Auto-close brackets"
+              checked={editor.autoClosingBrackets}
+              onChange={(v) => setEditor('autoClosingBrackets', v)}
+            />
+            <PanelToggle
+              label="Auto-close quotes"
+              checked={editor.autoClosingQuotes}
+              onChange={(v) => setEditor('autoClosingQuotes', v)}
+            />
+            <PanelToggle
+              label="Format on paste"
+              checked={editor.formatOnPaste}
+              onChange={(v) => setEditor('formatOnPaste', v)}
+            />
+            <PanelSelect
+              label="Auto indent rule"
+              value={editor.autoIndentRule}
+              onChange={(v) => setEditor('autoIndentRule', v as AutoIndentRule)}
+              options={AUTO_INDENT_OPTIONS}
+              fullWidth
+            />
+          </div>
+        </PanelSection>
+      </div>
+    </div>
+  );
+}
+
+function EditorThemeSection() {
+  const theme = useEditorSettings((s) => s.theme);
+  const setThemePreset = useEditorSettings((s) => s.setThemePreset);
+  const setThemeColor = useEditorSettings((s) => s.setThemeColor);
+  const resetThemeOverrides = useEditorSettings((s) => s.resetThemeOverrides);
+  const colors = resolveThemeColors(theme);
+  const hasOverrides = Object.keys(theme.overrides).length > 0;
+
+  return (
+    <div className="flex flex-col">
+      <SectionHeader
+        title="Editor Theme"
+        subtitle="Script editor color preset + per-token overrides."
+      />
+      <div className="px-6 py-5 max-w-xl flex flex-col gap-4">
+        <PanelSection collapsible title="Preset">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <PanelSelect
+              label="Script editor color preset"
+              value={theme.preset}
+              onChange={(v) => setThemePreset(v as EditorThemePreset)}
+              options={THEME_PRESET_OPTIONS}
+              fullWidth
+            />
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-zinc-500">
+                {hasOverrides ? `${Object.keys(theme.overrides).length} token${Object.keys(theme.overrides).length === 1 ? '' : 's'} customized` : 'Using preset defaults'}
+              </span>
+              {hasOverrides && (
+                <button
+                  type="button"
+                  onClick={resetThemeOverrides}
+                  className="flex items-center gap-1 text-[11px] text-accent hover:underline"
+                >
+                  <RotateCcw size={11} />
+                  Reset overrides
+                </button>
+              )}
+            </div>
+          </div>
+        </PanelSection>
+
+        <PanelSection collapsible title="Syntax colors">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            {THEME_SWATCH_KEYS.map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between gap-3">
+                <label className="text-[12px] text-zinc-300 flex-1 min-w-0 truncate">{label}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={colors[key]}
+                    onChange={(e) => setThemeColor(key, e.target.value)}
+                    className="h-6 w-10 rounded cursor-pointer bg-transparent border border-white/10"
+                    aria-label={label}
+                  />
+                  <code className="text-[10px] font-mono text-zinc-500 w-[60px] text-right tabular-nums">
+                    {colors[key]}
+                  </code>
+                </div>
+              </div>
+            ))}
+          </div>
+        </PanelSection>
+
+        <PanelSection collapsible title="Preview">
+          <div className="px-4 py-4">
+            <ThemePreview colors={colors} />
+          </div>
+        </PanelSection>
+      </div>
+    </div>
+  );
+}
+
+function ThemePreview({ colors }: { colors: EditorThemeColors }) {
+  return (
+    <div
+      className="rounded-lg border border-white/10 p-3 font-mono text-[12px] leading-5"
+      style={{ background: colors.background, color: colors.textColor }}
+    >
+      <div>
+        <span style={{ color: colors.commentColor }}>{'-- greets the player'}</span>
+      </div>
+      <div>
+        <span style={{ color: colors.keywordColor }}>local</span>{' '}
+        <span style={{ color: colors.functionNameColor }}>greet</span>{' '}
+        <span style={{ color: colors.operatorColor }}>=</span>{' '}
+        <span style={{ color: colors.keywordColor }}>function</span>
+        <span style={{ color: colors.operatorColor }}>(</span>
+        name
+        <span style={{ color: colors.operatorColor }}>)</span>
+      </div>
+      <div
+        className="px-1 -mx-1 rounded"
+        style={{ background: colors.currentLineHighlightColor }}
+      >
+        &nbsp;&nbsp;<span style={{ color: colors.keywordColor }}>return</span>{' '}
+        <span style={{ color: colors.stringColor }}>&quot;Hello, &quot;</span>{' '}
+        <span style={{ color: colors.operatorColor }}>..</span> name{' '}
+        <span style={{ color: colors.operatorColor }}>..</span>{' '}
+        <span style={{ color: colors.stringColor }}>&quot;!&quot;</span>
+      </div>
+      <div>
+        <span style={{ color: colors.keywordColor }}>end</span>
+      </div>
+      <div>
+        <span style={{ color: colors.functionNameColor }}>print</span>
+        <span style={{ color: colors.operatorColor }}>(</span>
+        <span style={{ color: colors.functionNameColor }}>greet</span>
+        <span style={{ color: colors.operatorColor }}>(</span>
+        <span style={{ color: colors.stringColor }}>&quot;world&quot;</span>
+        <span style={{ color: colors.operatorColor }}>))</span>{' '}
+        <span style={{ color: colors.numberColor }}>42</span>
+      </div>
+      <div>
+        <span
+          style={{
+            background: colors.selectionBackgroundColor,
+            color: colors.textColor,
+          }}
+        >
+          {'-- selected text sample'}
+        </span>
+      </div>
+      <div className="pt-1 flex gap-3">
+        <span style={{ color: colors.errorColor }}>■ error</span>
+        <span style={{ color: colors.warningColor }}>■ warning</span>
+      </div>
+    </div>
+  );
 }
 
 function ProjectSection() {

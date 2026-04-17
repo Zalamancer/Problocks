@@ -96,6 +96,7 @@ export function LightingPanel() {
           />
           <PanelToggle
             label="GlobalShadows"
+            description="(off = flat, same color on every face)"
             checked={config.globalShadows}
             onChange={(v) => setField('globalShadows', v)}
           />

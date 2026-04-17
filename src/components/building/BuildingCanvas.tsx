@@ -420,6 +420,25 @@ export function BuildingCanvas() {
       // Sky background
       scene.background = new THREE.Color(rgbToHex(cfg.skyColor));
 
+      // Exposure: Roblox ExposureCompensation is in EV stops (2^x).
+      const glare = cfg.atmosphere.glare / 10; // 0..1 small exposure boost
+      renderer.toneMappingExposure = Math.pow(2, cfg.exposureCompensation) * (1 + glare * 0.5);
+
+      if (!cfg.globalShadows) {
+        // Shadows OFF == fully flat-shaded: no directional component at all.
+        // Every face reads the base material color identically. Ambient carries
+        // everything, brightness becomes a flat multiplier.
+        sun.intensity = 0;
+        sun.visible = false;
+        sun.castShadow = false;
+        hemisphere.intensity = 0;
+        ambient.color.setHex(0xffffff);
+        ambient.intensity = Math.max(0.6, cfg.brightness * 0.5);
+        return;
+      }
+
+      // --- Shadows ON: full Roblox-style directional lighting ---
+
       // Hemisphere light: sky = outdoorAmbient, ground = ambient.
       // Intensity scaled by environmentDiffuseScale; Roblox ~127 → intensity ~1.0.
       hemisphere.color.setHex(rgbToHex(cfg.outdoorAmbient));
@@ -451,12 +470,9 @@ export function BuildingCanvas() {
       sun.position.set(Math.cos(angle) * 25, Math.max(4, altitude * 25), 12);
       sun.visible = altitude > 0.02;
 
-      // Exposure: Roblox ExposureCompensation is in EV stops (2^x).
-      const glare = cfg.atmosphere.glare / 10; // 0..1 small exposure boost
-      renderer.toneMappingExposure = Math.pow(2, cfg.exposureCompensation) * (1 + glare * 0.5);
-
-      // Shadow master switch
-      sun.castShadow = cfg.globalShadows && quality.shadows;
+      // Shadow-cast master switch: requires both the user toggle AND the
+      // quality tier's shadow support.
+      sun.castShadow = quality.shadows;
 
       // Atmosphere → fog. Density + Haze map to FogExp2 density.
       const fogDensity = cfg.atmosphere.density * 0.015 + cfg.atmosphere.haze * 0.008;

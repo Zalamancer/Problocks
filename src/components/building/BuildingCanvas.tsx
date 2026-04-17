@@ -206,14 +206,24 @@ export function BuildingCanvas() {
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
 
-    // Camera is fully static — OrbitControls is kept only because play-mode.ts
-    // reads refs.controls.target as the orbit pivot and calls controls.update().
-    // All user-driven camera movement (orbit / pan / zoom / wheel) is disabled.
+    // Camera controls: orbit + zoom only (pan stays off so two-finger swipe
+    // doesn't drag the view around). Right-drag orbits so LEFT stays reserved
+    // for tile selection / placement. In play-mode.ts the orbit target is
+    // translated with the character each frame, so the same controls give
+    // Roblox-style orbit-around-player + zoom-to-player.
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
-    controls.enableRotate = false;
+    controls.enableRotate = true;
     controls.enablePan = false;
-    controls.enableZoom = false;
+    controls.enableZoom = true;
+    controls.zoomToCursor = true;
+    controls.minDistance = 1.5;
+    controls.maxDistance = 150;
+    controls.mouseButtons = {
+      LEFT: -1 as unknown as THREE.MOUSE,
+      MIDDLE: -1 as unknown as THREE.MOUSE,
+      RIGHT: THREE.MOUSE.ROTATE,
+    };
     controls.target.set(0, 0, 0);
     controls.update();
 

@@ -75,7 +75,10 @@ function EmptyState({ onStart }: { onStart: () => void }) {
 export function StudioLayout() {
   useThemeEffect();
   const { board } = useProjectBoard();
-  const [wizardOpen, setWizardOpen] = useState(true);
+  // Wizard does NOT auto-open in studio. Game creation starts on the landing
+  // page ("Create game" CTA); by the time the user reaches /studio the
+  // project-board store has already been initialised and persisted.
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('3d');
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);

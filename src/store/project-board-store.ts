@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type {
   ProjectBoard,
   MilestoneInstance,
@@ -114,7 +115,7 @@ function appendActivity(
   }));
 }
 
-export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
+export const useProjectBoard = create<ProjectBoardState>()(persist((set, get) => ({
   board: null,
   teamMembers: [],
   setTeamMembers: (members) => set({ teamMembers: members }),
@@ -426,4 +427,13 @@ export const useProjectBoard = create<ProjectBoardState>()((set, get) => ({
   clearBoard() {
     set({ board: null });
   },
+}), {
+  name: 'problocks-project-board-v1',
+  // Persist the core board + team. Skip any ephemeral state. Without this,
+  // refreshing the studio would reset `board` to null and the wizard would
+  // fire again, which is exactly the behavior we want to eliminate.
+  partialize: (state) => ({
+    board: state.board,
+    teamMembers: state.teamMembers,
+  }),
 }));

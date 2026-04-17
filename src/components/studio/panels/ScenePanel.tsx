@@ -62,10 +62,10 @@ const CATEGORY_ICONS: Record<string, typeof Box> = {
 };
 
 const CATEGORY_ICON_BG: Record<string, string> = {
-  part: 'bg-blue-500/15 text-blue-300 ring-1 ring-blue-400/30',
-  floor: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/30',
-  wall: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30',
-  script: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30',
+  part: 'bg-blue-500/15 text-blue-300',
+  floor: 'bg-amber-500/15 text-amber-300',
+  wall: 'bg-rose-500/15 text-rose-300',
+  script: 'bg-emerald-500/15 text-emerald-300',
 };
 
 const PART_TYPE_ICON: Record<PartType, typeof Box> = {
@@ -290,7 +290,7 @@ export function ScenePanel({ onSelect }: Props) {
                   {/* Category header */}
                   <button
                     onClick={() => toggleCategory(cat)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-zinc-900/40 hover:bg-zinc-800/60 border border-white/[0.05] hover:border-white/10 transition-all group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-zinc-800/60 transition-all group"
                   >
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
                       <CategoryIcon size={15} />
@@ -354,26 +354,26 @@ function LayerRow({ layer }: { layer: LayerItem }) {
       onDoubleClick={startRename}
       className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
         layer.isSelected
-          ? 'bg-accent/15 ring-1 ring-accent/40 shadow-sm shadow-accent/10'
-          : 'bg-zinc-900/30 hover:bg-zinc-800/60 ring-1 ring-white/[0.04] hover:ring-white/10'
+          ? 'bg-accent/15 shadow-sm shadow-accent/10'
+          : 'hover:bg-zinc-800/60'
       }`}
     >
       {/* Thumbnail / icon block */}
       {layer.type === 'part' ? (
         <div
-          className="w-9 h-9 rounded-lg shrink-0 ring-1 ring-white/15 flex items-center justify-center"
+          className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center"
           style={{ background: layer.iconColor }}
         >
           <Icon size={14} className="text-white/80 drop-shadow" />
         </div>
       ) : (
         <div
-          className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center ring-1 ${
+          className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center ${
             layer.type === 'floor'
-              ? 'bg-amber-500/15 ring-amber-400/30'
+              ? 'bg-amber-500/15'
               : layer.type === 'wall'
-                ? 'bg-rose-500/15 ring-rose-400/30'
-                : 'bg-emerald-500/15 ring-emerald-400/30'
+                ? 'bg-rose-500/15'
+                : 'bg-emerald-500/15'
           }`}
         >
           <Icon size={16} style={{ color: layer.iconColor }} />

@@ -1,8 +1,9 @@
 'use client';
-import { Square, Columns, Eraser, Trash2, MousePointer2, Box } from 'lucide-react';
+import { Square, Columns, Eraser, Trash2, MousePointer2, Box, Play, Square as StopIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { BuildingCanvas } from '@/components/building/BuildingCanvas';
 import { useBuildingStore, type Tool } from '@/store/building-store';
+import { useSceneStore } from '@/store/scene-store';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and built-in
@@ -14,8 +15,37 @@ export function WorkspaceView() {
     <div className="relative w-full h-full">
       <BuildingCanvas />
       <FloatingBuildToolbar />
+      <FloatingPlayButton />
       <HintBadge />
     </div>
+  );
+}
+
+function FloatingPlayButton() {
+  const isPlaying = useSceneStore((s) => s.isPlaying);
+  const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
+  const setTool = useBuildingStore((s) => s.setTool);
+
+  function toggle() {
+    const next = !isPlaying;
+    setIsPlaying(next);
+    if (next) setTool('select');
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      title={isPlaying ? 'Stop' : 'Play'}
+      className={`absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-xl backdrop-blur-xl border shadow-lg text-xs font-semibold transition-all ${
+        isPlaying
+          ? 'bg-red-500/20 border-red-500/40 text-red-200 hover:bg-red-500/30'
+          : 'bg-green-500/20 border-green-500/40 text-green-200 hover:bg-green-500/30'
+      }`}
+    >
+      {isPlaying ? <StopIcon size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+      {isPlaying ? 'Stop' : 'Play'}
+    </button>
   );
 }
 

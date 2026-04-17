@@ -225,7 +225,7 @@ export function BuildingCanvas() {
     // Scroll-to-orbit + pinch-to-zoom. Tunable constants kept local so they
     // don't leak into the store.
     const ORBIT_SPEED = 0.004;          // radians per wheel-delta unit
-    const ZOOM_FACTOR_PER_UNIT = 1.0015; // pow(this, deltaY) per tick
+    const ZOOM_FACTOR_PER_UNIT = 1.01;   // pow(this, deltaY) per tick
     const ZOOM_MIN = 1.5;
     const ZOOM_MAX = 150;
     const POLAR_EPS = 0.05;              // keep camera off the exact pole

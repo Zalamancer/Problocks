@@ -101,6 +101,8 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
     projectName: state.projectName,
     flowDirection: state.flowDirection,
     games: state.games,
-    activeGameId: state.activeGameId,
+    // Intentionally NOT persisting activeGameId — otherwise a refresh would
+    // auto-open the last previewed game, forcing the GamePreview panel on
+    // users who didn't ask for it.
   }),
 }));

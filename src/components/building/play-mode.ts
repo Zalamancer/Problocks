@@ -34,20 +34,41 @@ export interface PlayController {
 const CAP_RADIUS = 0.45;
 const CAP_HEIGHT = 1.8;     // total capsule height (feet at y=0 of the group)
 const HEAD_OFFSET = 0.35;   // head above capsule top
-const MOVE_SPEED = 7;
-const JUMP_SPEED = 9;
-const GRAVITY = -26;
+const MOVE_SPEED = 9;
+const ACCEL = 60;           // horizontal units/sec² ramp toward target velocity
+const DECEL = 80;           // horizontal units/sec² ramp toward zero when idle
+const ROTATE_SPEED = 14;    // rad/sec character turns toward desired facing
+const JUMP_SPEED = 13;
+const GRAVITY_UP = -38;     // weaker gravity on the way up = hangtime
+const GRAVITY_DOWN = -68;   // harder fall gives the classic platformer feel
+const TERMINAL_VEL = -60;
+const COYOTE_TIME = 0.12;   // can still jump for this long after walking off a ledge
+const JUMP_BUFFER = 0.15;   // queue a Space press if it lands just before grounding
+const STEP_HEIGHT = 0.45;   // auto-step onto obstacles up to this tall
 const CAM_DIST = 6;
+const CAM_SHOULDER = 0.6;   // sideways shoulder offset like Roblox shift-lock
+const CAM_LERP = 12;        // cam follow smoothness
+const BOB_SPEED = 11;
+const BOB_AMP = 0.08;
 const LOOK_SENS = 0.0022;
 
 export function createPlayController(refs: PlaySceneRefs): PlayController {
   let active = false;
   let character: THREE.Group | null = null;
+  let body: THREE.Mesh | null = null; // reference kept so we can bob the torso
+  let head: THREE.Mesh | null = null;
   const velocity = new THREE.Vector3();
   const keys: Record<string, boolean> = {};
   let yaw = 0;
   let pitch = -0.25;
   let grounded = false;
+  let coyoteTimer = 0;   // counts up while airborne; jump OK if < COYOTE_TIME
+  let jumpBuffer = 0;    // counts down after Space press; auto-jump on landing
+  let bobPhase = 0;      // radians; drives walking head/body bob
+  let renderedYaw = 0;   // smoothed rotation actually applied to the mesh
+  const camDesired = new THREE.Vector3();
+  const camSmooth = new THREE.Vector3();
+  const lookAtSmooth = new THREE.Vector3();
   const savedCamPos = new THREE.Vector3();
   const savedTarget = new THREE.Vector3();
   let savedControlsEnabled = true;
@@ -62,14 +83,14 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
     const g = new THREE.Group();
     g.name = 'play-character';
     const cyl = CAP_HEIGHT - CAP_RADIUS * 2;
-    const body = new THREE.Mesh(
+    body = new THREE.Mesh(
       new THREE.CapsuleGeometry(CAP_RADIUS, cyl, 8, 16),
       new THREE.MeshStandardMaterial({ color: 0x3a7be2, roughness: 0.6 }),
     );
     body.position.y = CAP_HEIGHT / 2;
     body.castShadow = true;
     g.add(body);
-    const head = new THREE.Mesh(
+    head = new THREE.Mesh(
       new THREE.BoxGeometry(0.55, 0.55, 0.55),
       new THREE.MeshStandardMaterial({ color: 0xf0c090, roughness: 0.8 }),
     );
@@ -87,8 +108,12 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    const wasDown = keys[e.code];
     keys[e.code] = true;
-    if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (!wasDown) jumpBuffer = JUMP_BUFFER; // fresh press → buffer it
+    }
     if (e.code === 'Escape') {
       // Let the Stop button own the transition — just unlock the pointer
       if (document.pointerLockElement) document.exitPointerLock();
@@ -195,6 +220,12 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       yaw = 0;
       pitch = -0.25;
       grounded = true;
+      coyoteTimer = 0;
+      jumpBuffer = 0;
+      bobPhase = 0;
+      renderedYaw = 0;
+      camSmooth.set(0, 0, 0);
+      lookAtSmooth.set(0, 0, 0);
 
       savedCamPos.copy(refs.camera.position);
       savedTarget.copy(refs.controls.target);
@@ -247,65 +278,158 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       if (!active || !character) return;
       const step = Math.min(dt, 1 / 30); // clamp large frames so we don't tunnel
 
-      // Yaw-aligned WASD
+      // Yaw-aligned WASD → target horizontal velocity
       const fwd = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
       const str = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
-      const cy = Math.cos(yaw);
       const sy = Math.sin(yaw);
-      // Camera forward on the ground is (-sin yaw, 0, -cos yaw)
-      const fx = -sy;
-      const fz = -cy;
-      const rx = cy;
-      const rz = -sy;
-      let vx = fwd * fx + str * rx;
-      let vz = fwd * fz + str * rz;
-      const len = Math.hypot(vx, vz);
-      if (len > 0) {
-        vx = (vx / len) * MOVE_SPEED;
-        vz = (vz / len) * MOVE_SPEED;
-      } else {
-        vx = 0;
-        vz = 0;
+      const cy = Math.cos(yaw);
+      const fx = -sy, fz = -cy;      // camera forward on ground plane
+      const rx = cy,  rz = -sy;      // camera right on ground plane
+      let wishX = fwd * fx + str * rx;
+      let wishZ = fwd * fz + str * rz;
+      const wishLen = Math.hypot(wishX, wishZ);
+      if (wishLen > 0) {
+        wishX = (wishX / wishLen) * MOVE_SPEED;
+        wishZ = (wishZ / wishLen) * MOVE_SPEED;
       }
-      velocity.x = vx;
-      velocity.z = vz;
 
-      if (keys['Space'] && grounded) {
+      // Ease current velocity toward wish velocity — separate accel vs decel
+      const inputActive = wishLen > 0;
+      const rate = inputActive ? ACCEL : DECEL;
+      const dvx = wishX - velocity.x;
+      const dvz = wishZ - velocity.z;
+      const maxStep = rate * step;
+      const dvLen = Math.hypot(dvx, dvz);
+      if (dvLen > 0) {
+        const k = Math.min(1, maxStep / dvLen);
+        velocity.x += dvx * k;
+        velocity.z += dvz * k;
+      }
+
+      // Coyote time + jump buffering → forgiving jumps
+      if (grounded) coyoteTimer = 0;
+      else coyoteTimer += step;
+      if (jumpBuffer > 0) jumpBuffer -= step;
+
+      const canJump = grounded || coyoteTimer < COYOTE_TIME;
+      if (jumpBuffer > 0 && canJump) {
         velocity.y = JUMP_SPEED;
         grounded = false;
+        coyoteTimer = COYOTE_TIME; // consumed — prevents double-jump this frame
+        jumpBuffer = 0;
       }
-      velocity.y += GRAVITY * step;
-      if (velocity.y < -50) velocity.y = -50; // terminal velocity
 
+      // Variable gravity — weaker on the way up, harder on the way down.
+      // Holding Space while rising keeps the lower gravity for extra hangtime.
+      const g = velocity.y > 0 && keys['Space'] ? GRAVITY_UP : GRAVITY_DOWN;
+      velocity.y += g * step;
+      if (velocity.y < TERMINAL_VEL) velocity.y = TERMINAL_VEL;
+
+      // Advance position axis-by-axis so collision resolution can reason
+      // about each axis independently (enables step-up below).
       character.position.x += velocity.x * step;
       character.position.z += velocity.z * step;
       character.position.y += velocity.y * step;
 
+      // Save pre-resolve horizontal position so we can detect "blocked by a
+      // low obstacle" and auto-step up onto it.
+      const preX = character.position.x;
+      const preZ = character.position.z;
+
       resolveCollisions();
 
-      // Fell out of world (shouldn't happen with y=0 floor but safety net)
+      // Step-up: if we got pushed back on X or Z but there's a surface
+      // within STEP_HEIGHT of our feet we could have climbed, snap onto it.
+      if (inputActive) {
+        const pushedX = Math.abs(character.position.x - preX) > 1e-4;
+        const pushedZ = Math.abs(character.position.z - preZ) > 1e-4;
+        if (pushedX || pushedZ) {
+          // Re-probe for the tallest top we touch within step range
+          tmpCenter.set(
+            preX,
+            character.position.y + CAP_HEIGHT / 2,
+            preZ,
+          );
+          tmpSize.set(CAP_RADIUS * 2, CAP_HEIGHT, CAP_RADIUS * 2);
+          const probeBox = new THREE.Box3().setFromCenterAndSize(tmpCenter, tmpSize);
+          let bestTop = -Infinity;
+          for (const root of [refs.partGroup, refs.floorGroup, refs.wallGroup]) {
+            for (const obj of root.children) {
+              tmpBox.setFromObject(obj);
+              if (tmpBox.isEmpty() || !tmpBox.intersectsBox(probeBox)) continue;
+              if (tmpBox.max.y > bestTop) bestTop = tmpBox.max.y;
+            }
+          }
+          if (bestTop > character.position.y && bestTop - character.position.y <= STEP_HEIGHT) {
+            character.position.x = preX;
+            character.position.z = preZ;
+            character.position.y = bestTop;
+            if (velocity.y < 0) velocity.y = 0;
+            grounded = true;
+            resolveCollisions();
+          }
+        }
+      }
+
+      // Fell out of world (safety net in case a student deletes the ground)
       if (character.position.y < -20) {
         character.position.set(0, 0.1, 8);
         velocity.set(0, 0, 0);
       }
 
-      // Face the camera's horizontal forward when moving; else hold last yaw
-      if (len > 0) {
-        // Desired world-space movement direction → face it
-        character.rotation.y = Math.atan2(vx, vz);
-      } else {
-        character.rotation.y = yaw; // idle → face the way the camera looks
-      }
+      // Rotate mesh smoothly toward desired facing
+      let targetYaw = renderedYaw;
+      if (inputActive) targetYaw = Math.atan2(wishX, wishZ);
+      else targetYaw = yaw;
+      let diff = targetYaw - renderedYaw;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const rotK = Math.min(1, ROTATE_SPEED * step);
+      renderedYaw += diff * rotK;
+      character.rotation.y = renderedYaw;
 
-      // Third-person orbit camera around the character head
+      // Subtle walk bob — only when actually moving on the ground
+      const speed = Math.hypot(velocity.x, velocity.z);
+      const moving = speed > 0.5 && grounded;
+      if (moving) {
+        bobPhase += step * BOB_SPEED * (speed / MOVE_SPEED);
+      } else {
+        // Ease bob back to rest so stopping doesn't snap
+        bobPhase += (0 - (bobPhase % (Math.PI * 2))) * Math.min(1, step * 6);
+      }
+      const bobY = Math.sin(bobPhase) * BOB_AMP * (moving ? 1 : 0);
+      if (body) body.position.y = CAP_HEIGHT / 2 + bobY;
+      if (head) head.position.y = CAP_HEIGHT + HEAD_OFFSET + bobY * 0.8;
+
+      // Third-person shoulder camera — smoothed toward the desired position
       const headY = character.position.y + CAP_HEIGHT + HEAD_OFFSET;
       const cp = Math.cos(pitch);
       const sp = Math.sin(pitch);
-      const camX = character.position.x - Math.sin(yaw) * cp * CAM_DIST;
-      const camZ = character.position.z - Math.cos(yaw) * cp * CAM_DIST;
-      const camY = headY + sp * CAM_DIST + 1.2;
-      refs.camera.position.set(camX, camY, camZ);
-      refs.camera.lookAt(character.position.x, headY, character.position.z);
+      // Desired eye position: back along camera forward, then offset to the
+      // right by CAM_SHOULDER to give the Roblox over-the-shoulder framing.
+      const backX = -sy * cp;
+      const backZ = -cy * cp;
+      const rightX = cy;
+      const rightZ = -sy;
+      camDesired.set(
+        character.position.x + backX * CAM_DIST + rightX * CAM_SHOULDER,
+        headY + sp * CAM_DIST + 1.0,
+        character.position.z + backZ * CAM_DIST + rightZ * CAM_SHOULDER,
+      );
+      const camK = Math.min(1, CAM_LERP * step);
+      if (camSmooth.lengthSq() === 0) camSmooth.copy(camDesired); // first frame
+      camSmooth.lerp(camDesired, camK);
+      refs.camera.position.copy(camSmooth);
+
+      // Look at a smoothed head position so the view doesn't jitter while bobbing
+      if (lookAtSmooth.lengthSq() === 0) {
+        lookAtSmooth.set(character.position.x, headY, character.position.z);
+      }
+      lookAtSmooth.lerp(
+        tmpCenter.set(character.position.x, headY, character.position.z),
+        Math.min(1, 14 * step),
+      );
+      refs.camera.lookAt(lookAtSmooth);
     },
   };
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DEFAULT_PIECE, type PieceKind } from '@/lib/building-kit';
+import { DEFAULT_PIECE, TILE, type PieceKind } from '@/lib/building-kit';
 
 /**
  * Tile/edge building store with multi-level (Y) support.
@@ -142,7 +142,8 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   level: 0,
   setLevel: (level) => set({ level: Math.max(0, Math.floor(level)) }),
 
-  gridSize: 2,
+  /** Must match building-kit TILE so grid math in BuildingCanvas stays in sync. */
+  gridSize: TILE,
   gridExtent: 10,
 
   cornerBend: 0,

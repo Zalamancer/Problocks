@@ -9,8 +9,16 @@ import { STAIRS_PIECES } from './stairs';
 export type { PieceKind, PieceDef, BuildOpts };
 export { FACE_SHADE } from './types';
 
-export const TILE = 2;
-export const WALL_HEIGHT = 3;
+/**
+ * World scale constants. The player character is ~2.1m tall and ~1.0m wide
+ * (see play-mode.ts), so a 2m tile left half a tile of clearance — very
+ * cramped rooms/doors. Bumping to 3m gives roughly Roblox-stud proportions
+ * and makes 3×3 rooms feel like actual rooms. All procedural pieces are
+ * parameterized on `tile`, so this single change rescales every floor,
+ * wall, roof, corner, and staircase.
+ */
+export const TILE = 3;
+export const WALL_HEIGHT = 3.5;
 export const WALL_THICK = 0.15;
 export const FLOOR_THICK = 0.1;
 

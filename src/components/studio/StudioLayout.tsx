@@ -31,9 +31,8 @@ import type { TemplateId } from '@/lib/templates/types';
 import { useSceneStore, type ScenePart } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { useQualityStore } from '@/store/quality-store';
-
-// Uses the canonical building-kit constants so floor/wall default
-// transforms here never drift from BuildingCanvas's grid math.
+// Canonical world scale — shared with BuildingCanvas's grid math so
+// floor/wall default transforms here never drift.
 import { TILE as B_TILE, WALL_HEIGHT as B_WALL_HEIGHT, FLOOR_THICK as B_FLOOR_THICK } from '@/lib/building-kit';
 
 function floorDefaultPos(key: string) {

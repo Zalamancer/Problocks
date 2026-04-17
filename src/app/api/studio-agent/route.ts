@@ -17,8 +17,28 @@
  */
 import { spawn } from 'child_process';
 import { homedir } from 'os';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 import { PIECES } from '@/lib/building-kit';
 import type { PieceKind } from '@/lib/building-kit';
+
+type BuildMode = 'defaults' | 'assets';
+
+interface LibEntry {
+  name: string;
+  cat: string;
+}
+
+async function loadLibrary(): Promise<LibEntry[]> {
+  try {
+    const p = join(process.cwd(), 'public', 'assets', 'medieval', 'stats.json');
+    const raw = await readFile(p, 'utf-8');
+    const arr = JSON.parse(raw) as LibEntry[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
 
 function cliEnv() {
   return {
@@ -87,8 +107,12 @@ interface SceneSnapshot {
   stairs: string[];   // "x,y,z,facing"
   gridSize: number;
   selectedPiece: Record<PieceKind, string>;
-  /** User-enabled imported GLB model names (from /assets/medieval/). */
-  libraryAssets?: string[];
+  /**
+   * Which vocabulary the AI should build from:
+   *   'defaults' → procedural building-kit pieces (floors/walls/roofs/…)
+   *   'assets'   → user's imported GLB library under /assets/medieval/
+   */
+  buildMode?: BuildMode;
 }
 
 // --- Asset catalog (served to the model so it can pick real piece ids) ---
@@ -114,13 +138,35 @@ function catalogByKind(): string {
     .join('\n');
 }
 
+// Group library by category, truncating long categories so the prompt
+// stays bounded even if the catalog grows.
+function libraryByCategory(lib: LibEntry[]): string {
+  if (!lib.length) return '  (no imported models found)';
+  const byCat = new Map<string, string[]>();
+  for (const a of lib) {
+    if (!byCat.has(a.cat)) byCat.set(a.cat, []);
+    byCat.get(a.cat)!.push(a.name);
+  }
+  const cats = [...byCat.keys()].sort();
+  return cats
+    .map((cat) => {
+      const names = byCat.get(cat)!;
+      const shown = names.slice(0, 40);
+      const more = names.length - shown.length;
+      return `  ${cat}:\n${shown.map((n) => `    - ${n}`).join('\n')}${more > 0 ? `\n    (+${more} more)` : ''}`;
+    })
+    .join('\n');
+}
+
 // --- Prompt ---
 
 const STUDIO_PROMPT = (
   userMsg: string,
   scene: SceneSnapshot,
   conversation: { role: string; content: string }[],
+  library: LibEntry[],
 ) => {
+  const mode: BuildMode = scene.buildMode ?? 'defaults';
   const history = conversation
     .slice(0, -1)
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
@@ -144,27 +190,40 @@ const STUDIO_PROMPT = (
     .map(([k, v]) => `    ${k} = ${v}`)
     .join('\n');
 
-  const lib = scene.libraryAssets ?? [];
-  const librarySection = lib.length
-    ? `## User's imported model library (AI-enabled GLB models)
+  // Mode-dependent vocabulary section
+  const assetsMode = mode === 'assets';
+  const vocabSection = assetsMode
+    ? `## Build vocabulary: IMPORTED ASSETS mode
 
-These are the ONLY custom 3D models the user has enabled for you. Use them
-by emitting addPart with partType:"GLB" and modelName set to EXACTLY one
-of these names (no path, no extension):
+The user has chosen to build with their imported GLB library instead of
+procedural building-kit pieces. In this mode:
 
-${lib.map((n) => `  - ${n}`).join('\n')}
+- Create parts with addPart using partType:"GLB" and a modelName from the
+  library below. Do NOT invent modelName values — use EXACTLY these names
+  (no path, no extension).
+- Avoid placeFloor/placeWall/placeRoof/placeCorner/placeStairs — those
+  render procedural pieces. In assets mode, compose scenes out of GLB
+  parts instead.
+- Rotate/scale GLB parts freely. color is ignored for GLBs.
 
-Prefer these imported models over generic Block/Sphere parts when the user
-asks for something that matches (e.g. a cart → Prop_Wagon, a fence →
-Prop_WoodenFence_*). Combine multiple to build scenes.
+Available library models (from /assets/medieval/):
+
+${libraryByCategory(library)}
 `
-    : `## User's imported model library
+    : `## Build vocabulary: DEFAULT BLOCKS mode
 
-The user has not enabled any imported GLB models for AI use. Do NOT invent
-GLB modelName values — only create parts with partType "Block" | "Sphere"
-| "Cylinder" | "Wedge", or place building tiles from the piece catalog
-below. If the user wants a custom model, tell them to open the + palette
-drop-up → Library tab and enable the assets they want.
+The user has chosen to build with procedural building-kit pieces. In
+this mode:
+
+- Place floors/walls/roofs/corners/stairs using the piece ids below.
+- addPart is still available for primitives ("Block", "Sphere",
+  "Cylinder", "Wedge") when a generic shape is needed.
+- Do NOT emit partType:"GLB" in this mode — those require the user to
+  switch to "My assets" in the + picker.
+
+Available piece ids (use EXACTLY these strings for "asset"):
+
+${catalogByKind()}
 `;
 
   return `You are the Problocks Studio Agent. You edit a 3D scene directly —
@@ -185,13 +244,10 @@ ${dump('roofs', scene.roofs)}
 ${dump('corners', scene.corners)}
 ${dump('stairs', scene.stairs)}
 
-Currently selected piece per kind (used when an action omits "asset"):
+Currently selected piece per kind (used when a grid action omits "asset"):
 ${selected}
 
-${librarySection}
-## Available piece ids (use EXACTLY these strings for "asset")
-
-${catalogByKind()}
+${vocabSection}
 
 ## Output format
 
@@ -202,8 +258,8 @@ object. Narration text can appear between ACTION lines; keep it short.
 
   {"type":"addPart","name":"Tower","partType":"Block","position":{"x":0,"y":0.5,"z":0},"scale":{"x":1,"y":1,"z":1},"color":"#ff4444"}
     — partType: "Block" | "Sphere" | "Cylinder" | "Wedge" | "GLB"
-    — for partType:"GLB" add "modelName":"<exact library name from the section above>"
-      color is ignored for GLBs. Example:
+    — for partType:"GLB" add "modelName":"<exact library name>"
+      (only allowed in IMPORTED ASSETS mode). Example:
       {"type":"addPart","partType":"GLB","modelName":"Prop_Wagon","position":{"x":4,"y":0,"z":2}}
 
   {"type":"updatePart","id":"<existing-id>","color":"#00ff00","position":{"x":2,"y":0.5,"z":0}}
@@ -358,14 +414,24 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const userMsg = messages[messages.length - 1]?.content || '';
 
+    // Only load library when the user is in assets mode — keeps the
+    // default-mode prompt compact and avoids disk reads we don't need.
+    const library: LibEntry[] =
+      scene.buildMode === 'assets' ? await loadLibrary() : [];
+
     const readable = new ReadableStream({
       async start(controller) {
         const emit = makeEmitter(controller, encoder);
         try {
-          emit({ status: '🧠 Planning scene changes...' });
+          emit({
+            status:
+              scene.buildMode === 'assets'
+                ? `🧠 Planning with ${library.length} imported assets...`
+                : '🧠 Planning with default blocks...',
+          });
           const parser = createActionParser(emit);
           await streamClaude(
-            STUDIO_PROMPT(userMsg, scene, messages),
+            STUDIO_PROMPT(userMsg, scene, messages, library),
             (text) => {
               parser.push(text);
             },

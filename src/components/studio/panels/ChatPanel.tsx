@@ -6,7 +6,7 @@ import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-stor
 import { useBuildingStore, type EdgeDir, type Facing } from '@/store/building-store';
 import type { PieceKind } from '@/lib/building-kit';
 import { ChatAssetPicker } from './ChatAssetPicker';
-import { useAILibraryStore, enabledLibraryList } from '@/store/ai-library-store';
+import { useAIBuildModeStore } from '@/store/ai-library-store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -242,10 +242,10 @@ export function ChatPanel() {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
 
-    // Snapshot current scene + building state + AI-enabled library for the agent
+    // Snapshot current scene + building state + build-mode for the agent
     const sceneState = useSceneStore.getState();
     const b = useBuildingStore.getState();
-    const libEnabled = useAILibraryStore.getState().enabled;
+    const mode = useAIBuildModeStore.getState().mode;
     const snapshot = {
       parts: sceneState.sceneObjects.map((p) => ({
         id: p.id,
@@ -262,7 +262,7 @@ export function ChatPanel() {
       stairs: Object.keys(b.stairs),
       gridSize: b.gridSize,
       selectedPiece: b.selectedPiece,
-      libraryAssets: enabledLibraryList(libEnabled),
+      buildMode: mode,
     };
 
     const next: Message[] = [...messages, { role: 'user', content: trimmed }];

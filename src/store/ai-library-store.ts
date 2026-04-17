@@ -2,45 +2,25 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /**
- * Tracks which imported library assets (GLBs under /assets/medieval/) are
- * enabled for the AI agent to use. Enabled names are injected into the
- * studio-agent prompt so Claude can emit:
- *   ACTION: {"type":"addPart","partType":"GLB","modelName":"<name>", ...}
+ * Single toggle for which build vocabulary the AI agent uses:
+ *   - 'defaults' → procedural building-kit pieces (floors, walls, roofs, …)
+ *   - 'assets'   → the user's imported GLB library (/assets/medieval/*.gltf)
  *
- * Disabling an asset simply removes it from the prompt — the model stays
- * on disk and can still be dragged in manually.
- *
- * Persisted to localStorage so the user's curation survives reloads.
+ * Persisted so the user's choice sticks across reloads.
  */
-interface AILibraryState {
-  enabled: Record<string, boolean>;
-  toggle: (name: string) => void;
-  set: (name: string, on: boolean) => void;
-  enableAll: (names: string[]) => void;
-  clearAll: () => void;
+export type BuildMode = 'defaults' | 'assets';
+
+interface AIBuildModeState {
+  mode: BuildMode;
+  setMode: (m: BuildMode) => void;
 }
 
-export const useAILibraryStore = create<AILibraryState>()(
+export const useAIBuildModeStore = create<AIBuildModeState>()(
   persist(
     (set) => ({
-      enabled: {},
-      toggle: (name) =>
-        set((s) => ({ enabled: { ...s.enabled, [name]: !s.enabled[name] } })),
-      set: (name, on) =>
-        set((s) => ({ enabled: { ...s.enabled, [name]: on } })),
-      enableAll: (names) =>
-        set(() => {
-          const next: Record<string, boolean> = {};
-          for (const n of names) next[n] = true;
-          return { enabled: next };
-        }),
-      clearAll: () => set({ enabled: {} }),
+      mode: 'defaults',
+      setMode: (mode) => set({ mode }),
     }),
-    { name: 'problocks-ai-library' },
+    { name: 'problocks-ai-build-mode' },
   ),
 );
-
-/** Helper: list of currently-enabled asset names. */
-export function enabledLibraryList(enabled: Record<string, boolean>): string[] {
-  return Object.entries(enabled).filter(([, v]) => v).map(([k]) => k);
-}

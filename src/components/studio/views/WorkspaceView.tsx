@@ -2,11 +2,13 @@
 import {
   Square, Columns, Eraser, Trash2, MousePointer2, Box,
   AppWindow, DoorOpen, Mountain, TriangleRight, Columns3, StepForward,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, Sun,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { BuildingCanvas } from '@/components/building/BuildingCanvas';
+import { LightingPanel } from '@/components/building/LightingPanel';
 import { useBuildingStore, type Tool } from '@/store/building-store';
+import { useLightingStore } from '@/store/lighting-store';
 import { piecesByKind, type PieceDef, type PieceKind } from '@/lib/building-kit';
 
 /**
@@ -18,6 +20,8 @@ export function WorkspaceView() {
     <div className="relative w-full h-full">
       <BuildingCanvas />
       <FloatingBuildToolbar />
+      <LightingButton />
+      <LightingPanel />
       <HintBadge />
     </div>
   );
@@ -149,6 +153,23 @@ function FloatingBuildToolbar() {
         </div>
       )}
     </div>
+  );
+}
+
+function LightingButton() {
+  const panelOpen = useLightingStore((s) => s.panelOpen);
+  const setPanelOpen = useLightingStore((s) => s.setPanelOpen);
+  if (panelOpen) return null;
+  return (
+    <button
+      type="button"
+      title="Lighting & atmosphere"
+      onClick={() => setPanelOpen(true)}
+      className="absolute top-3 right-3 z-10 h-9 px-2.5 rounded-xl bg-zinc-900/90 backdrop-blur-xl border border-white/10 shadow-lg flex items-center gap-1.5 text-[12px] text-zinc-200 hover:text-white hover:bg-zinc-800/90 transition-colors"
+    >
+      <Sun size={14} className="text-amber-300" />
+      <span>Lighting</span>
+    </button>
   );
 }
 

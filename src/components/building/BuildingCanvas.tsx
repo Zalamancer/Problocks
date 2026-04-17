@@ -10,6 +10,7 @@ import {
 } from '@/store/building-store';
 import { useSceneStore, type PartType } from '@/store/scene-store';
 import { useQualityStore } from '@/store/quality-store';
+import { useLightingStore, rgbToHex, addRgb } from '@/store/lighting-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
 import { buildPiece, TILE, WALL_HEIGHT } from '@/lib/building-kit';
@@ -34,6 +35,9 @@ interface SceneRefs {
   raycaster: THREE.Raycaster;
   pointer: THREE.Vector2;
   animId: number;
+  hemisphere: THREE.HemisphereLight;
+  ambient: THREE.AmbientLight;
+  sun: THREE.DirectionalLight;
 }
 
 function makeSurfaceMaterial(params: {
@@ -179,7 +183,8 @@ export function BuildingCanvas() {
     if (!container || sceneRef.current) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x7cc8ff);
+    const initialLighting = useLightingStore.getState().config;
+    scene.background = new THREE.Color(rgbToHex(initialLighting.skyColor));
 
     const camera = new THREE.PerspectiveCamera(
       55, container.clientWidth / container.clientHeight, 0.1, 500,
@@ -195,7 +200,7 @@ export function BuildingCanvas() {
       quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 1.0; // overridden by lighting-store effect below
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
@@ -257,12 +262,12 @@ export function BuildingCanvas() {
     }
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-    // Roblox-style lighting: strong directional sun for saturated color pop,
-    // low ambient so shadows give contrast instead of flattening everything,
-    // gentle sky-bounce hemisphere to keep shadow side from going black.
-    scene.add(new THREE.HemisphereLight(0xbfe0ff, 0x7cd957, 0.55));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Roblox-style lighting — all values live-driven by useLightingStore.
+    const hemisphere = new THREE.HemisphereLight(0xffffff, 0xffffff, 0);
+    scene.add(hemisphere);
+    const ambient = new THREE.AmbientLight(0xffffff, 0);
+    scene.add(ambient);
+    const sun = new THREE.DirectionalLight(0xffffff, 0);
     sun.position.set(10, 18, 8);
     sun.castShadow = quality.shadows;
     sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
@@ -349,6 +354,7 @@ export function BuildingCanvas() {
       raycaster: new THREE.Raycaster(),
       pointer: new THREE.Vector2(),
       animId: 0,
+      hemisphere, ambient, sun,
     };
     sceneRef.current = refs;
 
@@ -402,6 +408,69 @@ export function BuildingCanvas() {
     if (!refs) return;
     refs.levelPlane.position.y = level * WALL_HEIGHT;
   }, [level]);
+
+  // --- live lighting / atmosphere updates (Roblox-style config) ---
+  useEffect(() => {
+    const applyLighting = (): void => {
+      const refs = sceneRef.current;
+      if (!refs) return;
+      const cfg = useLightingStore.getState().config;
+      const { hemisphere, ambient, sun, scene, renderer } = refs;
+
+      // Sky background
+      scene.background = new THREE.Color(rgbToHex(cfg.skyColor));
+
+      // Hemisphere light: sky = outdoorAmbient, ground = ambient.
+      // Intensity scaled by environmentDiffuseScale; Roblox ~127 → intensity ~1.0.
+      hemisphere.color.setHex(rgbToHex(cfg.outdoorAmbient));
+      hemisphere.groundColor.setHex(rgbToHex(cfg.ambient));
+      hemisphere.intensity =
+        (cfg.outdoorAmbient.r + cfg.outdoorAmbient.g + cfg.outdoorAmbient.b) / (3 * 127) *
+        cfg.environmentDiffuseScale;
+
+      // Ambient light: ColorShift_Bottom acts as a flat shadow-side tint.
+      const amb = addRgb(cfg.ambient, cfg.colorShiftBottom);
+      ambient.color.setHex(rgbToHex(amb));
+      ambient.intensity = 0.15;
+
+      // Sun: brightness (0..5) maps directly to directional intensity.
+      // ColorShift_Top tints the sunlit side; Atmosphere.Decay acts as a subtle cool-down.
+      const sunTint = {
+        r: Math.min(255, 255 + cfg.colorShiftTop.r - cfg.atmosphere.decay.r * 0.15),
+        g: Math.min(255, 255 + cfg.colorShiftTop.g - cfg.atmosphere.decay.g * 0.15),
+        b: Math.min(255, 255 + cfg.colorShiftTop.b - cfg.atmosphere.decay.b * 0.15),
+      };
+      sun.color.setHex(rgbToHex(sunTint));
+      sun.intensity = cfg.brightness;
+
+      // ClockTime → sun position. At 14h (2pm) sun is slightly west and high.
+      // Roblox: 0 = midnight, 6 = sunrise east, 12 = noon overhead, 18 = sunset west.
+      const t = (cfg.clockTime - 6) / 12; // 0..1 day arc
+      const angle = t * Math.PI;          // 0 = horizon east, π = horizon west
+      const altitude = Math.sin(angle);   // 0..1..0
+      sun.position.set(Math.cos(angle) * 25, Math.max(4, altitude * 25), 12);
+      sun.visible = altitude > 0.02;
+
+      // Exposure: Roblox ExposureCompensation is in EV stops (2^x).
+      const glare = cfg.atmosphere.glare / 10; // 0..1 small exposure boost
+      renderer.toneMappingExposure = Math.pow(2, cfg.exposureCompensation) * (1 + glare * 0.5);
+
+      // Shadow master switch
+      sun.castShadow = cfg.globalShadows && quality.shadows;
+
+      // Atmosphere → fog. Density + Haze map to FogExp2 density.
+      const fogDensity = cfg.atmosphere.density * 0.015 + cfg.atmosphere.haze * 0.008;
+      if (fogDensity > 0.001) {
+        scene.fog = new THREE.FogExp2(rgbToHex(cfg.atmosphere.color), fogDensity);
+      } else {
+        scene.fog = null;
+      }
+    };
+
+    applyLighting();
+    const unsub = useLightingStore.subscribe(applyLighting);
+    return () => unsub();
+  }, [quality]);
 
   // --- pointer handlers ---
   useEffect(() => {

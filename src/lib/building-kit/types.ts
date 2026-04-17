@@ -51,45 +51,30 @@ export interface PieceDef {
 }
 
 /**
- * Per-face brightness multipliers baked into BoxGeometry vertex colors.
- * BoxGeometry groups its 24 vertices in this face order:
+ * Per-face brightness multipliers baked into each face's material color.
+ * BoxGeometry groups its faces in this order:
  *   0: +X (right)   1: -X (left)
  *   2: +Y (top)     3: -Y (bottom)
  *   4: +Z (front)   5: -Z (back)
- * Multiplying the base color by these shades gives a "baked shadow"
- * look so same-color walls don't blend together when lit uniformly.
+ * Multiplying the base hex color by these shades — then rendering each
+ * face with its own pre-shaded material — gives a "baked shadow" look
+ * that survives any lighting config (shadows off, high ambient, tone
+ * mapping), because the shade IS the color, not a lighting response.
  */
 const FACE_SHADE: [number, number, number, number, number, number] = [
-  0.88, // +X right
-  0.72, // -X left
+  0.80, // +X right
+  0.62, // -X left
   1.0,  // +Y top (brightest)
-  0.55, // -Y bottom (darkest)
-  0.95, // +Z front
-  0.70, // -Z back (darker)
+  0.45, // -Y bottom (darkest)
+  0.90, // +Z front
+  0.58, // -Z back
 ];
-
-function applyFaceShade(THREE: typeof import('three'), geo: import('three').BufferGeometry): void {
-  const position = geo.getAttribute('position');
-  const count = position.count;
-  const colors = new Float32Array(count * 3);
-  // BoxGeometry is non-indexed groups-style: 4 verts per face * 6 faces = 24
-  for (let face = 0; face < 6; face++) {
-    const s = FACE_SHADE[face];
-    for (let v = 0; v < 4; v++) {
-      const i = (face * 4 + v) * 3;
-      colors[i    ] = s;
-      colors[i + 1] = s;
-      colors[i + 2] = s;
-    }
-  }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-}
 
 /**
  * Small helper used by every builder: returns a flat-shaded box mesh
- * with MeshStandardMaterial. Keeps material config consistent.
- * Face brightness is baked into vertex colors so each side reads as
- * a distinct shade even when neighbors use the same base color.
+ * with six MeshStandardMaterials (one per face), each pre-darkened by
+ * the face's shade factor. BoxGeometry already declares six groups so
+ * the multi-material array maps 1:1 onto faces.
  */
 export function makeBox(
   THREE: typeof import('three'),
@@ -99,16 +84,20 @@ export function makeBox(
   opts?: { roughness?: number; metalness?: number; emissive?: string; emissiveIntensity?: number },
 ): import('three').Mesh {
   const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
-  applyFaceShade(THREE, geo);
-  const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color),
-    roughness: opts?.roughness ?? 1.0,
-    metalness: opts?.metalness ?? 0,
-    emissive: new THREE.Color(opts?.emissive ?? '#000000'),
-    emissiveIntensity: opts?.emissiveIntensity ?? 0,
-    vertexColors: true,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
+  const base = new THREE.Color(color);
+  const emissive = new THREE.Color(opts?.emissive ?? '#000000');
+  const materials: import('three').MeshStandardMaterial[] = [];
+  for (let face = 0; face < 6; face++) {
+    const s = FACE_SHADE[face];
+    materials.push(new THREE.MeshStandardMaterial({
+      color: base.clone().multiplyScalar(s),
+      roughness: opts?.roughness ?? 1.0,
+      metalness: opts?.metalness ?? 0,
+      emissive: emissive.clone().multiplyScalar(s),
+      emissiveIntensity: opts?.emissiveIntensity ?? 0,
+    }));
+  }
+  const mesh = new THREE.Mesh(geo, materials);
   mesh.position.set(pos?.x ?? 0, pos?.y ?? 0, pos?.z ?? 0);
   mesh.castShadow = true;
   mesh.receiveShadow = true;

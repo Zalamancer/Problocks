@@ -118,6 +118,12 @@
   --z-index-dropdown: 999;
 }
 
+html, body {
+  /* Block browser back/forward on two-finger horizontal swipe so the
+     studio canvas can own the gesture. */
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--studio-bg);
   color: var(--node-text);
@@ -407,3 +413,45 @@ body {
 button, [role="button"], a, label[for], select {
   cursor: pointer;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*
+ * Quality-tier overrides. Driven by `html.quality-low` / `html.quality-medium`
+ * (see src/store/quality-store.ts and src/components/QualityProvider.tsx).
+ *
+ * Backdrop-filter is catastrophically expensive on Celeron N4000 / integrated
+ * Intel UHD 600. We neutralize it globally on low tier and halve it on medium,
+ * without touching a single panel's className.
+ */
+
+/* Low tier: kill every backdrop-blur-* utility. Bump translucent panels to
+ * near-opaque so they still read as panels without the blur's visual cue. */
+html.quality-low *[class*="backdrop-blur-"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.quality-low .bg-zinc-900\/60,
+html.quality-low .bg-zinc-900\/80,
+html.quality-low .bg-zinc-950\/80 {
+  background-color: rgb(24 24 27 / 0.97) !important;
+}
+html.quality-low .bg-zinc-900\/90 {
+  background-color: rgb(24 24 27 / 0.98) !important;
+}
+/* Disable CSS transitions in heavy lists/graphs on low tier. React Flow's
+ * per-node transition is the most visible offender. */
+html.quality-low .react-flow__node,
+html.quality-low .react-flow__edge {
+  transition: none !important;
+}
+
+/* Medium tier: halve the blur cost. Matches settings.backdropBlur === 'md'. */
+html.quality-medium *[class*="backdrop-blur-xl"] {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+html.quality-medium *[class*="backdrop-blur-lg"] {
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+

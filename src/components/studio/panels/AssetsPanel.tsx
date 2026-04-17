@@ -267,7 +267,7 @@ export function AssetsPanel() {
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
-                  className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors ${
+                  className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors [content-visibility:auto] [contain-intrinsic-size:0_44px] ${
                     isSelected
                       ? 'bg-accent/10 border border-accent/20'
                       : 'hover:bg-panel-surface-hover border border-transparent'
@@ -303,7 +303,7 @@ export function AssetsPanel() {
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
-                  className={`group relative flex flex-col rounded-lg overflow-hidden transition-colors ${
+                  className={`group relative flex flex-col rounded-lg overflow-hidden transition-colors [content-visibility:auto] [contain-intrinsic-size:0_160px] ${
                     isSelected
                       ? 'bg-accent/10 border border-accent/20'
                       : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent'

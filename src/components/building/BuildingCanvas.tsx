@@ -62,11 +62,17 @@ function makeSurfaceMaterial(params: {
   });
 }
 
-/** Build geometry for a scene part. Scale is applied on the mesh afterwards. */
-function geometryForPart(type: PartType): THREE.BufferGeometry {
+/**
+ * Build a scene-part geometry. Quality tier can reduce subdivision counts
+ * (low-poly primitives) to cut per-mesh triangle load on integrated GPUs.
+ */
+function geometryForPart(type: PartType, lowPoly: boolean): THREE.BufferGeometry {
+  const sphereW = lowPoly ? 12 : 24;
+  const sphereH = lowPoly ? 8 : 16;
+  const cylinderR = lowPoly ? 12 : 24;
   switch (type) {
-    case 'Sphere':   return new THREE.SphereGeometry(0.5, 24, 16);
-    case 'Cylinder': return new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
+    case 'Sphere':   return new THREE.SphereGeometry(0.5, sphereW, sphereH);
+    case 'Cylinder': return new THREE.CylinderGeometry(0.5, 0.5, 1, cylinderR);
     case 'Wedge':    return new THREE.ConeGeometry(0.7, 1, 4); // approximation for first slice
     case 'Block':
     default:         return new THREE.BoxGeometry(1, 1, 1);
@@ -732,7 +738,7 @@ export function BuildingCanvas() {
       }
 
       const mesh = new THREE.Mesh(
-        geometryForPart(p.partType),
+        geometryForPart(p.partType, quality.lowPolyPrimitives),
         makeSurfaceMaterial({
           color: p.color,
           roughness: p.roughness,

@@ -352,7 +352,7 @@ function LayerRow({ layer }: { layer: LayerItem }) {
     <div
       onClick={layer.onSelect}
       onDoubleClick={startRename}
-      className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
+      className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all [content-visibility:auto] [contain-intrinsic-size:0_56px] ${
         layer.isSelected
           ? 'bg-accent/15 shadow-sm shadow-accent/10'
           : 'hover:bg-zinc-800/60'

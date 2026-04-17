@@ -85,8 +85,7 @@ export function ChatPanel() {
   const placeWall = useBuildingStore((s) => s.placeWall);
   const eraseWall = useBuildingStore((s) => s.eraseWall);
   const clearBuilding = useBuildingStore((s) => s.clear);
-  const setFloorAsset = useBuildingStore((s) => s.setFloorAsset);
-  const setWallAsset = useBuildingStore((s) => s.setWallAsset);
+  const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -123,25 +122,25 @@ export function ChatPanel() {
           setSceneObjects([]);
           break;
         case 'placeFloor':
-          placeFloor(action.x, action.z);
+          placeFloor(action.x, 0, action.z);
           break;
         case 'eraseFloor':
-          eraseFloor(action.x, action.z);
+          eraseFloor(action.x, 0, action.z);
           break;
         case 'placeWall':
-          placeWall(action.x, action.z, action.dir);
+          placeWall(action.x, 0, action.z, action.dir);
           break;
         case 'eraseWall':
-          eraseWall(action.x, action.z, action.dir);
+          eraseWall(action.x, 0, action.z, action.dir);
           break;
         case 'clearBuilding':
           clearBuilding();
           break;
         case 'setFloorAsset':
-          setFloorAsset(action.asset);
+          setSelectedPiece('floor', action.asset);
           break;
         case 'setWallAsset':
-          setWallAsset(action.asset);
+          setSelectedPiece('wall', action.asset);
           break;
       }
     },
@@ -155,8 +154,7 @@ export function ChatPanel() {
       placeWall,
       eraseWall,
       clearBuilding,
-      setFloorAsset,
-      setWallAsset,
+      setSelectedPiece,
     ],
   );
 

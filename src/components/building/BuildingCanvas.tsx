@@ -3,17 +3,18 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { useBuildingStore, type EdgeDir } from '@/store/building-store';
-import { useSceneStore, type ScenePart, type PartType } from '@/store/scene-store';
+import {
+  useBuildingStore,
+  type EdgeDir,
+  type Facing,
+} from '@/store/building-store';
+import { useSceneStore, type PartType } from '@/store/scene-store';
 import { useQualityStore } from '@/store/quality-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
+import { buildPiece, TILE, WALL_HEIGHT } from '@/lib/building-kit';
 
-const TILE = 2;
-const WALL_HEIGHT = 3;
-const WALL_THICK = 0.15;
-const FLOOR_THICK = 0.1;
-const PART_DEFAULT_SIZE = 2; // 2m box, matches tile size
+const PART_DEFAULT_SIZE = 2;
 
 interface SceneRefs {
   scene: THREE.Scene;
@@ -21,10 +22,13 @@ interface SceneRefs {
   renderer: THREE.WebGLRenderer;
   controls: OrbitControls;
   ground: THREE.Mesh;
-  ghost: THREE.Mesh;
+  levelPlane: THREE.Mesh;
+  ghost: THREE.Group;
   floorGroup: THREE.Group;
   wallGroup: THREE.Group;
-  /** Parent of all ScenePart meshes — child.userData.id links back to the store. */
+  roofGroup: THREE.Group;
+  cornerGroup: THREE.Group;
+  stairsGroup: THREE.Group;
   partGroup: THREE.Group;
   gizmo: UnifiedGizmo3D;
   raycaster: THREE.Raycaster;
@@ -32,12 +36,6 @@ interface SceneRefs {
   animId: number;
 }
 
-/**
- * Build a surface material. Drops from PBR (MeshStandardMaterial) to
- * MeshLambertMaterial when the quality tier disables pbrMaterials —
- * Lambert is ~3× cheaper on integrated GPUs and visually similar for
- * opaque non-metal surfaces.
- */
 function makeSurfaceMaterial(params: {
   color: string | number | THREE.Color;
   roughness: number;
@@ -50,8 +48,7 @@ function makeSurfaceMaterial(params: {
   if (pbr) {
     return new THREE.MeshStandardMaterial({
       color: new THREE.Color(color as THREE.ColorRepresentation),
-      roughness,
-      metalness,
+      roughness, metalness,
       emissive: new THREE.Color(emissive as THREE.ColorRepresentation),
       emissiveIntensity,
     });
@@ -63,10 +60,6 @@ function makeSurfaceMaterial(params: {
   });
 }
 
-/**
- * Build a scene-part geometry. Quality tier can reduce subdivision counts
- * (low-poly primitives) to cut per-mesh triangle load on integrated GPUs.
- */
 function geometryForPart(type: PartType, lowPoly: boolean): THREE.BufferGeometry {
   const sphereW = lowPoly ? 12 : 24;
   const sphereH = lowPoly ? 8 : 16;
@@ -74,7 +67,7 @@ function geometryForPart(type: PartType, lowPoly: boolean): THREE.BufferGeometry
   switch (type) {
     case 'Sphere':   return new THREE.SphereGeometry(0.5, sphereW, sphereH);
     case 'Cylinder': return new THREE.CylinderGeometry(0.5, 0.5, 1, cylinderR);
-    case 'Wedge':    return new THREE.ConeGeometry(0.7, 1, 4); // approximation for first slice
+    case 'Wedge':    return new THREE.ConeGeometry(0.7, 1, 4);
     case 'Block':
     default:         return new THREE.BoxGeometry(1, 1, 1);
   }
@@ -87,26 +80,71 @@ function edgeFromWorld(wx: number, wz: number): { x: number; z: number; dir: Edg
   const dx = wx - tx * TILE;
   const dz = wz - tz * TILE;
   if (Math.abs(dz) > Math.abs(dx)) {
-    // horizontal edge (runs along X axis)
     if (dz < 0) return { x: tx, z: tz, dir: 'N' };
     return { x: tx, z: tz + 1, dir: 'N' };
   }
-  // vertical edge (runs along Z axis)
   if (dx > 0) return { x: tx, z: tz, dir: 'E' };
   return { x: tx - 1, z: tz, dir: 'E' };
 }
 
-function wallPlacement(x: number, z: number, dir: EdgeDir) {
-  if (dir === 'N') {
-    return {
-      pos: new THREE.Vector3(x * TILE, WALL_HEIGHT / 2, z * TILE - TILE / 2),
-      size: new THREE.Vector3(TILE, WALL_HEIGHT, WALL_THICK),
-    };
-  }
+/** Nearest tile vertex (corner) — half-tile snap. */
+function cornerFromWorld(wx: number, wz: number): { x: number; z: number } {
   return {
-    pos: new THREE.Vector3(x * TILE + TILE / 2, WALL_HEIGHT / 2, z * TILE),
-    size: new THREE.Vector3(WALL_THICK, WALL_HEIGHT, TILE),
+    x: Math.round(wx / TILE + 0.5) - 1,
+    z: Math.round(wz / TILE + 0.5) - 1,
   };
+}
+
+function tileFromWorld(wx: number, wz: number): { x: number; z: number } {
+  return { x: Math.round(wx / TILE), z: Math.round(wz / TILE) };
+}
+
+function wallWorldPlacement(x: number, y: number, z: number, dir: EdgeDir) {
+  const baseY = y * WALL_HEIGHT;
+  if (dir === 'N') {
+    return { x: x * TILE, y: baseY, z: z * TILE - TILE / 2, rotY: 0 };
+  }
+  return { x: x * TILE + TILE / 2, y: baseY, z: z * TILE, rotY: Math.PI / 2 };
+}
+
+function facingRotY(f: Facing): number {
+  switch (f) {
+    case 'N': return 0;
+    case 'E': return -Math.PI / 2;
+    case 'S': return Math.PI;
+    case 'W': return Math.PI / 2;
+  }
+}
+
+/** Replace every material in a Group with a translucent tinted ghost material. */
+function ghostifyGroup(g: THREE.Group, tint = 0x4ade80, opacity = 0.45): void {
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: tint, transparent: true, opacity, depthWrite: false,
+      });
+      m.material = mat;
+      m.castShadow = false;
+      m.receiveShadow = false;
+    }
+  });
+}
+
+/** Dispose every geometry+material in a subtree, then remove all children. */
+function disposeAndClear(group: THREE.Group) {
+  while (group.children.length) {
+    const c = group.children[0];
+    c.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+      if (m.material) {
+        if (Array.isArray(m.material)) m.material.forEach((mm) => mm.dispose());
+        else (m.material as THREE.Material).dispose();
+      }
+    });
+    group.remove(c);
+  }
 }
 
 export function BuildingCanvas() {
@@ -115,17 +153,19 @@ export function BuildingCanvas() {
   const playRef = useRef<PlayController | null>(null);
 
   const tool = useBuildingStore((s) => s.tool);
+  const level = useBuildingStore((s) => s.level);
+  const selectedPiece = useBuildingStore((s) => s.selectedPiece);
   const floors = useBuildingStore((s) => s.floors);
   const walls = useBuildingStore((s) => s.walls);
+  const roofs = useBuildingStore((s) => s.roofs);
+  const cornersRec = useBuildingStore((s) => s.corners);
+  const stairsRec = useBuildingStore((s) => s.stairs);
   const buildingSelection = useBuildingStore((s) => s.selection);
   const parts = useSceneStore((s) => s.sceneObjects);
   const selectedPartId = useSceneStore((s) => s.selectedPart?.id ?? null);
   const quality = useQualityStore((s) => s.settings);
   const isPlaying = useSceneStore((s) => s.isPlaying);
 
-  // Start/stop the play-mode character controller whenever the user toggles
-  // the Play button. Effect runs after sceneRef/playRef are populated by the
-  // init effect below, so the first toggle post-mount is safe.
   useEffect(() => {
     const ctrl = playRef.current;
     if (!ctrl) return;
@@ -133,20 +173,16 @@ export function BuildingCanvas() {
     else ctrl.stop();
   }, [isPlaying]);
 
-  // --- init scene (re-runs when the quality tier changes so we can rebuild
-  //     the renderer with a different antialias/pixelRatio/shadow config) ---
+  // --- init scene ---
   useEffect(() => {
     const container = containerRef.current;
     if (!container || sceneRef.current) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x9ed7ff); // Roblox-style bright sky blue
+    scene.background = new THREE.Color(0x9ed7ff);
 
     const camera = new THREE.PerspectiveCamera(
-      55,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      500,
+      55, container.clientWidth / container.clientHeight, 0.1, 500,
     );
     camera.position.set(18, 22, 24);
     camera.lookAt(0, 0, 0);
@@ -157,14 +193,9 @@ export function BuildingCanvas() {
     renderer.shadowMap.enabled = quality.shadows;
     renderer.shadowMap.type =
       quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
-    // Roblox-style bright, saturated output: sRGB display space + slight
-    // over-exposure with no filmic curve so colors stay punchy and don't
-    // get crushed into darks.
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.toneMappingExposure = 1.25;
-    // Block browser gestures (back/forward swipe, pinch-zoom the page) so
-    // the canvas owns every wheel/trackpad event.
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
@@ -172,24 +203,15 @@ export function BuildingCanvas() {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
-    // Left button reserved for placement. Right = rotate, middle = pan.
     controls.mouseButtons = {
       LEFT: -1 as unknown as THREE.MOUSE,
       MIDDLE: THREE.MOUSE.PAN,
       RIGHT: THREE.MOUSE.ROTATE,
     };
-    // We override wheel behavior below so OrbitControls' own dolly is
-    // disabled — otherwise every gesture would fight with zoom.
     controls.enableZoom = false;
     controls.target.set(0, 0, 0);
     controls.update();
 
-    // --- Trackpad gestures on the canvas ---
-    // Two-finger swipe                  → orbit
-    // Click-hold + two-finger swipe     → pan (any mouse button held)
-    // Pinch (ctrl/meta + wheel)         → zoom
-    // Also works with a mouse wheel: wheel orbits, click+wheel pans,
-    // ctrl-wheel zooms — matches the same mental model.
     const ORBIT_SPEED = 0.005;
     const PAN_SPEED = 0.0015;
     const ZOOM_SPEED = 0.01;
@@ -206,38 +228,25 @@ export function BuildingCanvas() {
       e.preventDefault();
       const dx = e.deltaX;
       const dy = e.deltaY;
-
-      // Pinch-to-zoom (trackpad synthesizes ctrlKey) or explicit ctrl/meta + wheel.
       if (e.ctrlKey || e.metaKey) {
         tmpOffset.copy(camera.position).sub(controls.target);
         const scale = Math.exp(dy * ZOOM_SPEED);
         tmpOffset.multiplyScalar(scale);
-        // Clamp so you can't zoom inside-out.
         const len = tmpOffset.length();
-        if (len > 0.5 && len < 400) {
-          camera.position.copy(controls.target).add(tmpOffset);
-        }
+        if (len > 0.5 && len < 400) camera.position.copy(controls.target).add(tmpOffset);
         return;
       }
-
-      // Mouse/trackpad click held during swipe → pan. Scale pan by distance so
-      // the world moves a consistent amount under the cursor regardless of
-      // zoom level. `e.buttons` is a bitmask of currently-held buttons, so
-      // any held button (including a trackpad click) triggers panning.
       if (e.buttons !== 0) {
-        tmpRight.setFromMatrixColumn(camera.matrix, 0);   // camera-local X
-        tmpUp.setFromMatrixColumn(camera.matrix, 1);      // camera-local Y
+        tmpRight.setFromMatrixColumn(camera.matrix, 0);
+        tmpUp.setFromMatrixColumn(camera.matrix, 1);
         const distance = camera.position.distanceTo(controls.target);
-        tmpMove
-          .set(0, 0, 0)
+        tmpMove.set(0, 0, 0)
           .addScaledVector(tmpRight,  dx * PAN_SPEED * distance)
           .addScaledVector(tmpUp,    -dy * PAN_SPEED * distance);
         camera.position.add(tmpMove);
         controls.target.add(tmpMove);
         return;
       }
-
-      // Default: orbit around the target.
       tmpOffset.copy(camera.position).sub(controls.target);
       tmpSpherical.setFromVector3(tmpOffset);
       tmpSpherical.theta += dx * ORBIT_SPEED;
@@ -246,12 +255,8 @@ export function BuildingCanvas() {
       tmpOffset.setFromSpherical(tmpSpherical);
       camera.position.copy(controls.target).add(tmpOffset);
     }
-
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-    // Roblox-style lighting: very bright hemisphere fill so shadows stay
-    // milky rather than black, plus a softer warm sun so the scene reads
-    // as playful/unreal. Shadows intentionally de-emphasized.
     scene.add(new THREE.HemisphereLight(0xffffff, 0xb9e08a, 1.4));
     scene.add(new THREE.AmbientLight(0xffffff, 0.35));
     const sun = new THREE.DirectionalLight(0xfff2d0, 1.1);
@@ -269,8 +274,6 @@ export function BuildingCanvas() {
     const { gridExtent } = useBuildingStore.getState();
     const gridSpan = gridExtent * 2 * TILE;
 
-    // Default baseplate — doubles as the raycast surface. Roblox-style
-    // bright green grass so the workspace reads immediately as a world.
     const baseSize = 128;
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(baseSize, baseSize).rotateX(-Math.PI / 2),
@@ -281,7 +284,16 @@ export function BuildingCanvas() {
     ground.name = 'baseplate';
     scene.add(ground);
 
-    // Build-area grid sits slightly above the baseplate to avoid z-fight.
+    // Invisible raycast plane that floats at the current level height so
+    // the user can place pieces on upper floors even in empty air.
+    const levelPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(baseSize, baseSize).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    levelPlane.position.y = 0;
+    levelPlane.name = 'level-plane';
+    scene.add(levelPlane);
+
     const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x5a9e2d, 0xbde676);
     grid.position.y = 0.01;
     (grid.material as THREE.Material).depthWrite = false;
@@ -289,56 +301,37 @@ export function BuildingCanvas() {
     (grid.material as THREE.Material).opacity = 0.6;
     scene.add(grid);
 
-    const floorGroup = new THREE.Group();
-    floorGroup.name = 'floors';
-    scene.add(floorGroup);
+    const floorGroup  = new THREE.Group(); floorGroup.name  = 'floors';  scene.add(floorGroup);
+    const wallGroup   = new THREE.Group(); wallGroup.name   = 'walls';   scene.add(wallGroup);
+    const roofGroup   = new THREE.Group(); roofGroup.name   = 'roofs';   scene.add(roofGroup);
+    const cornerGroup = new THREE.Group(); cornerGroup.name = 'corners'; scene.add(cornerGroup);
+    const stairsGroup = new THREE.Group(); stairsGroup.name = 'stairs';  scene.add(stairsGroup);
+    const partGroup   = new THREE.Group(); partGroup.name   = 'parts';   scene.add(partGroup);
 
-    const wallGroup = new THREE.Group();
-    wallGroup.name = 'walls';
-    scene.add(wallGroup);
-
-    const partGroup = new THREE.Group();
-    partGroup.name = 'parts';
-    scene.add(partGroup);
-
-    const ghost = new THREE.Mesh(
-      new THREE.BoxGeometry(TILE, FLOOR_THICK, TILE),
-      new THREE.MeshBasicMaterial({
-        color: 0x4ade80,
-        transparent: true,
-        opacity: 0.45,
-        depthWrite: false,
-      }),
-    );
+    const ghost = new THREE.Group();
     ghost.visible = false;
     scene.add(ghost);
 
-    // Selection gizmo — attach/detach handled by the selection effect below.
-    // onCommit reads the live mesh transform and writes it back to the store.
     let gizmo!: UnifiedGizmo3D;
     gizmo = new UnifiedGizmo3D({
-      camera,
-      renderer,
-      controls,
+      camera, renderer, controls,
       onCommit: () => {
         const target = gizmo.getTarget();
         if (!target) return;
         const xform = {
           position: { x: target.position.x, y: target.position.y, z: target.position.z },
           rotation: { x: target.rotation.x, y: target.rotation.y, z: target.rotation.z },
-          scale: { x: target.scale.x, y: target.scale.y, z: target.scale.z },
+          scale:    { x: target.scale.x,    y: target.scale.y,    z: target.scale.z    },
         };
-        const kind = target.userData.kind as 'part' | 'floor' | 'wall' | undefined;
-        if (kind === 'floor') {
-          const key = target.userData.key as string;
-          useBuildingStore.getState().updateFloorTransform(key, xform);
-          return;
-        }
-        if (kind === 'wall') {
-          const key = target.userData.key as string;
-          useBuildingStore.getState().updateWallTransform(key, xform);
-          return;
-        }
+        const kind = target.userData.kind as
+          | 'part' | 'floor' | 'wall' | 'roof' | 'corner' | 'stairs' | undefined;
+        const key = target.userData.key as string | undefined;
+        const store = useBuildingStore.getState();
+        if (kind === 'floor'  && key) return void store.updateFloorTransform(key, xform);
+        if (kind === 'wall'   && key) return void store.updateWallTransform(key, xform);
+        if (kind === 'roof'   && key) return void store.updateRoofTransform(key, xform);
+        if (kind === 'corner' && key) return void store.updateCornerTransform(key, xform);
+        if (kind === 'stairs' && key) return void store.updateStairsTransform(key, xform);
         const id = target.userData.id as string | undefined;
         if (!id) return;
         useSceneStore.getState().updateSceneObject(id, xform);
@@ -347,15 +340,8 @@ export function BuildingCanvas() {
     scene.add(gizmo.group);
 
     const refs: SceneRefs = {
-      scene,
-      camera,
-      renderer,
-      controls,
-      ground,
-      ghost,
-      floorGroup,
-      wallGroup,
-      partGroup,
+      scene, camera, renderer, controls, ground, levelPlane, ghost,
+      floorGroup, wallGroup, roofGroup, cornerGroup, stairsGroup, partGroup,
       gizmo,
       raycaster: new THREE.Raycaster(),
       pointer: new THREE.Vector2(),
@@ -366,7 +352,6 @@ export function BuildingCanvas() {
     playRef.current = createPlayController({
       scene, camera, renderer, controls, partGroup, floorGroup, wallGroup,
     });
-    // If Play was toggled on before the canvas mounted, pick it up immediately.
     if (useSceneStore.getState().isPlaying) playRef.current.start();
 
     let lastTime = performance.now();
@@ -396,10 +381,7 @@ export function BuildingCanvas() {
     return () => {
       ro.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
-      if (playRef.current) {
-        playRef.current.stop();
-        playRef.current = null;
-      }
+      if (playRef.current) { playRef.current.stop(); playRef.current = null; }
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);
         sceneRef.current.gizmo.dispose();
@@ -409,11 +391,16 @@ export function BuildingCanvas() {
         sceneRef.current = null;
       }
     };
-    // Re-init when the quality tier flips so the renderer picks up the new
-    // antialias/pixelRatio/shadowType values (those can't be toggled live).
   }, [quality]);
 
-  // --- pointer handlers (rebind when tool changes) ---
+  // Keep the raycast level-plane at the correct Y for the active level.
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    refs.levelPlane.position.y = level * WALL_HEIGHT;
+  }, [level]);
+
+  // --- pointer handlers ---
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
@@ -428,134 +415,144 @@ export function BuildingCanvas() {
 
     function worldFromEvent(e: MouseEvent): { x: number; z: number } | null {
       setPointerFromEvent(e);
-      const hits = refs!.raycaster.intersectObject(refs!.ground);
+      const targets = level > 0 ? [refs!.levelPlane, refs!.ground] : [refs!.ground];
+      const hits = refs!.raycaster.intersectObjects(targets);
       if (!hits.length) return null;
       return { x: hits[0].point.x, z: hits[0].point.z };
     }
 
-    /** Returns the top-level part mesh under the cursor (with userData.id), if any. */
-    function partHitFromEvent(e: MouseEvent): THREE.Mesh | null {
+    function partHitFromEvent(e: MouseEvent): THREE.Object3D | null {
       setPointerFromEvent(e);
       const hits = refs!.raycaster.intersectObjects(refs!.partGroup.children, true);
       if (!hits.length) return null;
-      // Walk up to the group/mesh that carries userData.id (GLB hits are deep).
       let obj: THREE.Object3D | null = hits[0].object;
       while (obj && !obj.userData.id) obj = obj.parent;
-      return (obj as THREE.Mesh) ?? null;
+      return obj ?? null;
     }
 
-    /** Returns a floor or wall mesh (top-level group child) under the cursor. */
-    function buildingHitFromEvent(e: MouseEvent): THREE.Mesh | null {
+    function buildingHitFromEvent(e: MouseEvent): THREE.Object3D | null {
       setPointerFromEvent(e);
       const hits = refs!.raycaster.intersectObjects(
-        [...refs!.floorGroup.children, ...refs!.wallGroup.children],
-        false,
+        [
+          ...refs!.floorGroup.children,
+          ...refs!.wallGroup.children,
+          ...refs!.roofGroup.children,
+          ...refs!.cornerGroup.children,
+          ...refs!.stairsGroup.children,
+        ],
+        true,
       );
-      return hits.length ? (hits[0].object as THREE.Mesh) : null;
+      if (!hits.length) return null;
+      let obj: THREE.Object3D | null = hits[0].object;
+      while (obj && !obj.userData.key) obj = obj.parent;
+      return obj;
     }
 
     function updateGhost(world: { x: number; z: number }) {
       const ghost = refs!.ghost;
-      const mat = ghost.material as THREE.MeshBasicMaterial;
-
-      if (tool === 'select') {
-        ghost.visible = false;
-        return;
-      }
-
+      disposeAndClear(ghost);
+      if (tool === 'select') { ghost.visible = false; return; }
       ghost.visible = true;
-      ghost.geometry.dispose();
+
+      const store = useBuildingStore.getState();
 
       if (tool === 'part') {
-        ghost.geometry = new THREE.BoxGeometry(PART_DEFAULT_SIZE, PART_DEFAULT_SIZE, PART_DEFAULT_SIZE);
-        ghost.position.set(world.x, PART_DEFAULT_SIZE / 2, world.z);
-        mat.color.setHex(0x4ade80);
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(PART_DEFAULT_SIZE, PART_DEFAULT_SIZE, PART_DEFAULT_SIZE),
+          new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.4, depthWrite: false }),
+        );
+        box.position.set(world.x, level * WALL_HEIGHT + PART_DEFAULT_SIZE / 2, world.z);
+        ghost.add(box);
         return;
       }
 
-      if (tool === 'wall') {
-        const e = edgeFromWorld(world.x, world.z);
-        const { pos, size } = wallPlacement(e.x, e.z, e.dir);
-        ghost.geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-        ghost.position.copy(pos);
-        mat.color.setHex(0x4ade80);
-        return;
-      }
-
-      const tx = Math.round(world.x / TILE);
-      const tz = Math.round(world.z / TILE);
       if (tool === 'eraser') {
-        // preview whichever element is closer — edge if near edge, tile otherwise
-        const dx = world.x - tx * TILE;
-        const dz = world.z - tz * TILE;
-        const nearEdge = Math.max(Math.abs(dx), Math.abs(dz)) > TILE * 0.35;
-        if (nearEdge) {
-          const e = edgeFromWorld(world.x, world.z);
-          const { pos, size } = wallPlacement(e.x, e.z, e.dir);
-          ghost.geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-          ghost.position.copy(pos);
-        } else {
-          ghost.geometry = new THREE.BoxGeometry(TILE * 0.98, FLOOR_THICK, TILE * 0.98);
-          ghost.position.set(tx * TILE, FLOOR_THICK / 2, tz * TILE);
-        }
-        mat.color.setHex(0xef4444);
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(TILE * 0.98, 0.25, TILE * 0.98),
+          new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.4, depthWrite: false }),
+        );
+        const t = tileFromWorld(world.x, world.z);
+        box.position.set(t.x * TILE, level * WALL_HEIGHT + 0.1, t.z * TILE);
+        ghost.add(box);
+        return;
+      }
+
+      if (tool === 'wall' || tool === 'wall-window' || tool === 'wall-door') {
+        const edge = edgeFromWorld(world.x, world.z);
+        const g = buildPiece(store.selectedPiece[tool], THREE);
+        const wp = wallWorldPlacement(edge.x, level, edge.z, edge.dir);
+        g.position.set(wp.x, wp.y, wp.z);
+        g.rotation.y = wp.rotY;
+        ghostifyGroup(g);
+        ghost.add(g);
+        return;
+      }
+
+      if (tool === 'roof') {
+        const t = tileFromWorld(world.x, world.z);
+        const g = buildPiece(store.selectedPiece.roof, THREE);
+        g.position.set(t.x * TILE, level * WALL_HEIGHT + WALL_HEIGHT, t.z * TILE);
+        ghostifyGroup(g);
+        ghost.add(g);
+        return;
+      }
+
+      if (tool === 'roof-corner' || tool === 'corner') {
+        const c = cornerFromWorld(world.x, world.z);
+        const g = buildPiece(store.selectedPiece[tool], THREE);
+        const worldX = c.x * TILE + TILE / 2;
+        const worldZ = c.z * TILE + TILE / 2;
+        const baseY = tool === 'roof-corner' ? level * WALL_HEIGHT + WALL_HEIGHT : level * WALL_HEIGHT;
+        g.position.set(worldX, baseY, worldZ);
+        ghostifyGroup(g);
+        ghost.add(g);
+        return;
+      }
+
+      if (tool === 'stairs') {
+        const t = tileFromWorld(world.x, world.z);
+        const g = buildPiece(store.selectedPiece.stairs, THREE);
+        g.position.set(t.x * TILE, level * WALL_HEIGHT, t.z * TILE);
+        g.rotation.y = facingRotY('N');
+        ghostifyGroup(g);
+        ghost.add(g);
         return;
       }
 
       // floor
-      ghost.geometry = new THREE.BoxGeometry(TILE * 0.98, FLOOR_THICK, TILE * 0.98);
-      ghost.position.set(tx * TILE, FLOOR_THICK / 2, tz * TILE);
-      mat.color.setHex(0x4ade80);
+      const t = tileFromWorld(world.x, world.z);
+      const g = buildPiece(store.selectedPiece.floor, THREE);
+      g.position.set(t.x * TILE, level * WALL_HEIGHT, t.z * TILE);
+      ghostifyGroup(g);
+      ghost.add(g);
     }
 
     function onMove(e: MouseEvent) {
-      // No hover/ghost logic while play-mode is running — the user is
-      // controlling the character and orbiting the camera, not placing parts.
-      if (useSceneStore.getState().isPlaying) {
-        refs!.ghost.visible = false;
-        return;
-      }
-      // Let the gizmo update its hover highlight first. If it's actively
-      // dragging we still want the orbit/ghost code below to stay quiet —
-      // it already does because OrbitControls is disabled during drag.
+      if (useSceneStore.getState().isPlaying) { refs!.ghost.visible = false; return; }
       setPointerFromEvent(e);
       refs!.gizmo.updateHover(refs!.pointer);
-      if (refs!.gizmo.isDragging()) {
-        refs!.ghost.visible = false;
-        return;
-      }
-
+      if (refs!.gizmo.isDragging()) { refs!.ghost.visible = false; return; }
       const world = worldFromEvent(e);
-      if (!world) {
-        refs!.ghost.visible = false;
-        return;
-      }
+      if (!world) { refs!.ghost.visible = false; return; }
       updateGhost(world);
     }
 
     function onDown(e: MouseEvent) {
       if (e.button !== 0) return;
-      // Block every editor click while play-mode is running so students
-      // don't place parts on the ground when they meant to move around.
       if (useSceneStore.getState().isPlaying) return;
 
-      // 0) Gizmo handle takes priority — if the user clicked a translate /
-      //    rotate / scale handle, start that drag and stop here.
       setPointerFromEvent(e);
       if (refs!.gizmo.tryPointerDown(refs!.pointer)) return;
 
-      // 1) Click on an existing part always selects it — regardless of tool.
-      //    (The only exceptions are 'eraser' which removes it, and 'part'
-      //    which should still spawn a new one nearby.)
       const hitPart = partHitFromEvent(e);
       const sceneStore = useSceneStore.getState();
       const bStore = useBuildingStore.getState();
+
       if (hitPart && tool !== 'part') {
         const id = hitPart.userData.id as string | undefined;
         if (id) {
-          if (tool === 'eraser') {
-            sceneStore.removePart(id);
-          } else {
+          if (tool === 'eraser') sceneStore.removePart(id);
+          else {
             const part = sceneStore.sceneObjects.find((p) => p.id === id) ?? null;
             sceneStore.setSelectedPart(part);
             bStore.setSelection(null);
@@ -564,13 +561,31 @@ export function BuildingCanvas() {
         }
       }
 
-      // 1b) Select tool: click a floor/wall mesh → select for gizmo.
-      if (tool === 'select') {
-        const hitBuilding = buildingHitFromEvent(e);
-        if (hitBuilding) {
-          const kind = hitBuilding.userData.kind as 'floor' | 'wall' | undefined;
-          const key = hitBuilding.userData.key as string | undefined;
+      if (tool === 'select' || tool === 'eraser') {
+        const hit = buildingHitFromEvent(e);
+        if (hit) {
+          const kind = hit.userData.kind as 'floor'|'wall'|'roof'|'corner'|'stairs'|undefined;
+          const key = hit.userData.key as string | undefined;
           if (kind && key) {
+            if (tool === 'eraser') {
+              if (kind === 'floor') {
+                const [xs, ys, zs] = key.split(',');
+                bStore.eraseFloor(+xs, +ys, +zs);
+              } else if (kind === 'wall') {
+                const [xs, ys, zs, dir] = key.split(',') as [string,string,string,EdgeDir];
+                bStore.eraseWall(+xs, +ys, +zs, dir);
+              } else if (kind === 'roof') {
+                const [xs, ys, zs] = key.split(',');
+                bStore.eraseRoof(+xs, +ys, +zs);
+              } else if (kind === 'corner') {
+                const [xs, ys, zs] = key.split(',');
+                bStore.eraseCorner(+xs, +ys, +zs);
+              } else if (kind === 'stairs') {
+                const [xs, ys, zs, f] = key.split(',') as [string,string,string,Facing];
+                bStore.eraseStairs(+xs, +ys, +zs, f);
+              }
+              return;
+            }
             bStore.setSelection({ kind, key });
             sceneStore.setSelectedPart(null);
             return;
@@ -580,14 +595,12 @@ export function BuildingCanvas() {
 
       const world = worldFromEvent(e);
       if (!world) {
-        // Clicking empty sky → deselect.
         if (tool === 'select') {
           sceneStore.setSelectedPart(null);
           bStore.setSelection(null);
         }
         return;
       }
-      const store = bStore;
 
       if (tool === 'select') {
         sceneStore.setSelectedPart(null);
@@ -598,7 +611,7 @@ export function BuildingCanvas() {
       if (tool === 'part') {
         sceneStore.addPart({
           partType: 'Block',
-          position: { x: world.x, y: PART_DEFAULT_SIZE / 2, z: world.z },
+          position: { x: world.x, y: level * WALL_HEIGHT + PART_DEFAULT_SIZE / 2, z: world.z },
           scale: { x: PART_DEFAULT_SIZE, y: PART_DEFAULT_SIZE, z: PART_DEFAULT_SIZE },
           color: '#a1a1aa',
         });
@@ -606,34 +619,37 @@ export function BuildingCanvas() {
       }
 
       if (tool === 'floor') {
-        const tx = Math.round(world.x / TILE);
-        const tz = Math.round(world.z / TILE);
-        store.placeFloor(tx, tz);
+        const t = tileFromWorld(world.x, world.z);
+        bStore.placeFloor(t.x, level, t.z);
         return;
       }
-      if (tool === 'wall') {
+
+      if (tool === 'wall' || tool === 'wall-window' || tool === 'wall-door') {
         const edge = edgeFromWorld(world.x, world.z);
-        store.placeWall(edge.x, edge.z, edge.dir);
+        bStore.placeWall(edge.x, level, edge.z, edge.dir);
         return;
       }
-      if (tool === 'eraser') {
-        const tx = Math.round(world.x / TILE);
-        const tz = Math.round(world.z / TILE);
-        const dx = world.x - tx * TILE;
-        const dz = world.z - tz * TILE;
-        const nearEdge = Math.max(Math.abs(dx), Math.abs(dz)) > TILE * 0.35;
-        if (nearEdge) {
-          const edge = edgeFromWorld(world.x, world.z);
-          store.eraseWall(edge.x, edge.z, edge.dir);
-        } else {
-          store.eraseFloor(tx, tz);
-        }
+
+      if (tool === 'roof') {
+        const t = tileFromWorld(world.x, world.z);
+        bStore.placeRoof(t.x, level, t.z);
+        return;
+      }
+
+      if (tool === 'corner' || tool === 'roof-corner') {
+        const c = cornerFromWorld(world.x, world.z);
+        bStore.placeCorner(c.x, level, c.z);
+        return;
+      }
+
+      if (tool === 'stairs') {
+        const t = tileFromWorld(world.x, world.z);
+        bStore.placeStairs(t.x, level, t.z, 'N');
+        return;
       }
     }
 
-    function onLeave() {
-      refs!.ghost.visible = false;
-    }
+    function onLeave() { refs!.ghost.visible = false; }
 
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('mousedown', onDown);
@@ -643,112 +659,128 @@ export function BuildingCanvas() {
       canvas.removeEventListener('mousedown', onDown);
       canvas.removeEventListener('mouseleave', onLeave);
     };
-  }, [tool]);
+  }, [tool, level, selectedPiece]);
 
-  // --- rebuild floor meshes when data changes ---
+  // ------------- data-driven rebuilds -------------
+
+  // Floors
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
-    const group = refs.floorGroup;
-    while (group.children.length) {
-      const c = group.children[0] as THREE.Mesh;
-      c.geometry.dispose();
-      (c.material as THREE.Material).dispose();
-      group.remove(c);
-    }
+    disposeAndClear(refs.floorGroup);
     for (const key of Object.keys(floors)) {
       const cell = floors[key];
-      const [xs, zs] = key.split(',');
-      const x = parseInt(xs, 10);
-      const z = parseInt(zs, 10);
-      const material = makeSurfaceMaterial({
-        color: cell.color ?? '#f0a93a',
-        roughness: cell.roughness ?? 0.35,
-        metalness: cell.metalness ?? 0,
-        emissive: cell.emissiveColor ?? '#000000',
-        emissiveIntensity: cell.emissiveIntensity ?? 0,
-        pbr: quality.pbrMaterials,
-      });
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(TILE, FLOOR_THICK, TILE),
-        material,
-      );
-      const p = cell.position ?? { x: x * TILE, y: FLOOR_THICK / 2, z: z * TILE };
-      mesh.position.set(p.x, p.y, p.z);
-      if (cell.rotation) mesh.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
-      if (cell.scale) mesh.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
-      mesh.receiveShadow = quality.shadows;
-      mesh.castShadow = quality.shadows && (cell.castShadow ?? true);
-      mesh.visible = cell.visible ?? true;
-      mesh.userData.kind = 'floor';
-      mesh.userData.key = key;
-      group.add(mesh);
+      const [xs, ys, zs] = key.split(',');
+      const x = +xs, y = +ys, z = +zs;
+      const g = buildPiece(cell.asset, THREE);
+      const p = cell.position ?? { x: x * TILE, y: y * WALL_HEIGHT, z: z * TILE };
+      g.position.set(p.x, p.y, p.z);
+      if (cell.rotation) g.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
+      if (cell.scale) g.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
+      g.visible = cell.visible ?? true;
+      g.userData.kind = 'floor';
+      g.userData.key = key;
+      refs.floorGroup.add(g);
     }
   }, [floors, quality]);
 
-  // --- rebuild wall meshes when data changes ---
+  // Walls
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
-    const group = refs.wallGroup;
-    while (group.children.length) {
-      const c = group.children[0] as THREE.Mesh;
-      c.geometry.dispose();
-      (c.material as THREE.Material).dispose();
-      group.remove(c);
-    }
+    disposeAndClear(refs.wallGroup);
     for (const key of Object.keys(walls)) {
       const edge = walls[key];
-      const [xs, zs, dir] = key.split(',') as [string, string, EdgeDir];
-      const x = parseInt(xs, 10);
-      const z = parseInt(zs, 10);
-      const { pos, size } = wallPlacement(x, z, dir);
-      const material = makeSurfaceMaterial({
-        color: edge.color ?? '#ed2b2b',
-        roughness: edge.roughness ?? 0.3,
-        metalness: edge.metalness ?? 0,
-        emissive: edge.emissiveColor ?? '#000000',
-        emissiveIntensity: edge.emissiveIntensity ?? 0,
-        pbr: quality.pbrMaterials,
-      });
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(size.x, size.y, size.z),
-        material,
-      );
-      if (edge.position) mesh.position.set(edge.position.x, edge.position.y, edge.position.z);
-      else mesh.position.copy(pos);
-      if (edge.rotation) mesh.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
-      if (edge.scale) mesh.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
-      mesh.castShadow = quality.shadows && (edge.castShadow ?? true);
-      mesh.visible = edge.visible ?? true;
-      mesh.receiveShadow = quality.shadows;
-      mesh.userData.kind = 'wall';
-      mesh.userData.key = key;
-      group.add(mesh);
+      const [xs, ys, zs, dir] = key.split(',') as [string, string, string, EdgeDir];
+      const x = +xs, y = +ys, z = +zs;
+      const g = buildPiece(edge.asset, THREE);
+      const wp = wallWorldPlacement(x, y, z, dir);
+      if (edge.position) g.position.set(edge.position.x, edge.position.y, edge.position.z);
+      else g.position.set(wp.x, wp.y, wp.z);
+      if (edge.rotation) g.rotation.set(edge.rotation.x, edge.rotation.y, edge.rotation.z);
+      else g.rotation.y = wp.rotY;
+      if (edge.scale) g.scale.set(edge.scale.x, edge.scale.y, edge.scale.z);
+      g.visible = edge.visible ?? true;
+      g.userData.kind = 'wall';
+      g.userData.key = key;
+      refs.wallGroup.add(g);
     }
   }, [walls, quality]);
 
-  // --- rebuild part meshes when scene parts change ---
+  // Roofs
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
-    const group = refs.partGroup;
-    while (group.children.length) {
-      const c = group.children[0] as THREE.Object3D;
-      c.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.geometry) m.geometry.dispose();
-        if (m.material) {
-          if (Array.isArray(m.material)) m.material.forEach((mm) => mm.dispose());
-          else (m.material as THREE.Material).dispose();
-        }
-      });
-      group.remove(c);
+    disposeAndClear(refs.roofGroup);
+    for (const key of Object.keys(roofs)) {
+      const cell = roofs[key];
+      const [xs, ys, zs] = key.split(',');
+      const x = +xs, y = +ys, z = +zs;
+      const g = buildPiece(cell.asset, THREE);
+      const p = cell.position ?? { x: x * TILE, y: y * WALL_HEIGHT + WALL_HEIGHT, z: z * TILE };
+      g.position.set(p.x, p.y, p.z);
+      if (cell.rotation) g.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
+      if (cell.scale) g.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
+      g.visible = cell.visible ?? true;
+      g.userData.kind = 'roof';
+      g.userData.key = key;
+      refs.roofGroup.add(g);
     }
+  }, [roofs, quality]);
+
+  // Corners (wall + roof corners share the same record)
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    disposeAndClear(refs.cornerGroup);
+    for (const key of Object.keys(cornersRec)) {
+      const cell = cornersRec[key];
+      const [xs, ys, zs] = key.split(',');
+      const x = +xs, y = +ys, z = +zs;
+      const g = buildPiece(cell.asset, THREE);
+      const worldX = x * TILE + TILE / 2;
+      const worldZ = z * TILE + TILE / 2;
+      const p = cell.position ?? { x: worldX, y: y * WALL_HEIGHT, z: worldZ };
+      g.position.set(p.x, p.y, p.z);
+      if (cell.rotation) g.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
+      if (cell.scale) g.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
+      g.visible = cell.visible ?? true;
+      g.userData.kind = 'corner';
+      g.userData.key = key;
+      refs.cornerGroup.add(g);
+    }
+  }, [cornersRec, quality]);
+
+  // Stairs
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    disposeAndClear(refs.stairsGroup);
+    for (const key of Object.keys(stairsRec)) {
+      const cell = stairsRec[key];
+      const [xs, ys, zs, fs] = key.split(',') as [string, string, string, Facing];
+      const x = +xs, y = +ys, z = +zs;
+      const g = buildPiece(cell.asset, THREE);
+      const p = cell.position ?? { x: x * TILE, y: y * WALL_HEIGHT, z: z * TILE };
+      g.position.set(p.x, p.y, p.z);
+      if (cell.rotation) g.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
+      else g.rotation.y = facingRotY(fs);
+      if (cell.scale) g.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
+      g.visible = cell.visible ?? true;
+      g.userData.kind = 'stairs';
+      g.userData.key = key;
+      refs.stairsGroup.add(g);
+    }
+  }, [stairsRec, quality]);
+
+  // Parts
+  useEffect(() => {
+    const refs = sceneRef.current;
+    if (!refs) return;
+    disposeAndClear(refs.partGroup);
     const loader = new GLTFLoader();
     for (const p of parts) {
       if (p.partType === 'GLB' && p.modelName) {
-        // Stand-in placeholder while the GLB streams in.
         const placeholder = new THREE.Group();
         placeholder.position.set(p.position.x, p.position.y, p.position.z);
         placeholder.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z);
@@ -756,34 +788,24 @@ export function BuildingCanvas() {
         placeholder.visible = p.visible;
         placeholder.userData.id = p.id;
         placeholder.userData.kind = 'part';
-        group.add(placeholder);
-
-        loader.load(
-          `/assets/medieval/${p.modelName}.gltf`,
-          (gltf) => {
-            // If the group was torn down, drop the result.
-            if (!placeholder.parent) return;
-            gltf.scene.traverse((o) => {
-              if ((o as THREE.Mesh).isMesh) {
-                (o as THREE.Mesh).castShadow = quality.shadows && p.castShadow;
-                (o as THREE.Mesh).receiveShadow = quality.shadows;
-              }
-            });
-            placeholder.add(gltf.scene);
-          },
-          undefined,
-          () => {
-            // Fallback: show a tinted box so the user at least sees something.
-            const box = new THREE.Mesh(
-              new THREE.BoxGeometry(1, 1, 1),
-              new THREE.MeshStandardMaterial({ color: 0xff6b6b }),
-            );
-            placeholder.add(box);
-          },
-        );
+        refs.partGroup.add(placeholder);
+        loader.load(`/assets/medieval/${p.modelName}.gltf`, (gltf) => {
+          if (!placeholder.parent) return;
+          gltf.scene.traverse((o) => {
+            if ((o as THREE.Mesh).isMesh) {
+              (o as THREE.Mesh).castShadow = quality.shadows && p.castShadow;
+              (o as THREE.Mesh).receiveShadow = quality.shadows;
+            }
+          });
+          placeholder.add(gltf.scene);
+        }, undefined, () => {
+          placeholder.add(new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshStandardMaterial({ color: 0xff6b6b }),
+          ));
+        });
         continue;
       }
-
       const mesh = new THREE.Mesh(
         geometryForPart(p.partType, quality.lowPolyPrimitives),
         makeSurfaceMaterial({
@@ -803,27 +825,20 @@ export function BuildingCanvas() {
       mesh.visible = p.visible;
       mesh.userData.id = p.id;
       mesh.userData.kind = 'part';
-      group.add(mesh);
+      refs.partGroup.add(mesh);
     }
   }, [parts, quality]);
 
-  // --- selection highlight: emissive glow on the selected part mesh ---
-  //     Also re-attaches the gizmo. This effect depends on `parts` so after
-  //     the meshes are rebuilt (on commit) the gizmo picks up the fresh mesh.
+  // Selection highlight + gizmo attach
   useEffect(() => {
     const refs = sceneRef.current;
-    // Guard against HMR / StrictMode mid-cleanup states where refs may be
-    // present but individual fields (gizmo, partGroup) are missing or
-    // disposed. The init effect will re-populate and re-run this effect.
-    if (!refs || !refs.gizmo || !refs.partGroup) return;
+    if (!refs || !refs.gizmo) return;
 
     let selectedObj: THREE.Object3D | null = null;
 
-    // Parts: highlight any Mesh child with an emissive tint.
     for (const child of refs.partGroup.children) {
       const isSelected = child.userData.id === selectedPartId;
       if (isSelected) selectedObj = child;
-      // Only a direct Mesh (primitive) has a tintable material.
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh && mesh.material) {
         const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -834,29 +849,35 @@ export function BuildingCanvas() {
       }
     }
 
-    // Floors + walls: highlight the selected building mesh.
-    const buildingGroups = [refs.floorGroup, refs.wallGroup];
-    for (const g of buildingGroups) {
+    const allBuildingGroups = [
+      refs.floorGroup, refs.wallGroup, refs.roofGroup,
+      refs.cornerGroup, refs.stairsGroup,
+    ];
+    for (const g of allBuildingGroups) {
       for (const child of g.children) {
-        const mesh = child as THREE.Mesh;
         const isSelected =
           !!buildingSelection &&
-          mesh.userData.kind === buildingSelection.kind &&
-          mesh.userData.key === buildingSelection.key;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat?.emissive) {
-          mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
-          mat.emissiveIntensity = isSelected ? 0.35 : 0;
-        }
-        if (isSelected) selectedObj = mesh;
+          child.userData.kind === buildingSelection.kind &&
+          child.userData.key === buildingSelection.key;
+        if (isSelected) selectedObj = child;
+        child.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh && mesh.material) {
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (mat.emissive) {
+              mat.emissive.setHex(isSelected ? 0x4ade80 : 0x000000);
+              mat.emissiveIntensity = isSelected ? 0.35 : 0;
+            }
+          }
+        });
       }
     }
 
     if (selectedObj) refs.gizmo.attach(selectedObj);
     else refs.gizmo.detach();
-  }, [selectedPartId, parts, buildingSelection, floors, walls]);
+  }, [selectedPartId, parts, buildingSelection, floors, walls, roofs, cornersRec, stairsRec]);
 
-  // --- drag-drop of assets from the left panel ---
+  // Drag-drop of GLB assets from the asset panel
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
@@ -869,13 +890,11 @@ export function BuildingCanvas() {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
     }
-
     function onDrop(e: DragEvent) {
       if (!e.dataTransfer) return;
       const modelName = e.dataTransfer.getData('application/x-problocks-asset');
       if (!modelName) return;
       e.preventDefault();
-
       const rect = refs!.renderer.domElement.getBoundingClientRect();
       refs!.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       refs!.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -883,16 +902,11 @@ export function BuildingCanvas() {
       const hits = refs!.raycaster.intersectObject(refs!.ground);
       if (!hits.length) return;
       const pt = hits[0].point;
-
       useSceneStore.getState().addPart({
-        name: modelName,
-        partType: 'GLB',
-        modelName,
-        position: { x: pt.x, y: 0, z: pt.z },
-        scale: { x: 1, y: 1, z: 1 },
+        name: modelName, partType: 'GLB', modelName,
+        position: { x: pt.x, y: 0, z: pt.z }, scale: { x: 1, y: 1, z: 1 },
       });
     }
-
     el.addEventListener('dragover', onDragOver);
     el.addEventListener('drop', onDrop);
     return () => {

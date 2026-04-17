@@ -37,17 +37,20 @@ const B_FLOOR_THICK = 0.1;
 const B_WALL_HEIGHT = 3;
 
 function floorDefaultPos(key: string) {
-  const [xs, zs] = key.split(',');
+  const [xs, ys, zs] = key.split(',');
   const x = parseInt(xs, 10);
+  const y = parseInt(ys, 10);
   const z = parseInt(zs, 10);
-  return { x: x * B_TILE, y: B_FLOOR_THICK / 2, z: z * B_TILE };
+  return { x: x * B_TILE, y: y * B_WALL_HEIGHT + B_FLOOR_THICK / 2, z: z * B_TILE };
 }
 function wallDefaultPos(key: string) {
-  const [xs, zs, dir] = key.split(',');
+  const [xs, ys, zs, dir] = key.split(',');
   const x = parseInt(xs, 10);
+  const y = parseInt(ys, 10);
   const z = parseInt(zs, 10);
-  if (dir === 'N') return { x: x * B_TILE, y: B_WALL_HEIGHT / 2, z: z * B_TILE - B_TILE / 2 };
-  return { x: x * B_TILE + B_TILE / 2, y: B_WALL_HEIGHT / 2, z: z * B_TILE };
+  const baseY = y * B_WALL_HEIGHT + B_WALL_HEIGHT / 2;
+  if (dir === 'N') return { x: x * B_TILE, y: baseY, z: z * B_TILE - B_TILE / 2 };
+  return { x: x * B_TILE + B_TILE / 2, y: baseY, z: z * B_TILE };
 }
 
 function EmptyState({ onStart }: { onStart: () => void }) {
@@ -110,6 +113,12 @@ export function StudioLayout() {
   // get inert defaults and their onUpdate writes are ignored.
   const buildingPart: ScenePart | null = (() => {
     if (!buildingSelection) return null;
+    // Right-panel property editing is only wired up for floors and walls
+    // today — roof/corner/stairs selections highlight in the scene but
+    // don't open the properties panel yet.
+    if (buildingSelection.kind !== 'floor' && buildingSelection.kind !== 'wall') {
+      return null;
+    }
     const record =
       buildingSelection.kind === 'floor'
         ? floors[buildingSelection.key]
@@ -158,17 +167,17 @@ export function StudioLayout() {
     // those are already forwarded as separate fields, so we can ignore it.
     if (Object.keys(patch).length === 0) return;
     if (buildingSelection.kind === 'floor') updateFloor(buildingSelection.key, patch);
-    else updateWall(buildingSelection.key, patch);
+    else if (buildingSelection.kind === 'wall') updateWall(buildingSelection.key, patch);
   }
 
   function handleBuildingPartDelete() {
     if (!buildingSelection) return;
     if (buildingSelection.kind === 'floor') {
-      const [xs, zs] = buildingSelection.key.split(',');
-      eraseFloor(parseInt(xs, 10), parseInt(zs, 10));
-    } else {
-      const [xs, zs, dir] = buildingSelection.key.split(',') as [string, string, 'N' | 'E'];
-      eraseWall(parseInt(xs, 10), parseInt(zs, 10), dir);
+      const [xs, ys, zs] = buildingSelection.key.split(',');
+      eraseFloor(parseInt(xs, 10), parseInt(ys, 10), parseInt(zs, 10));
+    } else if (buildingSelection.kind === 'wall') {
+      const [xs, ys, zs, dir] = buildingSelection.key.split(',') as [string, string, string, 'N' | 'E'];
+      eraseWall(parseInt(xs, 10), parseInt(ys, 10), parseInt(zs, 10), dir);
     }
     setBuildingSelection(null);
   }

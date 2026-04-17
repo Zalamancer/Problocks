@@ -152,8 +152,8 @@ export function ScenePanel({ onSelect }: Props) {
             setSelectedPart(null);
           },
           onRemove: () => {
-            const [x, z] = key.split(',').map(Number);
-            eraseFloor(x, z);
+            const [x, y, z] = key.split(',').map(Number);
+            eraseFloor(x, y, z);
           },
         });
       });
@@ -179,9 +179,10 @@ export function ScenePanel({ onSelect }: Props) {
           onRemove: () => {
             const parts = key.split(',');
             const x = Number(parts[0]);
-            const z = Number(parts[1]);
-            const dir = parts[2] as 'N' | 'E';
-            eraseWall(x, z, dir);
+            const y = Number(parts[1]);
+            const z = Number(parts[2]);
+            const dir = parts[3] as 'N' | 'E';
+            eraseWall(x, y, z, dir);
           },
         });
       });

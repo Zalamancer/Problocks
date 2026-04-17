@@ -1,28 +1,44 @@
 import { create } from 'zustand';
+import { DEFAULT_PIECE, type PieceKind } from '@/lib/building-kit';
 
 /**
- * Bloxburg-style tile building store — first slice.
- * Three anchor spaces per level:
- *   - floors:  tile centers  → key `${x},${z}`
- *   - walls:   tile edges    → key `${x},${z},${dir}` where dir ∈ 'N' | 'E'
- *   - corners: tile corners  → key `${x},${z}`  (auto, added later)
+ * Tile/edge building store with multi-level (Y) support.
  *
- * Canonicalization (so each edge has exactly one key):
- *   N-edge of tile (x,z) is between (x,z) and (x,z-1).
- *   E-edge of tile (x,z) is between (x,z) and (x+1,z).
- *   The S-edge of (x,z) is the N-edge of (x, z+1).
- *   The W-edge of (x,z) is the E-edge of (x-1, z).
+ * Anchor spaces (all keyed by level `y`):
+ *   - floors:  tile centers  → key `${x},${y},${z}`
+ *   - walls:   tile edges    → key `${x},${y},${z},${dir}` (dir ∈ 'N' | 'E')
+ *   - roofs:   tile centers  → key `${x},${y},${z}`        (sit on wall band)
+ *   - corners: tile corners  → key `${x},${y},${z}`        (vertex-based, 0..gridExtent inclusive)
+ *   - stairs:  tile centers  → key `${x},${y},${z},${facing}`
+ *
+ * Level height in meters = WALL_HEIGHT * y.
+ *
+ * Canonicalization for wall edges (so each edge has exactly one key):
+ *   N-edge of tile (x,y,z) is between (x,y,z) and (x,y,z-1).
+ *   E-edge of tile (x,y,z) is between (x,y,z) and (x+1,y,z).
  */
 
-export type Tool = 'select' | 'part' | 'floor' | 'wall' | 'eraser';
+export type Tool =
+  | 'select'
+  | 'part'
+  | 'floor'
+  | 'wall'
+  | 'wall-window'
+  | 'wall-door'
+  | 'roof'
+  | 'roof-corner'
+  | 'corner'
+  | 'stairs'
+  | 'eraser';
+
 export type EdgeDir = 'N' | 'E';
+export type Facing = 'N' | 'S' | 'E' | 'W';
 
 export interface Transform3 {
   position?: { x: number; y: number; z: number };
   rotation?: { x: number; y: number; z: number };
   scale?: { x: number; y: number; z: number };
 }
-/** Optional appearance overrides for floors/walls — all default in rebuild. */
 export interface Appearance {
   color?: string;
   roughness?: number;
@@ -32,49 +48,67 @@ export interface Appearance {
   castShadow?: boolean;
   visible?: boolean;
 }
-export interface FloorCell extends Transform3, Appearance {
-  asset: string;
-}
-export interface WallEdge extends Transform3, Appearance {
-  asset: string;
-}
+export interface FloorCell extends Transform3, Appearance { asset: string }
+export interface WallEdge extends Transform3, Appearance { asset: string }
+export interface RoofCell extends Transform3, Appearance { asset: string }
+export interface CornerCell extends Transform3, Appearance { asset: string }
+export interface StairsCell extends Transform3, Appearance { asset: string; facing: Facing }
 
-export type FloorPatch = Transform3 & Appearance & { asset?: string };
-export type WallPatch = Transform3 & Appearance & { asset?: string };
+export type FloorPatch  = Transform3 & Appearance & { asset?: string };
+export type WallPatch   = Transform3 & Appearance & { asset?: string };
+export type RoofPatch   = Transform3 & Appearance & { asset?: string };
+export type CornerPatch = Transform3 & Appearance & { asset?: string };
+export type StairsPatch = Transform3 & Appearance & { asset?: string; facing?: Facing };
 
 export type BuildingSelection =
-  | { kind: 'floor'; key: string }
-  | { kind: 'wall'; key: string }
+  | { kind: 'floor'  | 'wall' | 'roof' | 'corner' | 'stairs'; key: string }
   | null;
 
 interface BuildingState {
   tool: Tool;
   setTool: (t: Tool) => void;
 
-  /** Meters per tile. 2m matches common GLB wall widths. */
+  /** Which level (0-based) new placements land on. */
+  level: number;
+  setLevel: (n: number) => void;
+
+  /** Meters per tile. 2m matches common wall-piece widths. */
   gridSize: number;
   /** Grid spans −extent…+extent tiles on both axes. */
   gridExtent: number;
 
-  floorAsset: string;
-  wallAsset: string;
-  setFloorAsset: (a: string) => void;
-  setWallAsset: (a: string) => void;
+  /** Active piece id per kind — driven by the variant picker. */
+  selectedPiece: Record<PieceKind, string>;
+  setSelectedPiece: (kind: PieceKind, id: string) => void;
 
-  floors: Record<string, FloorCell>;
-  walls: Record<string, WallEdge>;
+  floors:  Record<string, FloorCell>;
+  walls:   Record<string, WallEdge>;
+  roofs:   Record<string, RoofCell>;
+  corners: Record<string, CornerCell>;
+  stairs:  Record<string, StairsCell>;
 
-  placeFloor: (x: number, z: number) => void;
-  eraseFloor: (x: number, z: number) => void;
-  placeWall: (x: number, z: number, dir: EdgeDir) => void;
-  eraseWall: (x: number, z: number, dir: EdgeDir) => void;
+  placeFloor:  (x: number, y: number, z: number) => void;
+  eraseFloor:  (x: number, y: number, z: number) => void;
+  placeWall:   (x: number, y: number, z: number, dir: EdgeDir) => void;
+  eraseWall:   (x: number, y: number, z: number, dir: EdgeDir) => void;
+  placeRoof:   (x: number, y: number, z: number) => void;
+  eraseRoof:   (x: number, y: number, z: number) => void;
+  placeCorner: (x: number, y: number, z: number) => void;
+  eraseCorner: (x: number, y: number, z: number) => void;
+  placeStairs: (x: number, y: number, z: number, facing: Facing) => void;
+  eraseStairs: (x: number, y: number, z: number, facing: Facing) => void;
 
-  /** Gizmo-writable transform overrides. If absent, grid placement is used. */
-  updateFloorTransform: (key: string, t: Transform3) => void;
-  updateWallTransform: (key: string, t: Transform3) => void;
-  /** Generic patch — transform OR appearance OR both. */
-  updateFloor: (key: string, patch: FloorPatch) => void;
-  updateWall: (key: string, patch: WallPatch) => void;
+  updateFloorTransform:  (key: string, t: Transform3) => void;
+  updateWallTransform:   (key: string, t: Transform3) => void;
+  updateRoofTransform:   (key: string, t: Transform3) => void;
+  updateCornerTransform: (key: string, t: Transform3) => void;
+  updateStairsTransform: (key: string, t: Transform3) => void;
+
+  updateFloor:  (key: string, patch: FloorPatch) => void;
+  updateWall:   (key: string, patch: WallPatch) => void;
+  updateRoof:   (key: string, patch: RoofPatch) => void;
+  updateCorner: (key: string, patch: CornerPatch) => void;
+  updateStairs: (key: string, patch: StairsPatch) => void;
 
   selection: BuildingSelection;
   setSelection: (s: BuildingSelection) => void;
@@ -82,73 +116,82 @@ interface BuildingState {
   clear: () => void;
 }
 
+function del<T>(rec: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in rec)) return rec;
+  const next = { ...rec };
+  delete next[key];
+  return next;
+}
+
 export const useBuildingStore = create<BuildingState>((set) => ({
   tool: 'floor',
   setTool: (tool) => set({ tool }),
 
+  level: 0,
+  setLevel: (level) => set({ level: Math.max(0, Math.floor(level)) }),
+
   gridSize: 2,
   gridExtent: 10,
 
-  floorAsset: 'Floor_WoodDark',
-  wallAsset: 'Wall_Brick',
-  setFloorAsset: (floorAsset) => set({ floorAsset }),
-  setWallAsset: (wallAsset) => set({ wallAsset }),
+  selectedPiece: { ...DEFAULT_PIECE },
+  setSelectedPiece: (kind, id) =>
+    set((s) => ({ selectedPiece: { ...s.selectedPiece, [kind]: id } })),
 
-  floors: {},
-  walls: {},
+  floors: {}, walls: {}, roofs: {}, corners: {}, stairs: {},
 
-  placeFloor: (x, z) =>
+  placeFloor: (x, y, z) =>
     set((s) => ({
-      floors: { ...s.floors, [`${x},${z}`]: { asset: s.floorAsset } },
+      floors: { ...s.floors, [`${x},${y},${z}`]: { asset: s.selectedPiece.floor } },
     })),
-  eraseFloor: (x, z) =>
-    set((s) => {
-      const key = `${x},${z}`;
-      if (!(key in s.floors)) return s;
-      const next = { ...s.floors };
-      delete next[key];
-      return { floors: next };
-    }),
-  placeWall: (x, z, dir) =>
-    set((s) => ({
-      walls: { ...s.walls, [`${x},${z},${dir}`]: { asset: s.wallAsset } },
-    })),
-  eraseWall: (x, z, dir) =>
-    set((s) => {
-      const key = `${x},${z},${dir}`;
-      if (!(key in s.walls)) return s;
-      const next = { ...s.walls };
-      delete next[key];
-      return { walls: next };
-    }),
+  eraseFloor: (x, y, z) =>
+    set((s) => ({ floors: del(s.floors, `${x},${y},${z}`) })),
 
-  updateFloorTransform: (key, t) =>
+  placeWall: (x, y, z, dir) =>
     set((s) => {
-      const cur = s.floors[key];
-      if (!cur) return s;
-      return { floors: { ...s.floors, [key]: { ...cur, ...t } } };
+      const kind = s.tool === 'wall-window' || s.tool === 'wall-door' ? s.tool : 'wall';
+      const asset = s.selectedPiece[kind];
+      return { walls: { ...s.walls, [`${x},${y},${z},${dir}`]: { asset } } };
     }),
-  updateWallTransform: (key, t) =>
+  eraseWall: (x, y, z, dir) =>
+    set((s) => ({ walls: del(s.walls, `${x},${y},${z},${dir}`) })),
+
+  placeRoof: (x, y, z) =>
+    set((s) => ({
+      roofs: { ...s.roofs, [`${x},${y},${z}`]: { asset: s.selectedPiece.roof } },
+    })),
+  eraseRoof: (x, y, z) =>
+    set((s) => ({ roofs: del(s.roofs, `${x},${y},${z}`) })),
+
+  placeCorner: (x, y, z) =>
     set((s) => {
-      const cur = s.walls[key];
-      if (!cur) return s;
-      return { walls: { ...s.walls, [key]: { ...cur, ...t } } };
+      const kind: PieceKind = s.tool === 'roof-corner' ? 'roof-corner' : 'corner';
+      const asset = s.selectedPiece[kind];
+      return { corners: { ...s.corners, [`${x},${y},${z}`]: { asset } } };
     }),
-  updateFloor: (key, patch) =>
-    set((s) => {
-      const cur = s.floors[key];
-      if (!cur) return s;
-      return { floors: { ...s.floors, [key]: { ...cur, ...patch } } };
-    }),
-  updateWall: (key, patch) =>
-    set((s) => {
-      const cur = s.walls[key];
-      if (!cur) return s;
-      return { walls: { ...s.walls, [key]: { ...cur, ...patch } } };
-    }),
+  eraseCorner: (x, y, z) =>
+    set((s) => ({ corners: del(s.corners, `${x},${y},${z}`) })),
+
+  placeStairs: (x, y, z, facing) =>
+    set((s) => ({
+      stairs: { ...s.stairs, [`${x},${y},${z},${facing}`]: { asset: s.selectedPiece.stairs, facing } },
+    })),
+  eraseStairs: (x, y, z, facing) =>
+    set((s) => ({ stairs: del(s.stairs, `${x},${y},${z},${facing}`) })),
+
+  updateFloorTransform:  (key, t) => set((s) => (s.floors[key]  ? { floors:  { ...s.floors,  [key]: { ...s.floors[key],  ...t } } } : s)),
+  updateWallTransform:   (key, t) => set((s) => (s.walls[key]   ? { walls:   { ...s.walls,   [key]: { ...s.walls[key],   ...t } } } : s)),
+  updateRoofTransform:   (key, t) => set((s) => (s.roofs[key]   ? { roofs:   { ...s.roofs,   [key]: { ...s.roofs[key],   ...t } } } : s)),
+  updateCornerTransform: (key, t) => set((s) => (s.corners[key] ? { corners: { ...s.corners, [key]: { ...s.corners[key], ...t } } } : s)),
+  updateStairsTransform: (key, t) => set((s) => (s.stairs[key]  ? { stairs:  { ...s.stairs,  [key]: { ...s.stairs[key],  ...t } } } : s)),
+
+  updateFloor:  (key, patch) => set((s) => (s.floors[key]  ? { floors:  { ...s.floors,  [key]: { ...s.floors[key],  ...patch } } } : s)),
+  updateWall:   (key, patch) => set((s) => (s.walls[key]   ? { walls:   { ...s.walls,   [key]: { ...s.walls[key],   ...patch } } } : s)),
+  updateRoof:   (key, patch) => set((s) => (s.roofs[key]   ? { roofs:   { ...s.roofs,   [key]: { ...s.roofs[key],   ...patch } } } : s)),
+  updateCorner: (key, patch) => set((s) => (s.corners[key] ? { corners: { ...s.corners, [key]: { ...s.corners[key], ...patch } } } : s)),
+  updateStairs: (key, patch) => set((s) => (s.stairs[key]  ? { stairs:  { ...s.stairs,  [key]: { ...s.stairs[key],  ...patch } } } : s)),
 
   selection: null,
   setSelection: (selection) => set({ selection }),
 
-  clear: () => set({ floors: {}, walls: {}, selection: null }),
+  clear: () => set({ floors: {}, walls: {}, roofs: {}, corners: {}, stairs: {}, selection: null }),
 }));

@@ -5,6 +5,7 @@ import { PanelTextarea, PanelActionButton } from '@/components/ui';
 import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-store';
 import { useBuildingStore, type EdgeDir, type Facing } from '@/store/building-store';
 import type { PieceKind } from '@/lib/building-kit';
+import { ChatAssetPicker } from './ChatAssetPicker';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -437,21 +438,26 @@ export function ChatPanel() {
           showCount
           disabled={streaming}
         />
-        {streaming ? (
-          <PanelActionButton onClick={cancel} variant="destructive" icon={Square} fullWidth>
-            Cancel
-          </PanelActionButton>
-        ) : (
-          <PanelActionButton
-            onClick={send}
-            variant="primary"
-            icon={Sparkles}
-            fullWidth
-            disabled={!input.trim()}
-          >
-            Build
-          </PanelActionButton>
-        )}
+        <div className="flex items-stretch gap-2">
+          <ChatAssetPicker />
+          <div className="flex-1">
+            {streaming ? (
+              <PanelActionButton onClick={cancel} variant="destructive" icon={Square} fullWidth>
+                Cancel
+              </PanelActionButton>
+            ) : (
+              <PanelActionButton
+                onClick={send}
+                variant="primary"
+                icon={Sparkles}
+                fullWidth
+                disabled={!input.trim()}
+              >
+                Build
+              </PanelActionButton>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { CORNER_PIECES } from './corners';
 import { STAIRS_PIECES } from './stairs';
 
 export type { PieceKind, PieceDef, BuildOpts };
+export { FACE_SHADE } from './types';
 
 export const TILE = 2;
 export const WALL_HEIGHT = 3;

@@ -13,7 +13,7 @@ import { useQualityStore } from '@/store/quality-store';
 import { useLightingStore, rgbToHex, addRgb } from '@/store/lighting-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
-import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK, FLOOR_THICK } from '@/lib/building-kit';
+import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK, FLOOR_THICK, FACE_SHADE } from '@/lib/building-kit';
 
 const PART_DEFAULT_SIZE = 2;
 
@@ -1068,10 +1068,18 @@ export function BuildingCanvas() {
         segGeo.rotateX(Math.PI / 2);
         segGeo.translate(cx, baseY + WALL_HEIGHT, cz);
 
-        const segMesh = new THREE.Mesh(
-          segGeo,
-          new THREE.MeshStandardMaterial({ color: tint, roughness: 1 }),
-        );
+        // Match the per-face baked shading used by makeBox (types.ts FACE_SHADE)
+        // so bent corners don't visually "lose ambient" against neighboring walls.
+        // ExtrudeGeometry has 2 material groups: 0 = caps (front+back of the
+        // extrusion → after rotateX(π/2) these are the top+bottom faces),
+        // 1 = side walls (the curved arc surface). Use top shade (1.0) for
+        // caps and ~front shade (0.85, between front 0.90 and back 0.58) for
+        // the visible curved surface.
+        const tintC = new THREE.Color(tint);
+        const segMesh = new THREE.Mesh(segGeo, [
+          new THREE.MeshStandardMaterial({ color: tintC.clone().multiplyScalar(FACE_SHADE[2]), roughness: 1 }),
+          new THREE.MeshStandardMaterial({ color: tintC.clone().multiplyScalar(0.85), roughness: 1 }),
+        ]);
         segMesh.castShadow = true;
         segMesh.receiveShadow = true;
         // Tag as a regular wall so select/erase logic treats clicks on the
@@ -1097,9 +1105,17 @@ export function BuildingCanvas() {
       const [ts, te] = trim[i];
       const length = TILE - ts - te;
       if (length <= 0.01) continue;
+      // Per-face baked shading (matches makeBox in building-kit/types.ts) so
+      // the trimmed bend-mode wall keeps the same "ambient" look as the
+      // sharp-mode pieces — sides/back darker than front/top.
+      const tintC = new THREE.Color(w.tint);
+      const mats = FACE_SHADE.map((s) => new THREE.MeshStandardMaterial({
+        color: tintC.clone().multiplyScalar(s),
+        roughness: 1,
+      }));
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(length, WALL_HEIGHT, WALL_THICK),
-        new THREE.MeshStandardMaterial({ color: w.tint, roughness: 1 }),
+        mats,
       );
       mesh.castShadow = true;
       mesh.receiveShadow = true;

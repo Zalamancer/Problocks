@@ -61,7 +61,7 @@ export interface PieceDef {
  * that survives any lighting config (shadows off, high ambient, tone
  * mapping), because the shade IS the color, not a lighting response.
  */
-const FACE_SHADE: [number, number, number, number, number, number] = [
+export const FACE_SHADE: [number, number, number, number, number, number] = [
   0.80, // +X right
   0.62, // -X left
   1.0,  // +Y top (brightest)

@@ -177,6 +177,8 @@ scene.add(new THREE.DirectionalLight(0xaadcff,0.8).position.set(-10,15,-8));
 const parts=new Map(); // id → {mesh, meta}
 let selId=null;
 let gizmoMode='select'; // 'select'|'translate'|'rotate'|'scale'
+let isPlaying=false;
+let playSnapshot=null; // Map<id,{position,rotation,scale}> captured on play, restored on stop
 const selLabel=document.getElementById('sel-label');
 
 const TEXTURE_PRESETS={
@@ -375,11 +377,40 @@ function deselect(){
 
 function setGizmoMode(mode){
   gizmoMode=mode;
-  if(mode==='select'){
+  if(mode==='select'||mode==='none'){
     tc.detach();
   } else {
     tc.setMode(mode==='move'?'translate':mode);
     if(selId){const p=parts.get(selId);if(p)tc.attach(p.mesh);}
+  }
+}
+
+function setPlayMode(playing){
+  if(playing===isPlaying)return;
+  isPlaying=!!playing;
+  if(isPlaying){
+    // Snapshot current transforms so Stop can revert student edits/motion
+    playSnapshot=new Map();
+    for(const [id,p] of parts){
+      playSnapshot.set(id,{
+        position:{x:p.mesh.position.x,y:p.mesh.position.y,z:p.mesh.position.z},
+        rotation:{x:p.mesh.rotation.x,y:p.mesh.rotation.y,z:p.mesh.rotation.z},
+        scale:{x:p.mesh.scale.x,y:p.mesh.scale.y,z:p.mesh.scale.z},
+      });
+    }
+    deselect();
+    tc.detach();
+  } else if(playSnapshot){
+    for(const [id,s] of playSnapshot){
+      const p=parts.get(id);if(!p)continue;
+      p.mesh.position.set(s.position.x,s.position.y,s.position.z);
+      p.mesh.rotation.set(s.rotation.x,s.rotation.y,s.rotation.z);
+      p.mesh.scale.set(s.scale.x,s.scale.y,s.scale.z);
+      p.meta.position={x:+s.position.x.toFixed(3),y:+s.position.y.toFixed(3),z:+s.position.z.toFixed(3)};
+      p.meta.rotation={x:+r2d(s.rotation.x).toFixed(2),y:+r2d(s.rotation.y).toFixed(2),z:+r2d(s.rotation.z).toFixed(2)};
+      p.meta.scale={x:+s.scale.x.toFixed(3),y:+s.scale.y.toFixed(3),z:+s.scale.z.toFixed(3)};
+    }
+    playSnapshot=null;
   }
 }
 
@@ -412,6 +443,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   const dx=e.clientX-pDown.x,dy=e.clientY-pDown.y;
   pDown=null;
   if(Math.hypot(dx,dy)>6||tc.dragging)return;
+  if(isPlaying)return; // click-to-select is editor-only
   const rect=renderer.domElement.getBoundingClientRect();
   const mouse=new THREE.Vector2(
     ((e.clientX-rect.left)/rect.width)*2-1,
@@ -448,6 +480,7 @@ window.addEventListener('message',e=>{
   const msg=e.data;if(!msg?.type)return;
   switch(msg.type){
     case 'setGizmoMode': setGizmoMode(msg.mode); break;
+    case 'setPlayMode': setPlayMode(!!msg.playing); break;
     case 'selectModel':
       if(msg.id) selectPart(msg.id);
       else if(msg.name){const p=[...parts.values()].find(p=>p.mesh.name===msg.name);if(p)selectPart(p.meta.id);}

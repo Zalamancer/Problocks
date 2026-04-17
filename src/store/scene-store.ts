@@ -28,8 +28,10 @@ interface SceneStore {
   gizmoMode: GizmoMode;
   selectedPart: ScenePart | null;
   sceneObjects: ScenePart[];
+  isPlaying: boolean;
 
   setGizmoMode: (mode: GizmoMode) => void;
+  setIsPlaying: (playing: boolean) => void;
   setSelectedPart: (part: ScenePart | null) => void;
   updateSelectedPart: (changes: Partial<ScenePart>) => void;
   setSceneObjects: (objects: ScenePart[]) => void;
@@ -67,8 +69,11 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   gizmoMode: 'select',
   selectedPart: null,
   sceneObjects: [],
+  isPlaying: false,
 
   setGizmoMode: (mode) => set({ gizmoMode: mode }),
+
+  setIsPlaying: (playing) => set({ isPlaying: playing }),
 
   setSelectedPart: (part) => set({ selectedPart: part }),
 

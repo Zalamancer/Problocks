@@ -8,8 +8,9 @@ import { persist } from 'zustand/middleware';
  * - low:    target Celeron N4000 / Chromebooks / integrated GPUs
  * - medium: older laptops, modest integrated GPUs
  * - high:   discrete GPU / modern silicon (current defaults)
+ * - custom: any individual setting overridden via setSetting()
  */
-export type QualityTier = 'low' | 'medium' | 'high';
+export type QualityTier = 'low' | 'medium' | 'high' | 'custom';
 
 export interface QualitySettings {
   /** Enable Three.js shadow map rendering (master switch) */
@@ -32,7 +33,11 @@ export interface QualitySettings {
   uiTransitions: boolean;
 }
 
-export const QUALITY_PRESETS: Record<QualityTier, QualitySettings> = {
+/**
+ * Concrete numbers per preset. `custom` is not listed here — it's a marker
+ * tier that preserves whatever `settings` the user has hand-tweaked.
+ */
+export const QUALITY_PRESETS: Record<Exclude<QualityTier, 'custom'>, QualitySettings> = {
   low: {
     shadows: false,
     shadowType: 'off',
@@ -72,7 +77,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualitySettings> = {
  * Best-effort auto-detection of a suitable tier. Runs once on first mount;
  * user's explicit choice overrides this forever after.
  */
-export function detectQualityTier(): QualityTier {
+export function detectQualityTier(): Exclude<QualityTier, 'custom'> {
   if (typeof window === 'undefined') return 'high';
 
   // Core-count heuristic: Celeron N4000 = 2 cores, most Chromebooks 2-4.
@@ -110,7 +115,11 @@ interface QualityStore {
   userPicked: boolean;
   settings: QualitySettings;
 
-  setTier: (tier: QualityTier) => void;
+  /** Apply a preset tier — overwrites every individual setting. */
+  setTier: (tier: Exclude<QualityTier, 'custom'>) => void;
+  /** Override a single setting; flips the tier to 'custom'. */
+  setSetting: <K extends keyof QualitySettings>(key: K, value: QualitySettings[K]) => void;
+  /** Re-run hardware detection and apply the recommended preset. */
   resetToAutoDetected: () => void;
 }
 
@@ -121,6 +130,12 @@ export const useQualityStore = create<QualityStore>()(
       userPicked: false,
       settings: QUALITY_PRESETS.high,
       setTier: (tier) => set({ tier, userPicked: true, settings: QUALITY_PRESETS[tier] }),
+      setSetting: (key, value) =>
+        set((s) => ({
+          tier: 'custom',
+          userPicked: true,
+          settings: { ...s.settings, [key]: value },
+        })),
       resetToAutoDetected: () => {
         const tier = detectQualityTier();
         set({ tier, userPicked: false, settings: QUALITY_PRESETS[tier] });

@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import {
   MousePointer2, Move3D, RotateCcw, Scale3D,
-  Plus, Copy, Trash2, ChevronDown,
+  Plus, Copy, Trash2, ChevronDown, Play, Square,
 } from 'lucide-react';
 import { useSceneStore, type GizmoMode, type PartType } from '@/store/scene-store';
 import type { GamePreviewHandle } from './GamePreview';
@@ -28,7 +28,7 @@ interface Props {
 }
 
 export function GameToolbar({ previewRef }: Props) {
-  const { gizmoMode, setGizmoMode, selectedPart } = useSceneStore();
+  const { gizmoMode, setGizmoMode, selectedPart, isPlaying, setIsPlaying } = useSceneStore();
   const [addOpen, setAddOpen] = useState(false);
   const addRef = useRef<HTMLDivElement>(null);
   const [colorIdx, setColorIdx] = useState(0);
@@ -57,8 +57,34 @@ export function GameToolbar({ previewRef }: Props) {
     previewRef.current?.sendToGame({ type: 'removePart', id: selectedPart.id });
   }
 
+  function togglePlay() {
+    const next = !isPlaying;
+    setIsPlaying(next);
+    if (next) {
+      setGizmoMode('select');
+      previewRef.current?.sendToGame({ type: 'setGizmoMode', mode: 'none' });
+    }
+    previewRef.current?.sendToGame({ type: 'setPlayMode', playing: next });
+  }
+
   return (
     <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 bg-zinc-900/90 border-b border-white/[0.06]">
+      {/* Play / Stop */}
+      <button
+        onClick={togglePlay}
+        title={isPlaying ? 'Stop' : 'Play'}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          isPlaying
+            ? 'bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25'
+            : 'bg-green-500/15 border border-green-500/30 text-green-300 hover:bg-green-500/25'
+        }`}
+      >
+        {isPlaying ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+        <span className="hidden sm:inline">{isPlaying ? 'Stop' : 'Play'}</span>
+      </button>
+
+      <div className="w-px h-5 bg-white/[0.08] mx-1" />
+
       {/* Gizmo mode toggles */}
       <div className="flex items-center gap-0.5 bg-zinc-800/60 rounded-lg p-0.5">
         {GIZMO_BUTTONS.map(btn => (

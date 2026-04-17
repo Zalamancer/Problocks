@@ -221,13 +221,9 @@ export function BuildingCanvas() {
 
     const ORBIT_SPEED = 0.005;
     const PAN_SPEED = 0.0015;
-    // Roblox-style discrete zoom levels — camera distance snaps to one of
-    // these on ctrl/cmd+wheel rather than scaling continuously.
+    // Roblox-style discrete zoom levels — ctrl/cmd+wheel snaps directly to
+    // one of these camera distances. No easing: the snap is the discretization.
     const ZOOM_LEVELS = [2, 4, 7, 11, 16, 24, 36, 55, 85, 128];
-    // Per-frame ease factor — 0.22 settles in ~5 frames and effectively
-    // absorbs macOS trackpad momentum events (which keep firing for ~300ms
-    // after the fingers lift) so the orbit actually comes to rest.
-    const DAMP = 0.22;
     const MIN_PHI = 0.02;
     const MAX_PHI = Math.PI - 0.02;
 
@@ -236,32 +232,6 @@ export function BuildingCanvas() {
     const tmpRight = new THREE.Vector3();
     const tmpUp = new THREE.Vector3();
     const tmpMove = new THREE.Vector3();
-
-    // Target orbit / zoom state. Wheel events write here; the render loop
-    // (applyCameraDamping below) eases the real camera toward these values.
-    let targetTheta = 0;
-    let targetPhi = Math.PI / 2;
-    let targetDistance = 20;
-    let targetsInitialized = false;
-    // True while the user is right-dragging via OrbitControls. We must skip
-    // damping during a drag — otherwise the ease-toward-target logic fights
-    // the drag every frame (pulling the camera ~22% back per frame, which
-    // makes orbit feel completely dead).
-    let orbitControlsActive = false;
-    controls.addEventListener('start', () => { orbitControlsActive = true; });
-    controls.addEventListener('end', () => {
-      orbitControlsActive = false;
-      syncTargetsFromCamera();
-    });
-
-    function syncTargetsFromCamera() {
-      tmpOffset.copy(camera.position).sub(controls.target);
-      tmpSpherical.setFromVector3(tmpOffset);
-      targetTheta = tmpSpherical.theta;
-      targetPhi = tmpSpherical.phi;
-      targetDistance = tmpSpherical.radius;
-      targetsInitialized = true;
-    }
 
     function snapToZoomLevel(dist: number, step: number): number {
       let best = 0;
@@ -276,18 +246,23 @@ export function BuildingCanvas() {
 
     function onWheel(e: WheelEvent) {
       e.preventDefault();
-      if (!targetsInitialized) syncTargetsFromCamera();
       const dx = e.deltaX;
       const dy = e.deltaY;
 
-      // Ctrl/Cmd + wheel → step through discrete zoom levels
+      // Ctrl/Cmd + wheel → snap camera distance to next/prev ZOOM_LEVEL
       if (e.ctrlKey || e.metaKey) {
+        tmpOffset.copy(camera.position).sub(controls.target);
+        const curDist = tmpOffset.length();
         const step = dy > 0 ? 1 : -1; // wheel-down = zoom out one level
-        targetDistance = snapToZoomLevel(targetDistance, step);
+        const newDist = snapToZoomLevel(curDist, step);
+        if (curDist > 0) {
+          tmpOffset.multiplyScalar(newDist / curDist);
+          camera.position.copy(controls.target).add(tmpOffset);
+        }
         return;
       }
 
-      // Middle-mouse held during wheel → pan (immediate, no damping)
+      // Middle-mouse held during wheel → pan
       if (e.buttons !== 0) {
         tmpRight.setFromMatrixColumn(camera.matrix, 0);
         tmpUp.setFromMatrixColumn(camera.matrix, 1);
@@ -297,47 +272,19 @@ export function BuildingCanvas() {
           .addScaledVector(tmpUp,    -dy * PAN_SPEED * distance);
         camera.position.add(tmpMove);
         controls.target.add(tmpMove);
-        syncTargetsFromCamera();
         return;
       }
 
-      // Trackpad / wheel orbit — accumulate on target, ease in animate()
-      targetTheta += dx * ORBIT_SPEED;
-      targetPhi   += dy * ORBIT_SPEED;
-      targetPhi = Math.max(MIN_PHI, Math.min(MAX_PHI, targetPhi));
-    }
-    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-
-    function applyCameraDamping() {
-      if (!targetsInitialized) return;
-      // User is actively right-dragging — let OrbitControls own the camera
-      // this frame and keep our target synced to wherever it takes us.
-      if (orbitControlsActive) { syncTargetsFromCamera(); return; }
+      // Trackpad / wheel orbit — apply directly (no damping)
       tmpOffset.copy(camera.position).sub(controls.target);
       tmpSpherical.setFromVector3(tmpOffset);
-
-      let dTheta = targetTheta - tmpSpherical.theta;
-      while (dTheta >  Math.PI) dTheta -= 2 * Math.PI;
-      while (dTheta < -Math.PI) dTheta += 2 * Math.PI;
-      const dPhi = targetPhi - tmpSpherical.phi;
-      const dR   = targetDistance - tmpSpherical.radius;
-
-      if (Math.abs(dTheta) + Math.abs(dPhi) + Math.abs(dR) < 5e-4) {
-        // Settled — resync target in case OrbitControls (right-drag) moved
-        // the camera directly since the last wheel event.
-        targetTheta = tmpSpherical.theta;
-        targetPhi   = tmpSpherical.phi;
-        targetDistance = tmpSpherical.radius;
-        return;
-      }
-
-      tmpSpherical.theta  += dTheta * DAMP;
-      tmpSpherical.phi    += dPhi   * DAMP;
-      tmpSpherical.radius += dR     * DAMP;
+      tmpSpherical.theta += dx * ORBIT_SPEED;
+      tmpSpherical.phi   += dy * ORBIT_SPEED;
       tmpSpherical.phi = Math.max(MIN_PHI, Math.min(MAX_PHI, tmpSpherical.phi));
       tmpOffset.setFromSpherical(tmpSpherical);
       camera.position.copy(controls.target).add(tmpOffset);
     }
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
     // Roblox-style lighting — all values live-driven by useLightingStore.
     const hemisphere = new THREE.HemisphereLight(0xffffff, 0xffffff, 0);
@@ -448,7 +395,6 @@ export function BuildingCanvas() {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
       if (playRef.current?.isActive()) playRef.current.update(dt);
-      else applyCameraDamping(); // ease toward target orbit/zoom every frame
       sceneRef.current.controls.update();
       sceneRef.current.gizmo.update();
       sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);

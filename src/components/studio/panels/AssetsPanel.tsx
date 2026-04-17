@@ -390,30 +390,113 @@ const PIECE_KIND_TO_TOOL: Record<PieceKind, Tool> = {
   stairs:        'stairs',
 };
 
+const PARTS_SORT_OPTIONS = [
+  { value: 'default', label: 'Default (kit order)' },
+  { value: 'name-asc', label: 'Name (A → Z)' },
+  { value: 'name-desc', label: 'Name (Z → A)' },
+];
+
 function PartsView() {
   const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sort, setSort] = useState('default');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | PieceKind>('all');
   const tool = useBuildingStore((s) => s.tool);
   const setTool = useBuildingStore((s) => s.setTool);
   const selectedPiece = useBuildingStore((s) => s.selectedPiece);
   const setSelectedPiece = useBuildingStore((s) => s.setSelectedPiece);
 
+  const hasActiveFilters =
+    viewMode !== 'grid' || sort !== 'default' || categoryFilter !== 'all';
+
   const q = search.trim().toLowerCase();
   const matches = (label: string, id: string) =>
     !q || label.toLowerCase().includes(q) || id.toLowerCase().includes(q);
 
+  const kindCounts = PIECES.reduce((acc, p) => {
+    acc[p.kind] = (acc[p.kind] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const sortPieces = (pieces: typeof PIECES) => {
+    if (sort === 'default') return pieces;
+    const copy = [...pieces];
+    if (sort === 'name-asc') copy.sort((a, b) => a.label.localeCompare(b.label));
+    if (sort === 'name-desc') copy.sort((a, b) => b.label.localeCompare(a.label));
+    return copy;
+  };
+
+  const visibleGroups = PIECE_KIND_GROUPS.filter(
+    (g) => categoryFilter === 'all' || categoryFilter === g.kind,
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="shrink-0 px-3 py-2">
-        <PanelSearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Search parts..."
-        />
+      <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 [&>div]:!mb-0">
+            <PanelSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search parts..."
+            />
+          </div>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={cn(
+              'relative shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
+              filtersOpen
+                ? 'bg-accent/15 text-accent'
+                : 'bg-panel-surface text-zinc-500 hover:text-zinc-200 hover:bg-panel-surface-hover',
+            )}
+            title="Filters"
+          >
+            <SlidersHorizontal size={15} />
+            {hasActiveFilters && !filtersOpen && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
+            )}
+          </button>
+        </div>
+
+        {filtersOpen && (
+          <>
+            <PanelSelect
+              label="View"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'grid' | 'list')}
+              options={[
+                { value: 'grid', label: 'Grid' },
+                { value: 'list', label: 'List' },
+              ]}
+            />
+            <PanelSelect
+              label="Sort by"
+              value={sort}
+              onChange={setSort}
+              options={PARTS_SORT_OPTIONS}
+            />
+            <PanelSelect
+              label="Category"
+              value={categoryFilter}
+              onChange={(v) => setCategoryFilter(v as 'all' | PieceKind)}
+              options={[
+                { value: 'all', label: `All (${PIECES.length})` },
+                ...PIECE_KIND_GROUPS.map((g) => ({
+                  value: g.kind,
+                  label: `${g.label} (${kindCounts[g.kind] || 0})`,
+                })),
+              ]}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
-        {PIECE_KIND_GROUPS.map(({ kind, label }) => {
-          const pieces = PIECES.filter((p) => p.kind === kind && matches(p.label, p.id));
+        {visibleGroups.map(({ kind, label }) => {
+          const pieces = sortPieces(
+            PIECES.filter((p) => p.kind === kind && matches(p.label, p.id)),
+          );
           if (pieces.length === 0) return null;
           const activeId = selectedPiece[kind];
           const kindToolActive = tool === PIECE_KIND_TO_TOOL[kind];
@@ -427,41 +510,78 @@ function PartsView() {
                   {pieces.length}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {pieces.map((p) => {
-                  const isSelected = kindToolActive && activeId === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        setTool(PIECE_KIND_TO_TOOL[kind]);
-                        setSelectedPiece(kind, p.id);
-                      }}
-                      className={cn(
-                        'group relative flex flex-col rounded-lg overflow-hidden transition-colors [content-visibility:auto] [contain-intrinsic-size:0_140px]',
-                        isSelected
-                          ? 'bg-accent/10 border border-accent/40'
-                          : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent',
-                      )}
-                      title={p.label}
-                    >
-                      <div className="relative w-full aspect-square">
-                        <PiecePreview pieceId={p.id} fluid />
-                      </div>
-                      <span className="block w-full px-2 py-1 text-[12px] text-zinc-300 truncate text-left">
-                        {p.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              {viewMode === 'list' ? (
+                <div className="flex flex-col gap-0.5">
+                  {pieces.map((p) => {
+                    const isSelected = kindToolActive && activeId === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setTool(PIECE_KIND_TO_TOOL[kind]);
+                          setSelectedPiece(kind, p.id);
+                        }}
+                        className={cn(
+                          'w-full text-left px-2.5 py-2 rounded-lg transition-colors flex items-center gap-2',
+                          isSelected
+                            ? 'bg-accent/10 border border-accent/40'
+                            : 'hover:bg-panel-surface-hover border border-transparent',
+                        )}
+                        title={p.label}
+                      >
+                        <span
+                          className="shrink-0 w-3 h-3 rounded-sm border border-white/10"
+                          style={{ backgroundColor: p.swatch }}
+                        />
+                        <span className="flex-1 text-[12px] text-zinc-300 truncate">
+                          {p.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {pieces.map((p) => {
+                    const isSelected = kindToolActive && activeId === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setTool(PIECE_KIND_TO_TOOL[kind]);
+                          setSelectedPiece(kind, p.id);
+                        }}
+                        className={cn(
+                          'group relative flex flex-col rounded-lg overflow-hidden transition-colors [content-visibility:auto] [contain-intrinsic-size:0_140px]',
+                          isSelected
+                            ? 'bg-accent/10 border border-accent/40'
+                            : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent',
+                        )}
+                        title={p.label}
+                      >
+                        <div className="relative w-full aspect-square">
+                          <PiecePreview pieceId={p.id} fluid />
+                        </div>
+                        <span className="block w-full px-2 py-1 text-[12px] text-zinc-300 truncate text-left">
+                          {p.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
 
-        {q && PIECES.every((p) => !matches(p.label, p.id)) && (
+        {visibleGroups.every(
+          ({ kind }) =>
+            PIECES.filter((p) => p.kind === kind && matches(p.label, p.id)).length === 0,
+        ) && (
           <div className="flex items-center justify-center py-8">
-            <p className="text-xs text-zinc-600">No matching parts</p>
+            <p className="text-xs text-zinc-600">
+              {q || hasActiveFilters ? 'No matching parts' : 'No parts loaded'}
+            </p>
           </div>
         )}
       </div>

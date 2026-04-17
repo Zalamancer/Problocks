@@ -51,6 +51,34 @@ function wallDefaultPos(key: string) {
   if (dir === 'N') return { x: x * B_TILE, y: baseY, z: z * B_TILE - B_TILE / 2 };
   return { x: x * B_TILE + B_TILE / 2, y: baseY, z: z * B_TILE };
 }
+function roofDefaultPos(key: string) {
+  // Roofs share floor's tile-center indexing but sit on top of the wall band.
+  const [xs, ys, zs] = key.split(',');
+  const x = parseInt(xs, 10);
+  const y = parseInt(ys, 10);
+  const z = parseInt(zs, 10);
+  return { x: x * B_TILE, y: y * B_WALL_HEIGHT + B_WALL_HEIGHT, z: z * B_TILE };
+}
+function cornerDefaultPos(key: string) {
+  // Corners are keyed on tile-corner vertices, so x/z are multiplied by TILE
+  // with a half-tile offset to land on the vertex between tiles.
+  const [xs, ys, zs] = key.split(',');
+  const x = parseInt(xs, 10);
+  const y = parseInt(ys, 10);
+  const z = parseInt(zs, 10);
+  return {
+    x: x * B_TILE - B_TILE / 2,
+    y: y * B_WALL_HEIGHT + B_WALL_HEIGHT / 2,
+    z: z * B_TILE - B_TILE / 2,
+  };
+}
+function stairsDefaultPos(key: string) {
+  const [xs, ys, zs] = key.split(',');
+  const x = parseInt(xs, 10);
+  const y = parseInt(ys, 10);
+  const z = parseInt(zs, 10);
+  return { x: x * B_TILE, y: y * B_WALL_HEIGHT + B_WALL_HEIGHT / 2, z: z * B_TILE };
+}
 
 function EmptyState({ onStart }: { onStart: () => void }) {
   return (
@@ -101,37 +129,66 @@ export function StudioLayout() {
   // the "Workspace" category in the left-panel scene hierarchy.
   const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
 
-  // Building store — selection of a floor or wall opens the right panel too.
+  // Building store — every kind of selection (floor/wall/roof/corner/
+  // stairs) opens the right panel. place* auto-selects the new piece, so
+  // the right panel also pops open on insertion.
   const buildingSelection = useBuildingStore((s) => s.selection);
   const floors = useBuildingStore((s) => s.floors);
   const walls = useBuildingStore((s) => s.walls);
+  const roofs = useBuildingStore((s) => s.roofs);
+  const cornersRec = useBuildingStore((s) => s.corners);
+  const stairsRec = useBuildingStore((s) => s.stairs);
   const setBuildingSelection = useBuildingStore((s) => s.setSelection);
   const updateFloor = useBuildingStore((s) => s.updateFloor);
   const updateWall = useBuildingStore((s) => s.updateWall);
+  const updateRoof = useBuildingStore((s) => s.updateRoof);
+  const updateCorner = useBuildingStore((s) => s.updateCorner);
+  const updateStairs = useBuildingStore((s) => s.updateStairs);
   const eraseFloor = useBuildingStore((s) => s.eraseFloor);
   const eraseWall = useBuildingStore((s) => s.eraseWall);
+  const eraseRoof = useBuildingStore((s) => s.eraseRoof);
+  const eraseCorner = useBuildingStore((s) => s.eraseCorner);
+  const eraseStairs = useBuildingStore((s) => s.eraseStairs);
 
-  // Synthesize a ScenePart-shaped object for the selected floor/wall so we
-  // can reuse PartPropertiesPanel. Unsupported fields (color, texture, etc.)
-  // get inert defaults and their onUpdate writes are ignored.
+  // Synthesize a ScenePart-shaped object for whichever building piece is
+  // selected so we can reuse PartPropertiesPanel. Unsupported fields stay
+  // inert; their onUpdate writes route to the matching update* method.
   const buildingPart: ScenePart | null = (() => {
     if (!buildingSelection) return null;
-    // Right-panel property editing is only wired up for floors and walls
-    // today — roof/corner/stairs selections highlight in the scene but
-    // don't open the properties panel yet.
-    if (buildingSelection.kind !== 'floor' && buildingSelection.kind !== 'wall') {
-      return null;
+    let record: { asset?: string; position?: { x: number; y: number; z: number }; rotation?: { x: number; y: number; z: number }; scale?: { x: number; y: number; z: number }; color?: string; roughness?: number; metalness?: number; emissiveColor?: string; emissiveIntensity?: number; castShadow?: boolean; visible?: boolean } | undefined;
+    let defaultPos: { x: number; y: number; z: number };
+    let defaultColor = '#c0c0c0';
+    let defaultRough = 0.5;
+    switch (buildingSelection.kind) {
+      case 'floor':
+        record = floors[buildingSelection.key];
+        defaultPos = floorDefaultPos(buildingSelection.key);
+        defaultColor = '#f0a93a'; defaultRough = 0.35;
+        break;
+      case 'wall':
+        record = walls[buildingSelection.key];
+        defaultPos = wallDefaultPos(buildingSelection.key);
+        defaultColor = '#ed2b2b'; defaultRough = 0.3;
+        break;
+      case 'roof':
+        record = roofs[buildingSelection.key];
+        defaultPos = roofDefaultPos(buildingSelection.key);
+        defaultColor = '#a14c2a'; defaultRough = 0.6;
+        break;
+      case 'corner':
+        record = cornersRec[buildingSelection.key];
+        defaultPos = cornerDefaultPos(buildingSelection.key);
+        defaultColor = '#8a6e3c'; defaultRough = 0.4;
+        break;
+      case 'stairs':
+        record = stairsRec[buildingSelection.key];
+        defaultPos = stairsDefaultPos(buildingSelection.key);
+        defaultColor = '#9aa0a6'; defaultRough = 0.5;
+        break;
+      default:
+        return null;
     }
-    const record =
-      buildingSelection.kind === 'floor'
-        ? floors[buildingSelection.key]
-        : walls[buildingSelection.key];
     if (!record) return null;
-    const defaultPos =
-      buildingSelection.kind === 'floor'
-        ? floorDefaultPos(buildingSelection.key)
-        : wallDefaultPos(buildingSelection.key);
-    const isFloor = buildingSelection.kind === 'floor';
     return {
       id: `${buildingSelection.kind}:${buildingSelection.key}`,
       name: record.asset || buildingSelection.kind,
@@ -139,8 +196,8 @@ export function StudioLayout() {
       position: record.position ?? defaultPos,
       rotation: record.rotation ?? { x: 0, y: 0, z: 0 },
       scale: record.scale ?? { x: 1, y: 1, z: 1 },
-      color: record.color ?? (isFloor ? '#f0a93a' : '#ed2b2b'),
-      roughness: record.roughness ?? (isFloor ? 0.35 : 0.3),
+      color: record.color ?? defaultColor,
+      roughness: record.roughness ?? defaultRough,
       metalness: record.metalness ?? 0,
       emissiveColor: record.emissiveColor ?? '#000000',
       emissiveIntensity: record.emissiveIntensity ?? 0,
@@ -166,21 +223,28 @@ export function StudioLayout() {
     if (changes.emissiveIntensity !== undefined) patch.emissiveIntensity = changes.emissiveIntensity;
     if (changes.castShadow !== undefined) patch.castShadow = changes.castShadow;
     if (changes.visible !== undefined) patch.visible = changes.visible;
-    // `texture` just drives roughness/metalness in PartPropertiesPanel —
-    // those are already forwarded as separate fields, so we can ignore it.
     if (Object.keys(patch).length === 0) return;
-    if (buildingSelection.kind === 'floor') updateFloor(buildingSelection.key, patch);
-    else if (buildingSelection.kind === 'wall') updateWall(buildingSelection.key, patch);
+    switch (buildingSelection.kind) {
+      case 'floor':  updateFloor(buildingSelection.key, patch); break;
+      case 'wall':   updateWall(buildingSelection.key, patch); break;
+      case 'roof':   updateRoof(buildingSelection.key, patch); break;
+      case 'corner': updateCorner(buildingSelection.key, patch); break;
+      case 'stairs': updateStairs(buildingSelection.key, patch); break;
+    }
   }
 
   function handleBuildingPartDelete() {
     if (!buildingSelection) return;
-    if (buildingSelection.kind === 'floor') {
-      const [xs, ys, zs] = buildingSelection.key.split(',');
-      eraseFloor(parseInt(xs, 10), parseInt(ys, 10), parseInt(zs, 10));
-    } else if (buildingSelection.kind === 'wall') {
-      const [xs, ys, zs, dir] = buildingSelection.key.split(',') as [string, string, string, 'N' | 'E'];
-      eraseWall(parseInt(xs, 10), parseInt(ys, 10), parseInt(zs, 10), dir);
+    const parts = buildingSelection.key.split(',');
+    const x = parseInt(parts[0], 10);
+    const y = parseInt(parts[1], 10);
+    const z = parseInt(parts[2], 10);
+    switch (buildingSelection.kind) {
+      case 'floor':  eraseFloor(x, y, z); break;
+      case 'wall':   eraseWall(x, y, z, parts[3] as 'N' | 'E'); break;
+      case 'roof':   eraseRoof(x, y, z); break;
+      case 'corner': eraseCorner(x, y, z); break;
+      case 'stairs': eraseStairs(x, y, z, parts[3] as 'N' | 'S' | 'E' | 'W'); break;
     }
     setBuildingSelection(null);
   }

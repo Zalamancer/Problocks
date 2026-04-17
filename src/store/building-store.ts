@@ -155,10 +155,17 @@ export const useBuildingStore = create<BuildingState>((set) => ({
 
   floors: {}, walls: {}, roofs: {}, corners: {}, stairs: {},
 
+  // Every place* also sets the selection to the new piece so the right
+  // panel opens automatically on insertion — user asked for the
+  // "selected on insert" pattern.
   placeFloor: (x, y, z, assetOverride) =>
-    set((s) => ({
-      floors: { ...s.floors, [`${x},${y},${z}`]: { asset: assetOverride ?? s.selectedPiece.floor } },
-    })),
+    set((s) => {
+      const key = `${x},${y},${z}`;
+      return {
+        floors: { ...s.floors, [key]: { asset: assetOverride ?? s.selectedPiece.floor } },
+        selection: { kind: 'floor', key },
+      };
+    }),
   eraseFloor: (x, y, z) =>
     set((s) => ({ floors: del(s.floors, `${x},${y},${z}`) })),
 
@@ -168,15 +175,23 @@ export const useBuildingStore = create<BuildingState>((set) => ({
         kindOverride ??
         (s.tool === 'wall-window' || s.tool === 'wall-door' ? s.tool : 'wall');
       const asset = assetOverride ?? s.selectedPiece[kind];
-      return { walls: { ...s.walls, [`${x},${y},${z},${dir}`]: { asset } } };
+      const key = `${x},${y},${z},${dir}`;
+      return {
+        walls: { ...s.walls, [key]: { asset } },
+        selection: { kind: 'wall', key },
+      };
     }),
   eraseWall: (x, y, z, dir) =>
     set((s) => ({ walls: del(s.walls, `${x},${y},${z},${dir}`) })),
 
   placeRoof: (x, y, z, assetOverride) =>
-    set((s) => ({
-      roofs: { ...s.roofs, [`${x},${y},${z}`]: { asset: assetOverride ?? s.selectedPiece.roof } },
-    })),
+    set((s) => {
+      const key = `${x},${y},${z}`;
+      return {
+        roofs: { ...s.roofs, [key]: { asset: assetOverride ?? s.selectedPiece.roof } },
+        selection: { kind: 'roof', key },
+      };
+    }),
   eraseRoof: (x, y, z) =>
     set((s) => ({ roofs: del(s.roofs, `${x},${y},${z}`) })),
 
@@ -185,18 +200,26 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       const kind: PieceKind =
         kindOverride ?? (s.tool === 'roof-corner' ? 'roof-corner' : 'corner');
       const asset = assetOverride ?? s.selectedPiece[kind];
-      return { corners: { ...s.corners, [`${x},${y},${z}`]: { asset } } };
+      const key = `${x},${y},${z}`;
+      return {
+        corners: { ...s.corners, [key]: { asset } },
+        selection: { kind: 'corner', key },
+      };
     }),
   eraseCorner: (x, y, z) =>
     set((s) => ({ corners: del(s.corners, `${x},${y},${z}`) })),
 
   placeStairs: (x, y, z, facing, assetOverride) =>
-    set((s) => ({
-      stairs: {
-        ...s.stairs,
-        [`${x},${y},${z},${facing}`]: { asset: assetOverride ?? s.selectedPiece.stairs, facing },
-      },
-    })),
+    set((s) => {
+      const key = `${x},${y},${z},${facing}`;
+      return {
+        stairs: {
+          ...s.stairs,
+          [key]: { asset: assetOverride ?? s.selectedPiece.stairs, facing },
+        },
+        selection: { kind: 'stairs', key },
+      };
+    }),
   eraseStairs: (x, y, z, facing) =>
     set((s) => ({ stairs: del(s.stairs, `${x},${y},${z},${facing}`) })),
 

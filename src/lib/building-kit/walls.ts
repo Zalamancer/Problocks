@@ -73,16 +73,16 @@ function stoneWall(a: string, b: string): PieceDef['build'] {
 }
 
 export const STRAIGHT_WALLS: PieceDef[] = [
-  { id: 'wall.plaster_white',  kind: 'wall', label: 'Plaster White', swatch: '#f5efe0', build: plasterWallWithTrim('#f5efe0', '#d7cdb2') },
-  { id: 'wall.plaster_cream',  kind: 'wall', label: 'Plaster Cream', swatch: '#ffe9c2', build: plasterWallWithTrim('#ffe9c2', '#b88a4a') },
-  { id: 'wall.brick_red',      kind: 'wall', label: 'Red Brick',     swatch: '#b33c2b', build: stoneWall('#b33c2b', '#d45a45') },
-  { id: 'wall.brick_tan',      kind: 'wall', label: 'Tan Brick',     swatch: '#c68450', build: stoneWall('#c68450', '#e0a070') },
-  { id: 'wall.stone_gray',     kind: 'wall', label: 'Gray Stone',    swatch: '#9aa0a4', build: stoneWall('#9aa0a4', '#c1c6cb') },
-  { id: 'wall.wood_dark',      kind: 'wall', label: 'Dark Wood',     swatch: '#5b3a1e', build: solidWall('#5b3a1e') },
-  { id: 'wall.wood_light',     kind: 'wall', label: 'Light Wood',    swatch: '#c98b55', build: solidWall('#c98b55') },
-  { id: 'wall.concrete',       kind: 'wall', label: 'Concrete',      swatch: '#b5b2a7', build: solidWall('#b5b2a7') },
-  { id: 'wall.timber_frame',   kind: 'wall', label: 'Timber Frame',  swatch: '#f3e4c2', build: timberFrameWall('#f3e4c2', '#3a2514') },
-  { id: 'wall.stucco_yellow',  kind: 'wall', label: 'Stucco Yellow', swatch: '#f4c75b', build: plasterWallWithTrim('#f4c75b', '#a67326') },
+  { id: 'wall.plaster_white',  kind: 'wall', label: 'Bright White',  swatch: '#ffffff', build: plasterWallWithTrim('#ffffff', '#ffd166') },
+  { id: 'wall.plaster_cream',  kind: 'wall', label: 'Sunny Cream',   swatch: '#fff3a8', build: plasterWallWithTrim('#fff3a8', '#ff9f1c') },
+  { id: 'wall.brick_red',      kind: 'wall', label: 'Candy Red',     swatch: '#ff2e44', build: stoneWall('#ff2e44', '#ff6b7a') },
+  { id: 'wall.brick_tan',      kind: 'wall', label: 'Orange Brick',  swatch: '#ff8c2b', build: stoneWall('#ff8c2b', '#ffc07a') },
+  { id: 'wall.stone_gray',     kind: 'wall', label: 'Sky Stone',     swatch: '#4dc4ff', build: stoneWall('#4dc4ff', '#a8e4ff') },
+  { id: 'wall.wood_dark',      kind: 'wall', label: 'Chocolate',     swatch: '#8b4a20', build: solidWall('#8b4a20') },
+  { id: 'wall.wood_light',     kind: 'wall', label: 'Maple',         swatch: '#ffb067', build: solidWall('#ffb067') },
+  { id: 'wall.concrete',       kind: 'wall', label: 'Cloud Grey',    swatch: '#e0e8f0', build: solidWall('#e0e8f0') },
+  { id: 'wall.timber_frame',   kind: 'wall', label: 'Timber Frame',  swatch: '#fff1b8', build: timberFrameWall('#fff1b8', '#4a2915') },
+  { id: 'wall.stucco_yellow',  kind: 'wall', label: 'Banana Yellow', swatch: '#ffd60a', build: plasterWallWithTrim('#ffd60a', '#ff8500') },
 ];
 
 /* ────────────────────────── 10 WINDOW WALLS ────────────────────────── */
@@ -187,51 +187,51 @@ function buildWindowWall(spec: WindowSpec): PieceDef['build'] {
 
 export const WINDOW_WALLS: PieceDef[] = [
   {
-    id: 'wallwin.square_plaster', kind: 'wall-window', label: 'Square · Plaster', swatch: '#f5efe0',
-    build: buildWindowWall({ baseColor: '#f5efe0', frameColor: '#6b4a22', sillColor: '#c9b181',
+    id: 'wallwin.square_plaster', kind: 'wall-window', label: 'Square · White', swatch: '#ffffff',
+    build: buildWindowWall({ baseColor: '#ffffff', frameColor: '#ff5252', sillColor: '#ffd166',
       openings: [{ cx: 0, cy: 1.6, w: 1.0, h: 1.0, mullions: 'cross' }] }),
   },
   {
-    id: 'wallwin.tall_plaster', kind: 'wall-window', label: 'Tall · Plaster', swatch: '#f5efe0',
-    build: buildWindowWall({ baseColor: '#f5efe0', frameColor: '#6b4a22', sillColor: '#c9b181',
+    id: 'wallwin.tall_plaster', kind: 'wall-window', label: 'Tall · Mint', swatch: '#7cffcd',
+    build: buildWindowWall({ baseColor: '#7cffcd', frameColor: '#0e8a6a', sillColor: '#ffd166',
       openings: [{ cx: 0, cy: 1.7, w: 0.55, h: 1.5, mullions: 'h' }] }),
   },
   {
-    id: 'wallwin.wide_brick', kind: 'wall-window', label: 'Wide · Brick', swatch: '#b33c2b',
-    build: buildWindowWall({ baseColor: '#b33c2b', frameColor: '#3b2316', sillColor: '#d4a47a',
+    id: 'wallwin.wide_brick', kind: 'wall-window', label: 'Wide · Red', swatch: '#ff2e44',
+    build: buildWindowWall({ baseColor: '#ff2e44', frameColor: '#1a1a1a', sillColor: '#ffe066',
       openings: [{ cx: 0, cy: 1.6, w: 1.5, h: 0.8, mullions: 'v' }] }),
   },
   {
-    id: 'wallwin.arched_plaster', kind: 'wall-window', label: 'Arched', swatch: '#f5efe0',
-    build: buildWindowWall({ baseColor: '#f5efe0', frameColor: '#6b4a22', sillColor: '#c9b181',
+    id: 'wallwin.arched_plaster', kind: 'wall-window', label: 'Arched · Sky', swatch: '#4dc4ff',
+    build: buildWindowWall({ baseColor: '#4dc4ff', frameColor: '#ffffff', sillColor: '#ffd166',
       openings: [{ cx: 0, cy: 1.5, w: 1.0, h: 1.3, arch: true, mullions: 'v' }] }),
   },
   {
-    id: 'wallwin.round_wood', kind: 'wall-window', label: 'Porthole', swatch: '#5b3a1e',
-    build: buildWindowWall({ baseColor: '#5b3a1e', frameColor: '#c9a45a', sillColor: '#c9a45a',
+    id: 'wallwin.round_wood', kind: 'wall-window', label: 'Porthole', swatch: '#8b4a20',
+    build: buildWindowWall({ baseColor: '#8b4a20', frameColor: '#ffd60a', sillColor: '#ffd60a',
       openings: [{ cx: 0, cy: 1.8, w: 0.8, h: 0.8, circle: true }] }),
   },
   {
-    id: 'wallwin.double_brick', kind: 'wall-window', label: 'Two Panes', swatch: '#b33c2b',
-    build: buildWindowWall({ baseColor: '#b33c2b', frameColor: '#3b2316', sillColor: '#d4a47a',
+    id: 'wallwin.double_brick', kind: 'wall-window', label: 'Two Panes', swatch: '#ff2e44',
+    build: buildWindowWall({ baseColor: '#ff2e44', frameColor: '#1a1a1a', sillColor: '#ffe066',
       openings: [
         { cx: -0.5, cy: 1.6, w: 0.7, h: 0.9, mullions: 'cross' },
         { cx:  0.5, cy: 1.6, w: 0.7, h: 0.9, mullions: 'cross' },
       ] }),
   },
   {
-    id: 'wallwin.cross_plaster', kind: 'wall-window', label: 'Cross-Pane', swatch: '#f5efe0',
-    build: buildWindowWall({ baseColor: '#f5efe0', frameColor: '#6b4a22', sillColor: '#c9b181',
+    id: 'wallwin.cross_plaster', kind: 'wall-window', label: 'Cross-Pane', swatch: '#ffd60a',
+    build: buildWindowWall({ baseColor: '#ffd60a', frameColor: '#ff5252', sillColor: '#ff8500',
       openings: [{ cx: 0, cy: 1.6, w: 1.2, h: 1.2, mullions: 'cross' }] }),
   },
   {
-    id: 'wallwin.clerestory', kind: 'wall-window', label: 'Clerestory', swatch: '#f5efe0',
-    build: buildWindowWall({ baseColor: '#f5efe0', frameColor: '#6b4a22', sillColor: '#c9b181',
+    id: 'wallwin.clerestory', kind: 'wall-window', label: 'Clerestory', swatch: '#ffffff',
+    build: buildWindowWall({ baseColor: '#ffffff', frameColor: '#ff5252', sillColor: '#ffd166',
       openings: [{ cx: 0, cy: 2.4, w: 1.4, h: 0.4, mullions: 'v' }] }),
   },
   {
-    id: 'wallwin.triple_stone', kind: 'wall-window', label: 'Triple · Stone', swatch: '#9aa0a4',
-    build: buildWindowWall({ baseColor: '#9aa0a4', frameColor: '#2b2b2b', sillColor: '#d1d4d8',
+    id: 'wallwin.triple_stone', kind: 'wall-window', label: 'Triple · Sky', swatch: '#4dc4ff',
+    build: buildWindowWall({ baseColor: '#4dc4ff', frameColor: '#1a1a1a', sillColor: '#ffffff',
       openings: [
         { cx: -0.6, cy: 1.6, w: 0.45, h: 1.2 },
         { cx:  0.0, cy: 1.6, w: 0.45, h: 1.2 },
@@ -239,16 +239,16 @@ export const WINDOW_WALLS: PieceDef[] = [
       ] }),
   },
   {
-    id: 'wallwin.diamond_brick', kind: 'wall-window', label: 'Diamond', swatch: '#b33c2b',
+    id: 'wallwin.diamond_brick', kind: 'wall-window', label: 'Diamond', swatch: '#ff2e44',
     build: ({ THREE, tile, wallHeight, wallThick }) => {
       // Render as a small square opening and rotate the glass + a frame cross
       // for a diamond impression.
       const g = new THREE.Group();
-      const baseColor = '#b33c2b';
-      const frameColor = '#3b2316';
+      const baseColor = '#ff2e44';
+      const frameColor = '#1a1a1a';
       const op = { cx: 0, cy: 1.7, w: 0.9, h: 0.9 };
       // build via the same window-wall emitter for the surrounding wall
-      const sub = buildWindowWall({ baseColor, frameColor, sillColor: '#d4a47a',
+      const sub = buildWindowWall({ baseColor, frameColor, sillColor: '#ffe066',
         openings: [op] })({ THREE, tile, wallHeight, wallThick, floorThick: 0.1 });
       // remove default square glass & mullions — we'll overlay a rotated cross
       g.add(sub);
@@ -383,26 +383,26 @@ function buildDoorWall(spec: DoorSpec): PieceDef['build'] {
 }
 
 export const DOOR_WALLS: PieceDef[] = [
-  { id: 'walldoor.simple_plaster', kind: 'wall-door', label: 'Simple',        swatch: '#f5efe0',
-    build: buildDoorWall({ baseColor: '#f5efe0', doorColor: '#5a3a1a', frameColor: '#3a2413', doorWidth: 0.95, doorHeight: 2.15 }) },
-  { id: 'walldoor.arched_plaster', kind: 'wall-door', label: 'Arched',        swatch: '#f5efe0',
-    build: buildDoorWall({ baseColor: '#f5efe0', doorColor: '#5a3a1a', frameColor: '#3a2413', doorWidth: 1.0, doorHeight: 2.2, arched: true }) },
-  { id: 'walldoor.double_wood',    kind: 'wall-door', label: 'Double',        swatch: '#c98b55',
-    build: buildDoorWall({ baseColor: '#c98b55', doorColor: '#3d2415', frameColor: '#2a1609', doorWidth: 1.6, doorHeight: 2.3 }) },
-  { id: 'walldoor.round_brick',    kind: 'wall-door', label: 'Round Top',     swatch: '#b33c2b',
-    build: buildDoorWall({ baseColor: '#b33c2b', doorColor: '#2b1a0c', frameColor: '#3a2413', doorWidth: 1.1, doorHeight: 2.25, arched: true }) },
-  { id: 'walldoor.transom_plaster',kind: 'wall-door', label: 'With Transom',  swatch: '#f5efe0',
-    build: buildDoorWall({ baseColor: '#f5efe0', doorColor: '#3d2415', frameColor: '#2a1609', doorWidth: 1.0, doorHeight: 2.1, transom: true }) },
-  { id: 'walldoor.sidelight_wood', kind: 'wall-door', label: 'Sidelights',    swatch: '#c98b55',
-    build: buildDoorWall({ baseColor: '#c98b55', doorColor: '#3d2415', frameColor: '#2a1609', doorWidth: 1.0, doorHeight: 2.2, sidelights: true, transom: true }) },
-  { id: 'walldoor.barn_wood',      kind: 'wall-door', label: 'Barn',          swatch: '#5b3a1e',
-    build: buildDoorWall({ baseColor: '#5b3a1e', doorColor: '#8c5f2e', frameColor: '#2a1609', doorWidth: 1.8, doorHeight: 2.6 }) },
-  { id: 'walldoor.garage_concrete',kind: 'wall-door', label: 'Garage',        swatch: '#b5b2a7',
-    build: buildDoorWall({ baseColor: '#b5b2a7', doorColor: '#7a7a74', frameColor: '#3a3a36', doorWidth: 1.9, doorHeight: 2.75 }) },
-  { id: 'walldoor.saloon_wood',    kind: 'wall-door', label: 'Saloon',        swatch: '#c98b55',
-    build: buildDoorWall({ baseColor: '#c98b55', doorColor: '#3d2415', frameColor: '#2a1609', doorWidth: 1.1, doorHeight: 2.1, saloon: true }) },
-  { id: 'walldoor.fancy_stone',    kind: 'wall-door', label: 'Fancy · Stone', swatch: '#9aa0a4',
-    build: buildDoorWall({ baseColor: '#9aa0a4', doorColor: '#2b1a0c', frameColor: '#d7c69a', doorWidth: 1.1, doorHeight: 2.3, transom: true, sidelights: true, arched: true }) },
+  { id: 'walldoor.simple_plaster', kind: 'wall-door', label: 'Simple',        swatch: '#ffffff',
+    build: buildDoorWall({ baseColor: '#ffffff', doorColor: '#ff2e44', frameColor: '#ffd60a', doorWidth: 0.95, doorHeight: 2.15 }) },
+  { id: 'walldoor.arched_plaster', kind: 'wall-door', label: 'Arched',        swatch: '#fff3a8',
+    build: buildDoorWall({ baseColor: '#fff3a8', doorColor: '#8b4a20', frameColor: '#ff5252', doorWidth: 1.0, doorHeight: 2.2, arched: true }) },
+  { id: 'walldoor.double_wood',    kind: 'wall-door', label: 'Double',        swatch: '#ffb067',
+    build: buildDoorWall({ baseColor: '#ffb067', doorColor: '#8b4a20', frameColor: '#ffd60a', doorWidth: 1.6, doorHeight: 2.3 }) },
+  { id: 'walldoor.round_brick',    kind: 'wall-door', label: 'Round Top',     swatch: '#ff2e44',
+    build: buildDoorWall({ baseColor: '#ff2e44', doorColor: '#1a1a1a', frameColor: '#ffd60a', doorWidth: 1.1, doorHeight: 2.25, arched: true }) },
+  { id: 'walldoor.transom_plaster',kind: 'wall-door', label: 'With Transom',  swatch: '#7cffcd',
+    build: buildDoorWall({ baseColor: '#7cffcd', doorColor: '#ff2e44', frameColor: '#ffffff', doorWidth: 1.0, doorHeight: 2.1, transom: true }) },
+  { id: 'walldoor.sidelight_wood', kind: 'wall-door', label: 'Sidelights',    swatch: '#4dc4ff',
+    build: buildDoorWall({ baseColor: '#4dc4ff', doorColor: '#ffffff', frameColor: '#ffd60a', doorWidth: 1.0, doorHeight: 2.2, sidelights: true, transom: true }) },
+  { id: 'walldoor.barn_wood',      kind: 'wall-door', label: 'Barn',          swatch: '#b83a1c',
+    build: buildDoorWall({ baseColor: '#b83a1c', doorColor: '#ff8c2b', frameColor: '#ffffff', doorWidth: 1.8, doorHeight: 2.6 }) },
+  { id: 'walldoor.garage_concrete',kind: 'wall-door', label: 'Garage',        swatch: '#e0e8f0',
+    build: buildDoorWall({ baseColor: '#e0e8f0', doorColor: '#4dc4ff', frameColor: '#1a1a1a', doorWidth: 1.9, doorHeight: 2.75 }) },
+  { id: 'walldoor.saloon_wood',    kind: 'wall-door', label: 'Saloon',        swatch: '#ffb067',
+    build: buildDoorWall({ baseColor: '#ffb067', doorColor: '#8b4a20', frameColor: '#ffd60a', doorWidth: 1.1, doorHeight: 2.1, saloon: true }) },
+  { id: 'walldoor.fancy_stone',    kind: 'wall-door', label: 'Fancy',         swatch: '#c9a6ff',
+    build: buildDoorWall({ baseColor: '#c9a6ff', doorColor: '#ffffff', frameColor: '#ffd60a', doorWidth: 1.1, doorHeight: 2.3, transom: true, sidelights: true, arched: true }) },
 ];
 
 export const WALL_PIECES: PieceDef[] = [...STRAIGHT_WALLS, ...WINDOW_WALLS, ...DOOR_WALLS];

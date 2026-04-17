@@ -44,7 +44,7 @@ function spiralStairs(color: string): PieceDef['build'] {
       g.add(m);
     }
     // center post
-    g.add(makeBox(THREE, { x: 0.18, y: wallHeight, z: 0.18 }, '#2a2a2a', { y: wallHeight / 2 }));
+    g.add(makeBox(THREE, { x: 0.18, y: wallHeight, z: 0.18 }, '#ffd60a', { y: wallHeight / 2 }));
     return g;
   };
 }
@@ -112,14 +112,14 @@ function ladder(rail: string, rung: string): PieceDef['build'] {
 }
 
 export const STAIRS_PIECES: PieceDef[] = [
-  { id: 'stairs.straight_wood',   kind: 'stairs', label: 'Straight Wood',   swatch: '#5b3a1e', build: straightStairs('#5b3a1e', '#c98b55') },
-  { id: 'stairs.straight_stone',  kind: 'stairs', label: 'Straight Stone',  swatch: '#9aa0a4', build: straightStairs('#9aa0a4', '#d1d4d8') },
-  { id: 'stairs.wide_wood',       kind: 'stairs', label: 'Wide Wood',       swatch: '#c98b55', build: straightStairs('#c98b55', '#eccaa0', 8) },
-  { id: 'stairs.narrow_stone',    kind: 'stairs', label: 'Narrow Stone',    swatch: '#9aa0a4', build: straightStairs('#9aa0a4', '#d1d4d8', 14) },
-  { id: 'stairs.l_wood',          kind: 'stairs', label: 'L-Shape',         swatch: '#5b3a1e', build: lStairs('#5b3a1e', '#c98b55') },
-  { id: 'stairs.l_stone',         kind: 'stairs', label: 'L-Shape Stone',   swatch: '#9aa0a4', build: lStairs('#9aa0a4', '#d1d4d8') },
-  { id: 'stairs.spiral_iron',     kind: 'stairs', label: 'Spiral Iron',     swatch: '#2a2a2a', build: spiralStairs('#2a2a2a') },
-  { id: 'stairs.spiral_wood',     kind: 'stairs', label: 'Spiral Wood',     swatch: '#5b3a1e', build: spiralStairs('#5b3a1e') },
-  { id: 'stairs.ramp_concrete',   kind: 'stairs', label: 'Ramp Concrete',   swatch: '#b5b2a7', build: rampStairs('#b5b2a7') },
-  { id: 'stairs.ladder_wood',     kind: 'stairs', label: 'Ladder',          swatch: '#5b3a1e', build: ladder('#3a2413', '#c98b55') },
+  { id: 'stairs.straight_wood',   kind: 'stairs', label: 'Straight Wood',   swatch: '#8b4a20', build: straightStairs('#8b4a20', '#ffb067') },
+  { id: 'stairs.straight_stone',  kind: 'stairs', label: 'Straight Sky',    swatch: '#4dc4ff', build: straightStairs('#4dc4ff', '#ffffff') },
+  { id: 'stairs.wide_wood',       kind: 'stairs', label: 'Wide Maple',      swatch: '#ffb067', build: straightStairs('#ffb067', '#ffe066', 8) },
+  { id: 'stairs.narrow_stone',    kind: 'stairs', label: 'Narrow Sky',      swatch: '#4dc4ff', build: straightStairs('#4dc4ff', '#ffffff', 14) },
+  { id: 'stairs.l_wood',          kind: 'stairs', label: 'L-Shape',         swatch: '#8b4a20', build: lStairs('#8b4a20', '#ffb067') },
+  { id: 'stairs.l_stone',         kind: 'stairs', label: 'L-Shape Sky',     swatch: '#4dc4ff', build: lStairs('#4dc4ff', '#ffffff') },
+  { id: 'stairs.spiral_iron',     kind: 'stairs', label: 'Spiral Red',      swatch: '#ff2e44', build: spiralStairs('#ff2e44') },
+  { id: 'stairs.spiral_wood',     kind: 'stairs', label: 'Spiral Wood',     swatch: '#8b4a20', build: spiralStairs('#8b4a20') },
+  { id: 'stairs.ramp_concrete',   kind: 'stairs', label: 'Ramp Cloud',      swatch: '#e0e8f0', build: rampStairs('#e0e8f0') },
+  { id: 'stairs.ladder_wood',     kind: 'stairs', label: 'Ladder',          swatch: '#8b4a20', build: ladder('#ff5252', '#ffb067') },
 ];

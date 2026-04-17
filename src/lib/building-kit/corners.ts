@@ -95,14 +95,14 @@ function lamppost(postColor: string, lampColor: string): PieceDef['build'] {
 }
 
 export const CORNER_PIECES: PieceDef[] = [
-  { id: 'cnr.square_plaster',  kind: 'corner', label: 'Square Plaster',  swatch: '#f5efe0', build: simpleColumn('#f5efe0') },
-  { id: 'cnr.square_brick',    kind: 'corner', label: 'Square Brick',    swatch: '#b33c2b', build: simpleColumn('#b33c2b') },
-  { id: 'cnr.square_stone',    kind: 'corner', label: 'Square Stone',    swatch: '#9aa0a4', build: simpleColumn('#9aa0a4') },
-  { id: 'cnr.round_marble',    kind: 'corner', label: 'Round Marble',    swatch: '#f1e9dc', build: roundedColumn('#f1e9dc') },
-  { id: 'cnr.round_wood',      kind: 'corner', label: 'Round Wood',      swatch: '#5b3a1e', build: roundedColumn('#5b3a1e') },
-  { id: 'cnr.doric_round',     kind: 'corner', label: 'Doric (round)',   swatch: '#f1e9dc', build: capitalColumn('#f1e9dc', '#d7c69a', true) },
-  { id: 'cnr.doric_square',    kind: 'corner', label: 'Doric (square)',  swatch: '#f1e9dc', build: capitalColumn('#f1e9dc', '#d7c69a', false) },
-  { id: 'cnr.buttress_stone',  kind: 'corner', label: 'Buttress',        swatch: '#9aa0a4', build: buttress('#9aa0a4') },
-  { id: 'cnr.lamppost_black',  kind: 'corner', label: 'Lamp Post',       swatch: '#1a1a1a', build: lamppost('#1a1a1a', '#ffdf70') },
-  { id: 'cnr.buttress_wood',   kind: 'corner', label: 'Buttress Wood',   swatch: '#5b3a1e', build: buttress('#5b3a1e') },
+  { id: 'cnr.square_plaster',  kind: 'corner', label: 'Square White',    swatch: '#ffffff', build: simpleColumn('#ffffff') },
+  { id: 'cnr.square_brick',    kind: 'corner', label: 'Square Red',      swatch: '#ff2e44', build: simpleColumn('#ff2e44') },
+  { id: 'cnr.square_stone',    kind: 'corner', label: 'Square Sky',      swatch: '#4dc4ff', build: simpleColumn('#4dc4ff') },
+  { id: 'cnr.round_marble',    kind: 'corner', label: 'Round White',     swatch: '#ffffff', build: roundedColumn('#ffffff') },
+  { id: 'cnr.round_wood',      kind: 'corner', label: 'Round Wood',      swatch: '#8b4a20', build: roundedColumn('#8b4a20') },
+  { id: 'cnr.doric_round',     kind: 'corner', label: 'Doric (round)',   swatch: '#ffffff', build: capitalColumn('#ffffff', '#ffd60a', true) },
+  { id: 'cnr.doric_square',    kind: 'corner', label: 'Doric (square)',  swatch: '#ffffff', build: capitalColumn('#ffffff', '#ffd60a', false) },
+  { id: 'cnr.buttress_stone',  kind: 'corner', label: 'Buttress',        swatch: '#4dc4ff', build: buttress('#4dc4ff') },
+  { id: 'cnr.lamppost_black',  kind: 'corner', label: 'Lamp Post',       swatch: '#1a1a1a', build: lamppost('#1a1a1a', '#ffff00') },
+  { id: 'cnr.buttress_wood',   kind: 'corner', label: 'Buttress Wood',   swatch: '#8b4a20', build: buttress('#8b4a20') },
 ];

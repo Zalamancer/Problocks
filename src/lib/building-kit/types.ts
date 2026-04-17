@@ -64,10 +64,10 @@ export function makeBox(
   const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(color),
-    roughness: opts?.roughness ?? 0.55,
+    roughness: opts?.roughness ?? 0.85,
     metalness: opts?.metalness ?? 0,
-    emissive: new THREE.Color(opts?.emissive ?? '#000000'),
-    emissiveIntensity: opts?.emissiveIntensity ?? 0,
+    emissive: new THREE.Color(opts?.emissive ?? color),
+    emissiveIntensity: opts?.emissiveIntensity ?? 0.18,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(pos?.x ?? 0, pos?.y ?? 0, pos?.z ?? 0);

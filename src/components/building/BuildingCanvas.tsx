@@ -179,7 +179,7 @@ export function BuildingCanvas() {
     if (!container || sceneRef.current) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x9ed7ff);
+    scene.background = new THREE.Color(0x7cc8ff);
 
     const camera = new THREE.PerspectiveCamera(
       55, container.clientWidth / container.clientHeight, 0.1, 500,
@@ -195,7 +195,7 @@ export function BuildingCanvas() {
       quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.85;
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
@@ -257,9 +257,9 @@ export function BuildingCanvas() {
     }
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xb9e08a, 1.4));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-    const sun = new THREE.DirectionalLight(0xfff2d0, 1.1);
+    scene.add(new THREE.HemisphereLight(0xfff6e0, 0x6ecc3a, 2.4));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
     sun.position.set(10, 18, 8);
     sun.castShadow = quality.shadows;
     sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
@@ -277,7 +277,7 @@ export function BuildingCanvas() {
     const baseSize = 128;
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(baseSize, baseSize).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0x9bc940, roughness: 0.6, metalness: 0 }),
+      new THREE.MeshStandardMaterial({ color: 0x5cd93a, roughness: 0.9, metalness: 0 }),
     );
     ground.position.y = 0;
     ground.receiveShadow = quality.shadows;
@@ -294,7 +294,7 @@ export function BuildingCanvas() {
     levelPlane.name = 'level-plane';
     scene.add(levelPlane);
 
-    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x5a9e2d, 0xbde676);
+    const grid = new THREE.GridHelper(gridSpan, gridExtent * 2, 0x2d8c17, 0x8cffad);
     grid.position.y = 0.01;
     (grid.material as THREE.Material).depthWrite = false;
     (grid.material as THREE.Material).transparent = true;

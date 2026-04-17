@@ -85,14 +85,14 @@ function grate(base: string, bar: string): PieceDef['build'] {
 }
 
 export const FLOOR_PIECES: PieceDef[] = [
-  { id: 'floor.wood_dark',     kind: 'floor', label: 'Dark Planks',   swatch: '#5b3a1e', build: planks('#5b3a1e', '#301a08', 'x') },
-  { id: 'floor.wood_light',    kind: 'floor', label: 'Light Planks',  swatch: '#c98b55', build: planks('#c98b55', '#7a4f29', 'x') },
-  { id: 'floor.stone_tiles',   kind: 'floor', label: 'Stone Tiles',   swatch: '#a7abb0', build: checker('#a7abb0', '#cfd3d8', 3) },
-  { id: 'floor.marble_checker',kind: 'floor', label: 'Marble Check',  swatch: '#f1e9dc', build: checker('#f1e9dc', '#2d2a26', 4) },
-  { id: 'floor.brick_red',     kind: 'floor', label: 'Brick',         swatch: '#b33c2b', build: brick('#6a2015', '#c55442') },
-  { id: 'floor.concrete',      kind: 'floor', label: 'Concrete',      swatch: '#b5b2a7', build: plain('#b5b2a7') },
-  { id: 'floor.grass',         kind: 'floor', label: 'Grass',         swatch: '#6bba3a', build: plain('#6bba3a') },
-  { id: 'floor.sand',          kind: 'floor', label: 'Sand',          swatch: '#ecd9a1', build: plain('#ecd9a1') },
-  { id: 'floor.carpet_red',    kind: 'floor', label: 'Red Carpet',    swatch: '#a82a2a', build: plain('#a82a2a') },
-  { id: 'floor.metal_grate',   kind: 'floor', label: 'Metal Grate',   swatch: '#4b5258', build: grate('#2b2f33', '#7a828a') },
+  { id: 'floor.wood_dark',     kind: 'floor', label: 'Dark Planks',   swatch: '#8b4a20', build: planks('#8b4a20', '#4a2510', 'x') },
+  { id: 'floor.wood_light',    kind: 'floor', label: 'Maple Planks',  swatch: '#ffb067', build: planks('#ffb067', '#c97a3a', 'x') },
+  { id: 'floor.stone_tiles',   kind: 'floor', label: 'Sky Tiles',     swatch: '#4dc4ff', build: checker('#4dc4ff', '#ffffff', 3) },
+  { id: 'floor.marble_checker',kind: 'floor', label: 'Checker',       swatch: '#ffffff', build: checker('#ffffff', '#1a1a1a', 4) },
+  { id: 'floor.brick_red',     kind: 'floor', label: 'Candy Brick',   swatch: '#ff2e44', build: brick('#b83a1c', '#ff6b7a') },
+  { id: 'floor.concrete',      kind: 'floor', label: 'Cloud Grey',    swatch: '#e0e8f0', build: plain('#e0e8f0') },
+  { id: 'floor.grass',         kind: 'floor', label: 'Grass',         swatch: '#5cd93a', build: plain('#5cd93a') },
+  { id: 'floor.sand',          kind: 'floor', label: 'Sand',          swatch: '#ffe066', build: plain('#ffe066') },
+  { id: 'floor.carpet_red',    kind: 'floor', label: 'Red Carpet',    swatch: '#ff2e44', build: plain('#ff2e44') },
+  { id: 'floor.metal_grate',   kind: 'floor', label: 'Metal Grate',   swatch: '#6b7580', build: grate('#3b434c', '#b8c2cc') },
 ];

@@ -84,7 +84,7 @@ function thatchedGable(): PieceDef['build'] {
       const y = r * peakH;
       const w = tile * (1 - r * 0.95);
       // alternate two golden-straw tones for texture
-      const c = i % 2 ? '#c79a4b' : '#d4ad5c';
+      const c = i % 2 ? '#ffd60a' : '#ffb800';
       g.add(makeBox(THREE, { x: tile * 1.02, y: peakH / steps + 0.025, z: w }, c, { y }));
     }
     return g;
@@ -122,8 +122,8 @@ function chimneyRoof(roofColor: string): PieceDef['build'] {
       g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, roofColor, { y }));
     }
     // chimney
-    g.add(makeBox(THREE, { x: 0.4, y: 1.2, z: 0.4 }, '#8a5236', { y: 0.6 + 0.05, x: tile * 0.25, z: tile * 0.25 }));
-    g.add(makeBox(THREE, { x: 0.5, y: 0.12, z: 0.5 }, '#5a3628', { y: 1.22, x: tile * 0.25, z: tile * 0.25 }));
+    g.add(makeBox(THREE, { x: 0.4, y: 1.2, z: 0.4 }, '#ff5252', { y: 0.6 + 0.05, x: tile * 0.25, z: tile * 0.25 }));
+    g.add(makeBox(THREE, { x: 0.5, y: 0.12, z: 0.5 }, '#1a1a1a', { y: 1.22, x: tile * 0.25, z: tile * 0.25 }));
     return g;
   };
 }
@@ -154,21 +154,21 @@ function skylight(roofColor: string): PieceDef['build'] {
   };
 }
 
-const RIDGE_SLATE     = '#4a5966';
-const RIDGE_TERRACOTTA= '#b85a3a';
-const RIDGE_GREEN_TILE= '#5b7b4c';
+const RIDGE_SLATE     = '#3b5dff';
+const RIDGE_TERRACOTTA= '#ff5252';
+const RIDGE_GREEN_TILE= '#5cd93a';
 
 export const ROOF_PIECES: PieceDef[] = [
-  { id: 'roof.flat_slate',       kind: 'roof', label: 'Flat · Slate',      swatch: RIDGE_SLATE,     build: flatRoof(RIDGE_SLATE, '#222b32') },
+  { id: 'roof.flat_slate',       kind: 'roof', label: 'Flat · Blue',       swatch: RIDGE_SLATE,     build: flatRoof(RIDGE_SLATE, '#ffd60a') },
   { id: 'roof.gable_x',          kind: 'roof', label: 'Gable (X ridge)',   swatch: RIDGE_TERRACOTTA,build: gableRoof(RIDGE_TERRACOTTA, 'x') },
   { id: 'roof.gable_z',          kind: 'roof', label: 'Gable (Z ridge)',   swatch: RIDGE_TERRACOTTA,build: gableRoof(RIDGE_TERRACOTTA, 'z') },
-  { id: 'roof.hip',              kind: 'roof', label: 'Hip',               swatch: RIDGE_GREEN_TILE,build: hipRoof(RIDGE_GREEN_TILE) },
-  { id: 'roof.shed',             kind: 'roof', label: 'Shed (pent)',       swatch: '#6b4a22',       build: shedRoof('#6b4a22') },
-  { id: 'roof.thatched',         kind: 'roof', label: 'Thatched',          swatch: '#c79a4b',       build: thatchedGable() },
-  { id: 'roof.domed_gold',       kind: 'roof', label: 'Domed · Gold',      swatch: '#d4a94b',       build: domed('#d4a94b', '#ffe27a') },
+  { id: 'roof.hip',              kind: 'roof', label: 'Hip · Green',       swatch: RIDGE_GREEN_TILE,build: hipRoof(RIDGE_GREEN_TILE) },
+  { id: 'roof.shed',             kind: 'roof', label: 'Shed · Orange',     swatch: '#ff8c2b',       build: shedRoof('#ff8c2b') },
+  { id: 'roof.thatched',         kind: 'roof', label: 'Thatched',          swatch: '#ffd60a',       build: thatchedGable() },
+  { id: 'roof.domed_gold',       kind: 'roof', label: 'Domed · Gold',      swatch: '#ffd60a',       build: domed('#ffd60a', '#ffffff') },
   { id: 'roof.chimney',          kind: 'roof', label: 'Chimney Gable',     swatch: RIDGE_SLATE,     build: chimneyRoof(RIDGE_SLATE) },
   { id: 'roof.skylight',         kind: 'roof', label: 'Skylight',          swatch: RIDGE_TERRACOTTA,build: skylight(RIDGE_TERRACOTTA) },
-  { id: 'roof.flat_green',       kind: 'roof', label: 'Flat · Green',      swatch: '#6bba3a',       build: flatRoof('#6bba3a', '#3f7622') },
+  { id: 'roof.flat_green',       kind: 'roof', label: 'Flat · Green',      swatch: '#5cd93a',       build: flatRoof('#5cd93a', '#ffd60a') },
 ];
 
 /* ──────────────── ROOF CORNERS (10) ──────────────── */
@@ -220,7 +220,7 @@ function flatCap(color: string): PieceDef['build'] {
     g.add(makeBox(THREE, { x: tile, y: 0.25, z: tile }, color, { y: 0.125 }));
     g.add(makeBox(THREE, { x: tile * 1.1, y: 0.1, z: tile * 1.1 }, color, { y: 0.3 }));
     // corner bollard
-    g.add(makeBox(THREE, { x: 0.3, y: 0.6, z: 0.3 }, '#3a2413', { y: 0.55, x: tile * 0.3, z: tile * 0.3 }));
+    g.add(makeBox(THREE, { x: 0.3, y: 0.6, z: 0.3 }, '#ffd60a', { y: 0.55, x: tile * 0.3, z: tile * 0.3 }));
     return g;
   };
 }
@@ -237,7 +237,7 @@ function gableEnd(color: string): PieceDef['build'] {
       g.add(makeBox(THREE, { x: w, y: peakH / steps + 0.02, z: tile }, color, { y }));
     }
     // pediment wall at the end
-    g.add(makeBox(THREE, { x: tile, y: peakH, z: 0.15 }, '#e7dfc8', { y: peakH / 2, z: -tile / 2 + 0.1 }));
+    g.add(makeBox(THREE, { x: tile, y: peakH, z: 0.15 }, '#ffffff', { y: peakH / 2, z: -tile / 2 + 0.1 }));
     return g;
   };
 }
@@ -254,8 +254,8 @@ function eaveGutter(color: string): PieceDef['build'] {
       g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, color, { y }));
     }
     // gutter lip along the front (Z = +tile/2)
-    g.add(makeBox(THREE, { x: tile, y: 0.1, z: 0.12 }, '#6b5a3c', { y: 0.1, z: tile / 2 + 0.05 }));
-    g.add(makeBox(THREE, { x: 0.12, y: 0.3, z: 0.12 }, '#6b5a3c', { y: -0.15, x: tile * 0.35, z: tile / 2 + 0.05 }));
+    g.add(makeBox(THREE, { x: tile, y: 0.1, z: 0.12 }, '#ffd60a', { y: 0.1, z: tile / 2 + 0.05 }));
+    g.add(makeBox(THREE, { x: 0.12, y: 0.3, z: 0.12 }, '#ffd60a', { y: -0.15, x: tile * 0.35, z: tile / 2 + 0.05 }));
     return g;
   };
 }
@@ -273,7 +273,7 @@ function dormer(color: string): PieceDef['build'] {
       g.add(makeBox(THREE, { x: tile, y: peakH / steps + 0.02, z: w }, color, { y }));
     }
     // dormer box
-    g.add(makeBox(THREE, { x: 0.9, y: 0.9, z: 0.6 }, '#f5efe0', { y: 0.45, z: tile * 0.25 }));
+    g.add(makeBox(THREE, { x: 0.9, y: 0.9, z: 0.6 }, '#ffffff', { y: 0.45, z: tile * 0.25 }));
     // dormer mini-roof
     g.add(makeBox(THREE, { x: 1.0, y: 0.2, z: 0.65 }, color, { y: 0.95, z: tile * 0.25 }));
     // window
@@ -309,14 +309,14 @@ function towerCap(color: string, flag: string): PieceDef['build'] {
 }
 
 export const ROOF_CORNERS: PieceDef[] = [
-  { id: 'roofcnr.hip_slate',      kind: 'roof-corner', label: 'Hip · Slate',   swatch: RIDGE_SLATE,      build: hipCorner(RIDGE_SLATE, '#1a2228') },
-  { id: 'roofcnr.hip_terra',      kind: 'roof-corner', label: 'Hip · Terra',   swatch: RIDGE_TERRACOTTA, build: hipCorner(RIDGE_TERRACOTTA, '#5a1f10') },
+  { id: 'roofcnr.hip_slate',      kind: 'roof-corner', label: 'Hip · Blue',    swatch: RIDGE_SLATE,      build: hipCorner(RIDGE_SLATE, '#ffd60a') },
+  { id: 'roofcnr.hip_terra',      kind: 'roof-corner', label: 'Hip · Red',     swatch: RIDGE_TERRACOTTA, build: hipCorner(RIDGE_TERRACOTTA, '#ffd60a') },
   { id: 'roofcnr.pyramid_green',  kind: 'roof-corner', label: 'Pyramid',       swatch: RIDGE_GREEN_TILE, build: pyramidCap(RIDGE_GREEN_TILE) },
   { id: 'roofcnr.flat_cap',       kind: 'roof-corner', label: 'Flat Cap',      swatch: RIDGE_SLATE,      build: flatCap(RIDGE_SLATE) },
   { id: 'roofcnr.gable_end',      kind: 'roof-corner', label: 'Gable End',     swatch: RIDGE_TERRACOTTA, build: gableEnd(RIDGE_TERRACOTTA) },
   { id: 'roofcnr.eave',           kind: 'roof-corner', label: 'Eave + Gutter', swatch: RIDGE_GREEN_TILE, build: eaveGutter(RIDGE_GREEN_TILE) },
   { id: 'roofcnr.dormer',         kind: 'roof-corner', label: 'Dormer',        swatch: RIDGE_SLATE,      build: dormer(RIDGE_SLATE) },
-  { id: 'roofcnr.tower_red',      kind: 'roof-corner', label: 'Tower · Red',   swatch: '#b8402a',        build: towerCap('#b8402a', '#f2c94c') },
-  { id: 'roofcnr.tower_blue',     kind: 'roof-corner', label: 'Tower · Blue',  swatch: '#2a5fb8',        build: towerCap('#2a5fb8', '#ffffff') },
-  { id: 'roofcnr.thatched_peak',  kind: 'roof-corner', label: 'Thatched Peak', swatch: '#c79a4b',        build: pyramidCap('#c79a4b') },
+  { id: 'roofcnr.tower_red',      kind: 'roof-corner', label: 'Tower · Red',   swatch: '#ff2e44',        build: towerCap('#ff2e44', '#ffd60a') },
+  { id: 'roofcnr.tower_blue',     kind: 'roof-corner', label: 'Tower · Blue',  swatch: '#3b5dff',        build: towerCap('#3b5dff', '#ffffff') },
+  { id: 'roofcnr.thatched_peak',  kind: 'roof-corner', label: 'Thatched Peak', swatch: '#ffd60a',        build: pyramidCap('#ffd60a') },
 ];

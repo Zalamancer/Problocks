@@ -1,8 +1,10 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Save, Upload, Play, Settings, Sun, Moon } from 'lucide-react';
+import { Save, Upload, Play, Square, Settings, Sun, Moon, User, LogOut } from 'lucide-react';
 import { useStudio } from '@/store/studio-store';
-import { IconButton, PanelActionButton } from '@/components/ui';
+import { useSceneStore } from '@/store/scene-store';
+import { useBuildingStore } from '@/store/building-store';
+import { PanelActionButton } from '@/components/ui';
 
 interface MenuItem {
   id: string;
@@ -24,7 +26,16 @@ export function TopMenuBar() {
   const [hoverMode, setHoverMode] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const { projectName, theme, toggleTheme, games, activeGameId, setViewMode } = useStudio();
+  const isPlaying = useSceneStore((s) => s.isPlaying);
+  const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
+  const setBuildTool = useBuildingStore((s) => s.setTool);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+
+  const togglePlay = useCallback(() => {
+    const next = !isPlaying;
+    setIsPlaying(next);
+    if (next) setBuildTool('select');
+  }, [isPlaying, setIsPlaying, setBuildTool]);
 
   useEffect(() => {
     if (!openMenu) return;
@@ -71,22 +82,39 @@ export function TopMenuBar() {
         { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => { useStudio.getState().setActiveGameId(null); } },
         { separator: true },
         { id: 'save',    label: 'Save',                   icon: Save,   shortcut: '⌘S', onClick: () => {} },
-        { id: 'publish', label: 'Publish to Marketplace', icon: Upload,                 onClick: () => {} },
+        { id: 'publish', label: 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => {} },
       ],
     },
     { kind: 'direct', id: 'marketplace', label: 'Marketplace', onClick: () => { window.location.href = '/marketplace'; } },
     { kind: 'direct', id: 'classroom',   label: 'Classroom',   onClick: () => {} },
   ];
 
+  const userMenu: DropdownMenu = {
+    kind: 'dropdown',
+    id: 'user',
+    label: 'User',
+    items: [
+      { id: 'settings', label: 'Settings',    icon: Settings, onClick: () => setViewMode('settings') },
+      { id: 'theme',    label: theme === 'dark' ? 'Light mode' : 'Dark mode', icon: theme === 'dark' ? Sun : Moon, onClick: toggleTheme },
+      { separator: true },
+      { id: 'signout',  label: 'Sign out',    icon: LogOut,   onClick: () => {} },
+    ],
+  };
+
   return (
     <div
       ref={barRef}
       className="relative z-50 flex items-center h-9 bg-zinc-900/60 backdrop-blur-xl border border-white/[0.06] rounded-xl shrink-0 select-none"
     >
-      {/* Logo */}
-      <div className="flex items-center gap-2 px-3 border-r border-white/[0.06] h-full">
-        <div className="h-4 w-4 rounded bg-accent shrink-0" />
-        <span className="text-xs font-bold text-white">Problocks</span>
+      {/* User menu */}
+      <div className="flex items-center border-r border-white/[0.06] h-full px-1">
+        <UserMenuButton
+          menu={userMenu}
+          isOpen={openMenu === userMenu.id}
+          onClick={() => handleMenuClick(userMenu.id)}
+          onHover={() => handleMenuHover(userMenu.id)}
+          onItemClick={handleItemClick}
+        />
       </div>
 
       {/* Menu buttons */}
@@ -121,24 +149,56 @@ export function TopMenuBar() {
 
       {/* Actions */}
       <div className="flex items-center gap-1 pr-2">
-        <IconButton
-          icon={theme === 'dark' ? Sun : Moon}
-          variant="ghost"
+        <PanelActionButton
+          onClick={togglePlay}
+          variant={isPlaying ? 'destructive' : 'primary'}
+          icon={isPlaying ? Square : Play}
           size="sm"
-          onClick={toggleTheme}
-          tooltip={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-        />
-        <PanelActionButton onClick={() => {}} variant="primary" icon={Upload} size="sm">
-          Publish
+        >
+          {isPlaying ? 'Stop' : 'Play'}
         </PanelActionButton>
-        <IconButton
-          icon={Settings}
-          variant="ghost"
-          size="sm"
-          tooltip="Settings"
-          onClick={() => setViewMode('settings')}
-        />
       </div>
+    </div>
+  );
+}
+
+function UserMenuButton({ menu, isOpen, onClick, onHover, onItemClick }: {
+  menu: DropdownMenu; isOpen: boolean; onClick: () => void; onHover: () => void;
+  onItemClick: (item: MenuItem) => void;
+}) {
+  return (
+    <div className="relative h-full flex items-center" onMouseEnter={onHover}>
+      <button
+        onClick={onClick}
+        title="Account"
+        className={cn(
+          'h-7 w-7 rounded-md flex items-center justify-center transition-colors',
+          isOpen ? 'bg-panel-surface text-white' : 'text-gray-400 hover:text-white hover:bg-panel-surface',
+        )}
+      >
+        <User size={14} />
+      </button>
+      {isOpen && (
+        <div className="absolute top-full left-0 z-dropdown min-w-[200px] py-1 bg-panel-bg border border-white/10 rounded-xl shadow-2xl mt-1">
+          {menu.items.map((entry, i) => {
+            if ((entry as MenuSeparator).separator)
+              return <div key={`sep-${i}`} className="my-1 border-t border-white/5" />;
+            const item = entry as MenuItem;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onItemClick(item)}
+                className="flex items-center gap-3 px-3 py-2 text-xs text-gray-300 hover:bg-panel-surface hover:text-white transition-colors rounded-md mx-1 w-[calc(100%-8px)]"
+              >
+                <Icon size={13} className="shrink-0 text-gray-500" />
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.shortcut && <span className="text-[10px] text-gray-600">{item.shortcut}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

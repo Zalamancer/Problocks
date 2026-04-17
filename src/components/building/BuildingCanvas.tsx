@@ -879,40 +879,50 @@ export function BuildingCanvas() {
       const tAx = jx + r * dA.dx, tAz = jz + r * dA.dz;
       const tBx = jx + r * dB.dx, tBz = jz + r * dB.dz;
 
+      // Find the shorter sweep (always ±π/2 for perpendicular walls).
       const startAng = Math.atan2(tAz - cz, tAx - cx);
-      const endAng = Math.atan2(tBz - cz, tBx - cx);
-      let delta = endAng - startAng;
+      const endAngRaw = Math.atan2(tBz - cz, tBx - cx);
+      let delta = endAngRaw - startAng;
       while (delta > Math.PI) delta -= 2 * Math.PI;
       while (delta < -Math.PI) delta += 2 * Math.PI;
+      const endAng = startAng + delta;
 
-      const SEG = 10;
-      const arcGroup = new THREE.Group();
-      arcGroup.userData.kind = 'wall-arc';
-      arcGroup.userData.junction = vk;
-      const arcMat = new THREE.MeshStandardMaterial({ color: wA.tint, roughness: 1 });
-      for (let s = 0; s < SEG; s++) {
-        const a0 = startAng + (s / SEG) * delta;
-        const a1 = startAng + ((s + 1) / SEG) * delta;
-        const aMid = (a0 + a1) / 2;
-        const x0 = cx + Math.cos(a0) * r, z0 = cz + Math.sin(a0) * r;
-        const x1 = cx + Math.cos(a1) * r, z1 = cz + Math.sin(a1) * r;
-        const chord = Math.hypot(x1 - x0, z1 - z0) + WALL_THICK * 0.35;
-        const seg = new THREE.Mesh(
-          new THREE.BoxGeometry(chord, WALL_HEIGHT, WALL_THICK),
-          arcMat,
-        );
-        seg.position.set(
-          cx + Math.cos(aMid) * r,
-          baseY + WALL_HEIGHT / 2,
-          cz + Math.sin(aMid) * r,
-        );
-        // Align segment's local +X with the tangent direction at aMid.
-        seg.rotation.y = -aMid - Math.PI / 2;
-        seg.castShadow = true;
-        seg.receiveShadow = true;
-        arcGroup.add(seg);
-      }
-      refs.wallGroup.add(arcGroup);
+      // Build a true 2D annulus slice (thick arc) and extrude it vertically.
+      // Three.js's Shape.absarc is the actual arc primitive — ExtrudeGeometry
+      // tessellates it via `curveSegments`, so the surface is mathematically
+      // correct (no chord-segment facets).
+      const halfT = WALL_THICK / 2;
+      const Ro = r + halfT;
+      const Ri = r - halfT;
+      const shape = new THREE.Shape();
+      // Outer arc from startAng to endAng. After rotateX(+π/2) the shape's
+      // XY plane maps directly to world XZ, so we work in standard angles.
+      shape.moveTo(Math.cos(startAng) * Ro, Math.sin(startAng) * Ro);
+      shape.absarc(0, 0, Ro, startAng, endAng, /* clockwise = */ delta < 0);
+      shape.lineTo(Math.cos(endAng) * Ri, Math.sin(endAng) * Ri);
+      shape.absarc(0, 0, Ri, endAng, startAng, /* clockwise = */ delta > 0);
+      shape.closePath();
+
+      const arcGeo = new THREE.ExtrudeGeometry(shape, {
+        depth: WALL_HEIGHT,
+        bevelEnabled: false,
+        curveSegments: 32, // smooth arc — each curve in `shape` is sampled this often
+      });
+      // Extrusion is along +Z. rotateX(+π/2) maps shape XY → world XZ
+      // (no mirror) and pushes the extrusion to -Y; translate up so the
+      // bottom of the arc sits at world y = baseY.
+      arcGeo.rotateX(Math.PI / 2);
+      arcGeo.translate(cx, baseY + WALL_HEIGHT, cz);
+
+      const arcMesh = new THREE.Mesh(
+        arcGeo,
+        new THREE.MeshStandardMaterial({ color: wA.tint, roughness: 1 }),
+      );
+      arcMesh.castShadow = true;
+      arcMesh.receiveShadow = true;
+      arcMesh.userData.kind = 'wall-arc';
+      arcMesh.userData.junction = vk;
+      refs.wallGroup.add(arcMesh);
     }
 
     // Emit each wall as a single trimmed solid box.

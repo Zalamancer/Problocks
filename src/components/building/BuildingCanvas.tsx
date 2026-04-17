@@ -7,6 +7,7 @@ import { useBuildingStore, type EdgeDir } from '@/store/building-store';
 import { useSceneStore, type ScenePart, type PartType } from '@/store/scene-store';
 import { useQualityStore } from '@/store/quality-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
+import { createPlayController, type PlayController } from './play-mode';
 
 const TILE = 2;
 const WALL_HEIGHT = 3;
@@ -111,6 +112,7 @@ function wallPlacement(x: number, z: number, dir: EdgeDir) {
 export function BuildingCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SceneRefs | null>(null);
+  const playRef = useRef<PlayController | null>(null);
 
   const tool = useBuildingStore((s) => s.tool);
   const floors = useBuildingStore((s) => s.floors);
@@ -119,6 +121,17 @@ export function BuildingCanvas() {
   const parts = useSceneStore((s) => s.sceneObjects);
   const selectedPartId = useSceneStore((s) => s.selectedPart?.id ?? null);
   const quality = useQualityStore((s) => s.settings);
+  const isPlaying = useSceneStore((s) => s.isPlaying);
+
+  // Start/stop the play-mode character controller whenever the user toggles
+  // the Play button. Effect runs after sceneRef/playRef are populated by the
+  // init effect below, so the first toggle post-mount is safe.
+  useEffect(() => {
+    const ctrl = playRef.current;
+    if (!ctrl) return;
+    if (isPlaying) ctrl.start();
+    else ctrl.stop();
+  }, [isPlaying]);
 
   // --- init scene (re-runs when the quality tier changes so we can rebuild
   //     the renderer with a different antialias/pixelRatio/shadow config) ---
@@ -340,9 +353,20 @@ export function BuildingCanvas() {
     };
     sceneRef.current = refs;
 
+    playRef.current = createPlayController({
+      scene, camera, renderer, controls, partGroup, floorGroup, wallGroup,
+    });
+    // If Play was toggled on before the canvas mounted, pick it up immediately.
+    if (useSceneStore.getState().isPlaying) playRef.current.start();
+
+    let lastTime = performance.now();
     function animate() {
       if (!sceneRef.current) return;
       sceneRef.current.animId = requestAnimationFrame(animate);
+      const now = performance.now();
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      if (playRef.current?.isActive()) playRef.current.update(dt);
       sceneRef.current.controls.update();
       sceneRef.current.gizmo.update();
       sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
@@ -362,6 +386,10 @@ export function BuildingCanvas() {
     return () => {
       ro.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
+      if (playRef.current) {
+        playRef.current.stop();
+        playRef.current = null;
+      }
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);
         sceneRef.current.gizmo.dispose();
@@ -471,6 +499,12 @@ export function BuildingCanvas() {
     }
 
     function onMove(e: MouseEvent) {
+      // No hover/ghost logic while play-mode is running — the cursor is in
+      // pointer-lock and the user is controlling the character.
+      if (useSceneStore.getState().isPlaying) {
+        refs!.ghost.visible = false;
+        return;
+      }
       // Let the gizmo update its hover highlight first. If it's actively
       // dragging we still want the orbit/ghost code below to stay quiet —
       // it already does because OrbitControls is disabled during drag.
@@ -491,6 +525,9 @@ export function BuildingCanvas() {
 
     function onDown(e: MouseEvent) {
       if (e.button !== 0) return;
+      // Block every editor click while play-mode is running so students
+      // don't place parts on the ground when they meant to move around.
+      if (useSceneStore.getState().isPlaying) return;
 
       // 0) Gizmo handle takes priority — if the user clicked a translate /
       //    rotate / scale handle, start that drag and stop here.

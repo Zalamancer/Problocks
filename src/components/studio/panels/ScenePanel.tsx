@@ -15,15 +15,18 @@ import {
   Layers,
   Search,
   X,
+  Square,
+  RectangleHorizontal,
 } from 'lucide-react';
 import { useSceneStore, type PartType } from '@/store/scene-store';
+import { useBuildingStore } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 
 // ── Unified layer item type ─────────────────────────────────────────────
 interface LayerItem {
   id: string;
   name: string;
-  type: 'part' | 'script';
+  type: 'part' | 'floor' | 'wall' | 'script';
   icon: typeof Box;
   iconColor: string;
   badge: string;
@@ -35,25 +38,33 @@ interface LayerItem {
   onRemove?: () => void;
 }
 
-const CATEGORY_ORDER = ['part', 'script'] as const;
+const CATEGORY_ORDER = ['part', 'floor', 'wall', 'script'] as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
   part: 'Workspace',
+  floor: 'Floors',
+  wall: 'Walls',
   script: 'Scripts',
 };
 
 const CATEGORY_SUBLABELS: Record<string, string> = {
   part: 'Parts in your scene',
+  floor: 'Floor tiles',
+  wall: 'Wall edges',
   script: 'Game code files',
 };
 
 const CATEGORY_ICONS: Record<string, typeof Box> = {
   part: Folder,
+  floor: Square,
+  wall: RectangleHorizontal,
   script: FileCode,
 };
 
 const CATEGORY_ICON_BG: Record<string, string> = {
   part: 'bg-blue-500/15 text-blue-300 ring-1 ring-blue-400/30',
+  floor: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/30',
+  wall: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30',
   script: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30',
 };
 
@@ -72,8 +83,16 @@ interface Props {
 export function ScenePanel({ onSelect }: Props) {
   const sceneObjects = useSceneStore((s) => s.sceneObjects);
   const selectedPart = useSceneStore((s) => s.selectedPart);
+  const setSelectedPart = useSceneStore((s) => s.setSelectedPart);
   const updateSceneObject = useSceneStore((s) => s.updateSceneObject);
   const removePart = useSceneStore((s) => s.removePart);
+
+  const floors = useBuildingStore((s) => s.floors);
+  const walls = useBuildingStore((s) => s.walls);
+  const buildingSelection = useBuildingStore((s) => s.selection);
+  const setBuildingSelection = useBuildingStore((s) => s.setSelection);
+  const eraseFloor = useBuildingStore((s) => s.eraseFloor);
+  const eraseWall = useBuildingStore((s) => s.eraseWall);
 
   const games = useStudio((s) => s.games);
   const activeGameId = useStudio((s) => s.activeGameId);
@@ -114,6 +133,59 @@ export function ScenePanel({ onSelect }: Props) {
       });
     });
 
+    // Floors (sorted by tile coords for stable order)
+    Object.entries(floors)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([key, cell]) => {
+        const isSelected = buildingSelection?.kind === 'floor' && buildingSelection.key === key;
+        items.push({
+          id: `floor-${key}`,
+          name: cell.asset,
+          type: 'floor',
+          icon: Square,
+          iconColor: '#fbbf24', // amber-400
+          badge: `(${key})`,
+          visible: null,
+          isSelected,
+          onSelect: () => {
+            setBuildingSelection({ kind: 'floor', key });
+            setSelectedPart(null);
+          },
+          onRemove: () => {
+            const [x, z] = key.split(',').map(Number);
+            eraseFloor(x, z);
+          },
+        });
+      });
+
+    // Walls
+    Object.entries(walls)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([key, edge]) => {
+        const isSelected = buildingSelection?.kind === 'wall' && buildingSelection.key === key;
+        items.push({
+          id: `wall-${key}`,
+          name: edge.asset,
+          type: 'wall',
+          icon: RectangleHorizontal,
+          iconColor: '#fb7185', // rose-400
+          badge: `(${key})`,
+          visible: null,
+          isSelected,
+          onSelect: () => {
+            setBuildingSelection({ kind: 'wall', key });
+            setSelectedPart(null);
+          },
+          onRemove: () => {
+            const parts = key.split(',');
+            const x = Number(parts[0]);
+            const z = Number(parts[1]);
+            const dir = parts[2] as 'N' | 'E';
+            eraseWall(x, z, dir);
+          },
+        });
+      });
+
     if (activeGame?.files) {
       const names = Object.keys(activeGame.files).sort((a, b) => {
         if (a === 'config.js') return -1;
@@ -136,7 +208,23 @@ export function ScenePanel({ onSelect }: Props) {
     }
 
     return items;
-  }, [sceneObjects, selectedPart, activeGame, openFileName, onSelect, updateSceneObject, removePart, setOpenFileName]);
+  }, [
+    sceneObjects,
+    selectedPart,
+    floors,
+    walls,
+    buildingSelection,
+    activeGame,
+    openFileName,
+    onSelect,
+    updateSceneObject,
+    removePart,
+    setSelectedPart,
+    setBuildingSelection,
+    eraseFloor,
+    eraseWall,
+    setOpenFileName,
+  ]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, LayerItem[]>();
@@ -279,7 +367,15 @@ function LayerRow({ layer }: { layer: LayerItem }) {
           <Icon size={14} className="text-white/80 drop-shadow" />
         </div>
       ) : (
-        <div className="w-9 h-9 rounded-lg shrink-0 bg-emerald-500/15 ring-1 ring-emerald-400/30 flex items-center justify-center">
+        <div
+          className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center ring-1 ${
+            layer.type === 'floor'
+              ? 'bg-amber-500/15 ring-amber-400/30'
+              : layer.type === 'wall'
+                ? 'bg-rose-500/15 ring-rose-400/30'
+                : 'bg-emerald-500/15 ring-emerald-400/30'
+          }`}
+        >
           <Icon size={16} style={{ color: layer.iconColor }} />
         </div>
       )}

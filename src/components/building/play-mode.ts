@@ -54,8 +54,6 @@ const SHOULDER_X = TORSO_WIDTH / 2 + ARM_THICKNESS / 2 - 0.02; // tucked just ou
 const LIMB_SWING = 0.75;    // radians — peak leg swing at full speed
 const ARM_SWING = 0.55;
 const MOVE_SPEED = 14;
-const ACCEL = 60;           // horizontal units/sec² ramp toward target velocity
-const DECEL = 80;           // horizontal units/sec² ramp toward zero when idle
 const ROTATE_SPEED = 14;    // rad/sec character turns toward desired facing
 const JUMP_SPEED = 13;
 const GRAVITY_UP = -38;     // weaker gravity on the way up = hangtime
@@ -375,18 +373,11 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
         wishZ = (wishZ / wishLen) * MOVE_SPEED;
       }
 
-      // Ease current velocity toward wish velocity — separate accel vs decel
+      // Snap velocity directly to wish — no accel/decel, so the character
+      // starts and stops instantly on key press/release (no ice slide).
       const inputActive = wishLen > 0;
-      const rate = inputActive ? ACCEL : DECEL;
-      const dvx = wishX - velocity.x;
-      const dvz = wishZ - velocity.z;
-      const maxStep = rate * step;
-      const dvLen = Math.hypot(dvx, dvz);
-      if (dvLen > 0) {
-        const k = Math.min(1, maxStep / dvLen);
-        velocity.x += dvx * k;
-        velocity.z += dvz * k;
-      }
+      velocity.x = wishX;
+      velocity.z = wishZ;
 
       // Coyote time + jump buffering → forgiving jumps
       if (grounded) coyoteTimer = 0;

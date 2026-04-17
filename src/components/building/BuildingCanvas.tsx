@@ -891,38 +891,52 @@ export function BuildingCanvas() {
       // Three.js's Shape.absarc is the actual arc primitive — ExtrudeGeometry
       // tessellates it via `curveSegments`, so the surface is mathematically
       // correct (no chord-segment facets).
+      // We split the arc at its midpoint so each wall owns half the bend and
+      // keeps its own tint — otherwise one wall's color bleeds across the whole
+      // fillet and the corner reads as "wall A extended around the other wall".
       const halfT = WALL_THICK / 2;
       const Ro = r + halfT;
-      const Ri = r - halfT;
-      const shape = new THREE.Shape();
-      // Outer arc from startAng to endAng. After rotateX(+π/2) the shape's
-      // XY plane maps directly to world XZ, so we work in standard angles.
-      shape.moveTo(Math.cos(startAng) * Ro, Math.sin(startAng) * Ro);
-      shape.absarc(0, 0, Ro, startAng, endAng, /* clockwise = */ delta < 0);
-      shape.lineTo(Math.cos(endAng) * Ri, Math.sin(endAng) * Ri);
-      shape.absarc(0, 0, Ri, endAng, startAng, /* clockwise = */ delta > 0);
-      shape.closePath();
+      const Ri = Math.max(r - halfT, 0.001); // guard against thick walls / small r
+      const midAng = startAng + delta / 2;
 
-      const arcGeo = new THREE.ExtrudeGeometry(shape, {
-        depth: WALL_HEIGHT,
-        bevelEnabled: false,
-        curveSegments: 32, // smooth arc — each curve in `shape` is sampled this often
-      });
-      // Extrusion is along +Z. rotateX(+π/2) maps shape XY → world XZ
-      // (no mirror) and pushes the extrusion to -Y; translate up so the
-      // bottom of the arc sits at world y = baseY.
-      arcGeo.rotateX(Math.PI / 2);
-      arcGeo.translate(cx, baseY + WALL_HEIGHT, cz);
+      const buildArcSegment = (angStart: number, angEnd: number, tint: string) => {
+        const segDelta = angEnd - angStart;
+        const shape = new THREE.Shape();
+        // Outer arc from angStart to angEnd. After rotateX(+π/2) the shape's
+        // XY plane maps directly to world XZ, so we work in standard angles.
+        shape.moveTo(Math.cos(angStart) * Ro, Math.sin(angStart) * Ro);
+        shape.absarc(0, 0, Ro, angStart, angEnd, /* clockwise = */ segDelta < 0);
+        shape.lineTo(Math.cos(angEnd) * Ri, Math.sin(angEnd) * Ri);
+        shape.absarc(0, 0, Ri, angEnd, angStart, /* clockwise = */ segDelta > 0);
+        shape.closePath();
 
-      const arcMesh = new THREE.Mesh(
-        arcGeo,
-        new THREE.MeshStandardMaterial({ color: wA.tint, roughness: 1 }),
-      );
-      arcMesh.castShadow = true;
-      arcMesh.receiveShadow = true;
-      arcMesh.userData.kind = 'wall-arc';
-      arcMesh.userData.junction = vk;
-      refs.wallGroup.add(arcMesh);
+        const segGeo = new THREE.ExtrudeGeometry(shape, {
+          depth: WALL_HEIGHT,
+          bevelEnabled: false,
+          curveSegments: 16, // per-half; total arc still ~32 like the old single-piece version
+        });
+        // Extrusion is along +Z. rotateX(+π/2) maps shape XY → world XZ
+        // (no mirror) and pushes the extrusion to -Y; translate up so the
+        // bottom of the arc sits at world y = baseY.
+        segGeo.rotateX(Math.PI / 2);
+        segGeo.translate(cx, baseY + WALL_HEIGHT, cz);
+
+        const segMesh = new THREE.Mesh(
+          segGeo,
+          new THREE.MeshStandardMaterial({ color: tint, roughness: 1 }),
+        );
+        segMesh.castShadow = true;
+        segMesh.receiveShadow = true;
+        segMesh.userData.kind = 'wall-arc';
+        segMesh.userData.junction = vk;
+        return segMesh;
+      };
+
+      // Half adjacent to wall A (from wall A's tangent to the midpoint) uses A's tint,
+      // half adjacent to wall B uses B's tint. Each wall now visibly "bends" into
+      // half of the corner instead of one wall apparently extending across.
+      refs.wallGroup.add(buildArcSegment(startAng, midAng, wA.tint));
+      refs.wallGroup.add(buildArcSegment(midAng, endAng, wB.tint));
     }
 
     // Emit each wall as a single trimmed solid box.

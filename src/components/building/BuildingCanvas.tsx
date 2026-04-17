@@ -13,7 +13,7 @@ import { useQualityStore } from '@/store/quality-store';
 import { useLightingStore, rgbToHex, addRgb } from '@/store/lighting-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
-import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK } from '@/lib/building-kit';
+import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK, FLOOR_THICK } from '@/lib/building-kit';
 
 const PART_DEFAULT_SIZE = 2;
 
@@ -775,26 +775,166 @@ export function BuildingCanvas() {
 
   // ------------- data-driven rebuilds -------------
 
-  // Floors
+  // Floors — sharp-corner mode renders each tile via buildPiece (preserves
+  // plank/checker/brick patterns). Bend mode (cornerBend > 0) replaces the
+  // default square slab with a custom ExtrudeGeometry whose corners are
+  // rounded by the same radius `r` used for wall fillets, but only at tile
+  // vertices that (a) host a clean 2-way wall junction and (b) whose fillet
+  // side points toward this floor tile. This keeps the floor flush with
+  // the rounded wall corner instead of a sharp slab poking through the arc.
+  // Same trade-off as walls: patterned floors become solid tinted shapes
+  // when bending is active.
   useEffect(() => {
     const refs = sceneRef.current;
     if (!refs) return;
     disposeAndClear(refs.floorGroup);
+
+    if (cornerBend <= 0.001) {
+      for (const key of Object.keys(floors)) {
+        const cell = floors[key];
+        const [xs, ys, zs] = key.split(',');
+        const x = +xs, y = +ys, z = +zs;
+        const g = buildPiece(cell.asset, THREE);
+        const p = cell.position ?? { x: x * TILE, y: y * WALL_HEIGHT, z: z * TILE };
+        g.position.set(p.x, p.y, p.z);
+        if (cell.rotation) g.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
+        if (cell.scale) g.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
+        g.visible = cell.visible ?? true;
+        g.userData.kind = 'floor';
+        g.userData.key = key;
+        refs.floorGroup.add(g);
+      }
+      return;
+    }
+
+    const r = Math.min(cornerBend, TILE / 2);
+
+    // Build a map: tile-vertex key → summed outward wall directions
+    // (dA+dB). Present only for clean 2-way perpendicular junctions, which
+    // is the same set of junctions that get wall fillets above.
+    type WInfo = { x: number; y: number; z: number; dir: EdgeDir };
+    const wallList: WInfo[] = [];
+    for (const key of Object.keys(walls)) {
+      const edge = walls[key];
+      if (edge.visible === false) continue;
+      const [xs, ys, zs, dirRaw] = key.split(',') as [string, string, string, EdgeDir];
+      wallList.push({ x: +xs, y: +ys, z: +zs, dir: dirRaw });
+    }
+    const endpointsOfW = (w: WInfo): [string, string] =>
+      w.dir === 'N'
+        ? [`${w.x},${w.y},${w.z}`, `${w.x + 1},${w.y},${w.z}`]
+        : [`${w.x + 1},${w.y},${w.z}`, `${w.x + 1},${w.y},${w.z + 1}`];
+    const dirAwayW = (w: WInfo, isFirst: boolean): { dx: number; dz: number } =>
+      w.dir === 'N'
+        ? { dx: isFirst ? 1 : -1, dz: 0 }
+        : { dx: 0, dz: isFirst ? 1 : -1 };
+
+    const vmap = new Map<string, { idx: number; first: boolean }[]>();
+    for (let i = 0; i < wallList.length; i++) {
+      const [a, b] = endpointsOfW(wallList[i]);
+      let arrA = vmap.get(a); if (!arrA) { arrA = []; vmap.set(a, arrA); }
+      arrA.push({ idx: i, first: true });
+      let arrB = vmap.get(b); if (!arrB) { arrB = []; vmap.set(b, arrB); }
+      arrB.push({ idx: i, first: false });
+    }
+    const filletDir = new Map<string, { dx: number; dz: number }>();
+    for (const [vk, links] of vmap.entries()) {
+      if (links.length !== 2) continue;
+      const wA = wallList[links[0].idx];
+      const wB = wallList[links[1].idx];
+      if (wA.dir === wB.dir) continue;
+      const dA = dirAwayW(wA, links[0].first);
+      const dB = dirAwayW(wB, links[1].first);
+      filletDir.set(vk, { dx: dA.dx + dB.dx, dz: dA.dz + dB.dz });
+    }
+
+    // Walk a floor tile's 4 corners CW in shape-local (X, Z) space:
+    //   NW → NE → SE → SW → NW. For each corner that hosts a matching
+    //   fillet, we trim the two adjacent edges back by r and insert a
+    //   tangent quarter-arc identical to the wall fillet.
     for (const key of Object.keys(floors)) {
       const cell = floors[key];
+      if (cell.visible === false) continue;
       const [xs, ys, zs] = key.split(',');
       const x = +xs, y = +ys, z = +zs;
-      const g = buildPiece(cell.asset, THREE);
-      const p = cell.position ?? { x: x * TILE, y: y * WALL_HEIGHT, z: z * TILE };
-      g.position.set(p.x, p.y, p.z);
-      if (cell.rotation) g.rotation.set(cell.rotation.x, cell.rotation.y, cell.rotation.z);
-      if (cell.scale) g.scale.set(cell.scale.x, cell.scale.y, cell.scale.z);
-      g.visible = cell.visible ?? true;
-      g.userData.kind = 'floor';
-      g.userData.key = key;
-      refs.floorGroup.add(g);
+      const tint = cell.color ?? getPiece(cell.asset)?.swatch ?? '#ffffff';
+
+      type CornerDef = { sx: number; sz: number; vk: string; inDx: number; inDz: number };
+      const corners: CornerDef[] = [
+        { sx: -TILE / 2, sz: -TILE / 2, vk: `${x},${y},${z}`,         inDx: +1, inDz: +1 }, // NW
+        { sx: +TILE / 2, sz: -TILE / 2, vk: `${x + 1},${y},${z}`,     inDx: -1, inDz: +1 }, // NE
+        { sx: +TILE / 2, sz: +TILE / 2, vk: `${x + 1},${y},${z + 1}`, inDx: -1, inDz: -1 }, // SE
+        { sx: -TILE / 2, sz: +TILE / 2, vk: `${x},${y},${z + 1}`,     inDx: +1, inDz: -1 }, // SW
+      ];
+      const rounded = corners.map((c) => {
+        const f = filletDir.get(c.vk);
+        if (!f) return false;
+        return Math.sign(f.dx) === c.inDx && Math.sign(f.dz) === c.inDz;
+      });
+      // Legs in walk order: NW→NE = +X, NE→SE = +Z, SE→SW = -X, SW→NW = -Z.
+      const legDirs = [
+        { dx: +1, dz:  0 },
+        { dx:  0, dz: +1 },
+        { dx: -1, dz:  0 },
+        { dx:  0, dz: -1 },
+      ];
+
+      const shape = new THREE.Shape();
+      // Start at exit of corner 0 (post-rounding along leg 0).
+      const start = rounded[0]
+        ? { x: corners[0].sx + r * legDirs[0].dx, z: corners[0].sz + r * legDirs[0].dz }
+        : { x: corners[0].sx, z: corners[0].sz };
+      shape.moveTo(start.x, start.z);
+
+      for (let i = 0; i < 4; i++) {
+        const next = (i + 1) % 4;
+        const leg = legDirs[i];
+        const nextLeg = legDirs[next];
+        const ec = corners[next];
+        // Entry of next corner (pre-rounding along this leg).
+        const entry = rounded[next]
+          ? { x: ec.sx - r * leg.dx, z: ec.sz - r * leg.dz }
+          : { x: ec.sx, z: ec.sz };
+        shape.lineTo(entry.x, entry.z);
+
+        if (rounded[next]) {
+          // Arc center = sharp corner + r*(−leg + nextLeg). E.g. NE sharp
+          // (+T/2,−T/2), leg=+X, nextLeg=+Z → center (+T/2−r, −T/2+r).
+          const acx = ec.sx + r * (-leg.dx + nextLeg.dx);
+          const acz = ec.sz + r * (-leg.dz + nextLeg.dz);
+          const exit = { x: ec.sx + r * nextLeg.dx, z: ec.sz + r * nextLeg.dz };
+          const a0 = Math.atan2(entry.z - acz, entry.x - acx);
+          const a1 = Math.atan2(exit.z - acz, exit.x - acx);
+          let dA = a1 - a0;
+          while (dA >  Math.PI) dA -= 2 * Math.PI;
+          while (dA < -Math.PI) dA += 2 * Math.PI;
+          shape.absarc(acx, acz, r, a0, a0 + dA, dA < 0);
+        }
+      }
+      shape.closePath();
+
+      const geo = new THREE.ExtrudeGeometry(shape, {
+        depth: FLOOR_THICK,
+        bevelEnabled: false,
+        curveSegments: 16,
+      });
+      // Shape lives in its own XY plane; rotateX(+π/2) maps shape XY → world XZ
+      // (matching the wall-arc pattern) and pushes the extrude to -Y, so we
+      // translate up by FLOOR_THICK to place the slab bottom at baseY.
+      geo.rotateX(Math.PI / 2);
+      geo.translate(x * TILE, y * WALL_HEIGHT + FLOOR_THICK, z * TILE);
+
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({ color: tint, roughness: 1 }),
+      );
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.userData.kind = 'floor';
+      mesh.userData.key = key;
+      refs.floorGroup.add(mesh);
     }
-  }, [floors, quality]);
+  }, [floors, walls, quality, cornerBend]);
 
   // Walls — sharp-corner mode renders each wall via buildPiece (preserves
   // window/door/textured variants). Bend mode (cornerBend > 0) walks every

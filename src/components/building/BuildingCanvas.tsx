@@ -900,7 +900,7 @@ export function BuildingCanvas() {
       const Ri = Math.max(r - halfT, 0.001); // guard against thick walls / small r
       const midAng = startAng + delta / 2;
 
-      const buildArcSegment = (angStart: number, angEnd: number, tint: string) => {
+      const buildArcSegment = (angStart: number, angEnd: number, tint: string, ownerKey: string) => {
         const segDelta = angEnd - angStart;
         const shape = new THREE.Shape();
         // Outer arc from angStart to angEnd. After rotateX(+π/2) the shape's
@@ -928,16 +928,21 @@ export function BuildingCanvas() {
         );
         segMesh.castShadow = true;
         segMesh.receiveShadow = true;
-        segMesh.userData.kind = 'wall-arc';
+        // Tag as a regular wall so select/erase logic treats clicks on the
+        // bend as clicks on its owning wall. Without this the raycaster walks
+        // up looking for userData.key, finds none, and the click is a no-op.
+        segMesh.userData.kind = 'wall';
+        segMesh.userData.key = ownerKey;
         segMesh.userData.junction = vk;
+        segMesh.userData.isArc = true;
         return segMesh;
       };
 
       // Half adjacent to wall A (from wall A's tangent to the midpoint) uses A's tint,
       // half adjacent to wall B uses B's tint. Each wall now visibly "bends" into
       // half of the corner instead of one wall apparently extending across.
-      refs.wallGroup.add(buildArcSegment(startAng, midAng, wA.tint));
-      refs.wallGroup.add(buildArcSegment(midAng, endAng, wB.tint));
+      refs.wallGroup.add(buildArcSegment(startAng, midAng, wA.tint, wA.key));
+      refs.wallGroup.add(buildArcSegment(midAng, endAng, wB.tint, wB.key));
     }
 
     // Emit each wall as a single trimmed solid box.

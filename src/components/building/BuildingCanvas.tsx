@@ -243,6 +243,16 @@ export function BuildingCanvas() {
     let targetPhi = Math.PI / 2;
     let targetDistance = 20;
     let targetsInitialized = false;
+    // True while the user is right-dragging via OrbitControls. We must skip
+    // damping during a drag — otherwise the ease-toward-target logic fights
+    // the drag every frame (pulling the camera ~22% back per frame, which
+    // makes orbit feel completely dead).
+    let orbitControlsActive = false;
+    controls.addEventListener('start', () => { orbitControlsActive = true; });
+    controls.addEventListener('end', () => {
+      orbitControlsActive = false;
+      syncTargetsFromCamera();
+    });
 
     function syncTargetsFromCamera() {
       tmpOffset.copy(camera.position).sub(controls.target);
@@ -300,6 +310,9 @@ export function BuildingCanvas() {
 
     function applyCameraDamping() {
       if (!targetsInitialized) return;
+      // User is actively right-dragging — let OrbitControls own the camera
+      // this frame and keep our target synced to wherever it takes us.
+      if (orbitControlsActive) { syncTargetsFromCamera(); return; }
       tmpOffset.copy(camera.position).sub(controls.target);
       tmpSpherical.setFromVector3(tmpOffset);
 

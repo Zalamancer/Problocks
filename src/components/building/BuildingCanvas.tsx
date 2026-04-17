@@ -206,26 +206,61 @@ export function BuildingCanvas() {
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
 
-    // Camera controls: orbit + zoom only (pan stays off so two-finger swipe
-    // doesn't drag the view around). Right-drag orbits so LEFT stays reserved
-    // for tile selection / placement. In play-mode.ts the orbit target is
-    // translated with the character each frame, so the same controls give
-    // Roblox-style orbit-around-player + zoom-to-player.
+    // Camera controls: scroll-driven. All mouse-button interactions are off
+    // (no left/right/middle drag touches the camera). A custom wheel handler
+    // below implements:
+    //   • plain two-finger swipe / wheel  → orbit (azimuth + polar)
+    //   • ctrl/⌘ + wheel  (trackpad pinch) → zoom (dolly toward target)
+    // OrbitControls is kept only to hold the orbit target — play-mode.ts
+    // translates that target with the character each frame, so the same
+    // scroll-to-orbit + pinch-to-zoom also follows the player.
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
-    controls.enableRotate = true;
+    controls.enableRotate = false;
     controls.enablePan = false;
-    controls.enableZoom = true;
-    controls.zoomToCursor = true;
-    controls.minDistance = 1.5;
-    controls.maxDistance = 150;
-    controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: -1 as unknown as THREE.MOUSE,
-      RIGHT: THREE.MOUSE.ROTATE,
-    };
+    controls.enableZoom = false;
     controls.target.set(0, 0, 0);
     controls.update();
+
+    // Scroll-to-orbit + pinch-to-zoom. Tunable constants kept local so they
+    // don't leak into the store.
+    const ORBIT_SPEED = 0.004;          // radians per wheel-delta unit
+    const ZOOM_FACTOR_PER_UNIT = 1.0015; // pow(this, deltaY) per tick
+    const ZOOM_MIN = 1.5;
+    const ZOOM_MAX = 150;
+    const POLAR_EPS = 0.05;              // keep camera off the exact pole
+
+    const spherical = new THREE.Spherical();
+    const sphOffset = new THREE.Vector3();
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+
+      // Pinch (trackpad) or ctrl/⌘ + wheel → dolly toward the orbit target.
+      if (e.ctrlKey || e.metaKey) {
+        sphOffset.copy(camera.position).sub(controls.target);
+        const curDist = sphOffset.length();
+        if (curDist <= 0) return;
+        const factor = Math.pow(ZOOM_FACTOR_PER_UNIT, e.deltaY);
+        const newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, curDist * factor));
+        sphOffset.multiplyScalar(newDist / curDist);
+        camera.position.copy(controls.target).add(sphOffset);
+        return;
+      }
+
+      // Plain wheel / two-finger swipe → orbit around target.
+      // deltaX spins azimuth, deltaY tilts polar. Sign convention matches
+      // a Roblox / Minecraft feel: swipe up = look up, swipe right = look right.
+      sphOffset.copy(camera.position).sub(controls.target);
+      spherical.setFromVector3(sphOffset);
+      spherical.theta -= e.deltaX * ORBIT_SPEED;
+      spherical.phi   -= e.deltaY * ORBIT_SPEED;
+      spherical.phi = Math.max(POLAR_EPS, Math.min(Math.PI - POLAR_EPS, spherical.phi));
+      sphOffset.setFromSpherical(spherical);
+      camera.position.copy(controls.target).add(sphOffset);
+      camera.lookAt(controls.target);
+    }
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
     // Roblox-style lighting — all values live-driven by useLightingStore.
     const hemisphere = new THREE.HemisphereLight(0xffffff, 0xffffff, 0);
@@ -354,6 +389,7 @@ export function BuildingCanvas() {
 
     return () => {
       ro.disconnect();
+      renderer.domElement.removeEventListener('wheel', onWheel);
       if (playRef.current) { playRef.current.stop(); playRef.current = null; }
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);

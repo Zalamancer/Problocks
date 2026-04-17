@@ -195,7 +195,7 @@ export function BuildingCanvas() {
       quality.shadowType === 'pcf-soft' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
-    renderer.toneMappingExposure = 1.85;
+    renderer.toneMappingExposure = 1.0;
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.overscrollBehavior = 'none';
     container.appendChild(renderer.domElement);
@@ -257,9 +257,12 @@ export function BuildingCanvas() {
     }
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
-    scene.add(new THREE.HemisphereLight(0xfff6e0, 0x6ecc3a, 2.4));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+    // Roblox-style lighting: strong directional sun for saturated color pop,
+    // low ambient so shadows give contrast instead of flattening everything,
+    // gentle sky-bounce hemisphere to keep shadow side from going black.
+    scene.add(new THREE.HemisphereLight(0xbfe0ff, 0x7cd957, 0.55));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(10, 18, 8);
     sun.castShadow = quality.shadows;
     sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);

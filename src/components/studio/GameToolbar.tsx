@@ -24,7 +24,10 @@ const PART_TYPES: { type: PartType; emoji: string }[] = [
 const PART_COLORS = ['#e84040','#40a0ff','#40cf40','#ffcc00','#ff8800','#cc40ff','#ff4088','#ffffff'];
 
 interface Props {
-  previewRef: React.RefObject<GamePreviewHandle | null>;
+  /** Optional — when a game iframe is active, toolbar actions are forwarded to
+   *  it via postMessage. When null/unmounted, actions operate directly on the
+   *  native scene store (Roblox-Studio-style live editor). */
+  previewRef?: React.RefObject<GamePreviewHandle | null>;
 }
 
 export function GameToolbar({ previewRef }: Props) {
@@ -33,28 +36,68 @@ export function GameToolbar({ previewRef }: Props) {
   const addRef = useRef<HTMLDivElement>(null);
   const [colorIdx, setColorIdx] = useState(0);
 
+  /** True when a live game preview iframe is mounted. */
+  const hasIframe = () => !!previewRef?.current;
+
   function switchMode(mode: GizmoMode) {
     setGizmoMode(mode);
-    const gameMode = mode === 'select' ? 'none' : mode === 'move' ? 'translate' : mode;
-    previewRef.current?.sendToGame({ type: 'setGizmoMode', mode: gameMode });
+    if (hasIframe()) {
+      const gameMode = mode === 'select' ? 'none' : mode === 'move' ? 'translate' : mode;
+      previewRef!.current!.sendToGame({ type: 'setGizmoMode', mode: gameMode });
+    }
+    // Native mode: BuildingCanvas reads gizmoMode from scene-store — no extra call needed.
   }
 
   function addPart(type: PartType) {
     setAddOpen(false);
     const color = PART_COLORS[colorIdx % PART_COLORS.length];
     setColorIdx(i => i + 1);
-    previewRef.current?.addModel(type, 0, 1.5, 0);
-    // Also send color + type specifics
-    previewRef.current?.sendToGame({ type: 'addPart', partType: type, color, x: 0, y: 1.5, z: 0 });
+    if (hasIframe()) {
+      previewRef!.current!.addModel(type, 0, 1.5, 0);
+      previewRef!.current!.sendToGame({ type: 'addPart', partType: type, color, x: 0, y: 1.5, z: 0 });
+      return;
+    }
+    // Native editor: place part directly in the scene store; BuildingCanvas
+    // will render it and auto-select so gizmo picks it up.
+    useSceneStore.getState().addPart({
+      partType: type,
+      color,
+      position: { x: 0, y: 1.5, z: 0 },
+    });
   }
 
   function duplicate() {
-    previewRef.current?.sendToGame({ type: 'duplicatePart' });
+    if (hasIframe()) {
+      previewRef!.current!.sendToGame({ type: 'duplicatePart' });
+      return;
+    }
+    const sp = useSceneStore.getState().selectedPart;
+    if (!sp) return;
+    useSceneStore.getState().addPart({
+      partType: sp.partType,
+      color: sp.color,
+      position: { x: sp.position.x + 2, y: sp.position.y, z: sp.position.z + 2 },
+      rotation: { ...sp.rotation },
+      scale: { ...sp.scale },
+      roughness: sp.roughness,
+      metalness: sp.metalness,
+      emissiveColor: sp.emissiveColor,
+      emissiveIntensity: sp.emissiveIntensity,
+      texture: sp.texture,
+      castShadow: sp.castShadow,
+      anchored: sp.anchored,
+      visible: sp.visible,
+      modelName: sp.modelName,
+    });
   }
 
   function deletePart() {
     if (!selectedPart) return;
-    previewRef.current?.sendToGame({ type: 'removePart', id: selectedPart.id });
+    if (hasIframe()) {
+      previewRef!.current!.sendToGame({ type: 'removePart', id: selectedPart.id });
+      return;
+    }
+    useSceneStore.getState().removePart(selectedPart.id);
   }
 
   function togglePlay() {
@@ -62,9 +105,9 @@ export function GameToolbar({ previewRef }: Props) {
     setIsPlaying(next);
     if (next) {
       setGizmoMode('select');
-      previewRef.current?.sendToGame({ type: 'setGizmoMode', mode: 'none' });
+      if (hasIframe()) previewRef!.current!.sendToGame({ type: 'setGizmoMode', mode: 'none' });
     }
-    previewRef.current?.sendToGame({ type: 'setPlayMode', playing: next });
+    if (hasIframe()) previewRef!.current!.sendToGame({ type: 'setPlayMode', playing: next });
   }
 
   return (

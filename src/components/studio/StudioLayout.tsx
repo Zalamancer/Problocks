@@ -359,8 +359,15 @@ export function StudioLayout() {
                   />
                 </div>
               ) : viewMode === '3d' ? (
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <WorkspaceView />
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  {/* Native Roblox-Studio-style editor toolbar. Operates on
+                      the scene store directly (no iframe needed); the Part
+                      button spawns primitives you can Move/Rotate/Scale with
+                      the gizmo below. */}
+                  <GameToolbar />
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <WorkspaceView />
+                  </div>
                 </div>
               ) : !board ? (
                 <div className="flex-1 min-h-0 overflow-hidden">

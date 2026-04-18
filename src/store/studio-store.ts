@@ -3,7 +3,8 @@ import { persist } from 'zustand/middleware';
 
 export type LeftPanelGroup = 'scene' | 'assets' | 'chat';
 export type AssetsTab = 'models' | 'parts';
-export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings';
+export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings' | 'parts-gen';
+export type ChatMode = 'scene' | 'part';
 export type Theme = 'dark' | 'light';
 export type FlowDirection = 'LR' | 'TB';
 
@@ -27,6 +28,14 @@ export interface StudioStore {
 
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
+
+  /**
+   * Which intent the left-panel chat is in. "scene" routes to the existing
+   * studio-agent (builds the 3D scene); "part" opens the full-screen Part
+   * Studio for low-poly asset generation.
+   */
+  chatMode: ChatMode;
+  setChatMode: (mode: ChatMode) => void;
 
   projectName: string;
   setProjectName: (name: string) => void;
@@ -63,6 +72,9 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
 
   viewMode: '3d',
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  chatMode: 'scene',
+  setChatMode: (mode) => set({ chatMode: mode }),
 
   projectName: 'Untitled Game',
   setProjectName: (name) => set({ projectName: name }),
@@ -112,6 +124,7 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   partialize: (state) => ({
     projectName: state.projectName,
     flowDirection: state.flowDirection,
+    chatMode: state.chatMode,
     games: state.games,
     // Intentionally NOT persisting activeGameId — otherwise a refresh would
     // auto-open the last previewed game, forcing the GamePreview panel on

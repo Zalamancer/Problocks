@@ -15,6 +15,7 @@ import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { WorkspaceView } from './views/WorkspaceView';
+import { PartStudioView } from './views/PartStudioView';
 import { useStudio } from '@/store/studio-store';
 import { CodeView } from './CodeView';
 import { useProjectBoard } from '@/store/project-board-store';
@@ -546,6 +547,11 @@ export function StudioLayout() {
         onComplete={handleWizardComplete}
         onClose={() => setWizardOpen(false)}
       />
+
+      {/* Part Studio full-screen overlay. Covers the whole layout when the
+          chat pill routes a prompt to "Part" mode or the user opens it
+          directly from the chat. Back button restores viewMode='3d'. */}
+      {viewMode === 'parts-gen' && <PartStudioView />}
     </div>
   );
 }

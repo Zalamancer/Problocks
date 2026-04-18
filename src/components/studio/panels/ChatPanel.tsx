@@ -1,12 +1,14 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageSquare, Sparkles, Square } from 'lucide-react';
+import { MessageSquare, Sparkles, Square, Layers, Box } from 'lucide-react';
 import { PanelTextarea, PanelActionButton } from '@/components/ui';
 import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-store';
 import { useBuildingStore, type EdgeDir, type Facing } from '@/store/building-store';
 import type { PieceKind } from '@/lib/building-kit';
 import { ChatAssetPicker } from './ChatAssetPicker';
 import { useAIBuildModeStore } from '@/store/ai-library-store';
+import { useStudio } from '@/store/studio-store';
+import { usePartStudio } from '@/store/part-studio-store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -112,6 +114,15 @@ export function ChatPanel() {
   const [statuses, setStatuses] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Chat intent pill — "scene" talks to the studio-agent (builds the 3D
+  // world); "part" routes to Part Studio where low-poly assets are
+  // generated, rated, and refined. The pill stays visible on the input
+  // row so the user always sees what "Build" is going to do.
+  const chatMode = useStudio((s) => s.chatMode);
+  const setChatMode = useStudio((s) => s.setChatMode);
+  const setViewMode = useStudio((s) => s.setViewMode);
+  const setDraftPrompt = usePartStudio((s) => s.setDraftPrompt);
 
   // Scene/building store actions (stable references)
   const addPart = useSceneStore((s) => s.addPart);
@@ -242,6 +253,17 @@ export function ChatPanel() {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
 
+    // Part mode: don't stream actions — hand the prompt to Part Studio
+    // which runs its own generation + rating loop. We still push the
+    // prompt into the Part Studio draft so the full-screen view opens
+    // with the field pre-filled and the user can hit Generate.
+    if (chatMode === 'part') {
+      setDraftPrompt(trimmed);
+      setInput('');
+      setViewMode('parts-gen');
+      return;
+    }
+
     // Snapshot current scene + building state + build-mode for the agent
     const sceneState = useSceneStore.getState();
     const b = useBuildingStore.getState();
@@ -356,7 +378,7 @@ export function ChatPanel() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, applyAction]);
+  }, [input, streaming, messages, applyAction, chatMode, setDraftPrompt, setViewMode]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -435,12 +457,20 @@ export function ChatPanel() {
 
       {/* Input area */}
       <div className="shrink-0 px-3 pb-3 pt-2 border-t border-panel-border space-y-2">
+        {/* Intent pill row — selects whether "Build" routes to the scene
+            agent or opens the full-screen Part Studio. */}
+        <ChatIntentPill value={chatMode} onChange={setChatMode} disabled={streaming} />
+
         <PanelTextarea
           value={input}
           onChange={setInput}
           onKeyDown={handleKeyDown}
           placeholder={
-            streaming ? 'Generating… press cancel to stop' : 'Tell the AI what to build…'
+            streaming
+              ? 'Generating… press cancel to stop'
+              : chatMode === 'part'
+                ? 'Describe a low-poly asset… (e.g. "a knight with a red cape")'
+                : 'Tell the AI what to build…'
           }
           rows={3}
           showCount
@@ -457,16 +487,54 @@ export function ChatPanel() {
               <PanelActionButton
                 onClick={send}
                 variant="primary"
-                icon={Sparkles}
+                icon={chatMode === 'part' ? Box : Sparkles}
                 fullWidth
                 disabled={!input.trim()}
               >
-                Build
+                {chatMode === 'part' ? 'Generate Part' : 'Build'}
               </PanelActionButton>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChatIntentPill({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: 'scene' | 'part';
+  onChange: (v: 'scene' | 'part') => void;
+  disabled?: boolean;
+}) {
+  const options: { id: 'scene' | 'part'; label: string; icon: typeof Layers }[] = [
+    { id: 'scene', label: 'Scene', icon: Layers },
+    { id: 'part',  label: 'Generate Part', icon: Box },
+  ];
+  return (
+    <div className="flex items-center gap-1.5">
+      {options.map(({ id, label, icon: Icon }) => {
+        const active = value === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(id)}
+            className={`inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full text-[11px] font-medium border transition-colors ${
+              active
+                ? 'bg-accent/15 border-accent/40 text-accent'
+                : 'bg-panel-surface border-panel-border text-zinc-400 hover:bg-panel-surface-hover hover:text-zinc-200'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <Icon size={12} />
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

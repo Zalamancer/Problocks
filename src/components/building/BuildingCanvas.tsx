@@ -290,10 +290,10 @@ export function BuildingCanvas() {
         return;
       }
 
-      // Pointer-held two-finger swipe OR shift+swipe → pan (translate camera
-      // + target in the camera's right/up plane). Scaled by distance so the
-      // gesture feels the same far away as close up.
-      if (pointerDown || e.shiftKey) {
+      // Click + two-finger swipe → pan (translate camera + target in the
+      // camera's right/up plane). Scaled by distance so the gesture feels
+      // the same far away as close up.
+      if (pointerDown) {
         sphOffset.copy(camera.position).sub(controls.target);
         const dist = sphOffset.length();
         panRight.setFromMatrixColumn(camera.matrix, 0); // camera X axis

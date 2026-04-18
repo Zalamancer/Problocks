@@ -36,12 +36,17 @@ interface GeneratedFilesPanelProps {
   files: string[];
   activeFile: string | null;
   onSelectFile: (name: string) => void;
+  /** When true, skip the outer <aside> shell so this panel can be nested
+   *  inside the shared RightPanel wrapper. */
+  headless?: boolean;
 }
 
-export function GeneratedFilesPanel({ files, activeFile, onSelectFile }: GeneratedFilesPanelProps) {
+export function GeneratedFilesPanel({ files, activeFile, onSelectFile, headless }: GeneratedFilesPanelProps) {
   const entries = files.length > 0 ? files : (activeFile ? [activeFile] : []);
 
-  return (
+  const Shell = headless ? (({ children }: { children: React.ReactNode }) => (
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ padding: '16px 12px', gap: 8 }}>{children}</div>
+  )) : (({ children }: { children: React.ReactNode }) => (
     <aside
       className="shrink-0 flex flex-col rounded-xl overflow-hidden"
       style={{
@@ -52,6 +57,12 @@ export function GeneratedFilesPanel({ files, activeFile, onSelectFile }: Generat
         gap: 8,
       }}
     >
+      {children}
+    </aside>
+  ));
+
+  return (
+    <Shell>
       <div
         style={{
           fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
@@ -123,6 +134,6 @@ export function GeneratedFilesPanel({ files, activeFile, onSelectFile }: Generat
           </div>
         </div>
       </div>
-    </aside>
+    </Shell>
   );
 }

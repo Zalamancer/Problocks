@@ -16,7 +16,7 @@ import {
  * scene hierarchy. Hosts the Roblox-style Lighting + Atmosphere controls that
  * used to live in the floating LightingPanel over the 3D viewport.
  */
-export function WorkspacePropertiesPanel() {
+export function WorkspacePropertiesPanel({ headless }: { headless?: boolean } = {}) {
   const preset = useLightingStore((s) => s.preset);
   const config = useLightingStore((s) => s.config);
   const setPreset = useLightingStore((s) => s.setPreset);
@@ -25,7 +25,7 @@ export function WorkspacePropertiesPanel() {
   const reset = useLightingStore((s) => s.reset);
   const setPanelOpen = useLightingStore((s) => s.setPanelOpen);
 
-  return (
+  const Shell = headless ? (({ children }: { children: React.ReactNode }) => <>{children}</>) : (({ children }: { children: React.ReactNode }) => (
     <aside
       className="w-full md:w-[260px] flex flex-col rounded-xl overflow-hidden shrink-0"
       style={{
@@ -33,6 +33,12 @@ export function WorkspacePropertiesPanel() {
         border: '1.5px solid var(--pb-line-2)',
       }}
     >
+      {children}
+    </aside>
+  ));
+
+  return (
+    <Shell>
       {/* Header — butter icon tile + "Workspace" + close, styled to match the
           design bundle's properties pager row. Mirrors atoms.jsx ToneBadge +
           sibling text pattern. */}
@@ -233,7 +239,7 @@ export function WorkspacePropertiesPanel() {
           Reset to Poppy
         </PBButton>
       </footer>
-    </aside>
+    </Shell>
   );
 }
 

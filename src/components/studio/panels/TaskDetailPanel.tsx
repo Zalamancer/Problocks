@@ -54,9 +54,12 @@ interface TaskDetailPanelProps {
   templateTaskId: string;
   template: Template;
   board: ProjectBoard;
+  /** When true, skip the outer <aside> shell so this panel can be nested
+   *  inside the shared RightPanel wrapper. */
+  headless?: boolean;
 }
 
-export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ templateTaskId, template, board, headless }: TaskDetailPanelProps) {
   const updateTaskStatus          = useProjectBoard((s) => s.updateTaskStatus);
   const setTaskOverride           = useProjectBoard((s) => s.setTaskOverride);
   const setTaskAssignees          = useProjectBoard((s) => s.setTaskAssignees);
@@ -122,7 +125,7 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
   const handleAddAttachment = (attachment: ResourceAttachment) =>
     addAttachment(taskInstance.id, attachment);
 
-  return (
+  const Shell = headless ? (({ children }: { children: React.ReactNode }) => <>{children}</>) : (({ children }: { children: React.ReactNode }) => (
     <aside
       className="w-[300px] flex-shrink-0 h-full flex flex-col rounded-xl overflow-hidden"
       style={{
@@ -130,6 +133,12 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
         border: '1.5px solid var(--pb-line-2)',
       }}
     >
+      {children}
+    </aside>
+  ));
+
+  return (
+    <Shell>
       <div className="shrink-0" style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}>
         <DropdownSectionHeader
           sections={TASK_SECTIONS}
@@ -255,6 +264,6 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
           {isBlocked ? 'Blocked' : status === 'done' ? 'Completed' : `Mark ${STATUS_LABEL[nextStatus(status)]}`}
         </PanelActionButton>
       </div>
-    </aside>
+    </Shell>
   );
 }

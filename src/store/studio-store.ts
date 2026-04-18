@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'parts' | 'connectors';
+export type RightPanelGroup = 'properties' | 'chat' | 'parts';
 export type AssetsTab = 'models' | 'parts';
 export type PartsTab = 'generate' | 'history';
 export type ViewMode = 'canvas' | 'kanban' | '3d';
@@ -22,10 +23,12 @@ export interface GeneratedGame {
 export interface StudioStore {
   leftPanelCollapsed: boolean;
   leftPanelActiveGroup: LeftPanelGroup;
+  rightPanelActiveGroup: RightPanelGroup;
   assetsActiveTab: AssetsTab;
   partsActiveTab: PartsTab;
   toggleLeftPanel: () => void;
   setLeftPanelGroup: (group: LeftPanelGroup) => void;
+  setRightPanelGroup: (group: RightPanelGroup) => void;
   setAssetsActiveTab: (tab: AssetsTab) => void;
   setPartsActiveTab: (tab: PartsTab) => void;
 
@@ -68,10 +71,12 @@ export interface StudioStore {
 export const useStudio = create<StudioStore>()(persist((set) => ({
   leftPanelCollapsed: false,
   leftPanelActiveGroup: 'assets',
+  rightPanelActiveGroup: 'properties',
   assetsActiveTab: 'models',
   partsActiveTab: 'generate',
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
   setLeftPanelGroup: (group) => set({ leftPanelActiveGroup: group }),
+  setRightPanelGroup: (group) => set({ rightPanelActiveGroup: group }),
   setAssetsActiveTab: (tab) => set({ assetsActiveTab: tab }),
   setPartsActiveTab: (tab) => set({ partsActiveTab: tab }),
 

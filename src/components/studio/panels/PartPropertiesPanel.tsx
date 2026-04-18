@@ -48,6 +48,9 @@ interface Props {
    *  surfaces global Level + Bend controls alongside the piece properties
    *  so the user can tweak placement without leaving the right panel. */
   showBuilding?: boolean;
+  /** When true, skip the outer <aside> shell so this panel can be nested
+   *  inside a shared right-panel wrapper (RightPanel.tsx). */
+  headless?: boolean;
 }
 
 function Vec3Row({
@@ -85,7 +88,7 @@ function Vec3Row({
   );
 }
 
-export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: Props) {
+export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, headless }: Props) {
   const level = useBuildingStore((s) => s.level);
   const setLevel = useBuildingStore((s) => s.setLevel);
   const cornerBend = useBuildingStore((s) => s.cornerBend);
@@ -100,7 +103,7 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: 
     onUpdate({ texture: tex, roughness: preset.roughness, metalness: preset.metalness });
   }
 
-  return (
+  const Shell = headless ? (({ children }: { children: React.ReactNode }) => <>{children}</>) : (({ children }: { children: React.ReactNode }) => (
     <aside
       className="w-full md:w-[260px] flex flex-col rounded-xl overflow-hidden shrink-0"
       style={{
@@ -108,6 +111,12 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: 
         border: '1.5px solid var(--pb-line-2)',
       }}
     >
+      {children}
+    </aside>
+  ));
+
+  return (
+    <Shell>
       {/* Header — part color tile + name, matches WorkspacePropertiesPanel */}
       <div
         className="shrink-0"
@@ -323,6 +332,6 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: 
           Delete Part
         </PanelActionButton>
       </footer>
-    </aside>
+    </Shell>
   );
 }

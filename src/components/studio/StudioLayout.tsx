@@ -7,6 +7,7 @@ import { StudioTerminal } from './Terminal';
 import { GamePreview, type GamePreviewHandle, type GameObjectInfo } from './GamePreview';
 import { GameToolbar } from './GameToolbar';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
+import { RightPanel } from './RightPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
 import { TimelineBar } from './views/TimelineBar';
 import { KanbanView } from './views/KanbanView';
@@ -529,43 +530,63 @@ export function StudioLayout() {
 
           </div>
 
-          {/* Right panel — Code-view file list always wins while a file is
-              open (Code tab is active). Otherwise: part properties when a
-              part is selected (native workspace OR running iframe game),
-              workspace lighting when "Workspace" is selected, task detail
-              otherwise. */}
-          {openFileName ? (() => {
-            const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
-            const fileList = activeGame?.files ? Object.keys(activeGame.files) : [];
-            return (
-              <GeneratedFilesPanel
-                files={fileList}
-                activeFile={openFileName}
-                onSelectFile={(name) => setOpenFileName(name)}
-              />
-            );
-          })() : selectedPart ? (
-            <PartPropertiesPanel
-              part={selectedPart}
-              onUpdate={handlePartUpdate}
-              onDelete={handlePartDelete}
-            />
-          ) : buildingPart ? (
-            <PartPropertiesPanel
-              part={buildingPart}
-              onUpdate={handleBuildingPartUpdate}
-              onDelete={handleBuildingPartDelete}
-              showBuilding
-            />
-          ) : lightingPanelOpen ? (
-            <WorkspacePropertiesPanel />
-          ) : board && template && selectedTaskId ? (
-            <TaskDetailPanel
-              templateTaskId={selectedTaskId}
-              template={template}
-              board={board}
-            />
-          ) : null}
+          {/* Right panel — shared aside shell with dropdown tabs
+              (Properties / Chat / Part Studio). The "Properties" tab is
+              context-aware: shows Code-view file list when a file is open,
+              part properties when a part is selected, workspace lighting
+              when "Workspace" is selected in the scene hierarchy, or task
+              detail when a flowchart task is selected. */}
+          <RightPanel
+            propertiesContent={(() => {
+              if (openFileName) {
+                const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+                const fileList = activeGame?.files ? Object.keys(activeGame.files) : [];
+                return (
+                  <GeneratedFilesPanel
+                    files={fileList}
+                    activeFile={openFileName}
+                    onSelectFile={(name) => setOpenFileName(name)}
+                    headless
+                  />
+                );
+              }
+              if (selectedPart) {
+                return (
+                  <PartPropertiesPanel
+                    part={selectedPart}
+                    onUpdate={handlePartUpdate}
+                    onDelete={handlePartDelete}
+                    headless
+                  />
+                );
+              }
+              if (buildingPart) {
+                return (
+                  <PartPropertiesPanel
+                    part={buildingPart}
+                    onUpdate={handleBuildingPartUpdate}
+                    onDelete={handleBuildingPartDelete}
+                    showBuilding
+                    headless
+                  />
+                );
+              }
+              if (lightingPanelOpen) {
+                return <WorkspacePropertiesPanel headless />;
+              }
+              if (board && template && selectedTaskId) {
+                return (
+                  <TaskDetailPanel
+                    templateTaskId={selectedTaskId}
+                    template={template}
+                    board={board}
+                    headless
+                  />
+                );
+              }
+              return null;
+            })()}
+          />
         </div>
 
         <LeftPanelToggle />

@@ -4,6 +4,7 @@ import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
+import { PanelColorSwatches } from '@/components/ui/panel-controls/PanelColorSwatches';
 import { PBButton } from '@/components/ui';
 import {
   useLightingStore,
@@ -160,50 +161,17 @@ function RgbRow({
       .join('');
 
   return (
-    <div className="flex items-center gap-2 py-1">
-      <label
-        className="flex-1 truncate"
-        style={{
-          fontSize: 10,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          fontWeight: 700,
-          color: 'var(--pb-ink-muted)',
-        }}
-      >
-        {label}
-      </label>
-      <input
-        type="color"
-        value={hex}
-        onChange={(e) => {
-          const h = e.target.value.replace('#', '');
-          onChange({
-            r: parseInt(h.slice(0, 2), 16),
-            g: parseInt(h.slice(2, 4), 16),
-            b: parseInt(h.slice(4, 6), 16),
-          });
-        }}
-        className="cursor-pointer"
-        style={{
-          width: 32,
-          height: 24,
-          borderRadius: 6,
-          border: '1.5px solid var(--pb-line-2)',
-          background: 'transparent',
-        }}
-      />
-      <span
-        className="w-20 text-right tabular-nums"
-        style={{
-          fontSize: 10,
-          fontFamily: 'DM Mono, monospace',
-          color: 'var(--pb-ink-muted)',
-          fontWeight: 600,
-        }}
-      >
-        {value.r},{value.g},{value.b}
-      </span>
-    </div>
+    <PanelColorSwatches
+      label={label}
+      value={hex}
+      onChange={(h) => {
+        const raw = h.replace('#', '');
+        onChange({
+          r: parseInt(raw.slice(0, 2), 16),
+          g: parseInt(raw.slice(2, 4), 16),
+          b: parseInt(raw.slice(4, 6), 16),
+        });
+      }}
+    />
   );
 }

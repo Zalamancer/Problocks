@@ -87,18 +87,18 @@ function trisColor(tris: number): string {
 function AssetExpandedStats({ asset }: { asset: AssetInfo }) {
   const rows: Array<{ label: string; value: string; valueClass?: string }> = [
     { label: 'Tris', value: asset.tris.toLocaleString(), valueClass: `font-mono ${trisColor(asset.tris)}` },
-    { label: 'Verts', value: asset.vertices.toLocaleString(), valueClass: 'font-mono text-zinc-300' },
-    { label: 'Size', value: `${asset.binKB} KB`, valueClass: 'font-mono text-zinc-300' },
-    { label: 'Mats', value: String(asset.materials), valueClass: 'font-mono text-zinc-300' },
-    { label: 'Tex', value: String(asset.textures), valueClass: 'font-mono text-zinc-300' },
-    { label: 'Cat', value: asset.cat, valueClass: 'text-zinc-300' },
+    { label: 'Verts', value: asset.vertices.toLocaleString(), valueClass: 'font-mono' },
+    { label: 'Size', value: `${asset.binKB} KB`, valueClass: 'font-mono' },
+    { label: 'Mats', value: String(asset.materials), valueClass: 'font-mono' },
+    { label: 'Tex', value: String(asset.textures), valueClass: 'font-mono' },
+    { label: 'Cat', value: asset.cat },
   ];
   return (
     <div className="w-full flex flex-col gap-1 text-[11px] text-left">
       {rows.map((row) => (
         <div key={row.label} className="flex items-center justify-between gap-2">
-          <span className="text-zinc-500">{row.label}</span>
-          <span className={row.valueClass}>{row.value}</span>
+          <span style={{ color: 'var(--pb-ink-muted)' }}>{row.label}</span>
+          <span className={row.valueClass} style={{ color: 'var(--pb-ink)' }}>{row.value}</span>
         </div>
       ))}
     </div>
@@ -208,17 +208,32 @@ export function AssetsPanel() {
           </div>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className={cn(
-              'relative shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
-              filtersOpen
-                ? 'bg-accent/15 text-accent'
-                : 'bg-panel-surface text-zinc-500 hover:text-zinc-200 hover:bg-panel-surface-hover',
-            )}
+            className="relative shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: filtersOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              border: `1.5px solid ${filtersOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: filtersOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+              color: filtersOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
             title="Filters"
           >
-            <SlidersHorizontal size={15} />
+            <SlidersHorizontal size={15} strokeWidth={2.2} />
             {hasActiveFilters && !filtersOpen && (
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
+              <span
+                className="absolute top-1 right-1"
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  background: 'var(--pb-coral)',
+                  border: '1px solid var(--pb-coral-ink)',
+                }}
+              />
             )}
           </button>
         </div>
@@ -299,15 +314,26 @@ export function AssetsPanel() {
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
-                  className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors [content-visibility:auto] [contain-intrinsic-size:0_44px] ${
-                    isSelected
-                      ? 'bg-accent/10 border border-accent/20'
-                      : 'hover:bg-panel-surface-hover border border-transparent'
-                  }`}
+                  className="w-full text-left [content-visibility:auto] [contain-intrinsic-size:0_44px]"
+                  style={{
+                    padding: '9px 11px',
+                    borderRadius: 10,
+                    background: isSelected ? 'var(--pb-cream-2)' : 'transparent',
+                    border: isSelected ? '1.5px solid var(--pb-ink)' : '1.5px solid transparent',
+                    boxShadow: isSelected ? '0 2px 0 var(--pb-ink)' : 'none',
+                    cursor: 'pointer',
+                    transition: 'background 120ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'var(--pb-cream-2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'transparent';
+                  }}
                 >
                   <div className="flex items-center gap-2">
-                    <Box size={13} className="shrink-0 text-purple-400" />
-                    <span className="flex-1 text-[12px] text-zinc-300 truncate">
+                    <Box size={13} strokeWidth={2.2} className="shrink-0" style={{ color: 'var(--pb-grape-ink)' }} />
+                    <span className="flex-1 truncate" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pb-ink)' }}>
                       {asset.name.replace(/_/g, ' ')}
                     </span>
                     <span className={`shrink-0 text-[10px] font-mono ${trisColor(asset.tris)}`}>
@@ -335,20 +361,36 @@ export function AssetsPanel() {
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   onClick={() => setSelectedAsset(isSelected ? null : asset.name)}
-                  className={`group relative flex flex-col rounded-lg overflow-hidden transition-colors [content-visibility:auto] [contain-intrinsic-size:0_160px] ${
-                    isSelected
-                      ? 'bg-accent/10 border border-accent/20'
-                      : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent'
-                  }`}
+                  className="group relative flex flex-col overflow-hidden [content-visibility:auto] [contain-intrinsic-size:0_160px]"
+                  style={{
+                    borderRadius: 12,
+                    background: 'var(--pb-paper)',
+                    border: `1.5px solid ${isSelected ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+                    boxShadow: isSelected ? '0 2px 0 var(--pb-ink)' : 'none',
+                    cursor: 'pointer',
+                    transition: 'border-color 120ms ease',
+                  }}
                 >
-                  <div className="relative w-full aspect-square">
+                  <div className="relative w-full aspect-square" style={{ background: 'var(--pb-cream-2)' }}>
                     <AssetThumbnail modelName={asset.name} fluid />
                     {/* Hover overlay with extra stats */}
-                    <div className="absolute inset-0 bg-panel-surface/95 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2"
+                      style={{ background: 'color-mix(in srgb, var(--pb-paper) 94%, transparent)' }}
+                    >
                       <AssetExpandedStats asset={asset} />
                     </div>
                   </div>
-                  <span className="block w-full px-2 py-1 text-sm text-zinc-300 truncate text-left">
+                  <span
+                    className="block w-full truncate text-left"
+                    style={{
+                      padding: '6px 10px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: 'var(--pb-ink)',
+                      borderTop: '1.5px solid var(--pb-line-2)',
+                    }}
+                  >
                     {asset.name.replace(/_/g, ' ')}
                   </span>
                 </button>
@@ -359,7 +401,9 @@ export function AssetsPanel() {
 
         {sorted.length === 0 && (
           <div className="flex items-center justify-center py-8">
-            <p className="text-xs text-zinc-600">{search || hasActiveFilters ? 'No matching assets' : 'No assets loaded'}</p>
+            <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
+              {search || hasActiveFilters ? 'No matching assets' : 'No assets loaded'}
+            </p>
           </div>
         )}
       </div>
@@ -451,17 +495,32 @@ function PartsView() {
           </div>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
-            className={cn(
-              'relative shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
-              filtersOpen
-                ? 'bg-accent/15 text-accent'
-                : 'bg-panel-surface text-zinc-500 hover:text-zinc-200 hover:bg-panel-surface-hover',
-            )}
+            className="relative shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: filtersOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              border: `1.5px solid ${filtersOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: filtersOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+              color: filtersOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
             title="Filters"
           >
-            <SlidersHorizontal size={15} />
+            <SlidersHorizontal size={15} strokeWidth={2.2} />
             {hasActiveFilters && !filtersOpen && (
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
+              <span
+                className="absolute top-1 right-1"
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  background: 'var(--pb-coral)',
+                  border: '1px solid var(--pb-coral-ink)',
+                }}
+              />
             )}
           </button>
         </div>
@@ -510,10 +569,18 @@ function PartsView() {
           return (
             <div key={kind} className="mb-4">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: 'var(--pb-ink-muted)',
+                  }}
+                >
                   {label}
                 </span>
-                <span className="text-[10px] font-mono text-zinc-600">
+                <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: 'var(--pb-ink-muted)' }}>
                   {pieces.length}
                 </span>
               </div>
@@ -528,19 +595,38 @@ function PartsView() {
                           setTool(PIECE_KIND_TO_TOOL[kind]);
                           setSelectedPiece(kind, p.id);
                         }}
-                        className={cn(
-                          'w-full text-left px-2.5 py-2 rounded-lg transition-colors flex items-center gap-2',
-                          isSelected
-                            ? 'bg-accent/10 border border-accent/40'
-                            : 'hover:bg-panel-surface-hover border border-transparent',
-                        )}
+                        className="w-full text-left flex items-center gap-2"
+                        style={{
+                          padding: '9px 11px',
+                          borderRadius: 10,
+                          background: isSelected ? 'var(--pb-cream-2)' : 'transparent',
+                          border: isSelected ? '1.5px solid var(--pb-ink)' : '1.5px solid transparent',
+                          boxShadow: isSelected ? '0 2px 0 var(--pb-ink)' : 'none',
+                          cursor: 'pointer',
+                          transition: 'background 120ms ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = 'var(--pb-cream-2)';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = 'transparent';
+                        }}
                         title={p.label}
                       >
                         <span
-                          className="shrink-0 w-3 h-3 rounded-sm border border-white/10"
-                          style={{ backgroundColor: p.swatch }}
+                          className="shrink-0"
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: 4,
+                            backgroundColor: p.swatch,
+                            border: '1.5px solid var(--pb-ink)',
+                          }}
                         />
-                        <span className="flex-1 text-[12px] text-zinc-300 truncate">
+                        <span
+                          className="flex-1 truncate"
+                          style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pb-ink)' }}
+                        >
                           {p.label}
                         </span>
                       </button>
@@ -558,18 +644,33 @@ function PartsView() {
                           setTool(PIECE_KIND_TO_TOOL[kind]);
                           setSelectedPiece(kind, p.id);
                         }}
-                        className={cn(
-                          'group relative flex flex-col rounded-lg overflow-hidden transition-colors [content-visibility:auto] [contain-intrinsic-size:0_140px]',
-                          isSelected
-                            ? 'bg-accent/10 border border-accent/40'
-                            : 'bg-panel-surface hover:bg-panel-surface-hover border border-transparent',
-                        )}
+                        className="group relative flex flex-col overflow-hidden [content-visibility:auto] [contain-intrinsic-size:0_140px]"
+                        style={{
+                          borderRadius: 12,
+                          background: 'var(--pb-paper)',
+                          border: `1.5px solid ${isSelected ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+                          boxShadow: isSelected ? '0 2px 0 var(--pb-ink)' : 'none',
+                          cursor: 'pointer',
+                          transition: 'border-color 120ms ease',
+                        }}
                         title={p.label}
                       >
-                        <div className="relative w-full aspect-square">
+                        <div
+                          className="relative w-full aspect-square"
+                          style={{ background: 'var(--pb-cream-2)' }}
+                        >
                           <PiecePreview pieceId={p.id} fluid />
                         </div>
-                        <span className="block w-full px-2 py-1 text-[12px] text-zinc-300 truncate text-left">
+                        <span
+                          className="block w-full truncate text-left"
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: 12.5,
+                            fontWeight: 600,
+                            color: 'var(--pb-ink)',
+                            borderTop: '1.5px solid var(--pb-line-2)',
+                          }}
+                        >
                           {p.label}
                         </span>
                       </button>
@@ -586,7 +687,7 @@ function PartsView() {
             PIECES.filter((p) => p.kind === kind && matches(p.label, p.id)).length === 0,
         ) && (
           <div className="flex items-center justify-center py-8">
-            <p className="text-xs text-zinc-600">
+            <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
               {q || hasActiveFilters ? 'No matching parts' : 'No parts loaded'}
             </p>
           </div>
@@ -611,11 +712,31 @@ function CustomModelsSection() {
   if (savedModels.length === 0) {
     return (
       <div className="shrink-0 px-3 pt-3 pb-2">
-        <div className="rounded-lg border border-dashed border-white/10 p-3 text-center">
-          <div className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-accent/10 text-accent mb-2">
-            <Sparkles size={14} />
+        <div
+          className="p-3 text-center"
+          style={{
+            borderRadius: 12,
+            background: 'var(--pb-cream-2)',
+            border: '1.5px dashed var(--pb-line-2)',
+          }}
+        >
+          <div
+            className="inline-flex items-center justify-center mb-2"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              background: 'var(--pb-grape)',
+              color: 'var(--pb-grape-ink)',
+              border: '1.5px solid var(--pb-grape-ink)',
+            }}
+          >
+            <Sparkles size={14} strokeWidth={2.4} />
           </div>
-          <p className="text-[11px] text-zinc-400 leading-relaxed mb-2">
+          <p
+            className="leading-relaxed mb-2"
+            style={{ fontSize: 11.5, color: 'var(--pb-ink-soft)' }}
+          >
             Generate low-poly assets from prompts — each capped at ~100 verts.
           </p>
           <PanelActionButton
@@ -640,14 +761,23 @@ function CustomModelsSection() {
         type="button"
         onClick={() => setCollapsed((c) => !c)}
         className="w-full flex items-center gap-2 mb-1.5 text-left"
+        style={{ background: 'transparent', cursor: 'pointer' }}
       >
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: 'var(--pb-ink-muted)',
+          }}
+        >
           Custom
         </span>
-        <span className="text-[10px] font-mono text-zinc-600">
+        <span style={{ fontSize: 10, fontFamily: 'DM Mono, monospace', color: 'var(--pb-ink-muted)' }}>
           {savedModels.length}
         </span>
-        <span className="ml-auto text-[10px] text-zinc-600">
+        <span className="ml-auto" style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}>
           {collapsed ? 'show' : 'hide'}
         </span>
       </button>
@@ -657,16 +787,32 @@ function CustomModelsSection() {
           {[...savedModels].reverse().map((m) => (
             <div
               key={m.id}
-              className="group relative flex flex-col rounded-lg overflow-hidden bg-panel-surface border border-panel-border hover:border-accent/30 transition-colors"
+              className="group relative flex flex-col overflow-hidden"
+              style={{
+                borderRadius: 12,
+                background: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-line-2)',
+                transition: 'border-color 120ms ease',
+              }}
               title={`${m.name}\n${m.vertexCount} verts · ${m.model.parts.length} parts\n"${m.sourcePrompt}"`}
             >
-              <div className="relative w-full aspect-square">
+              <div className="relative w-full aspect-square" style={{ background: 'var(--pb-cream-2)' }}>
                 <CustomModelThumbnail model={m.model} fluid />
 
                 {/* Rating badge */}
-                <div className="absolute top-1 left-1 flex items-center gap-0.5 px-1.5 h-5 rounded-full bg-black/60 backdrop-blur-sm">
-                  <Star size={9} className="text-amber-400" fill="currentColor" />
-                  <span className="text-[9px] font-mono text-amber-300">
+                <div
+                  className="absolute top-1 left-1 flex items-center gap-0.5"
+                  style={{
+                    padding: '2px 7px',
+                    height: 18,
+                    borderRadius: 999,
+                    background: 'var(--pb-butter)',
+                    border: '1.5px solid var(--pb-butter-ink)',
+                    color: 'var(--pb-butter-ink)',
+                  }}
+                >
+                  <Star size={9} strokeWidth={2.4} fill="currentColor" />
+                  <span style={{ fontSize: 9, fontFamily: 'DM Mono, monospace', fontWeight: 700 }}>
                     {m.rating}
                   </span>
                 </div>
@@ -678,17 +824,35 @@ function CustomModelsSection() {
                     e.stopPropagation();
                     removeSavedModel(m.id);
                   }}
-                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 backdrop-blur-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  style={{
+                    height: 20,
+                    width: 20,
+                    borderRadius: 999,
+                    background: 'var(--pb-paper)',
+                    border: '1.5px solid var(--pb-coral-ink)',
+                    color: 'var(--pb-coral-ink)',
+                    cursor: 'pointer',
+                  }}
                   title="Remove"
                 >
-                  <X size={10} />
+                  <X size={10} strokeWidth={2.4} />
                 </button>
               </div>
-              <div className="px-2 py-1 border-t border-white/5">
-                <div className="text-[11px] text-zinc-300 truncate">
+              <div style={{ padding: '6px 10px', borderTop: '1.5px solid var(--pb-line-2)' }}>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--pb-ink)' }}
+                >
                   {m.name}
                 </div>
-                <div className="text-[9px] font-mono text-zinc-600">
+                <div
+                  style={{
+                    fontSize: 9.5,
+                    fontFamily: 'DM Mono, monospace',
+                    color: 'var(--pb-ink-muted)',
+                  }}
+                >
                   {m.vertexCount} verts
                 </div>
               </div>

@@ -255,10 +255,10 @@ export function BuildingCanvas() {
     const ZOOM_MAX = 150;
     const POLAR_EPS = 0.05;              // keep camera off the exact pole
 
-    // Pan tuning. Converts wheel-delta pixels into world-space translation,
+    // Pan tuning. Converts pointer-move pixels into world-space translation,
     // scaled by camera distance so the felt-speed stays ~constant regardless
     // of zoom level.
-    const PAN_SPEED = 0.0015;
+    const PAN_SPEED = 0.0025;
 
     const spherical = new THREE.Spherical();
     const sphOffset = new THREE.Vector3();
@@ -266,14 +266,56 @@ export function BuildingCanvas() {
     const panUp = new THREE.Vector3();
     const panDelta = new THREE.Vector3();
 
-    // Track whether any pointer button is currently held on the canvas, so
-    // "click + two-finger swipe" can pan instead of orbit.
-    let pointerDown = false;
-    const onPointerDown = () => { pointerDown = true; };
-    const onPointerUp = () => { pointerDown = false; };
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
+    // Right- or middle-button drag pans the camera. Matches the hint in
+    // WorkspaceView's HintBadge ("Middle-drag pan"). Left-drag is reserved
+    // for tools (floor/wall/part placement, eraser, select).
+    let panDragActive = false;
+    let lastPanX = 0;
+    let lastPanY = 0;
+    let panPointerId: number | null = null;
+
+    function onPanPointerDown(e: PointerEvent) {
+      // Only middle (1) and right (2) start a pan drag.
+      if (e.button !== 1 && e.button !== 2) return;
+      panDragActive = true;
+      panPointerId = e.pointerId;
+      lastPanX = e.clientX;
+      lastPanY = e.clientY;
+      // Capture so we keep getting moves even if the cursor leaves the canvas.
+      try { renderer.domElement.setPointerCapture(e.pointerId); } catch {}
+      e.preventDefault();
+    }
+    function onPanPointerMove(e: PointerEvent) {
+      if (!panDragActive || e.pointerId !== panPointerId) return;
+      const dx = e.clientX - lastPanX;
+      const dy = e.clientY - lastPanY;
+      lastPanX = e.clientX;
+      lastPanY = e.clientY;
+
+      sphOffset.copy(camera.position).sub(controls.target);
+      const dist = sphOffset.length();
+      panRight.setFromMatrixColumn(camera.matrix, 0); // camera X axis
+      panUp.setFromMatrixColumn(camera.matrix, 1);    // camera Y axis
+      panDelta
+        .copy(panRight).multiplyScalar(-dx * PAN_SPEED * dist)
+        .addScaledVector(panUp,       dy * PAN_SPEED * dist);
+      camera.position.add(panDelta);
+      controls.target.add(panDelta);
+    }
+    function onPanPointerUp(e: PointerEvent) {
+      if (e.pointerId !== panPointerId) return;
+      panDragActive = false;
+      panPointerId = null;
+      try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
+    }
+    // Suppress the native context menu on right-drag so pan isn't interrupted.
+    const onContextMenu = (e: Event) => { e.preventDefault(); };
+
+    renderer.domElement.addEventListener('pointerdown', onPanPointerDown);
+    renderer.domElement.addEventListener('pointermove', onPanPointerMove);
+    renderer.domElement.addEventListener('pointerup', onPanPointerUp);
+    renderer.domElement.addEventListener('pointercancel', onPanPointerUp);
+    renderer.domElement.addEventListener('contextmenu', onContextMenu);
 
     function onWheel(e: WheelEvent) {
       e.preventDefault();
@@ -287,22 +329,6 @@ export function BuildingCanvas() {
         const newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, curDist * factor));
         sphOffset.multiplyScalar(newDist / curDist);
         camera.position.copy(controls.target).add(sphOffset);
-        return;
-      }
-
-      // Click + two-finger swipe → pan (translate camera + target in the
-      // camera's right/up plane). Scaled by distance so the gesture feels
-      // the same far away as close up.
-      if (pointerDown) {
-        sphOffset.copy(camera.position).sub(controls.target);
-        const dist = sphOffset.length();
-        panRight.setFromMatrixColumn(camera.matrix, 0); // camera X axis
-        panUp.setFromMatrixColumn(camera.matrix, 1);    // camera Y axis
-        panDelta
-          .copy(panRight).multiplyScalar(-e.deltaX * PAN_SPEED * dist)
-          .addScaledVector(panUp,    e.deltaY * PAN_SPEED * dist);
-        camera.position.add(panDelta);
-        controls.target.add(panDelta);
         return;
       }
 
@@ -448,9 +474,11 @@ export function BuildingCanvas() {
     return () => {
       ro.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
-      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
+      renderer.domElement.removeEventListener('pointerdown', onPanPointerDown);
+      renderer.domElement.removeEventListener('pointermove', onPanPointerMove);
+      renderer.domElement.removeEventListener('pointerup', onPanPointerUp);
+      renderer.domElement.removeEventListener('pointercancel', onPanPointerUp);
+      renderer.domElement.removeEventListener('contextmenu', onContextMenu);
       if (playRef.current) { playRef.current.stop(); playRef.current = null; }
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);

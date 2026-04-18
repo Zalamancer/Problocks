@@ -1,10 +1,10 @@
 'use client';
-import { X, Sun } from 'lucide-react';
+import { X, Sun, RotateCcw } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
-import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
+import { PBButton } from '@/components/ui';
 import {
   useLightingStore,
   type LightingPreset,
@@ -26,20 +26,109 @@ export function WorkspacePropertiesPanel() {
   const setPanelOpen = useLightingStore((s) => s.setPanelOpen);
 
   return (
-    <aside className="w-full md:w-[260px] flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden shrink-0">
-      {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
-        <Sun size={14} className="text-amber-300 shrink-0" />
-        <span className="text-zinc-200 text-sm font-semibold truncate flex-1">Workspace</span>
-        <span className="text-zinc-600 text-xs">Lighting</span>
+    <aside
+      className="w-full md:w-[260px] flex flex-col rounded-xl overflow-hidden shrink-0"
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      {/* Header — butter icon tile + "Workspace" + close, styled to match the
+          design bundle's properties pager row. Mirrors atoms.jsx ToneBadge +
+          sibling text pattern. */}
+      <div
+        className="shrink-0"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 12px',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            background: 'var(--pb-butter)',
+            color: 'var(--pb-butter-ink)',
+            border: '1.5px solid var(--pb-butter-ink)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Sun size={12} strokeWidth={2.4} />
+        </span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Workspace
+        </span>
         <button
           type="button"
           onClick={() => setPanelOpen(false)}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/10"
           title="Close"
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 7,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--pb-paper)',
+            color: 'var(--pb-ink-soft)',
+            border: '1.5px solid var(--pb-line-2)',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--pb-paper)'; }}
         >
           <X size={13} />
         </button>
+      </div>
+
+      {/* Type-badge row — matches the "Part N of M · TYPE" strip from
+          /tmp/design_bundle/problocks/project/studio/properties.jsx */}
+      <div
+        className="shrink-0"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pb-ink-muted)' }}>
+          Part 1 of 1
+        </span>
+        <span
+          style={{
+            padding: '2px 9px',
+            borderRadius: 999,
+            background: 'var(--pb-cream-2)',
+            color: 'var(--pb-ink-muted)',
+            fontSize: 10.5,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            border: '1.5px solid var(--pb-line-2)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Lighting
+        </span>
       </div>
 
       {/* Scrollable content */}
@@ -131,11 +220,18 @@ export function WorkspacePropertiesPanel() {
         </PanelSection>
       </div>
 
-      {/* Sticky footer */}
-      <footer className="shrink-0 px-4 py-3 border-t border-white/[0.05]">
-        <PanelActionButton onClick={reset} variant="secondary" fullWidth>
+      {/* Sticky footer — chunky PBButton with the design's stacked drop-shadow */}
+      <footer
+        className="shrink-0"
+        style={{
+          padding: 12,
+          borderTop: '1.5px solid var(--pb-line-2)',
+          background: 'var(--pb-paper)',
+        }}
+      >
+        <PBButton onClick={reset} variant="secondary" icon={RotateCcw} fullWidth>
           Reset to Poppy
-        </PanelActionButton>
+        </PBButton>
       </footer>
     </aside>
   );

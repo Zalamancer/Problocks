@@ -6,15 +6,19 @@ import type { Comment, TeamMember } from '@/lib/templates/types';
 
 // ─── Avatar helpers ───────────────────────────────────────────────────────────
 
-const AVATAR_COLORS = [
-  'bg-purple-500', 'bg-blue-500', 'bg-emerald-500',
-  'bg-orange-500', 'bg-pink-500', 'bg-cyan-500', 'bg-amber-500',
+const AVATAR_TONES: { bg: string; ink: string }[] = [
+  { bg: 'var(--pb-grape)',  ink: 'var(--pb-grape-ink)'  },
+  { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  { bg: 'var(--pb-mint)',   ink: 'var(--pb-mint-ink)'   },
+  { bg: 'var(--pb-coral)',  ink: 'var(--pb-coral-ink)'  },
+  { bg: 'var(--pb-pink)',   ink: 'var(--pb-pink-ink)'   },
+  { bg: 'var(--pb-butter)', ink: 'var(--pb-butter-ink)' },
 ];
 
-function avatarColor(id: string): string {
+function avatarTone(id: string) {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length];
 }
 
 function initials(name: string): string {
@@ -22,9 +26,21 @@ function initials(name: string): string {
 }
 
 function Avatar({ name, userId }: { name: string; userId: string }) {
+  const tone = avatarTone(userId);
   return (
     <div
-      className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${avatarColor(userId)}`}
+      className="flex items-center justify-center shrink-0"
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: 999,
+        background: tone.bg,
+        border: `1.5px solid ${tone.ink}`,
+        boxShadow: `0 2px 0 ${tone.ink}`,
+        color: tone.ink,
+        fontSize: 10,
+        fontWeight: 800,
+      }}
     >
       {initials(name)}
     </div>
@@ -51,28 +67,66 @@ function CommentItem({
   return (
     <div className={`flex gap-2.5 group ${isReply ? 'ml-9 mt-2' : ''}`}>
       {!isReply && <Avatar name={authorName} userId={comment.authorId} />}
-      {isReply && <div className="w-5 border-l-2 border-white/10 shrink-0 rounded-b-full" />}
+      {isReply && (
+        <div
+          className="shrink-0"
+          style={{
+            width: 20,
+            borderLeft: '1.5px solid var(--pb-line-2)',
+            borderBottomLeftRadius: 999,
+          }}
+        />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[12px] font-semibold text-zinc-200">{authorName}</span>
-          <span className="text-[11px] text-zinc-500">{formatRelativeTime(comment.createdAt)}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--pb-ink)' }}>
+            {authorName}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}>
+            {formatRelativeTime(comment.createdAt)}
+          </span>
         </div>
-        <p className="text-[13px] text-zinc-300 leading-relaxed whitespace-pre-wrap">{comment.body}</p>
+        <p
+          className="leading-relaxed whitespace-pre-wrap"
+          style={{ fontSize: 13, color: 'var(--pb-ink)' }}
+        >
+          {comment.body}
+        </p>
         <div className="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
           {!isReply && (
             <button
               onClick={onReply}
-              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="flex items-center gap-1 transition-colors"
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--pb-ink-muted)',
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pb-ink)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pb-ink-muted)'; }}
             >
-              <Reply size={11} /> Reply
+              <Reply size={11} strokeWidth={2.2} /> Reply
             </button>
           )}
           {isOwn && (
             <button
               onClick={onDelete}
-              className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
+              className="flex items-center gap-1 transition-colors"
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--pb-ink-muted)',
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pb-coral-ink)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pb-ink-muted)'; }}
             >
-              <Trash2 size={11} /> Delete
+              <Trash2 size={11} strokeWidth={2.2} /> Delete
             </button>
           )}
         </div>
@@ -100,6 +154,7 @@ export function CommentsSection({
 }: CommentsSectionProps) {
   const [body, setBody] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
 
   const resolveName = (id: string) =>
     id === 'local-user' ? 'You' : (teamMembers.find((m) => m.id === id)?.name ?? 'Unknown');
@@ -116,12 +171,18 @@ export function CommentsSection({
   };
 
   const replyTarget = replyingTo ? comments.find((c) => c.id === replyingTo) : null;
+  const canPost = body.trim().length > 0;
 
   return (
     <div className="flex flex-col gap-6">
       {/* Comment list */}
       {topLevel.length === 0 ? (
-        <p className="text-sm text-zinc-600 italic">No comments yet — be the first!</p>
+        <p
+          className="italic"
+          style={{ fontSize: 13, color: 'var(--pb-ink-muted)' }}
+        >
+          No comments yet — be the first!
+        </p>
       ) : (
         <div className="flex flex-col gap-4">
           {topLevel.map((c) => (
@@ -155,12 +216,28 @@ export function CommentsSection({
         <Avatar name="You" userId={currentUserId} />
         <div className="flex-1">
           {replyTarget && (
-            <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-zinc-500">
-              <Reply size={11} />
+            <div
+              className="flex items-center gap-1.5 mb-1.5"
+              style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600 }}
+            >
+              <Reply size={11} strokeWidth={2.2} />
               Replying to{' '}
-              <span className="text-zinc-300">{resolveName(replyTarget.authorId)}</span>
-              <button onClick={() => setReplyingTo(null)} className="hover:text-zinc-300 ml-0.5">
-                <X size={11} />
+              <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>
+                {resolveName(replyTarget.authorId)}
+              </span>
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="ml-0.5 transition-colors"
+                style={{
+                  color: 'var(--pb-ink-muted)',
+                  background: 'transparent',
+                  border: 0,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pb-ink)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pb-ink-muted)'; }}
+              >
+                <X size={11} strokeWidth={2.4} />
               </button>
             </div>
           )}
@@ -170,17 +247,42 @@ export function CommentsSection({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handlePost();
             }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             placeholder={replyTarget ? 'Write a reply...' : 'Add a comment... (⌘↵ to post)'}
             rows={2}
-            className="w-full bg-white/5 rounded-lg px-3 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 resize-none outline-none border border-white/[0.06] focus:border-white/20 transition-colors"
+            className="w-full resize-none outline-none transition-colors"
+            style={{
+              background: 'var(--pb-paper)',
+              color: 'var(--pb-ink)',
+              border: `1.5px solid ${focused ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              borderRadius: 10,
+              padding: '9px 12px',
+              fontSize: 13,
+              fontFamily: 'inherit',
+              boxShadow: focused ? '0 2px 0 var(--pb-ink)' : 'none',
+            }}
           />
           <div className="flex justify-end mt-1.5">
             <button
               onClick={handlePost}
-              disabled={!body.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-accent/90 hover:bg-accent text-white disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+              disabled={!canPost}
+              className="flex items-center gap-1.5 transition-opacity"
+              style={{
+                padding: '5px 14px',
+                borderRadius: 10,
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                background: 'var(--pb-mint)',
+                color: 'var(--pb-mint-ink)',
+                border: '1.5px solid var(--pb-mint-ink)',
+                boxShadow: '0 2px 0 var(--pb-mint-ink)',
+                opacity: canPost ? 1 : 0.4,
+                cursor: canPost ? 'pointer' : 'not-allowed',
+              }}
             >
-              <Send size={11} />
+              <Send size={11} strokeWidth={2.4} />
               Post
             </button>
           </div>

@@ -3,16 +3,16 @@ import { PanelSection } from '@/components/ui/panel-controls';
 import { formatRelativeTime } from '@/lib/format-time';
 import type { ActivityEntry, TeamMember } from '@/lib/templates/types';
 
-const DOT_COLOR: Record<string, string> = {
-  status_change:      'bg-green-400',
-  field_edit:         'bg-blue-400',
-  comment_added:      'bg-purple-400',
-  comment_deleted:    'bg-purple-400/50',
-  attachment_added:   'bg-orange-400',
-  attachment_removed: 'bg-orange-400/50',
-  assignee_added:     'bg-cyan-400',
-  assignee_removed:   'bg-cyan-400/50',
-  due_date_set:       'bg-yellow-400',
+const DOT_VAR: Record<string, { bg: string; ink: string }> = {
+  status_change:      { bg: 'var(--pb-mint)',   ink: 'var(--pb-mint-ink)'   },
+  field_edit:         { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  comment_added:      { bg: 'var(--pb-grape)',  ink: 'var(--pb-grape-ink)'  },
+  comment_deleted:    { bg: 'var(--pb-grape)',  ink: 'var(--pb-grape-ink)'  },
+  attachment_added:   { bg: 'var(--pb-coral)',  ink: 'var(--pb-coral-ink)'  },
+  attachment_removed: { bg: 'var(--pb-coral)',  ink: 'var(--pb-coral-ink)'  },
+  assignee_added:     { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  assignee_removed:   { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  due_date_set:       { bg: 'var(--pb-butter)', ink: 'var(--pb-butter-ink)' },
 };
 
 function describeEntry(entry: ActivityEntry, resolveName: (id: string) => string): string {
@@ -58,22 +58,42 @@ export function ActivitySection({ activityLog, teamMembers }: ActivitySectionPro
   return (
     <PanelSection title="Activity" collapsible badge={activityLog.length} noBorder>
       {entries.length === 0 ? (
-        <p className="text-xs text-zinc-600 italic">No activity yet.</p>
+        <p
+          className="italic"
+          style={{ fontSize: 11.5, color: 'var(--pb-ink-muted)' }}
+        >
+          No activity yet.
+        </p>
       ) : (
         <div className="max-h-72 overflow-y-auto space-y-2.5">
-          {entries.map((e) => (
-            <div key={e.id} className="flex items-start gap-2">
-              <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${DOT_COLOR[e.type] ?? 'bg-zinc-500'}`} />
-              <div className="min-w-0">
-                <p className="text-[11px] text-zinc-400 leading-snug">
-                  {describeEntry(e, resolveName)}
-                </p>
-                <span className="text-[10px] text-zinc-600">
-                  {formatRelativeTime(e.timestamp)}
-                </span>
+          {entries.map((e) => {
+            const dot = DOT_VAR[e.type];
+            return (
+              <div key={e.id} className="flex items-start gap-2">
+                <span
+                  className="shrink-0 mt-1"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: dot?.bg ?? 'var(--pb-line-2)',
+                    border: `1.5px solid ${dot?.ink ?? 'var(--pb-ink-muted)'}`,
+                  }}
+                />
+                <div className="min-w-0">
+                  <p
+                    className="leading-snug"
+                    style={{ fontSize: 11.5, color: 'var(--pb-ink)', fontWeight: 500 }}
+                  >
+                    {describeEntry(e, resolveName)}
+                  </p>
+                  <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}>
+                    {formatRelativeTime(e.timestamp)}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </PanelSection>

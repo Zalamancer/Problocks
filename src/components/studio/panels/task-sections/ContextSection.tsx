@@ -30,7 +30,13 @@ function AutoTextarea({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={1}
-      className="w-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 resize-none outline-none leading-relaxed"
+      className="w-full resize-none outline-none leading-relaxed"
+      style={{
+        background: 'transparent',
+        fontSize: 13,
+        color: 'var(--pb-ink)',
+        fontFamily: 'inherit',
+      }}
     />
   );
 }
@@ -89,8 +95,21 @@ export function ContextSection({
             >
               <div className="space-y-1.5">
                 {blockedByTitles.map((title) => (
-                  <div key={title} className="text-[11px] text-zinc-500 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
+                  <div
+                    key={title}
+                    className="flex items-center gap-2"
+                    style={{ fontSize: 11, color: 'var(--pb-ink-soft)', fontWeight: 500 }}
+                  >
+                    <span
+                      className="shrink-0"
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: 999,
+                        background: 'var(--pb-coral)',
+                        border: '1.5px solid var(--pb-coral-ink)',
+                      }}
+                    />
                     {title}
                   </div>
                 ))}

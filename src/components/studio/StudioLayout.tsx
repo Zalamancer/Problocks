@@ -478,8 +478,8 @@ export function StudioLayout() {
               />
             )}
 
-            {/* Timeline bar */}
-            {board && template && (
+            {/* Timeline bar — flowchart view only */}
+            {viewMode === 'canvas' && board && template && (
               <TimelineBar
                 template={template}
                 board={board}

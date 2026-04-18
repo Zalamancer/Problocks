@@ -415,14 +415,45 @@ export function ChatPanel() {
               return (
                 <div
                   key={i}
-                  className={
+                  className="whitespace-pre-wrap break-words"
+                  style={
                     msg.role === 'user'
-                      ? 'ml-auto max-w-[90%] rounded-xl bg-accent/15 border border-accent/25 px-3 py-2 text-sm text-zinc-100 whitespace-pre-wrap break-words'
-                      : 'mr-auto max-w-[95%] rounded-xl bg-panel-surface border border-panel-border px-3 py-2 text-sm text-zinc-200 whitespace-pre-wrap break-words'
+                      ? {
+                          marginLeft: 'auto',
+                          maxWidth: '90%',
+                          borderRadius: 12,
+                          background: 'var(--pb-mint)',
+                          border: '1.5px solid var(--pb-mint-ink)',
+                          boxShadow: '0 2px 0 var(--pb-mint-ink)',
+                          padding: '8px 11px',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: 'var(--pb-mint-ink)',
+                        }
+                      : {
+                          marginRight: 'auto',
+                          maxWidth: '95%',
+                          borderRadius: 12,
+                          background: 'var(--pb-paper)',
+                          border: '1.5px solid var(--pb-line-2)',
+                          padding: '8px 11px',
+                          fontSize: 13,
+                          color: 'var(--pb-ink)',
+                          lineHeight: 1.45,
+                        }
                   }
                 >
                   {isEmptyStreaming ? (
-                    <span className="inline-block w-1.5 h-4 bg-green-400 animate-pulse align-text-bottom" />
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 6,
+                        height: 14,
+                        background: 'var(--pb-grape-ink)',
+                        verticalAlign: 'text-bottom',
+                      }}
+                      className="animate-pulse"
+                    />
                   ) : (
                     msg.content
                   )}
@@ -434,7 +465,12 @@ export function ChatPanel() {
                 {statuses.map((s, i) => (
                   <div
                     key={i}
-                    className="text-[11px] text-emerald-400/80 font-mono whitespace-pre-wrap"
+                    className="whitespace-pre-wrap"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--pb-mint-ink)',
+                      fontFamily: 'DM Mono, monospace',
+                    }}
                   >
                     {s}
                   </div>
@@ -446,7 +482,10 @@ export function ChatPanel() {
       </div>
 
       {/* Input area */}
-      <div className="shrink-0 px-3 pb-3 pt-2 border-t border-panel-border space-y-2">
+      <div
+        className="shrink-0 px-3 pb-3 pt-2 space-y-2"
+        style={{ borderTop: '1.5px solid var(--pb-line-2)' }}
+      >
         {/* Intent pill row — selects whether "Build" routes to the scene
             agent or opens the full-screen Part Studio. */}
         <ChatIntentPill value={chatMode} onChange={setChatMode} disabled={streaming} />
@@ -590,13 +629,24 @@ function ChatIntentPill({
             type="button"
             disabled={disabled}
             onClick={() => onChange(id)}
-            className={`inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full text-[11px] font-medium border transition-colors ${
-              active
-                ? 'bg-accent/15 border-accent/40 text-accent'
-                : 'bg-panel-surface border-panel-border text-zinc-400 hover:bg-panel-surface-hover hover:text-zinc-200'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className="inline-flex items-center gap-1.5"
+            style={{
+              padding: '4px 11px',
+              height: 28,
+              borderRadius: 999,
+              fontSize: 11.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              background: active ? 'var(--pb-mint)' : 'var(--pb-paper)',
+              border: `1.5px solid ${active ? 'var(--pb-mint-ink)' : 'var(--pb-line-2)'}`,
+              color: active ? 'var(--pb-mint-ink)' : 'var(--pb-ink-soft)',
+              boxShadow: active ? '0 2px 0 var(--pb-mint-ink)' : 'none',
+              opacity: disabled ? 0.5 : 1,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
           >
-            <Icon size={12} />
+            <Icon size={12} strokeWidth={2.4} />
             {label}
           </button>
         );

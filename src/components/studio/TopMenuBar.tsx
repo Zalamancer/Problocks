@@ -25,7 +25,7 @@ export function TopMenuBar() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [hoverMode, setHoverMode] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const { projectName, theme, toggleTheme, games, activeGameId, setViewMode } = useStudio();
+  const { projectName, theme, setTheme, games, activeGameId, setViewMode } = useStudio();
   const isPlaying = useSceneStore((s) => s.isPlaying);
   const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
   const setBuildTool = useBuildingStore((s) => s.setTool);
@@ -95,11 +95,10 @@ export function TopMenuBar() {
     label: 'User',
     items: [
       { id: 'settings', label: 'Settings',    icon: Settings, onClick: () => setViewMode('settings') },
-      { id: 'theme',
-        label: theme === 'dark' ? 'Switch to Light' : theme === 'light' ? 'Switch to Cream' : 'Switch to Dark',
-        icon: theme === 'dark' ? Sun : theme === 'light' ? Sparkles : Moon,
-        onClick: toggleTheme,
-      },
+      { separator: true },
+      { id: 'theme-dark',  label: theme === 'dark'  ? '✓ Dark'  : 'Dark',  icon: Moon,     onClick: () => setTheme('dark')  },
+      { id: 'theme-light', label: theme === 'light' ? '✓ Light' : 'Light', icon: Sun,      onClick: () => setTheme('light') },
+      { id: 'theme-cream', label: theme === 'cream' ? '✓ Cream' : 'Cream', icon: Sparkles, onClick: () => setTheme('cream') },
       { separator: true },
       { id: 'signout',  label: 'Sign out',    icon: LogOut,   onClick: () => {} },
     ],

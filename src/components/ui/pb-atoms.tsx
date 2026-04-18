@@ -110,6 +110,8 @@ export function PBButton({
   style,
   fullWidth,
   type = 'button',
+  'aria-label': ariaLabel,
+  title,
 }: {
   variant?: PBButtonVariant;
   size?: PBSize;
@@ -121,6 +123,8 @@ export function PBButton({
   style?: CSSProperties;
   fullWidth?: boolean;
   type?: 'button' | 'submit' | 'reset';
+  'aria-label'?: string;
+  title?: string;
 }) {
   const S = SIZE_MAP[size];
   const t = VARIANT_TONE[variant];
@@ -130,6 +134,8 @@ export function PBButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
+      aria-label={ariaLabel}
+      title={title}
       style={{
         display: fullWidth ? 'flex' : 'inline-flex',
         width: fullWidth ? '100%' : undefined,

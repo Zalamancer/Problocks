@@ -4,6 +4,7 @@ import {
   Wrench,
   FileText,
   Paperclip,
+  Sparkles,
 } from 'lucide-react';
 import { useProjectBoard } from '@/store/project-board-store';
 import { PanelActionButton } from '@/components/ui/panel-controls';
@@ -91,12 +92,27 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
       .filter((v): v is string => typeof v === 'string');
   }, [templateTask, template, board]);
 
+  // Flat index across every template task — powers the "Node N of M" header
+  // row ported from the design bundle's properties.jsx pager meta strip.
+  const allTasks = useMemo(
+    () => template.milestones.flatMap((m) => m.tasks),
+    [template.milestones],
+  );
+  const nodeIndex = allTasks.findIndex((t) => t.id === templateTaskId);
+
   if (!templateTask || !effective || !taskInstance) return null;
 
   const status = taskInstance.status;
   const isBlocked = status === 'blocked';
   const canAdvance = isActive && !isBlocked && status !== 'done';
   const activeIndex = TASK_SECTIONS.findIndex((s) => s.id === activeSection);
+
+  // INPUT / OUTPUT / PROCESS badge matches the design-bundle properties.jsx
+  // type label — derived from whether the task has dependents (processes output)
+  // or no deps (pure input).
+  const hasDeps = templateTask.blockedBy.length > 0;
+  const hasDependents = allTasks.some((t) => t.blockedBy.includes(templateTaskId));
+  const nodeKind = !hasDeps ? 'INPUT' : !hasDependents ? 'OUTPUT' : 'PROCESS';
 
   // ─── Handlers ────────────────────────────────────────────────────────
 
@@ -114,6 +130,27 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
           activeIndex={activeIndex}
           onSelect={(i) => setActiveSection(TASK_SECTIONS[i].id as TaskSectionId)}
         />
+      </div>
+
+      {/* Node-meta row ported from /tmp/design_bundle/problocks/project/studio/properties.jsx
+          "Node N of M" muted subtitle + INPUT/OUTPUT/PROCESS uppercase badge. */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/5">
+        <span className="text-[11px] font-medium text-zinc-400">
+          Node {Math.max(0, nodeIndex) + 1} of {allTasks.length}
+        </span>
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            padding: '2px 8px',
+            borderRadius: 999,
+            background: 'var(--pb-cream-2)',
+            color: 'var(--pb-ink-muted)',
+            border: '1.5px solid var(--pb-line-2)',
+            letterSpacing: '0.08em',
+          }}
+        >
+          {nodeKind}
+        </span>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -150,6 +187,50 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
           )}
 
         </PanelErrorBoundary>
+
+        {/* Claude-tip card ported from properties.jsx. Grape tone uppercase
+            header + one-line hint. Shown at the bottom of the scroll area
+            regardless of which section is active. */}
+        <div className="px-4 pb-4">
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              background: 'var(--pb-cream-2)',
+              border: '1.5px solid var(--pb-line-2)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--pb-grape-ink)',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <Sparkles size={11} strokeWidth={2.4} />
+              Claude tip
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--pb-ink-soft)',
+                marginTop: 4,
+                lineHeight: 1.45,
+              }}
+            >
+              {nodeKind === 'INPUT'
+                ? 'Short, specific briefs produce better games than long ones.'
+                : nodeKind === 'OUTPUT'
+                ? 'Publish to share a read-only link with your class.'
+                : 'Tweak any value — the graph re-runs automatically.'}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="shrink-0 px-4 py-3 border-t border-white/5">

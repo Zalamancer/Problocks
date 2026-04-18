@@ -117,7 +117,7 @@ export function TopMenuBar() {
     setOpenFileName,
     leftPanelActiveGroup,
     setLeftPanelGroup,
-    setActiveGameId,
+    openNewGameDialog,
   } = useStudio();
   const isPlaying = useSceneStore((s) => s.isPlaying);
   const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
@@ -157,7 +157,7 @@ export function TopMenuBar() {
   };
 
   const menuItems: MenuEntry[] = [
-    { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => setActiveGameId(null) },
+    { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => openNewGameDialog() },
     { id: 'save',    label: 'Save',                   icon: Save,   shortcut: '⌘S', onClick: () => {} },
     { id: 'publish', label: 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => {} },
     { separator: true },

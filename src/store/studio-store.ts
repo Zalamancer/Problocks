@@ -10,6 +10,29 @@ export type ChatMode = 'scene' | 'part';
 export type Theme = 'dark' | 'light' | 'cream';
 export type FlowDirection = 'LR' | 'TB';
 
+/**
+ * What kind of game world this project builds. Drives what the AssetsPanel
+ * shows (GLTF models vs procedural building-kit parts vs 2D sprites), which
+ * viewport is active, and which toolbars appear. Chosen in the New Game
+ * dialog and cannot be mixed — a freeform 3D world and a tile-based 3D
+ * world are different systems, not different views of the same scene.
+ */
+export type GameSystem =
+  | '3d-freeform'
+  | '3d-tile'
+  | '3d-lego'
+  | '2d'
+  | 'topdown';
+
+// Which AssetsPanel view a given game system should show. '3d-freeform'
+// maps to Models (GLTF kit), the two grid-based 3d systems map to Parts
+// (procedural pieces). 2D/topdown use Models as a placeholder until their
+// dedicated sprite/tileset browsers are built.
+export function assetsTabForGameSystem(sys: GameSystem): AssetsTab {
+  if (sys === '3d-tile' || sys === '3d-lego') return 'parts';
+  return 'models';
+}
+
 export interface GeneratedGame {
   id: string;
   name: string;
@@ -31,6 +54,15 @@ export interface StudioStore {
   setRightPanelGroup: (group: RightPanelGroup) => void;
   setAssetsActiveTab: (tab: AssetsTab) => void;
   setPartsActiveTab: (tab: PartsTab) => void;
+
+  /** The active game system. Picked in the New Game dialog. */
+  gameSystem: GameSystem;
+  setGameSystem: (sys: GameSystem) => void;
+
+  /** Whether the New Game dialog is open. */
+  newGameDialogOpen: boolean;
+  openNewGameDialog: () => void;
+  closeNewGameDialog: () => void;
 
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
@@ -79,6 +111,20 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   setRightPanelGroup: (group) => set({ rightPanelActiveGroup: group }),
   setAssetsActiveTab: (tab) => set({ assetsActiveTab: tab }),
   setPartsActiveTab: (tab) => set({ partsActiveTab: tab }),
+
+  // Default game system matches the old "Models" tab so projects that were
+  // created before the system concept existed keep showing the GLTF kit.
+  gameSystem: '3d-freeform',
+  setGameSystem: (sys) => set({
+    gameSystem: sys,
+    // Keep the legacy assetsActiveTab in sync so code that still reads it
+    // (e.g. WorkspaceView's toolbar gate) reacts to game-system changes.
+    assetsActiveTab: assetsTabForGameSystem(sys),
+  }),
+
+  newGameDialogOpen: false,
+  openNewGameDialog: () => set({ newGameDialogOpen: true }),
+  closeNewGameDialog: () => set({ newGameDialogOpen: false }),
 
   viewMode: '3d',
   setViewMode: (mode) => set({ viewMode: mode }),
@@ -141,6 +187,7 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
     chatMode: state.chatMode,
     games: state.games,
     theme: state.theme,
+    gameSystem: state.gameSystem,
     // Intentionally NOT persisting activeGameId — otherwise a refresh would
     // auto-open the last previewed game, forcing the GamePreview panel on
     // users who didn't ask for it.

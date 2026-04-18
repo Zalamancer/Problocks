@@ -1,14 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Box, SlidersHorizontal, Shapes, Package, X, Star } from 'lucide-react';
-import { PanelSearchInput, PanelSelect, PanelIconTabs } from '@/components/ui';
-import { cn } from '@/lib/utils';
+import { Box, SlidersHorizontal, X, Star } from 'lucide-react';
+import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
 import { PiecePreview } from '@/components/studio/PiecePreview';
 import { CustomModelThumbnail } from '@/components/studio/CustomModelThumbnail';
 import { PIECES, type PieceKind } from '@/lib/building-kit';
 import { useBuildingStore, type Tool } from '@/store/building-store';
-import { useStudio, type AssetsTab } from '@/store/studio-store';
+import { useStudio } from '@/store/studio-store';
 import { usePartStudio } from '@/store/part-studio-store';
 
 interface AssetInfo {
@@ -105,14 +104,36 @@ function AssetExpandedStats({ asset }: { asset: AssetInfo }) {
   );
 }
 
-const ASSETS_TABS: { id: AssetsTab; label: string; icon: typeof Box }[] = [
-  { id: 'models', label: 'Models', icon: Package },
-  { id: 'parts',  label: 'Parts',  icon: Shapes },
-];
-
 export function AssetsPanel() {
-  const tab = useStudio((s) => s.assetsActiveTab);
-  const setTab = useStudio((s) => s.setAssetsActiveTab);
+  // Which view renders is driven by the active game system, not a sub-tab.
+  // Models and Parts are different game systems (freeform vs tile-based 3D),
+  // not two views of the same asset library — so the user picks one in the
+  // New Game dialog and the other isn't accessible.
+  const gameSystem = useStudio((s) => s.gameSystem);
+
+  if (gameSystem === '3d-tile' || gameSystem === '3d-lego') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <PartsView />
+      </div>
+    );
+  }
+
+  if (gameSystem === '2d' || gameSystem === 'topdown') {
+    return (
+      <div className="flex-1 flex items-center justify-center px-6 text-center">
+        <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
+          {gameSystem === '2d' ? '2D sprite browser' : 'Top-down tileset browser'}
+          <br />coming soon.
+        </p>
+      </div>
+    );
+  }
+
+  return <ModelsView />;
+}
+
+function ModelsView() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [assets, setAssets] = useState<AssetInfo[]>([]);
@@ -175,23 +196,9 @@ export function AssetsPanel() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* White-pill sub-tabs — Models (GLTF assets) vs Parts (procedural
-          building-kit pieces). Uses the same PanelIconTabs animated pill
-          bar that LeftPanel uses. */}
-      <PanelIconTabs
-        tabs={ASSETS_TABS}
-        activeTab={tab}
-        onChange={(id) => setTab(id as AssetsTab)}
-      />
-
-      {tab === 'parts' ? (
-        <PartsView />
-      ) : (
-      <>
-
       {/* Custom models — user-generated via Part Studio. Shown as the first
-          bucket on the Models tab so the user's own assets are always on
-          top of the imported medieval kit. */}
+          bucket so the user's own assets are always on top of the imported
+          medieval kit. */}
       <CustomModelsSection />
 
       {/* Scripts moved to Scene panel (Explorer-style, Roblox parity) */}
@@ -407,9 +414,6 @@ export function AssetsPanel() {
           </div>
         )}
       </div>
-      </>
-      )}
-
     </div>
   );
 }

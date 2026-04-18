@@ -9,6 +9,7 @@ import { GameToolbar } from './GameToolbar';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
 import { RightPanel } from './RightPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
+import { NewGameDialog } from './modals/NewGameDialog';
 import { TimelineBar } from './views/TimelineBar';
 import { KanbanView } from './views/KanbanView';
 import { FlowchartView } from './views/FlowchartView';
@@ -590,6 +591,7 @@ export function StudioLayout() {
         onComplete={handleWizardComplete}
         onClose={() => setWizardOpen(false)}
       />
+      <NewGameDialog />
     </div>
   );
 }

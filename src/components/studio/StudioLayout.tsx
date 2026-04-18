@@ -426,8 +426,10 @@ export function StudioLayout() {
                     html={gameHtml ?? ''}
                     fileName={openFileName}
                     fileContent={content}
+                    files={activeGame?.files ?? null}
                     onClose={() => setOpenFileName(null)}
                     onSwitchToPreview={() => setOpenFileName(null)}
+                    onSelectFile={(name) => setOpenFileName(name)}
                   />
                 );
               })() : gameHtml && !terminalMaximized ? (

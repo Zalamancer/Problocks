@@ -117,44 +117,6 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, he
 
   return (
     <Shell>
-      {/* Header — part color tile + name, matches WorkspacePropertiesPanel */}
-      <div
-        className="shrink-0"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '10px 12px',
-          borderBottom: '1.5px solid var(--pb-line-2)',
-        }}
-      >
-        <span
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            background: part.color,
-            border: '1.5px solid var(--pb-ink)',
-            flexShrink: 0,
-          }}
-          aria-label="Part color"
-        />
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 13,
-            fontWeight: 700,
-            color: 'var(--pb-ink)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {part.name}
-        </span>
-      </div>
-
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
 

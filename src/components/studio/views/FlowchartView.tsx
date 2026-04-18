@@ -16,9 +16,10 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
-import { Lock, Check } from 'lucide-react';
+import { Lock, Check, ZoomIn, ZoomOut, Grid3x3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type FlowDirection } from '@/store/studio-store';
+import { Pill } from '@/components/ui';
 import {
   resolveEffectiveTask,
   type Template,
@@ -253,8 +254,15 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
     onTaskClick(node.id)
   }, [onTaskClick])
 
+  const nodeCount = nodes.length
+  const edgeCount = edges.length
+  const allResolved = nodes.every((n) => {
+    const s = (n.data as TaskNodeData).status
+    return s !== 'blocked'
+  })
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -282,6 +290,85 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
           borderRadius: 8,
         }} />
       </ReactFlow>
+
+      {/* Canvas chrome — ported from /tmp/design_bundle/problocks/project/studio/canvas.jsx
+          Graph-status pill (left) + zoom/grid cluster (right). Sits on top of the
+          React Flow surface with pointer-events none on the wrapper so scroll/pan
+          still works, but each chip re-enables pointer-events for its clickable area. */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 14,
+          left: 14,
+          right: 14,
+          zIndex: 5,
+          display: 'flex',
+          justifyContent: 'space-between',
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            alignItems: 'center',
+            padding: '6px 8px',
+            borderRadius: 10,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            boxShadow: '0 1px 0 var(--pb-line-2)',
+            pointerEvents: 'auto',
+          }}
+        >
+          <Pill tone={allResolved ? 'mint' : 'butter'} icon={Check}>
+            {allResolved ? 'Graph valid' : 'In progress'}
+          </Pill>
+          <span style={{ fontSize: 11.5, color: 'var(--pb-ink-muted)' }}>
+            {nodeCount} {nodeCount === 1 ? 'node' : 'nodes'} · {edgeCount} {edgeCount === 1 ? 'wire' : 'wires'}
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: 4,
+            alignItems: 'center',
+            padding: 4,
+            borderRadius: 10,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            pointerEvents: 'auto',
+          }}
+        >
+          {[
+            { icon: ZoomOut,  label: 'Zoom out' },
+            { icon: Grid3x3,  label: 'Grid'     },
+            { icon: ZoomIn,   label: 'Zoom in'  },
+          ].map(({ icon: I, label }) => (
+            <button
+              key={label}
+              type="button"
+              aria-label={label}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 7,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--pb-ink-soft)',
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <I size={14} strokeWidth={2.2} />
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

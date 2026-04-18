@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export interface SectionDef {
   id: string;
@@ -19,13 +18,11 @@ interface DropdownSectionHeaderProps {
 /**
  * Shared arrow-navigable dropdown header used across right-panel contexts.
  *
- * Layout: [ChevronLeft] [centered icon + label + ChevronDown dropdown] [ChevronRight]
- * Clicking the center button opens a portal-style list of all sections.
- * Left/right arrows cycle prev/next.
- *
- * Copied faithfully from
- * AutoAnimation/src/components/layout/RightPanel/SectionHeaders.tsx
- * (DropdownSectionHeader, lines 156–241).
+ * Ported to the chunky-pastel look from
+ * /tmp/design_bundle2/problocks/project/studio/leftpanel.jsx PagerBtn. Keeps
+ * the same prev/center/next structure as AutoAnimation's DropdownSectionHeader
+ * but swaps dark-glass chrome for paper + 1.5px ink borders + 0 2px 0 ink
+ * stacked shadow when the central button is active.
  */
 export function DropdownSectionHeader({
   sections,
@@ -56,65 +53,173 @@ export function DropdownSectionHeader({
     onSelect(activeIndex >= sections.length - 1 ? 0 : activeIndex + 1);
   }, [activeIndex, sections.length, onSelect]);
 
+  const pagerBtnStyle: React.CSSProperties = {
+    width: 30,
+    height: 30,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    background: 'var(--pb-paper)',
+    border: '1.5px solid var(--pb-line-2)',
+    color: 'var(--pb-ink-soft)',
+    cursor: 'pointer',
+  };
+
   return (
-    <div className="flex items-center gap-1 px-3 py-2">
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '10px 12px',
+      }}
+    >
       <button
+        type="button"
         onClick={goPrev}
-        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
+        style={pagerBtnStyle}
         title="Previous"
         aria-label="Previous section"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={13} strokeWidth={2.4} />
       </button>
-      <div ref={dropdownRef} className="relative flex-1 min-w-0">
+
+      <div ref={dropdownRef} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         <button
+          type="button"
           onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[13px] font-medium text-zinc-200 hover:text-white hover:bg-white/[0.06] transition-colors"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: dropdownOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+            border: `1.5px solid ${dropdownOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+            boxShadow: dropdownOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            transition: 'background 120ms ease, border-color 120ms ease',
+          }}
         >
-          <SectionIcon size={14} className="shrink-0 text-accent" />
-          <span className="truncate">{current.label}</span>
+          <SectionIcon size={14} strokeWidth={2.2} />
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {current.label}
+          </span>
           <ChevronDown
-            size={14}
-            className={cn(
-              'shrink-0 text-zinc-500 transition-transform duration-200',
-              dropdownOpen && 'rotate-180',
-            )}
+            size={11}
+            strokeWidth={2.4}
+            style={{
+              color: 'var(--pb-ink-muted)',
+              transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s',
+              flexShrink: 0,
+            }}
           />
         </button>
+
         {dropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-panel-bg border border-white/5 rounded-xl shadow-2xl py-1.5">
+          <div
+            className="z-dropdown"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: 0,
+              right: 0,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-ink)',
+              borderRadius: 12,
+              boxShadow: '0 4px 0 var(--pb-ink), 0 12px 28px rgba(29,26,20,0.12)',
+              padding: 6,
+            }}
+          >
             {sections.map((section, i) => {
               const Icon = section.icon;
               const isActive = i === activeIndex;
               return (
                 <button
                   key={section.id}
+                  type="button"
                   onClick={() => {
                     onSelect(i);
                     setDropdownOpen(false);
                   }}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-[13px] transition-colors',
-                    isActive
-                      ? 'bg-accent/10 text-accent'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06]',
-                  )}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '9px 10px',
+                    borderRadius: 8,
+                    background: isActive ? 'var(--pb-cream-2)' : 'transparent',
+                    color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink)',
+                    fontSize: 13,
+                    fontWeight: isActive ? 700 : 500,
+                    fontFamily: 'inherit',
+                    textAlign: 'left',
+                    border: 0,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'var(--pb-cream-2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'transparent';
+                  }}
                 >
-                  <Icon size={15} className="shrink-0" />
-                  <span className="truncate">{section.label}</span>
+                  <Icon
+                    size={15}
+                    strokeWidth={2.2}
+                    style={{
+                      color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink-muted)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {section.label}
+                  </span>
+                  {isActive && (
+                    <Check
+                      size={12}
+                      strokeWidth={2.6}
+                      style={{ color: 'var(--pb-mint-ink)', flexShrink: 0 }}
+                    />
+                  )}
                 </button>
               );
             })}
           </div>
         )}
       </div>
+
       <button
+        type="button"
         onClick={goNext}
-        className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors"
+        style={pagerBtnStyle}
         title="Next"
         aria-label="Next section"
       >
-        <ChevronRight size={16} />
+        <ChevronRight size={13} strokeWidth={2.4} />
       </button>
     </div>
   );

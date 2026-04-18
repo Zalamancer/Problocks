@@ -123,8 +123,14 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
     addAttachment(taskInstance.id, attachment);
 
   return (
-    <aside className="w-[300px] flex-shrink-0 h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden">
-      <div className="shrink-0 border-b border-white/5">
+    <aside
+      className="w-[300px] flex-shrink-0 h-full flex flex-col rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      <div className="shrink-0" style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}>
         <DropdownSectionHeader
           sections={TASK_SECTIONS}
           activeIndex={activeIndex}
@@ -134,8 +140,11 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
 
       {/* Node-meta row ported from /tmp/design_bundle/problocks/project/studio/properties.jsx
           "Node N of M" muted subtitle + INPUT/OUTPUT/PROCESS uppercase badge. */}
-      <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/5">
-        <span className="text-[11px] font-medium text-zinc-400">
+      <div
+        className="shrink-0 flex items-center justify-between px-4 py-2"
+        style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pb-ink-muted)' }}>
           Node {Math.max(0, nodeIndex) + 1} of {allTasks.length}
         </span>
         <span
@@ -233,7 +242,10 @@ export function TaskDetailPanel({ templateTaskId, template, board }: TaskDetailP
         </div>
       </div>
 
-      <div className="shrink-0 px-4 py-3 border-t border-white/5">
+      <div
+        className="shrink-0 px-4 py-3"
+        style={{ borderTop: '1.5px solid var(--pb-line-2)', background: 'var(--pb-paper)' }}
+      >
         <PanelActionButton
           variant="accent"
           fullWidth

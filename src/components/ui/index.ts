@@ -15,5 +15,5 @@ export { ConfirmDialog } from './ConfirmDialog'
 export { ToastContainer } from './ToastContainer'
 
 // Problocks Studio design-bundle atoms (chunky pastel/stacked-shadow look)
-export { Pill, PBButton, SectionLabel, ToneBadge } from './pb-atoms'
+export { Pill, PBButton, SectionLabel, ToneBadge, PBLogo, AvatarStack } from './pb-atoms'
 export type { PBTone, PBSize } from './pb-atoms'

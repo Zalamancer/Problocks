@@ -1,15 +1,39 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Save, Upload, Play, Square, Settings, Sun, Moon, Sparkles, User, LogOut } from 'lucide-react';
-import { useStudio } from '@/store/studio-store';
+import {
+  Save,
+  Upload,
+  Play,
+  Square,
+  Settings,
+  Sun,
+  Moon,
+  Sparkles,
+  LogOut,
+  ChevronRight,
+  Share2,
+  Network,
+  Gamepad2,
+  Code2,
+  Kanban,
+  MoreVertical,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useStudio, type ViewMode } from '@/store/studio-store';
 import { useSceneStore } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
-import { PanelActionButton } from '@/components/ui';
+import { PBButton, PBLogo, AvatarStack } from '@/components/ui';
+
+// ProBlocks Studio top bar — ported from the design bundle's topbar.jsx.
+// Layout: logo mark + breadcrumb (classroom > project) on the left,
+// centered chunky pill-tab view switcher, collab avatar stack + Share + Play
+// on the right. File/Marketplace/Classroom/Account rolled into the kebab
+// dropdown so the chrome stays clean.
 
 interface MenuItem {
   id: string;
   label: string;
-  icon: typeof Save;
+  icon: LucideIcon;
   shortcut?: string;
   onClick: () => void;
   separator?: false;
@@ -17,19 +41,82 @@ interface MenuItem {
 interface MenuSeparator { separator: true; }
 type MenuEntry = MenuItem | MenuSeparator;
 
-interface DropdownMenu { kind: 'dropdown'; id: string; label: string; items: MenuEntry[]; }
-interface DirectButton { kind: 'direct'; id: string; label: string; onClick: () => void; }
-type MenuDef = DropdownMenu | DirectButton;
+// View-switcher pills — mapped to the existing ViewMode values plus "chat"
+// which is a convenience pill that focuses the left-panel Chat tab rather
+// than a fourth viewMode. Matches topbar.jsx exactly: Canvas/Preview/Code/Claude.
+interface ViewTab {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  isActive: (ctx: ViewTabCtx) => boolean;
+  activate: (ctx: ViewTabCtx) => void;
+}
+interface ViewTabCtx {
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
+  openFileName: string | null;
+  setOpenFileName: (name: string | null) => void;
+  setLeftPanelGroup: (group: 'scene' | 'assets' | 'chat' | 'parts' | 'connectors') => void;
+  activeGameFirstFile?: string;
+  leftPanelActiveGroup: string;
+}
+
+const VIEW_TABS: ViewTab[] = [
+  {
+    id: 'canvas',
+    label: 'Canvas',
+    icon: Network,
+    isActive: (c) => c.viewMode === 'canvas' && !c.openFileName,
+    activate: (c) => { c.setOpenFileName(null); c.setViewMode('canvas'); },
+  },
+  {
+    id: 'preview',
+    label: 'Preview',
+    icon: Gamepad2,
+    isActive: (c) => c.viewMode === '3d' && !c.openFileName,
+    activate: (c) => { c.setOpenFileName(null); c.setViewMode('3d'); },
+  },
+  {
+    id: 'code',
+    label: 'Code',
+    icon: Code2,
+    isActive: (c) => !!c.openFileName,
+    activate: (c) => {
+      if (c.activeGameFirstFile) c.setOpenFileName(c.activeGameFirstFile);
+    },
+  },
+  {
+    id: 'claude',
+    label: 'Claude',
+    icon: Sparkles,
+    isActive: (c) => c.leftPanelActiveGroup === 'chat',
+    activate: (c) => { c.setLeftPanelGroup('chat'); },
+  },
+];
 
 export function TopMenuBar() {
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [hoverMode, setHoverMode] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
-  const { projectName, theme, setTheme, games, activeGameId, setViewMode } = useStudio();
+  const {
+    projectName,
+    setProjectName,
+    theme,
+    setTheme,
+    games,
+    activeGameId,
+    viewMode,
+    setViewMode,
+    openFileName,
+    setOpenFileName,
+    leftPanelActiveGroup,
+    setLeftPanelGroup,
+    setActiveGameId,
+  } = useStudio();
   const isPlaying = useSceneStore((s) => s.isPlaying);
   const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
   const setBuildTool = useBuildingStore((s) => s.setTool);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+  const activeGameFirstFile = activeGame?.files ? Object.keys(activeGame.files)[0] : undefined;
 
   const togglePlay = useCallback(() => {
     const next = !isPlaying;
@@ -37,230 +124,252 @@ export function TopMenuBar() {
     if (next) setBuildTool('select');
   }, [isPlaying, setIsPlaying, setBuildTool]);
 
+  // Close menu on outside click / escape
   useEffect(() => {
-    if (!openMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setOpenMenu(null); setHoverMode(false);
-      }
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [openMenu]);
-
-  useEffect(() => {
-    if (!openMenu) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setOpenMenu(null); setHoverMode(false); }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [openMenu]);
+  }, [menuOpen]);
 
-  const handleMenuClick = useCallback((menuId: string) => {
-    setOpenMenu((prev) => {
-      if (prev === menuId) { setHoverMode(false); return null; }
-      setHoverMode(true);
-      return menuId;
-    });
-  }, []);
-
-  const handleMenuHover = useCallback((menuId: string) => {
-    if (hoverMode && openMenu) setOpenMenu(menuId);
-  }, [hoverMode, openMenu]);
-
-  const handleItemClick = useCallback((item: MenuItem) => {
-    item.onClick(); setOpenMenu(null); setHoverMode(false);
-  }, []);
-
-  const menus: MenuDef[] = [
-    {
-      kind: 'dropdown',
-      id: 'file',
-      label: 'File',
-      items: [
-        { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => { useStudio.getState().setActiveGameId(null); } },
-        { separator: true },
-        { id: 'save',    label: 'Save',                   icon: Save,   shortcut: '⌘S', onClick: () => {} },
-        { id: 'publish', label: 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => {} },
-      ],
-    },
-    { kind: 'direct', id: 'marketplace', label: 'Marketplace', onClick: () => { window.location.href = '/marketplace'; } },
-    { kind: 'direct', id: 'classroom',   label: 'Classroom',   onClick: () => {} },
-  ];
-
-  const userMenu: DropdownMenu = {
-    kind: 'dropdown',
-    id: 'user',
-    label: 'User',
-    items: [
-      { id: 'settings', label: 'Settings',    icon: Settings, onClick: () => setViewMode('settings') },
-      { separator: true },
-      { id: 'theme-dark',  label: theme === 'dark'  ? '✓ Dark'  : 'Dark',  icon: Moon,     onClick: () => setTheme('dark')  },
-      { id: 'theme-light', label: theme === 'light' ? '✓ Light' : 'Light', icon: Sun,      onClick: () => setTheme('light') },
-      { id: 'theme-cream', label: theme === 'cream' ? '✓ Cream' : 'Cream', icon: Sparkles, onClick: () => setTheme('cream') },
-      { separator: true },
-      { id: 'signout',  label: 'Sign out',    icon: LogOut,   onClick: () => {} },
-    ],
+  const tabCtx: ViewTabCtx = {
+    viewMode,
+    setViewMode,
+    openFileName,
+    setOpenFileName,
+    setLeftPanelGroup,
+    activeGameFirstFile,
+    leftPanelActiveGroup,
   };
+
+  const menuItems: MenuEntry[] = [
+    { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => setActiveGameId(null) },
+    { id: 'save',    label: 'Save',                   icon: Save,   shortcut: '⌘S', onClick: () => {} },
+    { id: 'publish', label: 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => {} },
+    { separator: true },
+    { id: 'marketplace', label: 'Marketplace', icon: Upload,   onClick: () => { window.location.href = '/marketplace'; } },
+    { id: 'classroom',   label: 'Classroom',   icon: Sparkles, onClick: () => {} },
+    { separator: true },
+    { id: 'settings',    label: 'Settings',    icon: Settings, onClick: () => setViewMode('settings') },
+    { separator: true },
+    { id: 'theme-dark',  label: theme === 'dark'  ? '✓ Dark'  : 'Dark',  icon: Moon,     onClick: () => setTheme('dark')  },
+    { id: 'theme-light', label: theme === 'light' ? '✓ Light' : 'Light', icon: Sun,      onClick: () => setTheme('light') },
+    { id: 'theme-cream', label: theme === 'cream' ? '✓ Cream' : 'Cream', icon: Sparkles, onClick: () => setTheme('cream') },
+    { separator: true },
+    { id: 'signout',     label: 'Sign out',    icon: LogOut,   onClick: () => {} },
+  ];
 
   return (
     <div
       ref={barRef}
-      className="relative z-50 flex items-center h-9 bg-zinc-900/60 backdrop-blur-xl border border-white/[0.06] rounded-xl shrink-0 select-none"
+      className="relative z-50 shrink-0 select-none"
+      style={{
+        height: 56,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '0 14px',
+        borderRadius: 14,
+        background: 'var(--shell-bg)',
+        border: '1.5px solid var(--shell-border)',
+      }}
     >
-      {/* User menu */}
-      <div className="flex items-center border-r border-white/[0.06] h-full px-1">
-        <UserMenuButton
-          menu={userMenu}
-          isOpen={openMenu === userMenu.id}
-          onClick={() => handleMenuClick(userMenu.id)}
-          onHover={() => handleMenuHover(userMenu.id)}
-          onItemClick={handleItemClick}
-        />
+      {/* Logo + breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <PBLogo size={28} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 14,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            minWidth: 0,
+          }}
+        >
+          <span className="hidden sm:inline">ProBlocks</span>
+          <ChevronRight size={12} style={{ color: 'var(--pb-ink-muted)' }} className="hidden sm:inline" />
+          <span style={{ color: 'var(--pb-ink-soft)', fontWeight: 600 }} className="hidden md:inline">
+            Ms. Alvarez · Period 4
+          </span>
+          <ChevronRight size={12} style={{ color: 'var(--pb-ink-muted)' }} className="hidden md:inline" />
+          <input
+            value={activeGame?.name ?? projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 0,
+              padding: '2px 4px',
+              borderRadius: 6,
+              fontSize: 14,
+              fontWeight: 700,
+              color: 'var(--pb-ink)',
+              minWidth: 120,
+              maxWidth: 220,
+              outline: 'none',
+            }}
+            placeholder="Project name"
+          />
+        </div>
       </div>
 
-      {/* Menu buttons */}
-      <div className="flex items-center h-full">
-        {menus.map((menu) =>
-          menu.kind === 'dropdown' ? (
-            <DropdownMenuButton
-              key={menu.id}
-              menu={menu}
-              isOpen={openMenu === menu.id}
-              onClick={() => handleMenuClick(menu.id)}
-              onHover={() => handleMenuHover(menu.id)}
-              onItemClick={handleItemClick}
-            />
-          ) : (
-            <DirectMenuButton
-              key={menu.id}
-              menu={menu as DirectButton}
-              onClick={() => { setOpenMenu(null); setHoverMode(false); (menu as DirectButton).onClick(); }}
-              onHover={() => handleMenuHover(menu.id)}
-            />
-          ),
-        )}
+      {/* Centered pill-tab view switcher — absolutely positioned at center */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          padding: 3,
+          borderRadius: 999,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          zIndex: 1,
+        }}
+      >
+        {VIEW_TABS.map((v) => {
+          const on = v.isActive(tabCtx);
+          const Icon = v.icon;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => v.activate(tabCtx)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                color: on ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+                background: on ? 'var(--pb-paper)' : 'transparent',
+                border: 0,
+                boxShadow: on ? '0 1px 2px rgba(29,26,20,0.08), inset 0 0 0 1.5px var(--pb-ink)' : 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Icon size={14} strokeWidth={2.2} />
+              <span className="hidden md:inline">{v.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex-1" />
+      <div style={{ flex: 1 }} />
 
-      {/* Active game name — absolutely centered in the bar */}
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-xs font-medium text-zinc-300 truncate max-w-[220px]">
-        {activeGame?.name ?? projectName}
-      </span>
+      {/* Right cluster: avatars + Share + Play + kebab */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <AvatarStack names={['Ms Alvarez', 'Jules Tran', 'Rosa Shah']} size={26} />
 
-      {/* Actions */}
-      <div className="flex items-center gap-1 pr-2">
-        <PanelActionButton
-          onClick={togglePlay}
+        <PBButton variant="secondary" size="sm" icon={Share2}>
+          <span className="hidden sm:inline">Share</span>
+        </PBButton>
+
+        <PBButton
           variant={isPlaying ? 'destructive' : 'primary'}
-          icon={isPlaying ? Square : Play}
           size="sm"
+          icon={isPlaying ? Square : Play}
+          onClick={togglePlay}
         >
           {isPlaying ? 'Stop' : 'Play'}
-        </PanelActionButton>
+        </PBButton>
+
+        {/* Kebab menu — replaces the old File/Account dropdown cluster */}
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="More"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--pb-paper)',
+              color: 'var(--pb-ink-soft)',
+              border: '1.5px solid var(--pb-line-2)',
+              cursor: 'pointer',
+            }}
+          >
+            <MoreVertical size={15} />
+          </button>
+
+          {menuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                right: 0,
+                minWidth: 220,
+                padding: 6,
+                borderRadius: 12,
+                background: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-ink)',
+                boxShadow: '0 4px 0 var(--pb-ink), 0 12px 28px rgba(29,26,20,0.15)',
+                zIndex: 60,
+              }}
+            >
+              {menuItems.map((entry, i) => {
+                if ((entry as MenuSeparator).separator) {
+                  return <div key={`sep-${i}`} style={{ margin: '4px 0', borderTop: '1px solid var(--pb-line-2)' }} />;
+                }
+                const item = entry as MenuItem;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { item.onClick(); setMenuOpen(false); }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      background: 'transparent',
+                      color: 'var(--pb-ink)',
+                      border: 0,
+                      fontSize: 13,
+                      fontFamily: 'inherit',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <Icon size={14} style={{ color: 'var(--pb-ink-muted)', flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {item.shortcut && (
+                      <span style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)' }}>{item.shortcut}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function UserMenuButton({ menu, isOpen, onClick, onHover, onItemClick }: {
-  menu: DropdownMenu; isOpen: boolean; onClick: () => void; onHover: () => void;
-  onItemClick: (item: MenuItem) => void;
-}) {
-  return (
-    <div className="relative h-full flex items-center" onMouseEnter={onHover}>
-      <button
-        onClick={onClick}
-        title="Account"
-        className={cn(
-          'h-7 w-7 rounded-md flex items-center justify-center transition-colors',
-          isOpen ? 'bg-panel-surface text-white' : 'text-gray-400 hover:text-white hover:bg-panel-surface',
-        )}
-      >
-        <User size={14} />
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 z-dropdown min-w-[200px] py-1 bg-panel-bg border border-white/10 rounded-xl shadow-2xl mt-1">
-          {menu.items.map((entry, i) => {
-            if ((entry as MenuSeparator).separator)
-              return <div key={`sep-${i}`} className="my-1 border-t border-white/5" />;
-            const item = entry as MenuItem;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onItemClick(item)}
-                className="flex items-center gap-3 px-3 py-2 text-xs text-gray-300 hover:bg-panel-surface hover:text-white transition-colors rounded-md mx-1 w-[calc(100%-8px)]"
-              >
-                <Icon size={13} className="shrink-0 text-gray-500" />
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.shortcut && <span className="text-[10px] text-gray-600">{item.shortcut}</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DropdownMenuButton({ menu, isOpen, onClick, onHover, onItemClick }: {
-  menu: DropdownMenu; isOpen: boolean; onClick: () => void; onHover: () => void;
-  onItemClick: (item: MenuItem) => void;
-}) {
-  return (
-    <div className="relative h-full flex items-center" onMouseEnter={onHover}>
-      <button
-        onClick={onClick}
-        className={cn(
-          'px-3 h-7 text-xs font-medium rounded-md mx-0.5 transition-colors',
-          isOpen ? 'bg-panel-surface text-white' : 'text-gray-400 hover:text-white hover:bg-panel-surface',
-        )}
-      >
-        {menu.label}
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 z-dropdown min-w-[200px] py-1 bg-panel-bg border border-white/10 rounded-xl shadow-2xl mt-1">
-          {menu.items.map((entry, i) => {
-            if ((entry as MenuSeparator).separator)
-              return <div key={`sep-${i}`} className="my-1 border-t border-white/5" />;
-            const item = entry as MenuItem;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onItemClick(item)}
-                className="flex items-center gap-3 px-3 py-2 text-xs text-gray-300 hover:bg-panel-surface hover:text-white transition-colors rounded-md mx-1 w-[calc(100%-8px)]"
-              >
-                <Icon size={13} className="shrink-0 text-gray-500" />
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.shortcut && <span className="text-[10px] text-gray-600">{item.shortcut}</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DirectMenuButton({ menu, onClick, onHover }: {
-  menu: DirectButton; onClick: () => void; onHover: () => void;
-}) {
-  return (
-    <div className="h-full flex items-center" onMouseEnter={onHover}>
-      <button
-        onClick={onClick}
-        className="px-3 h-7 text-xs font-medium text-gray-400 hover:text-white hover:bg-panel-surface transition-colors rounded-md mx-0.5"
-      >
-        {menu.label}
-      </button>
-    </div>
-  );
-}
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}
+// Unused placeholder export retained to keep the import tree stable in case
+// external callers reference KanbanIcon. (tree-shaken in production.)
+void Kanban;

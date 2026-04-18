@@ -209,6 +209,72 @@ export function SectionLabel({
   );
 }
 
+// ─── PBLogo ──────────────────────────────────────────────────────────────
+// The 4-colored-squares mark from atoms.jsx → Icon case 'logo'.
+export function PBLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-label="Problocks">
+      <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="var(--pb-ink)" />
+      <rect x="5.5"  y="5.5"  width="6" height="6" rx="1.5" fill="var(--pb-butter)" />
+      <rect x="12.5" y="5.5"  width="6" height="6" rx="1.5" fill="var(--pb-pink)" />
+      <rect x="5.5"  y="12.5" width="6" height="6" rx="1.5" fill="var(--pb-mint)" />
+      <rect x="12.5" y="12.5" width="6" height="6" rx="1.5" fill="var(--pb-sky)" />
+    </svg>
+  );
+}
+
+// ─── AvatarStack ─────────────────────────────────────────────────────────
+// 3 overlapping initial-circles in the design's pastel tones. No photo
+// support — this is the classroom-collaborator indicator, not a real avatar.
+const AVATAR_TONES: Array<Exclude<PBTone, 'paper' | 'ink'>> = ['pink', 'mint', 'sky', 'butter', 'grape', 'coral'];
+
+export function AvatarStack({
+  names,
+  size = 26,
+}: {
+  names: string[];
+  size?: number;
+}) {
+  return (
+    <div style={{ display: 'inline-flex' }}>
+      {names.map((name, i) => {
+        const tone = AVATAR_TONES[i % AVATAR_TONES.length];
+        const t = TONE_MAP[tone];
+        const initials = name
+          .split(/\s+/)
+          .map((p) => p[0])
+          .filter(Boolean)
+          .slice(0, 2)
+          .join('')
+          .toUpperCase();
+        return (
+          <div
+            key={name}
+            title={name}
+            style={{
+              width: size,
+              height: size,
+              borderRadius: '50%',
+              background: t.bg,
+              color: t.fg,
+              border: `1.5px solid ${t.bd}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: Math.round(size * 0.42),
+              fontWeight: 700,
+              marginLeft: i === 0 ? 0 : -Math.round(size * 0.3),
+              zIndex: names.length - i,
+            }}
+          >
+            {initials}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Tone icon badge ──────────────────────────────────────────────────────
 // The chunky colored square used by ConnectorsTab + SceneLayerRow icons.
 // Bright tone bg, ink-colored text, 1.5px ink border.

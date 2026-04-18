@@ -14,15 +14,18 @@ interface Props {
 
 const POS_MIN = -50, POS_MAX = 50, POS_STEP = 0.25, POS_PREC = 2;
 const ROT_MIN = -180, ROT_MAX = 180, ROT_STEP = 1, ROT_PREC = 1;
-const SCL_MIN = 10, SCL_MAX = 500, SCL_STEP = 1, SCL_PREC = 0; // as %
+const SCL_MIN = 0.05, SCL_MAX = 40, SCL_STEP = 0.1, SCL_PREC = 2;
+
+const formatDeg = (v: number) => `${v.toFixed(ROT_PREC)}°`;
 
 function Row({
-  label, value, onChange, min, max, step, precision, suffix,
+  label, value, onChange, min, max, step, precision, format,
 }: {
   label: string;
   value: Vec3;
   onChange: (v: Vec3) => void;
-  min: number; max: number; step: number; precision: number; suffix?: string;
+  min: number; max: number; step: number; precision: number;
+  format?: (v: number) => string;
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -38,7 +41,7 @@ function Row({
             max={max}
             step={step}
             precision={precision}
-            suffix={suffix}
+            formatValue={format}
             inline
             className="flex-1"
           />
@@ -65,20 +68,13 @@ export function TransformControls({
         value={rotation}
         onChange={onRotationChange}
         min={ROT_MIN} max={ROT_MAX} step={ROT_STEP} precision={ROT_PREC}
-        suffix="°"
+        format={formatDeg}
       />
       <Row
         label="Scale"
-        value={{
-          x: Math.round(scale.x * 100),
-          y: Math.round(scale.y * 100),
-          z: Math.round(scale.z * 100),
-        }}
-        onChange={(pct) =>
-          onScaleChange({ x: pct.x / 100, y: pct.y / 100, z: pct.z / 100 })
-        }
+        value={scale}
+        onChange={onScaleChange}
         min={SCL_MIN} max={SCL_MAX} step={SCL_STEP} precision={SCL_PREC}
-        suffix="%"
       />
     </div>
   );

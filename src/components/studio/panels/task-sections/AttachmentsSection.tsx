@@ -114,34 +114,85 @@ export function AttachmentsSection({
 
       <PanelSection title="Resources" collapsible badge={attachments.length} noBorder>
         {attachments.length === 0 ? (
-          <p className="text-xs text-zinc-600 italic">No resources attached.</p>
+          <p
+            className="italic"
+            style={{ fontSize: 11.5, color: 'var(--pb-ink-muted)' }}
+          >
+            No resources attached.
+          </p>
         ) : (
           <div className="space-y-2">
             {attachments.map((a) => {
               const Icon = TYPE_ICON[a.type];
               const ytId = a.type === 'youtube' ? extractYouTubeId(a.url) : null;
               return (
-                <div key={a.id} className="flex items-start gap-2 bg-panel-surface rounded-lg p-2.5">
-                  <Icon size={14} className="shrink-0 text-zinc-500 mt-0.5" />
+                <div
+                  key={a.id}
+                  className="flex items-start gap-2"
+                  style={{
+                    background: 'var(--pb-paper)',
+                    border: '1.5px solid var(--pb-line-2)',
+                    borderRadius: 10,
+                    padding: '9px 10px',
+                  }}
+                >
+                  <Icon
+                    size={14}
+                    strokeWidth={2.2}
+                    className="shrink-0 mt-0.5"
+                    style={{ color: 'var(--pb-grape-ink)' }}
+                  />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-zinc-300 font-medium truncate">{a.title}</p>
+                    <p
+                      className="truncate"
+                      style={{ fontSize: 12, fontWeight: 600, color: 'var(--pb-ink)' }}
+                    >
+                      {a.title}
+                    </p>
                     {a.url && (
-                      <p className="text-[10px] text-zinc-600 truncate">{a.url}</p>
+                      <p
+                        className="truncate"
+                        style={{
+                          fontSize: 10,
+                          fontFamily: 'DM Mono, monospace',
+                          color: 'var(--pb-ink-muted)',
+                        }}
+                      >
+                        {a.url}
+                      </p>
                     )}
                     {ytId && (
                       <img
                         src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
                         alt=""
-                        className="mt-1.5 rounded w-full aspect-video object-cover"
+                        className="mt-1.5 w-full aspect-video object-cover"
+                        style={{ borderRadius: 6, border: '1.5px solid var(--pb-line-2)' }}
                       />
                     )}
                   </div>
                   <button
                     onClick={() => onRemoveAttachment(a.id)}
-                    className="shrink-0 text-zinc-600 hover:text-red-400 transition-colors"
+                    className="shrink-0 flex items-center justify-center"
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 6,
+                      background: 'var(--pb-paper)',
+                      border: '1.5px solid var(--pb-line-2)',
+                      color: 'var(--pb-ink-soft)',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--pb-coral-ink)';
+                      e.currentTarget.style.color = 'var(--pb-coral-ink)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+                      e.currentTarget.style.color = 'var(--pb-ink-soft)';
+                    }}
                     aria-label="Remove"
                   >
-                    <X size={12} />
+                    <X size={11} strokeWidth={2.4} />
                   </button>
                 </div>
               );

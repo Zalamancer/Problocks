@@ -6,6 +6,7 @@ import {
 } from '@/components/ui';
 import type { ScenePart, TexturePreset, PartType } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
+import { TransformControls } from './TransformControls';
 
 const PART_TYPE_OPTIONS: { value: PartType; label: string }[] = [
   { value: 'Block',    label: 'Block' },
@@ -51,41 +52,6 @@ interface Props {
   /** When true, skip the outer <aside> shell so this panel can be nested
    *  inside a shared right-panel wrapper (RightPanel.tsx). */
   headless?: boolean;
-}
-
-function Vec3Row({
-  label, value, onChange, min, max, step, precision, suffix,
-}: {
-  label: string;
-  value: { x: number; y: number; z: number };
-  onChange: (v: { x: number; y: number; z: number }) => void;
-  min: number; max: number; step: number; precision?: number; suffix?: string;
-}) {
-  return (
-    <div className="space-y-1 mb-2">
-      <span
-        className="px-0.5"
-        style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600 }}
-      >
-        {label}
-      </span>
-      <div className="grid grid-cols-3 gap-1">
-        {(['x', 'y', 'z'] as const).map(axis => (
-          <PanelSlider
-            key={axis}
-            label={axis.toUpperCase()}
-            value={value[axis]}
-            onChange={v => onChange({ ...value, [axis]: v })}
-            min={min} max={max} step={step}
-            precision={precision ?? 2}
-            suffix={suffix}
-            compact
-            inline
-          />
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, headless }: Props) {
@@ -155,32 +121,14 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, he
         </PanelSection>
 
         {/* ── Transform ── */}
-        <PanelSection title="Position" collapsible defaultOpen>
-          <Vec3Row
-            label="Position"
-            value={part.position}
-            onChange={v => set('position', v)}
-            min={-50} max={50} step={0.25} precision={2}
-          />
-        </PanelSection>
-
-        <PanelSection title="Rotation" collapsible defaultOpen>
-          <Vec3Row
-            label="Rotation"
-            value={part.rotation}
-            onChange={v => set('rotation', v)}
-            min={-180} max={180} step={1} precision={1} suffix="°"
-          />
-        </PanelSection>
-
-        <PanelSection title="Size" collapsible defaultOpen>
-          <Vec3Row
-            label="Size"
-            value={part.scale}
-            onChange={v => set('scale', v)}
-            min={0.05} max={40} step={0.1} precision={2}
-          />
-        </PanelSection>
+        <TransformControls
+          position={part.position}
+          rotation={part.rotation}
+          scale={part.scale}
+          onPositionChange={v => set('position', v)}
+          onRotationChange={v => set('rotation', v)}
+          onScaleChange={v => set('scale', v)}
+        />
 
         {/* ── Appearance ── */}
         <PanelSection title="Appearance" collapsible defaultOpen>

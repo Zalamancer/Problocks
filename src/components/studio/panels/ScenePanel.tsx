@@ -104,6 +104,8 @@ export function ScenePanel({ onSelect }: Props) {
 
   const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
   const setLightingPanelOpen = useLightingStore((s) => s.setPanelOpen);
+  const rightPanelGroup = useStudio((s) => s.rightPanelActiveGroup);
+  const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
 
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
@@ -353,13 +355,25 @@ export function ScenePanel({ onSelect }: Props) {
               const CategoryIcon = meta.icon;
 
               const isWorkspace = cat === 'part';
-              const workspaceSelected = isWorkspace && lightingPanelOpen;
+              // Workspace is its own right-panel tab now. Treat as
+              // "selected" whenever the right panel is on the Workspace
+              // tab — keeps the highlight in sync without the legacy
+              // lightingPanelOpen flag.
+              const workspaceSelected = isWorkspace && rightPanelGroup === 'workspace';
               const handleHeaderClick = () => {
                 if (isWorkspace) {
-                  // Click name → open Workspace lighting on the right.
+                  // Click name → switch right panel to Workspace tab so
+                  // lighting/atmosphere controls become visible.
                   setSelectedPart(null);
                   setBuildingSelection(null);
-                  setLightingPanelOpen(!lightingPanelOpen);
+                  if (rightPanelGroup === 'workspace') {
+                    // Toggle off → go back to Properties.
+                    setRightPanelGroup('properties');
+                    setLightingPanelOpen(false);
+                  } else {
+                    setRightPanelGroup('workspace');
+                    setLightingPanelOpen(true);
+                  }
                 } else {
                   toggleCategory(cat);
                 }

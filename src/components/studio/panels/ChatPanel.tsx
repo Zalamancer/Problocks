@@ -121,7 +121,7 @@ export function ChatPanel() {
   // row so the user always sees what "Build" is going to do.
   const chatMode = useStudio((s) => s.chatMode);
   const setChatMode = useStudio((s) => s.setChatMode);
-  const setLeftPanelGroup = useStudio((s) => s.setLeftPanelGroup);
+  const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
   const setPartsActiveTab = useStudio((s) => s.setPartsActiveTab);
   const setDraftPrompt = usePartStudio((s) => s.setDraftPrompt);
 
@@ -261,7 +261,8 @@ export function ChatPanel() {
     if (chatMode === 'part') {
       setDraftPrompt(trimmed);
       setInput('');
-      setLeftPanelGroup('parts');
+      // Part Studio now lives on the right-panel dropdown.
+      setRightPanelGroup('parts');
       setPartsActiveTab('generate');
       return;
     }
@@ -380,7 +381,7 @@ export function ChatPanel() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, applyAction, chatMode, setDraftPrompt, setLeftPanelGroup, setPartsActiveTab]);
+  }, [input, streaming, messages, applyAction, chatMode, setDraftPrompt, setRightPanelGroup, setPartsActiveTab]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();

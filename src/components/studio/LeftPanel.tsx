@@ -1,13 +1,11 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Sparkles, Zap } from 'lucide-react';
+import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
 import type { LucideIcon } from 'lucide-react';
 import { AssetsPanel }       from './panels/AssetsPanel';
-import { ChatPanel }         from './panels/ChatPanel';
 import { ScenePanel }        from './panels/ScenePanel';
-import { PartStudioPanel }   from './panels/PartStudioPanel';
 import { ConnectorsPanel }   from './panels/ConnectorsPanel';
 
 interface TabGroupDef {
@@ -16,21 +14,22 @@ interface TabGroupDef {
   icon: LucideIcon;
 }
 
+// Chat + Part Studio now live on the right panel's dropdown (see
+// RightPanel.tsx). The left panel keeps the workspace-level navigators only.
 const TAB_GROUPS: TabGroupDef[] = [
   { id: 'scene',      label: 'Scene',       icon: Layers },
   { id: 'assets',     label: 'Assets',      icon: FolderOpen },
-  { id: 'parts',      label: 'Part Studio', icon: Sparkles },
   { id: 'connectors', label: 'Connectors',  icon: Zap },
-  { id: 'chat',       label: 'Chat',        icon: MessageSquare },
 ];
 
 function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onSceneSelect?: (id: string) => void }) {
+  // 'chat' and 'parts' were moved to the right panel — fall through to
+  // Scene if a stale persisted value still points there.
   switch (group) {
     case 'scene':      return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
     case 'assets':     return <AssetsPanel />;
-    case 'parts':      return <PartStudioPanel />;
     case 'connectors': return <ConnectorsPanel />;
-    case 'chat':       return <ChatPanel />;
+    default:           return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
   }
 }
 

@@ -1,13 +1,15 @@
 'use client';
-import { SlidersHorizontal, MessageSquare, Sparkles } from 'lucide-react';
+import { SlidersHorizontal, MessageSquare, Sparkles, Sun } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useStudio, type RightPanelGroup } from '@/store/studio-store';
 import { DropdownSectionHeader, type SectionDef } from './panels/DropdownSectionHeader';
 import { ChatPanel } from './panels/ChatPanel';
 import { PartStudioPanel } from './panels/PartStudioPanel';
+import { WorkspacePropertiesPanel } from './panels/WorkspacePropertiesPanel';
 
 const RIGHT_SECTIONS: readonly SectionDef[] = [
   { id: 'properties', icon: SlidersHorizontal, label: 'Properties' },
+  { id: 'workspace',  icon: Sun,               label: 'Workspace' },
   { id: 'chat',       icon: MessageSquare,     label: 'Chat' },
   { id: 'parts',      icon: Sparkles,          label: 'Part Studio' },
 ] as const;
@@ -50,6 +52,8 @@ export function RightPanel({ propertiesContent }: RightPanelProps) {
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {group === 'properties' ? (
           propertiesContent ?? <PropertiesEmpty />
+        ) : group === 'workspace' ? (
+          <WorkspacePropertiesPanel headless />
         ) : group === 'chat' ? (
           <ChatPanel />
         ) : (

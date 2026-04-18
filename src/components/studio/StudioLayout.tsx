@@ -22,9 +22,7 @@ import { getTemplate } from '@/lib/templates';
 import { getGameHtml } from '@/lib/game-engine';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
-import { WorkspacePropertiesPanel } from './panels/WorkspacePropertiesPanel';
 import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
-import { useLightingStore } from '@/store/lighting-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
 import { resolveEffectiveTask } from '@/lib/templates/types';
@@ -140,10 +138,6 @@ export function StudioLayout() {
   // Quality tier — forwarded to the game bundler so generated iframes honor
   // the same shadow/antialias/pixelRatio settings as the studio.
   const gameQuality = useQualityStore((s) => s.settings);
-
-  // Lighting panel open — surfaced in the right panel when the user clicks
-  // the "Workspace" category in the left-panel scene hierarchy.
-  const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
 
   // Building store — every kind of selection (floor/wall/roof/corner/
   // stairs) opens the right panel. place* auto-selects the new piece, so
@@ -571,9 +565,8 @@ export function StudioLayout() {
                   />
                 );
               }
-              if (lightingPanelOpen) {
-                return <WorkspacePropertiesPanel headless />;
-              }
+              // NOTE: Workspace lighting lives on its own right-panel tab
+              // now ("Workspace"), no longer under the Properties branch.
               if (board && template && selectedTaskId) {
                 return (
                   <TaskDetailPanel

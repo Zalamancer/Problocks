@@ -529,11 +529,22 @@ export function StudioLayout() {
 
           </div>
 
-          {/* Right panel — part properties when a part is selected (native
-              workspace OR running iframe game); workspace lighting when the
-              user clicked "Workspace" in the scene hierarchy; Code-view file
-              list when the Code tab is active; task detail otherwise. */}
-          {selectedPart ? (
+          {/* Right panel — Code-view file list always wins while a file is
+              open (Code tab is active). Otherwise: part properties when a
+              part is selected (native workspace OR running iframe game),
+              workspace lighting when "Workspace" is selected, task detail
+              otherwise. */}
+          {openFileName ? (() => {
+            const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+            const fileList = activeGame?.files ? Object.keys(activeGame.files) : [];
+            return (
+              <GeneratedFilesPanel
+                files={fileList}
+                activeFile={openFileName}
+                onSelectFile={(name) => setOpenFileName(name)}
+              />
+            );
+          })() : selectedPart ? (
             <PartPropertiesPanel
               part={selectedPart}
               onUpdate={handlePartUpdate}
@@ -548,17 +559,7 @@ export function StudioLayout() {
             />
           ) : lightingPanelOpen ? (
             <WorkspacePropertiesPanel />
-          ) : openFileName ? (() => {
-            const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
-            const fileList = activeGame?.files ? Object.keys(activeGame.files) : [];
-            return (
-              <GeneratedFilesPanel
-                files={fileList}
-                activeFile={openFileName}
-                onSelectFile={(name) => setOpenFileName(name)}
-              />
-            );
-          })() : board && template && selectedTaskId ? (
+          ) : board && template && selectedTaskId ? (
             <TaskDetailPanel
               templateTaskId={selectedTaskId}
               template={template}

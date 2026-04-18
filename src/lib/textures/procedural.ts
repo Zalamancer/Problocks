@@ -177,94 +177,126 @@ function drawNeon(ctx: CanvasRenderingContext2D) {
 }
 
 function drawStuds(ctx: CanvasRenderingContext2D) {
-  // White base — multiplied by the mesh color so studs tint to any brick color.
+  // ONE stud per tile; tiling repeat = scale gives 1 stud per world unit
+  // (matching Lego's 1-stud-per-stud convention).
+  // White base lets the mesh color tint everything.
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, SIZE, SIZE);
 
-  // 4×4 grid of studs (will tile with material repeat for larger faces).
-  const cells = 4;
-  const cell = SIZE / cells;
-  const r = cell * 0.32;
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  const r = SIZE * 0.32;             // stud is ~64% the tile width
 
-  // Faint plate seam at the top edge of the tile (keeps the Lego-row look).
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  ctx.fillRect(0, 0, SIZE, 2);
+  // Plate body shadow at the seams — darker around the edges so the
+  // brick body feels recessed beneath the stud.
+  const seam = ctx.createRadialGradient(cx, cy, r * 1.05, cx, cy, SIZE * 0.7);
+  seam.addColorStop(0, 'rgba(0,0,0,0)');
+  seam.addColorStop(1, 'rgba(0,0,0,0.18)');
+  ctx.fillStyle = seam;
+  ctx.fillRect(0, 0, SIZE, SIZE);
 
-  for (let gy = 0; gy < cells; gy++) {
-    for (let gx = 0; gx < cells; gx++) {
-      const cx = gx * cell + cell / 2;
-      const cy = gy * cell + cell / 2;
+  // Hard shadow ring directly under the stud (contact shadow).
+  ctx.beginPath();
+  ctx.arc(cx + 3, cy + 4, r + 4, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fill();
 
-      // Outer ring shadow — gives the stud a sunken-base look.
-      ctx.beginPath();
-      ctx.arc(cx, cy, r + 1.5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      ctx.fill();
+  // Stud body with strong radial shading — top-left lit, bottom-right dark.
+  const body = ctx.createRadialGradient(
+    cx - r * 0.35, cy - r * 0.4, r * 0.05,
+    cx + r * 0.15, cy + r * 0.2, r * 1.05,
+  );
+  body.addColorStop(0, 'rgba(255,255,255,1)');
+  body.addColorStop(0.45, 'rgba(235,235,235,1)');
+  body.addColorStop(0.85, 'rgba(165,165,165,1)');
+  body.addColorStop(1, 'rgba(95,95,95,1)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = body;
+  ctx.fill();
 
-      // Stud body: radial gradient for fake spherical shading.
-      const grad = ctx.createRadialGradient(
-        cx - r * 0.35, cy - r * 0.35, r * 0.1,
-        cx, cy, r,
-      );
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(0.55, 'rgba(220,220,220,1)');
-      grad.addColorStop(1, 'rgba(140,140,140,1)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
-      ctx.fill();
+  // Dark rim outline — sells the cylinder edge.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.stroke();
 
-      // Specular highlight dot.
-      ctx.beginPath();
-      ctx.arc(cx - r * 0.4, cy - r * 0.4, r * 0.18, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fill();
-    }
-  }
+  // Bright crescent specular highlight.
+  ctx.beginPath();
+  ctx.arc(cx - r * 0.3, cy - r * 0.4, r * 0.55, Math.PI * 0.9, Math.PI * 1.6);
+  ctx.lineWidth = r * 0.18;
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.stroke();
+
+  // Embossed "LEGO" wordmark on top of the stud.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.font = `bold ${Math.round(r * 0.42)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Shadow pass (below)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillText('LEGO', 1, 1);
+  // Highlight pass (above)
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText('LEGO', 0, 0);
+  ctx.restore();
 }
 
 function drawStudsSquare(ctx: CanvasRenderingContext2D) {
-  // Same idea as drawStuds but square pads — Roblox "Inlet/Universal" vibe.
+  // ONE square pad per tile — beveled like a Lego tile/plate.
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, SIZE, SIZE);
 
-  const cells = 4;
-  const cell = SIZE / cells;
-  const inset = cell * 0.18;          // gap between pads
-  const size = cell - inset * 2;      // pad edge length
+  // Recessed plate body around the pad.
+  const seam = ctx.createRadialGradient(SIZE / 2, SIZE / 2, SIZE * 0.32, SIZE / 2, SIZE / 2, SIZE * 0.7);
+  seam.addColorStop(0, 'rgba(0,0,0,0)');
+  seam.addColorStop(1, 'rgba(0,0,0,0.18)');
+  ctx.fillStyle = seam;
+  ctx.fillRect(0, 0, SIZE, SIZE);
 
-  // Faint plate seam at the top edge of the tile.
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  ctx.fillRect(0, 0, SIZE, 2);
+  const inset = SIZE * 0.16;
+  const x = inset;
+  const y = inset;
+  const w = SIZE - inset * 2;
 
-  for (let gy = 0; gy < cells; gy++) {
-    for (let gx = 0; gx < cells; gx++) {
-      const x = gx * cell + inset;
-      const y = gy * cell + inset;
+  // Hard contact shadow.
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(x + 4, y + 5, w, w);
 
-      // Drop shadow under the pad.
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fillRect(x + 1.5, y + 1.5, size, size);
+  // Pad body — diagonal gradient for fake bevel (top-left bright).
+  const body = ctx.createLinearGradient(x, y, x + w, y + w);
+  body.addColorStop(0, 'rgba(255,255,255,1)');
+  body.addColorStop(0.55, 'rgba(225,225,225,1)');
+  body.addColorStop(1, 'rgba(120,120,120,1)');
+  ctx.fillStyle = body;
+  ctx.fillRect(x, y, w, w);
 
-      // Pad body — diagonal gradient for fake bevel.
-      const grad = ctx.createLinearGradient(x, y, x + size, y + size);
-      grad.addColorStop(0, 'rgba(255,255,255,1)');
-      grad.addColorStop(0.6, 'rgba(220,220,220,1)');
-      grad.addColorStop(1, 'rgba(150,150,150,1)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, y, size, size);
+  // Bevel: top + left bright, bottom + right dark.
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillRect(x, y, w, 4);
+  ctx.fillRect(x, y, 4, w);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(x, y + w - 4, w, 4);
+  ctx.fillRect(x + w - 4, y, 4, w);
 
-      // Top + left highlight edges.
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.fillRect(x, y, size, 1.5);
-      ctx.fillRect(x, y, 1.5, size);
+  // Dark outline.
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.strokeRect(x, y, w, w);
 
-      // Bottom + right shadow edges.
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.fillRect(x, y + size - 1.5, size, 1.5);
-      ctx.fillRect(x + size - 1.5, y, 1.5, size);
-    }
-  }
+  // Embossed "LEGO" wordmark.
+  ctx.save();
+  ctx.translate(x + w / 2, y + w / 2);
+  ctx.font = `bold ${Math.round(w * 0.18)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillText('LEGO', 1, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText('LEGO', 0, 0);
+  ctx.restore();
 }
 
 function drawSmoothPlastic(ctx: CanvasRenderingContext2D) {
@@ -285,6 +317,21 @@ const DRAWERS: Partial<Record<TexturePreset, (ctx: CanvasRenderingContext2D) => 
   Studs: drawStuds,
   StudsSquare: drawStudsSquare,
 };
+
+/**
+ * How many pattern repeats to apply per world unit, per preset. Brick / wood
+ * patterns have many features per tile so 0.5 looks right at unit scale;
+ * stud presets draw ONE feature per tile so 1.0 = "1 stud per unit".
+ */
+export function getTextureRepeatPerUnit(preset: TexturePreset): number {
+  switch (preset) {
+    case 'Studs':
+    case 'StudsSquare':
+      return 1.0;
+    default:
+      return 0.5;
+  }
+}
 
 /**
  * Returns a cached base CanvasTexture for the given preset, or null when the

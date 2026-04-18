@@ -14,7 +14,7 @@ import { useLightingStore, rgbToHex, addRgb } from '@/store/lighting-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
 import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK, FLOOR_THICK, FACE_SHADE } from '@/lib/building-kit';
-import { getProceduralTexture } from '@/lib/textures/procedural';
+import { getProceduralTexture, getTextureRepeatPerUnit } from '@/lib/textures/procedural';
 
 const PART_DEFAULT_SIZE = 2;
 
@@ -61,8 +61,9 @@ function makeSurfaceMaterial(params: {
       // Clone so per-mesh repeat/offset don't mutate the cached instance.
       map = base.clone();
       map.needsUpdate = true;
-      const sx = scaleHint ? Math.max(0.25, scaleHint.x * 0.5) : 1;
-      const sy = scaleHint ? Math.max(0.25, scaleHint.y * 0.5) : 1;
+      const density = getTextureRepeatPerUnit(texture);
+      const sx = scaleHint ? Math.max(0.25, scaleHint.x * density) : density;
+      const sy = scaleHint ? Math.max(0.25, scaleHint.y * density) : density;
       map.repeat.set(sx, sy);
     }
   }

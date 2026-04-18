@@ -155,37 +155,6 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, he
         </span>
       </div>
 
-      {/* Type-badge row — mirrors WorkspacePropertiesPanel's "Part 1 of 1 · TYPE" strip */}
-      <div
-        className="shrink-0"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 12px',
-          borderBottom: '1.5px solid var(--pb-line-2)',
-        }}
-      >
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pb-ink-muted)' }}>
-          Part
-        </span>
-        <span
-          style={{
-            padding: '2px 9px',
-            borderRadius: 999,
-            background: 'var(--pb-cream-2)',
-            color: 'var(--pb-ink-muted)',
-            fontSize: 10.5,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            border: '1.5px solid var(--pb-line-2)',
-            textTransform: 'uppercase',
-          }}
-        >
-          {part.partType}
-        </span>
-      </div>
-
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
 

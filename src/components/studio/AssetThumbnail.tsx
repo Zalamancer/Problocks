@@ -241,8 +241,16 @@ export function AssetThumbnail({ modelName, size = 80, fluid = false }: AssetThu
     <div ref={containerRef} style={wrapperStyle}>
       {error ? (
         <div
-          className="rounded bg-zinc-800 flex items-center justify-center text-zinc-600 text-[10px]"
-          style={wrapperStyle}
+          className="flex items-center justify-center"
+          style={{
+            ...wrapperStyle,
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 10,
+            color: 'var(--pb-ink-muted)',
+            fontSize: 11,
+            fontWeight: 700,
+          }}
         >
           ?
         </div>
@@ -251,8 +259,13 @@ export function AssetThumbnail({ modelName, size = 80, fluid = false }: AssetThu
           ref={canvasRef}
           width={effectiveSize * 2}
           height={effectiveSize * 2}
-          className={`rounded bg-zinc-900 ${loaded ? '' : 'animate-pulse'}`}
-          style={canvasStyle}
+          className={loaded ? '' : 'animate-pulse'}
+          style={{
+            ...canvasStyle,
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 10,
+          }}
         />
       )}
     </div>

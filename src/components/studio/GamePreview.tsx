@@ -154,41 +154,66 @@ export function GamePreview({
   return (
     <div
       ref={containerRef}
-      className={`flex-1 flex flex-col min-h-0 border-b border-white/[0.06] ${isFullscreen ? '!w-screen !h-screen' : ''}`}
+      className={`flex-1 flex flex-col min-h-0 ${isFullscreen ? '!w-screen !h-screen' : ''}`}
+      style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#161616] border-b border-white/[0.06] shrink-0">
+      <div
+        className="flex items-center justify-between px-3 py-1.5 shrink-0"
+        style={{
+          background: 'var(--pb-paper)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
         <div className="flex items-center gap-2">
-          <Gamepad2 size={13} className="text-green-400" />
-          <span className="text-xs font-medium text-zinc-300">Game Preview</span>
+          <Gamepad2 size={13} strokeWidth={2.4} style={{ color: 'var(--pb-mint-ink)' }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--pb-ink)' }}>
+            Game Preview
+          </span>
         </div>
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={refresh}
-            className="p-1 rounded hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Restart game"
-          >
-            <RefreshCw size={12} />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            className="p-1 rounded hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-          >
-            {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Close preview"
-          >
-            <X size={12} />
-          </button>
+        <div className="flex items-center gap-1">
+          {[
+            { onClick: refresh, icon: RefreshCw, title: 'Restart game' },
+            {
+              onClick: toggleFullscreen,
+              icon: isFullscreen ? Minimize2 : Maximize2,
+              title: isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
+            },
+            { onClick: onClose, icon: X, title: 'Close preview' },
+          ].map(({ onClick, icon: Icon, title }) => (
+            <button
+              key={title}
+              onClick={onClick}
+              title={title}
+              className="flex items-center justify-center transition-colors"
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                background: 'transparent',
+                color: 'var(--pb-ink-soft)',
+                border: '1.5px solid transparent',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--pb-cream-2)';
+                e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+                e.currentTarget.style.color = 'var(--pb-ink)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'transparent';
+                e.currentTarget.style.color = 'var(--pb-ink-soft)';
+              }}
+            >
+              <Icon size={12} strokeWidth={2.2} />
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Game iframe -- click overlay to focus */}
-      <div className="flex-1 min-h-0 bg-black relative">
+      <div className="flex-1 min-h-0 relative" style={{ background: '#000' }}>
         <iframe
           ref={iframeRef}
           key={key}
@@ -204,11 +229,23 @@ export function GamePreview({
         {!iframeFocused && (
           <div
             onClick={focusIframe}
-            className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer z-10"
+            className="absolute inset-0 flex items-center justify-center cursor-pointer z-10"
+            style={{ background: 'rgba(29,26,20,0.45)' }}
           >
-            <div className="flex flex-col items-center gap-2 text-white/70">
-              <Gamepad2 size={28} />
-              <span className="text-sm font-medium">Click to play</span>
+            <div
+              className="flex flex-col items-center gap-2"
+              style={{
+                padding: '14px 20px',
+                background: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-ink)',
+                borderRadius: 14,
+                boxShadow: '0 4px 0 var(--pb-ink)',
+              }}
+            >
+              <Gamepad2 size={24} strokeWidth={2.4} style={{ color: 'var(--pb-mint-ink)' }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--pb-ink)' }}>
+                Click to play
+              </span>
             </div>
           </div>
         )}

@@ -148,8 +148,13 @@ export function CustomModelThumbnail({
         ref={canvasRef}
         width={effectiveSize * 2}
         height={effectiveSize * 2}
-        className={`rounded bg-zinc-900 ${loaded ? '' : 'animate-pulse'}`}
-        style={wrap}
+        className={loaded ? '' : 'animate-pulse'}
+        style={{
+          ...wrap,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 10,
+        }}
       />
     </div>
   );

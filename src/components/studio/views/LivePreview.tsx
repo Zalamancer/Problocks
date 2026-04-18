@@ -181,26 +181,54 @@ export function LivePreview({ assetUrls = [], onReady }: LivePreviewProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.05] shrink-0">
-        <span className="text-[10px] text-zinc-500">
-          3D Preview — {modelCount} model{modelCount !== 1 ? 's' : ''} loaded
+    <div className="flex flex-col h-full" style={{ background: 'var(--pb-paper)' }}>
+      <div
+        className="flex items-center justify-between px-3 py-1.5 shrink-0"
+        style={{
+          background: 'var(--pb-paper)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pb-ink-muted)' }}>
+          3D Preview —{' '}
+          <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>
+            {modelCount} model{modelCount !== 1 ? 's' : ''}
+          </span>{' '}
+          loaded
         </span>
         <div className="flex items-center gap-1">
-          <button
-            onClick={loadAssets}
-            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Reload assets"
-          >
-            <RotateCcw size={12} />
-          </button>
-          <button
-            onClick={resetCamera}
-            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Reset camera"
-          >
-            <Maximize2 size={12} />
-          </button>
+          {[
+            { onClick: loadAssets, icon: RotateCcw, title: 'Reload assets' },
+            { onClick: resetCamera, icon: Maximize2, title: 'Reset camera' },
+          ].map(({ onClick, icon: Icon, title }) => (
+            <button
+              key={title}
+              onClick={onClick}
+              title={title}
+              className="flex items-center justify-center transition-colors"
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                background: 'transparent',
+                color: 'var(--pb-ink-soft)',
+                border: '1.5px solid transparent',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--pb-cream-2)';
+                e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+                e.currentTarget.style.color = 'var(--pb-ink)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'transparent';
+                e.currentTarget.style.color = 'var(--pb-ink-soft)';
+              }}
+            >
+              <Icon size={12} strokeWidth={2.2} />
+            </button>
+          ))}
         </div>
       </div>
       <div ref={containerRef} className="flex-1 min-h-0" />

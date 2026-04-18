@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'parts' | 'connectors';
 export type AssetsTab = 'models' | 'parts';
 export type PartsTab = 'generate' | 'history';
-export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings';
+export type ViewMode = 'canvas' | 'kanban' | '3d';
 export type ChatMode = 'scene' | 'part';
 export type Theme = 'dark' | 'light' | 'cream';
 export type FlowDirection = 'LR' | 'TB';

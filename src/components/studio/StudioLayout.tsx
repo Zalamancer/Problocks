@@ -7,8 +7,6 @@ import { StudioTerminal } from './Terminal';
 import { GamePreview, type GamePreviewHandle, type GameObjectInfo } from './GamePreview';
 import { GameToolbar } from './GameToolbar';
 import { LeftPanel, LeftPanelToggle } from './LeftPanel';
-import { BottomTabBar } from './BottomTabBar';
-import { SettingsPanel } from './panels/SettingsPanel';
 import { OnboardingWizard } from './modals/OnboardingWizard';
 import { TimelineBar } from './views/TimelineBar';
 import { KanbanView } from './views/KanbanView';
@@ -430,11 +428,7 @@ export function StudioLayout() {
                     onSwitchToPreview={() => setOpenFileName(null)}
                   />
                 );
-              })() : viewMode === 'settings' ? (
-                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <SettingsPanel />
-                </div>
-              ) : gameHtml && !terminalMaximized ? (
+              })() : gameHtml && !terminalMaximized ? (
                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                   <GameToolbar previewRef={previewRef} />
                   <GamePreview
@@ -527,11 +521,6 @@ export function StudioLayout() {
                 />
               );
             })()}
-
-            <BottomTabBar
-              terminalOpen={terminalOpen}
-              onToggleTerminal={() => setTerminalOpen((o) => !o)}
-            />
 
           </div>
 

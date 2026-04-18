@@ -5,7 +5,6 @@ import {
   Upload,
   Play,
   Square,
-  Settings,
   Sun,
   Moon,
   Sparkles,
@@ -63,8 +62,15 @@ interface ViewTabCtx {
 
 const VIEW_TABS: ViewTab[] = [
   {
+    id: 'kanban',
+    label: 'Kanban',
+    icon: Kanban,
+    isActive: (c) => c.viewMode === 'kanban' && !c.openFileName,
+    activate: (c) => { c.setOpenFileName(null); c.setViewMode('kanban'); },
+  },
+  {
     id: 'canvas',
-    label: 'Canvas',
+    label: 'Flowchart',
     icon: Network,
     isActive: (c) => c.viewMode === 'canvas' && !c.openFileName,
     activate: (c) => { c.setOpenFileName(null); c.setViewMode('canvas'); },
@@ -156,8 +162,6 @@ export function TopMenuBar() {
     { separator: true },
     { id: 'marketplace', label: 'Marketplace', icon: Upload,   onClick: () => { window.location.href = '/marketplace'; } },
     { id: 'classroom',   label: 'Classroom',   icon: Sparkles, onClick: () => {} },
-    { separator: true },
-    { id: 'settings',    label: 'Settings',    icon: Settings, onClick: () => setViewMode('settings') },
     { separator: true },
     { id: 'theme-dark',  label: theme === 'dark'  ? '✓ Dark'  : 'Dark',  icon: Moon,     onClick: () => setTheme('dark')  },
     { id: 'theme-light', label: theme === 'light' ? '✓ Light' : 'Light', icon: Sun,      onClick: () => setTheme('light') },
@@ -369,7 +373,3 @@ export function TopMenuBar() {
     </div>
   );
 }
-
-// Unused placeholder export retained to keep the import tree stable in case
-// external callers reference KanbanIcon. (tree-shaken in production.)
-void Kanban;

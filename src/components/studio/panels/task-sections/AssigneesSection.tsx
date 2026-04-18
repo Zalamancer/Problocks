@@ -31,15 +31,33 @@ export function AssigneesSection({
           {assigned.map((m) => (
             <span
               key={m.id}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-panel-surface text-xs text-zinc-300"
+              className="inline-flex items-center gap-1"
+              style={{
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: 'var(--pb-sky)',
+                border: '1.5px solid var(--pb-sky-ink)',
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: 'var(--pb-sky-ink)',
+              }}
             >
               {m.name}
               <button
                 onClick={() => onAssigneesChange(assigneeIds.filter((id) => id !== m.id))}
-                className="text-zinc-500 hover:text-zinc-200 transition-colors"
+                className="transition-colors"
+                style={{
+                  color: 'var(--pb-sky-ink)',
+                  opacity: 0.7,
+                  background: 'transparent',
+                  border: 0,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
                 aria-label={`Remove ${m.name}`}
               >
-                <X size={10} />
+                <X size={10} strokeWidth={2.4} />
               </button>
             </span>
           ))}

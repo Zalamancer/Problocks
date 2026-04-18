@@ -31,16 +31,16 @@ type BottomTab = 'comments' | 'activity';
 
 // ─── Activity helpers (mirrors ActivitySection logic, without PanelSection wrapper) ───
 
-const DOT_COLOR: Record<string, string> = {
-  status_change:      'bg-green-400',
-  field_edit:         'bg-blue-400',
-  comment_added:      'bg-purple-400',
-  comment_deleted:    'bg-purple-400/50',
-  attachment_added:   'bg-orange-400',
-  attachment_removed: 'bg-orange-400/50',
-  assignee_added:     'bg-cyan-400',
-  assignee_removed:   'bg-cyan-400/50',
-  due_date_set:       'bg-yellow-400',
+const DOT_VAR: Record<string, { bg: string; ink: string }> = {
+  status_change:      { bg: 'var(--pb-mint)',   ink: 'var(--pb-mint-ink)'   },
+  field_edit:         { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  comment_added:      { bg: 'var(--pb-grape)',  ink: 'var(--pb-grape-ink)'  },
+  comment_deleted:    { bg: 'var(--pb-grape)',  ink: 'var(--pb-grape-ink)'  },
+  attachment_added:   { bg: 'var(--pb-coral)',  ink: 'var(--pb-coral-ink)'  },
+  attachment_removed: { bg: 'var(--pb-coral)',  ink: 'var(--pb-coral-ink)'  },
+  assignee_added:     { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  assignee_removed:   { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  due_date_set:       { bg: 'var(--pb-butter)', ink: 'var(--pb-butter-ink)' },
 };
 
 function describeEntry(entry: ActivityEntry, resolveName: (id: string) => string): string {
@@ -92,7 +92,10 @@ export function ExpandedFieldEditor({
   const entries = [...activityLog].reverse().slice(0, 50);
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-[#1f1f1f] overflow-hidden">
+    <div
+      className="absolute inset-0 z-30 flex flex-col overflow-hidden"
+      style={{ background: 'var(--pb-paper)' }}
+    >
       {/* Header */}
       <div className="shrink-0 flex items-center justify-end px-4 py-2">
         <IconButton
@@ -114,15 +117,41 @@ export function ExpandedFieldEditor({
               type="text"
               value={title}
               onChange={(e) => onTitleChange(e.target.value)}
-              className="w-full bg-transparent text-2xl font-bold text-zinc-100 border-none outline-none placeholder:text-zinc-700 mb-6"
+              className="w-full text-2xl font-bold border-none outline-none mb-6"
+              style={{
+                background: 'transparent',
+                color: 'var(--pb-ink)',
+              }}
               placeholder="Untitled"
             />
 
             {/* Deliverable info box */}
-            <div className="flex items-start gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3 mb-8 group">
-              <Package size={14} className="text-zinc-500 shrink-0 mt-0.5" />
+            <div
+              className="flex items-start gap-2.5 mb-8 group"
+              style={{
+                background: 'var(--pb-cream-2)',
+                border: '1.5px solid var(--pb-line-2)',
+                borderRadius: 12,
+                padding: '10px 14px',
+              }}
+            >
+              <Package
+                size={14}
+                strokeWidth={2.2}
+                className="shrink-0 mt-0.5"
+                style={{ color: 'var(--pb-grape-ink)' }}
+              />
               <div className="flex-1 min-w-0">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 block mb-1">
+                <span
+                  className="block mb-1"
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: 'var(--pb-ink-muted)',
+                  }}
+                >
                   Deliverable
                 </span>
                 {editingDeliverable ? (
@@ -140,7 +169,18 @@ export function ExpandedFieldEditor({
                           onDeliverableBlocksChange(localDeliverableBlocks);
                           setEditingDeliverable(false);
                         }}
-                        className="px-3 py-1 rounded-lg text-[12px] font-medium bg-accent/90 hover:bg-accent text-white transition-colors"
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          background: 'var(--pb-mint)',
+                          color: 'var(--pb-mint-ink)',
+                          border: '1.5px solid var(--pb-mint-ink)',
+                          boxShadow: '0 2px 0 var(--pb-mint-ink)',
+                          cursor: 'pointer',
+                        }}
                       >
                         Save
                       </button>
@@ -155,17 +195,32 @@ export function ExpandedFieldEditor({
                     />
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                    {deliverable || <span className="text-zinc-600 italic">What must exist when done?</span>}
+                  <p
+                    className="leading-relaxed whitespace-pre-wrap"
+                    style={{ fontSize: 13, color: 'var(--pb-ink)' }}
+                  >
+                    {deliverable || (
+                      <span className="italic" style={{ color: 'var(--pb-ink-muted)' }}>
+                        What must exist when done?
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => setEditingDeliverable((v) => !v)}
-                className="shrink-0 mt-0.5 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                className="shrink-0 mt-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                style={{
+                  color: 'var(--pb-ink-muted)',
+                  background: 'transparent',
+                  border: 0,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pb-ink)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pb-ink-muted)'; }}
                 aria-label="Edit deliverable"
               >
-                <Pencil size={13} />
+                <Pencil size={13} strokeWidth={2.2} />
               </button>
             </div>
 
@@ -180,42 +235,54 @@ export function ExpandedFieldEditor({
           </div>
 
           {/* Divider */}
-          <div className="border-t border-white/[0.06]" />
+          <div style={{ borderTop: '1.5px solid var(--pb-line-2)' }} />
 
           {/* Tab bar */}
-          <div className="flex items-center gap-1 py-5">
-            <button
-              onClick={() => setTab('comments')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
-                tab === 'comments'
-                  ? 'bg-white/10 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <MessageSquare size={13} />
-              Comments
-              {comments.length > 0 && (
-                <span className="ml-0.5 text-[10px] bg-white/10 rounded-full px-1.5 py-0.5 text-zinc-400">
-                  {comments.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setTab('activity')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
-                tab === 'activity'
-                  ? 'bg-white/10 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Clock size={13} />
-              Activity
-              {activityLog.length > 0 && (
-                <span className="ml-0.5 text-[10px] bg-white/10 rounded-full px-1.5 py-0.5 text-zinc-400">
-                  {activityLog.length}
-                </span>
-              )}
-            </button>
+          <div className="flex items-center gap-1.5 py-5">
+            {([
+              { id: 'comments', label: 'Comments', Icon: MessageSquare, count: comments.length },
+              { id: 'activity', label: 'Activity', Icon: Clock, count: activityLog.length },
+            ] as const).map(({ id, label, Icon, count }) => {
+              const active = tab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setTab(id)}
+                  className="flex items-center gap-1.5 transition-colors"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 10,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    background: active ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+                    border: `1.5px solid ${active ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+                    boxShadow: active ? '0 2px 0 var(--pb-ink)' : 'none',
+                    color: active ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon size={13} strokeWidth={2.2} />
+                  {label}
+                  {count > 0 && (
+                    <span
+                      style={{
+                        marginLeft: 2,
+                        padding: '1px 7px',
+                        borderRadius: 999,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: 'var(--pb-mint)',
+                        border: '1.5px solid var(--pb-mint-ink)',
+                        color: 'var(--pb-mint-ink)',
+                      }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Comments tab */}
@@ -233,23 +300,41 @@ export function ExpandedFieldEditor({
           {tab === 'activity' && (
             <div className="flex flex-col gap-4">
               {entries.length === 0 ? (
-                <p className="text-sm text-zinc-600 italic">No activity yet.</p>
+                <p
+                  className="italic"
+                  style={{ fontSize: 13, color: 'var(--pb-ink-muted)' }}
+                >
+                  No activity yet.
+                </p>
               ) : (
-                entries.map((e) => (
-                  <div key={e.id} className="flex items-start gap-3">
-                    <span
-                      className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${DOT_COLOR[e.type] ?? 'bg-zinc-500'}`}
-                    />
-                    <div>
-                      <p className="text-[13px] text-zinc-400 leading-relaxed">
-                        {describeEntry(e, resolveName)}
-                      </p>
-                      <span className="text-[11px] text-zinc-600">
-                        {formatRelativeTime(e.timestamp)}
-                      </span>
+                entries.map((e) => {
+                  const dot = DOT_VAR[e.type];
+                  return (
+                    <div key={e.id} className="flex items-start gap-3">
+                      <span
+                        className="shrink-0 mt-1.5"
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: 999,
+                          background: dot?.bg ?? 'var(--pb-line-2)',
+                          border: `1.5px solid ${dot?.ink ?? 'var(--pb-ink-muted)'}`,
+                        }}
+                      />
+                      <div>
+                        <p
+                          className="leading-relaxed"
+                          style={{ fontSize: 13, color: 'var(--pb-ink)', fontWeight: 500 }}
+                        >
+                          {describeEntry(e, resolveName)}
+                        </p>
+                        <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}>
+                          {formatRelativeTime(e.timestamp)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}

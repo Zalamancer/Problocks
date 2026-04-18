@@ -16,7 +16,10 @@ import {
   parsePartModel,
   vertexCountFor,
   type PartModel,
+  type ClaudeModelId,
+  type GenerationUsage,
 } from '@/lib/part-studio/types';
+import { MODEL_CATALOG, DEFAULT_MODEL } from '@/lib/part-studio/models';
 
 function cliEnv(): NodeJS.ProcessEnv {
   return {
@@ -29,12 +32,26 @@ function cliEnv(): NodeJS.ProcessEnv {
   };
 }
 
-function callClaude(prompt: string): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
+interface ClaudeCallResult {
+  text: string;
+  /** Whatever usage data we could lift off the `result` line. */
+  usage: Omit<GenerationUsage, 'modelAlias'> | null;
+}
+
+function callClaude(prompt: string, model: ClaudeModelId): Promise<ClaudeCallResult> {
+  return new Promise<ClaudeCallResult>((resolve, reject) => {
     let text = '';
+    let usage: Omit<GenerationUsage, 'modelAlias'> | null = null;
+
     const child = spawn(
       'claude',
-      ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
+      [
+        '-p', prompt,
+        '--model', model,
+        '--output-format', 'stream-json',
+        '--verbose',
+        '--dangerously-skip-permissions',
+      ],
       { env: cliEnv() },
     );
 
@@ -47,8 +64,40 @@ function callClaude(prompt: string): Promise<string> {
               if (b.type === 'text') text += b.text;
             }
           }
-          if (p.type === 'result' && p.result && !text) {
-            text = p.result;
+          if (p.type === 'result') {
+            if (p.result && !text) text = p.result;
+
+            // Extract usage + cost. The CLI reports per-model breakdown in
+            // `modelUsage` which is the richest source; fall back to the
+            // flat `usage` + `total_cost_usd` if only those are present.
+            const modelUsage = p.modelUsage && typeof p.modelUsage === 'object'
+              ? (Object.entries(p.modelUsage)[0] as [string, {
+                  inputTokens?: number;
+                  outputTokens?: number;
+                  cacheReadInputTokens?: number;
+                  cacheCreationInputTokens?: number;
+                  costUSD?: number;
+                }] | undefined)
+              : undefined;
+
+            const rawUsage = p.usage as {
+              input_tokens?: number;
+              output_tokens?: number;
+              cache_read_input_tokens?: number;
+              cache_creation_input_tokens?: number;
+            } | undefined;
+
+            usage = {
+              modelFull: modelUsage?.[0] ?? MODEL_CATALOG[model].fullId,
+              inputTokens: modelUsage?.[1]?.inputTokens ?? rawUsage?.input_tokens ?? 0,
+              outputTokens: modelUsage?.[1]?.outputTokens ?? rawUsage?.output_tokens ?? 0,
+              cacheReadTokens:
+                modelUsage?.[1]?.cacheReadInputTokens ?? rawUsage?.cache_read_input_tokens ?? 0,
+              cacheCreationTokens:
+                modelUsage?.[1]?.cacheCreationInputTokens ?? rawUsage?.cache_creation_input_tokens ?? 0,
+              costUsd: modelUsage?.[1]?.costUSD ?? p.total_cost_usd ?? 0,
+              durationMs: p.duration_ms ?? 0,
+            };
           }
         } catch {
           /* skip non-JSON lines */
@@ -61,7 +110,7 @@ function callClaude(prompt: string): Promise<string> {
     });
 
     child.on('close', (code: number | null) => {
-      if (code === 0 || text) resolve(text);
+      if (code === 0 || text) resolve({ text, usage });
       else reject(new Error(`claude CLI exited ${code}`));
     });
 
@@ -212,6 +261,7 @@ export async function POST(req: Request) {
     feedback?: unknown;
     parentModel?: unknown;
     phraseHints?: unknown;
+    model?: unknown;
   };
 
   const userPrompt =
@@ -219,6 +269,11 @@ export async function POST(req: Request) {
   if (!userPrompt) {
     return NextResponse.json({ error: 'missing-userPrompt' }, { status: 400 });
   }
+
+  const modelAlias: ClaudeModelId =
+    b.model === 'opus' || b.model === 'sonnet' || b.model === 'haiku'
+      ? b.model
+      : DEFAULT_MODEL;
 
   const feedback = typeof b.feedback === 'string' && b.feedback.trim() ? b.feedback.trim() : null;
   const parentModel = parsePartModel(b.parentModel);
@@ -236,8 +291,11 @@ export async function POST(req: Request) {
   const expandedPrompt = buildExpansion(userPrompt, category, feedback, parentModel, phraseHints);
 
   let raw: string;
+  let usagePartial: Omit<GenerationUsage, 'modelAlias'> | null = null;
   try {
-    raw = await callClaude(expandedPrompt);
+    const result = await callClaude(expandedPrompt, modelAlias);
+    raw = result.text;
+    usagePartial = result.usage;
   } catch (e) {
     return NextResponse.json(
       { error: 'claude-cli-failed', detail: (e as Error).message },
@@ -276,10 +334,14 @@ export async function POST(req: Request) {
   }
 
   const vertexCount = vertexCountFor(model);
+  const usage: GenerationUsage | null = usagePartial
+    ? { ...usagePartial, modelAlias }
+    : null;
   return NextResponse.json({
     model,
     expandedPrompt,
     category,
     vertexCount,
+    usage,
   });
 }

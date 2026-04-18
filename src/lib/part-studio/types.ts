@@ -36,6 +36,28 @@ export interface PartModel {
   parts: Primitive[];
 }
 
+/** Aliases the Claude CLI accepts via `--model`. */
+export type ClaudeModelId = 'opus' | 'sonnet' | 'haiku';
+
+/** Full id reported by the CLI in the result.usage payload. */
+export type ClaudeFullModelId = string;
+
+export interface GenerationUsage {
+  /** Model alias the user selected for this run. */
+  modelAlias: ClaudeModelId;
+  /** Full model id the CLI actually served (e.g. claude-haiku-4-5-20251001). */
+  modelFull: ClaudeFullModelId;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  /** CLI-reported USD cost. Under "Claude Max" subscription this is the
+   *  equivalent API price, not what the user was actually billed. */
+  costUsd: number;
+  /** End-to-end wall clock ms reported by the CLI. */
+  durationMs: number;
+}
+
 /** One generation attempt, persisted to Supabase eventually. */
 export interface PartGeneration {
   id: string;
@@ -49,6 +71,8 @@ export interface PartGeneration {
   model: PartModel | null;
   /** Approximate total vertex count. */
   vertexCount: number;
+  /** Token + cost breakdown from the CLI's result line. Null on error. */
+  usage: GenerationUsage | null;
   /** 1–5 star rating, null until rated. */
   rating: number | null;
   /** Free-text feedback for "regenerate with notes". */

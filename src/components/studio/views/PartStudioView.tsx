@@ -5,11 +5,19 @@ import {
   PanelTextarea,
   PanelActionButton,
   PanelSection,
+  PanelSelect,
 } from '@/components/ui';
 import { useStudio } from '@/store/studio-store';
 import { usePartStudio } from '@/store/part-studio-store';
 import { PartPreview } from '@/components/studio/PartPreview';
 import { useToastStore } from '@/store/toast-store';
+import {
+  MODEL_CATALOG,
+  MODEL_ORDER,
+  formatUsd,
+  formatTokens,
+} from '@/lib/part-studio/models';
+import type { ClaudeModelId } from '@/lib/part-studio/types';
 import { cn } from '@/lib/utils';
 
 export function PartStudioView() {
@@ -22,10 +30,12 @@ export function PartStudioView() {
     draftFeedback,
     generating,
     savedModels,
+    selectedModel,
     setDraftPrompt,
     setDraftFeedback,
     setActiveId,
     setGenerating,
+    setSelectedModel,
     startGeneration,
     finishGeneration,
     rateGeneration,
@@ -73,6 +83,7 @@ export function PartStudioView() {
             feedback: args.feedback,
             parentModel: parentGen?.model ?? null,
             phraseHints,
+            model: selectedModel,
           }),
         });
 
@@ -90,6 +101,7 @@ export function PartStudioView() {
           vertexCount: number;
           category?: string;
           expandedPrompt?: string;
+          usage?: import('@/lib/part-studio/types').GenerationUsage | null;
         };
         finishGeneration(id, {
           ok: true,
@@ -97,6 +109,7 @@ export function PartStudioView() {
           vertexCount: data.vertexCount,
           category: data.category,
           expandedPrompt: data.expandedPrompt,
+          usage: data.usage ?? null,
         });
       } catch (e) {
         finishGeneration(id, {
@@ -110,12 +123,30 @@ export function PartStudioView() {
     [
       generating,
       generations,
+      selectedModel,
       setGenerating,
       startGeneration,
       finishGeneration,
       getHints,
     ],
   );
+
+  // Session totals — sum across all generations with usage. Lets the user
+  // see what they've spent across iteration, not just the latest call.
+  const sessionTotals = useMemo(() => {
+    let cost = 0;
+    let inTok = 0;
+    let outTok = 0;
+    let count = 0;
+    for (const g of generations) {
+      if (!g.usage) continue;
+      cost += g.usage.costUsd || 0;
+      inTok += g.usage.inputTokens || 0;
+      outTok += g.usage.outputTokens || 0;
+      count++;
+    }
+    return { cost, inTok, outTok, count };
+  }, [generations]);
 
   const handleGenerate = () => {
     runGeneration({ userPrompt: draftPrompt, feedback: null, parentId: null });
@@ -253,6 +284,33 @@ export function PartStudioView() {
               )}
             </div>
           )}
+          <div className="ml-auto flex items-center gap-3 text-[11px] text-zinc-500">
+            {active?.usage && (
+              <div className="flex items-center gap-1.5">
+                <span className="px-1.5 py-0.5 rounded bg-white/5 text-zinc-300 font-mono">
+                  {MODEL_CATALOG[active.usage.modelAlias].label.split(' · ')[0]}
+                </span>
+                <span className="font-mono text-zinc-400">
+                  {formatTokens(active.usage.inputTokens)}↑ / {formatTokens(active.usage.outputTokens)}↓
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span className="font-mono text-accent">
+                  {formatUsd(active.usage.costUsd)}
+                </span>
+              </div>
+            )}
+            {sessionTotals.count > 0 && (
+              <div
+                className="flex items-center gap-1.5"
+                title={`${sessionTotals.count} generations this session`}
+              >
+                <span className="text-zinc-600">session</span>
+                <span className="font-mono text-zinc-300">
+                  {formatUsd(sessionTotals.cost)}
+                </span>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Preview */}
@@ -282,7 +340,21 @@ export function PartStudioView() {
               rows={3}
               disabled={generating}
             />
-            <div className="mt-2">
+            <div className="mt-3">
+              <PanelSelect
+                label="Model"
+                value={selectedModel}
+                onChange={(v) => setSelectedModel(v as ClaudeModelId)}
+                options={MODEL_ORDER.map((id) => ({
+                  value: id,
+                  label: MODEL_CATALOG[id].label,
+                }))}
+              />
+              <p className="text-[10px] text-zinc-500 mt-1.5 leading-relaxed">
+                {MODEL_CATALOG[selectedModel].tagline}
+              </p>
+            </div>
+            <div className="mt-3">
               <PanelActionButton
                 onClick={handleGenerate}
                 variant="primary"
@@ -294,6 +366,69 @@ export function PartStudioView() {
               </PanelActionButton>
             </div>
           </PanelSection>
+
+          {active?.usage && (
+            <PanelSection collapsible title="Usage & cost" defaultOpen={false}>
+              <div className="space-y-1.5 text-[11px]">
+                <Row label="Model">
+                  <span className="font-mono text-zinc-300">
+                    {active.usage.modelFull}
+                  </span>
+                </Row>
+                <Row label="Input tokens">
+                  <span className="font-mono text-zinc-300">
+                    {active.usage.inputTokens.toLocaleString()}
+                  </span>
+                </Row>
+                <Row label="Output tokens">
+                  <span className="font-mono text-zinc-300">
+                    {active.usage.outputTokens.toLocaleString()}
+                  </span>
+                </Row>
+                {active.usage.cacheReadTokens > 0 && (
+                  <Row label="Cache read">
+                    <span className="font-mono text-zinc-400">
+                      {active.usage.cacheReadTokens.toLocaleString()}
+                    </span>
+                  </Row>
+                )}
+                {active.usage.cacheCreationTokens > 0 && (
+                  <Row label="Cache write">
+                    <span className="font-mono text-zinc-400">
+                      {active.usage.cacheCreationTokens.toLocaleString()}
+                    </span>
+                  </Row>
+                )}
+                <Row label="Cost">
+                  <span className="font-mono text-accent">
+                    {formatUsd(active.usage.costUsd)}
+                  </span>
+                </Row>
+                <Row label="Duration">
+                  <span className="font-mono text-zinc-400">
+                    {(active.usage.durationMs / 1000).toFixed(2)}s
+                  </span>
+                </Row>
+              </div>
+              {sessionTotals.count > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/5 space-y-1.5 text-[11px]">
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                    Session total · {sessionTotals.count} run{sessionTotals.count === 1 ? '' : 's'}
+                  </div>
+                  <Row label="Tokens in/out">
+                    <span className="font-mono text-zinc-300">
+                      {formatTokens(sessionTotals.inTok)} / {formatTokens(sessionTotals.outTok)}
+                    </span>
+                  </Row>
+                  <Row label="Cost">
+                    <span className="font-mono text-accent">
+                      {formatUsd(sessionTotals.cost)}
+                    </span>
+                  </Row>
+                </div>
+              )}
+            </PanelSection>
+          )}
 
           <PanelSection
             collapsible
@@ -476,6 +611,15 @@ function ErrorOverlay({ error }: { error: string }) {
         <div className="text-sm text-zinc-200 mb-1">Generation failed</div>
         <div className="text-[11px] text-zinc-500 font-mono break-all">{error}</div>
       </div>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-zinc-500">{label}</span>
+      {children}
     </div>
   );
 }

@@ -9,7 +9,13 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { PartGeneration, PartModel } from '@/lib/part-studio/types';
+import type {
+  ClaudeModelId,
+  GenerationUsage,
+  PartGeneration,
+  PartModel,
+} from '@/lib/part-studio/types';
+import { DEFAULT_MODEL } from '@/lib/part-studio/models';
 import {
   applyRatingToPhrases,
   unapplyRatingFromPhrases,
@@ -50,10 +56,14 @@ export interface PartStudioStore {
   /** Permanent custom models (surfaced in Assets → Models). */
   savedModels: SavedPartModel[];
 
+  /** Which Claude model the next generation should run on. */
+  selectedModel: ClaudeModelId;
+
   setDraftPrompt: (v: string) => void;
   setDraftFeedback: (v: string) => void;
   setActiveId: (id: string | null) => void;
   setGenerating: (v: boolean) => void;
+  setSelectedModel: (m: ClaudeModelId) => void;
 
   /** Optimistically insert a placeholder row, return its id. */
   startGeneration: (args: {
@@ -67,8 +77,15 @@ export interface PartStudioStore {
   finishGeneration: (
     id: string,
     result:
-      | { ok: true; model: PartModel; vertexCount: number; category?: string; expandedPrompt?: string }
-      | { ok: false; error: string },
+      | {
+          ok: true;
+          model: PartModel;
+          vertexCount: number;
+          category?: string;
+          expandedPrompt?: string;
+          usage?: GenerationUsage | null;
+        }
+      | { ok: false; error: string; usage?: GenerationUsage | null },
   ) => void;
 
   /**
@@ -110,9 +127,11 @@ export const usePartStudio = create<PartStudioStore>()(
       generating: false,
       phraseStats: {},
       savedModels: [],
+      selectedModel: DEFAULT_MODEL,
 
       setDraftPrompt: (draftPrompt) => set({ draftPrompt }),
       setDraftFeedback: (draftFeedback) => set({ draftFeedback }),
+      setSelectedModel: (selectedModel) => set({ selectedModel }),
       setActiveId: (activeId) => {
         // Pull the feedback that was stored on this generation back into the
         // draft field so the user can edit it rather than retyping.
@@ -137,6 +156,7 @@ export const usePartStudio = create<PartStudioStore>()(
           category,
           model: null,
           vertexCount: 0,
+          usage: null,
           rating: null,
           feedback: null,
           parentId,
@@ -158,9 +178,10 @@ export const usePartStudio = create<PartStudioStore>()(
                 vertexCount: result.vertexCount,
                 category: result.category ?? g.category,
                 expandedPrompt: result.expandedPrompt ?? g.expandedPrompt,
+                usage: result.usage ?? g.usage,
               };
             }
-            return { ...g, error: result.error };
+            return { ...g, error: result.error, usage: result.usage ?? g.usage };
           }),
         })),
 
@@ -263,6 +284,7 @@ export const usePartStudio = create<PartStudioStore>()(
         generations: s.generations,
         savedModels: s.savedModels,
         phraseStats: s.phraseStats,
+        selectedModel: s.selectedModel,
       }),
     },
   ),

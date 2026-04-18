@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useMemo } from 'react';
-import { ArrowLeft, Sparkles, Star, Trash2, RefreshCw, Save, X } from 'lucide-react';
+import { ArrowLeft, Sparkles, Star, Trash2, RefreshCw, Save, X, Check } from 'lucide-react';
 import {
   PanelTextarea,
   PanelActionButton,
@@ -9,6 +9,7 @@ import {
 import { useStudio } from '@/store/studio-store';
 import { usePartStudio } from '@/store/part-studio-store';
 import { PartPreview } from '@/components/studio/PartPreview';
+import { useToastStore } from '@/store/toast-store';
 import { cn } from '@/lib/utils';
 
 export function PartStudioView() {
@@ -20,6 +21,7 @@ export function PartStudioView() {
     draftPrompt,
     draftFeedback,
     generating,
+    savedModels,
     setDraftPrompt,
     setDraftFeedback,
     setActiveId,
@@ -30,7 +32,11 @@ export function PartStudioView() {
     setGenerationFeedback,
     removeGeneration,
     clearGenerations,
+    saveActiveToLibrary,
+    getHints,
   } = usePartStudio();
+
+  const addToast = useToastStore((s) => s.addToast);
 
   const active = useMemo(
     () => generations.find((g) => g.id === activeId) ?? null,
@@ -55,6 +61,10 @@ export function PartStudioView() {
       });
 
       try {
+        // Phrase-mining hints — phrases from past prompts that rated well,
+        // forwarded so the API can nudge the new generation's style.
+        const phraseHints = getHints(6).map((h) => h.phrase);
+
         const res = await fetch('/api/generate-part', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -62,6 +72,7 @@ export function PartStudioView() {
             userPrompt: trimmed,
             feedback: args.feedback,
             parentModel: parentGen?.model ?? null,
+            phraseHints,
           }),
         });
 
@@ -77,11 +88,15 @@ export function PartStudioView() {
         const data = (await res.json()) as {
           model: import('@/lib/part-studio/types').PartModel;
           vertexCount: number;
+          category?: string;
+          expandedPrompt?: string;
         };
         finishGeneration(id, {
           ok: true,
           model: data.model,
           vertexCount: data.vertexCount,
+          category: data.category,
+          expandedPrompt: data.expandedPrompt,
         });
       } catch (e) {
         finishGeneration(id, {
@@ -98,12 +113,38 @@ export function PartStudioView() {
       setGenerating,
       startGeneration,
       finishGeneration,
+      getHints,
     ],
   );
 
   const handleGenerate = () => {
     runGeneration({ userPrompt: draftPrompt, feedback: null, parentId: null });
   };
+
+  const handleSave = () => {
+    const savedId = saveActiveToLibrary();
+    if (savedId) {
+      addToast(
+        'success',
+        'Saved to Assets → Models → Custom.',
+      );
+    } else {
+      addToast(
+        'warning',
+        'Rate this generation (≥ 1 star) before saving.',
+      );
+    }
+  };
+
+  const alreadySaved = useMemo(() => {
+    if (!active?.model) return false;
+    return savedModels.some(
+      (m) =>
+        m.sourcePrompt === active.userPrompt &&
+        m.model.parts.length === active.model!.parts.length &&
+        m.createdAt >= active.createdAt,
+    );
+  }, [active, savedModels]);
 
   const handleRegenerate = () => {
     if (!active) return;
@@ -311,26 +352,25 @@ export function PartStudioView() {
           )}
         </div>
 
-        {/* Sticky primary action — Save to Assets (placeholder for now) */}
+        {/* Sticky primary action — persist the active generation to the
+            custom models bucket in AssetsPanel. The rating-gated save is
+            the UX contract described in the store header: ratings are
+            the learning signal, so only rated work feeds the library. */}
         <footer className="shrink-0 px-4 py-3 border-t border-white/5">
           <PanelActionButton
-            onClick={() => {
-              // Saving to the studio asset library lives in a follow-up
-              // commit once the Models tab has a "custom" bucket. For now
-              // this is the intentional stub so the sticky footer matches
-              // the panel-rule spec.
-              alert(
-                'Save to Assets lands in the next commit once the custom-models bucket is wired up.',
-              );
-            }}
+            onClick={handleSave}
             variant="primary"
-            icon={Save}
+            icon={alreadySaved ? Check : Save}
             fullWidth
-            disabled={!active?.model || (active?.rating ?? 0) < 1}
+            disabled={
+              !active?.model ||
+              (active?.rating ?? 0) < 1 ||
+              alreadySaved
+            }
           >
-            Save to Assets
+            {alreadySaved ? 'Saved to Assets' : 'Save to Assets'}
           </PanelActionButton>
-          {active?.model && (active?.rating ?? 0) < 1 && (
+          {active?.model && (active?.rating ?? 0) < 1 && !alreadySaved && (
             <p className="text-[10px] text-zinc-500 mt-1.5 text-center">
               Rate this generation to save it.
             </p>

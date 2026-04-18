@@ -1,13 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Box, SlidersHorizontal, Shapes, Package } from 'lucide-react';
-import { PanelSearchInput, PanelSelect, PanelIconTabs } from '@/components/ui';
+import { Box, SlidersHorizontal, Shapes, Package, Sparkles, X, Star } from 'lucide-react';
+import { PanelSearchInput, PanelSelect, PanelIconTabs, PanelActionButton } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
 import { PiecePreview } from '@/components/studio/PiecePreview';
+import { CustomModelThumbnail } from '@/components/studio/CustomModelThumbnail';
 import { PIECES, type PieceKind } from '@/lib/building-kit';
 import { useBuildingStore, type Tool } from '@/store/building-store';
 import { useStudio, type AssetsTab } from '@/store/studio-store';
+import { usePartStudio } from '@/store/part-studio-store';
 
 interface AssetInfo {
   name: string;
@@ -186,6 +188,11 @@ export function AssetsPanel() {
         <PartsView />
       ) : (
       <>
+
+      {/* Custom models — user-generated via Part Studio. Shown as the first
+          bucket on the Models tab so the user's own assets are always on
+          top of the imported medieval kit. */}
+      <CustomModelsSection />
 
       {/* Scripts moved to Scene panel (Explorer-style, Roblox parity) */}
 
@@ -585,6 +592,110 @@ function PartsView() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Custom models section ─────────────────────────────────────────────────
+// Bridges the permanent Part Studio library into the existing Assets panel.
+// Users who clicked "Save to Assets" in Part Studio see their generations
+// here alongside the imported medieval kit.
+
+function CustomModelsSection() {
+  const savedModels = usePartStudio((s) => s.savedModels);
+  const removeSavedModel = usePartStudio((s) => s.removeSavedModel);
+  const setViewMode = useStudio((s) => s.setViewMode);
+  const setChatMode = useStudio((s) => s.setChatMode);
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (savedModels.length === 0) {
+    return (
+      <div className="shrink-0 px-3 pt-3 pb-2">
+        <div className="rounded-lg border border-dashed border-white/10 p-3 text-center">
+          <div className="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-accent/10 text-accent mb-2">
+            <Sparkles size={14} />
+          </div>
+          <p className="text-[11px] text-zinc-400 leading-relaxed mb-2">
+            Generate low-poly assets from prompts — each capped at ~100 verts.
+          </p>
+          <PanelActionButton
+            variant="secondary"
+            icon={Sparkles}
+            onClick={() => {
+              setChatMode('part');
+              setViewMode('parts-gen');
+            }}
+            fullWidth
+          >
+            Open Part Studio
+          </PanelActionButton>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="shrink-0 px-3 pt-2 pb-2">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full flex items-center gap-2 mb-1.5 text-left"
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          Custom
+        </span>
+        <span className="text-[10px] font-mono text-zinc-600">
+          {savedModels.length}
+        </span>
+        <span className="ml-auto text-[10px] text-zinc-600">
+          {collapsed ? 'show' : 'hide'}
+        </span>
+      </button>
+
+      {!collapsed && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {[...savedModels].reverse().map((m) => (
+            <div
+              key={m.id}
+              className="group relative flex flex-col rounded-lg overflow-hidden bg-panel-surface border border-panel-border hover:border-accent/30 transition-colors"
+              title={`${m.name}\n${m.vertexCount} verts · ${m.model.parts.length} parts\n"${m.sourcePrompt}"`}
+            >
+              <div className="relative w-full aspect-square">
+                <CustomModelThumbnail model={m.model} fluid />
+
+                {/* Rating badge */}
+                <div className="absolute top-1 left-1 flex items-center gap-0.5 px-1.5 h-5 rounded-full bg-black/60 backdrop-blur-sm">
+                  <Star size={9} className="text-amber-400" fill="currentColor" />
+                  <span className="text-[9px] font-mono text-amber-300">
+                    {m.rating}
+                  </span>
+                </div>
+
+                {/* Delete button on hover */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeSavedModel(m.id);
+                  }}
+                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 backdrop-blur-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  title="Remove"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+              <div className="px-2 py-1 border-t border-white/5">
+                <div className="text-[11px] text-zinc-300 truncate">
+                  {m.name}
+                </div>
+                <div className="text-[9px] font-mono text-zinc-600">
+                  {m.vertexCount} verts
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

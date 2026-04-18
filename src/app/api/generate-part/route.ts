@@ -118,6 +118,7 @@ function buildExpansion(
   category: Category,
   feedback: string | null,
   parentModel: PartModel | null,
+  phraseHints: string[],
 ): string {
   const catHints: Record<Category, string> = {
     character:  'Target 8–12 primitives. Torso (box) + head (sphere or box) + two arms (cylinder or box) + two legs (cylinder or box). Add 1–3 accent pieces (hat, weapon, belt).',
@@ -134,9 +135,21 @@ function buildExpansion(
     '',
     `CATEGORY: ${category}`,
     `GUIDANCE: ${catHints[category]}`,
-    '',
-    `USER REQUEST: ${userPrompt}`,
   ];
+
+  // Learning signal: phrases that correlated with high user ratings get
+  // injected as soft style cues. We don't force Claude to use them, but
+  // surfacing them biases the aesthetic toward what the user actually
+  // liked on past generations.
+  if (phraseHints.length > 0) {
+    lines.push('');
+    lines.push(
+      `STYLE HINTS (phrasing that rated well on past generations — draw inspiration only if it fits): ${phraseHints.join(', ')}`,
+    );
+  }
+
+  lines.push('');
+  lines.push(`USER REQUEST: ${userPrompt}`);
 
   if (feedback && parentModel) {
     lines.push('');
@@ -198,6 +211,7 @@ export async function POST(req: Request) {
     userPrompt?: unknown;
     feedback?: unknown;
     parentModel?: unknown;
+    phraseHints?: unknown;
   };
 
   const userPrompt =
@@ -209,8 +223,17 @@ export async function POST(req: Request) {
   const feedback = typeof b.feedback === 'string' && b.feedback.trim() ? b.feedback.trim() : null;
   const parentModel = parsePartModel(b.parentModel);
 
+  // Phrase hints arrive client-side from part-studio-store's phraseStats,
+  // already filtered/ranked. Cap to avoid pushing a huge context if a
+  // user has hundreds of high-rated generations.
+  const phraseHints = Array.isArray(b.phraseHints)
+    ? (b.phraseHints as unknown[])
+        .filter((x): x is string => typeof x === 'string' && x.length > 0)
+        .slice(0, 8)
+    : [];
+
   const category = inferCategory(userPrompt);
-  const expandedPrompt = buildExpansion(userPrompt, category, feedback, parentModel);
+  const expandedPrompt = buildExpansion(userPrompt, category, feedback, parentModel, phraseHints);
 
   let raw: string;
   try {

@@ -48,7 +48,6 @@ import type {
   ClaudeModelId,
   PartGeneration,
 } from '@/lib/part-studio/types';
-import { cn } from '@/lib/utils';
 
 const PARTS_SUBTABS: { id: PartsTab; label: string; icon: typeof Wand2 }[] = [
   { id: 'generate', label: 'Generate', icon: Wand2 },
@@ -138,7 +137,14 @@ function GenerateView() {
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Inline preview — small but enough to judge a 100-vert asset. */}
         <div className="shrink-0 px-3 pt-3">
-          <div className="relative aspect-square rounded-lg border border-panel-border bg-zinc-950 overflow-hidden">
+          <div
+            className="relative aspect-square overflow-hidden"
+            style={{
+              borderRadius: 12,
+              background: 'var(--pb-cream-2)',
+              border: '1.5px solid var(--pb-line-2)',
+            }}
+          >
             {active?.error ? (
               <InlineError error={active.error} />
             ) : active?.model ? (
@@ -149,12 +155,34 @@ function GenerateView() {
               <InlineEmpty />
             )}
             {active?.model && (
-              <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between text-[10px] pointer-events-none">
-                <span className="px-1.5 py-0.5 rounded bg-black/60 text-zinc-200 font-mono">
+              <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between pointer-events-none">
+                <span
+                  style={{
+                    padding: '2px 7px',
+                    borderRadius: 999,
+                    background: 'var(--pb-paper)',
+                    border: '1.5px solid var(--pb-line-2)',
+                    color: 'var(--pb-ink)',
+                    fontFamily: 'DM Mono, monospace',
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
                   {active.vertexCount}v · {active.model.parts.length}p
                 </span>
                 {active.usage && (
-                  <span className="px-1.5 py-0.5 rounded bg-black/60 text-accent font-mono">
+                  <span
+                    style={{
+                      padding: '2px 7px',
+                      borderRadius: 999,
+                      background: 'var(--pb-mint)',
+                      border: '1.5px solid var(--pb-mint-ink)',
+                      color: 'var(--pb-mint-ink)',
+                      fontFamily: 'DM Mono, monospace',
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  >
                     {formatUsd(active.usage.costUsd)}
                   </span>
                 )}
@@ -181,7 +209,10 @@ function GenerateView() {
                 label: MODEL_CATALOG[id].label,
               }))}
             />
-            <p className="text-[10px] text-zinc-500 mt-1.5 leading-relaxed">
+            <p
+              className="mt-1.5 leading-relaxed"
+              style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)' }}
+            >
               {MODEL_CATALOG[selectedModel].tagline}
             </p>
           </div>
@@ -204,7 +235,10 @@ function GenerateView() {
             onChange={(v) => active && rateGeneration(active.id, v)}
             disabled={!active?.model}
           />
-          <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+          <p
+            className="mt-2 leading-relaxed"
+            style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}
+          >
             Ratings train which prompts work. We learn from what you{' '}
             <em>asked</em>, not what Claude wrote.
           </p>
@@ -256,7 +290,10 @@ function GenerateView() {
       </div>
 
       {/* Sticky save footer — matches right-panel convention elsewhere. */}
-      <footer className="shrink-0 px-3 py-3 border-t border-white/5">
+      <footer
+        className="shrink-0 px-3 py-3"
+        style={{ borderTop: '1.5px solid var(--pb-line-2)' }}
+      >
         <PanelActionButton
           onClick={handleSave}
           variant="primary"
@@ -269,7 +306,10 @@ function GenerateView() {
           {alreadySaved ? 'Saved to Assets' : 'Save to Assets'}
         </PanelActionButton>
         {active?.model && (active?.rating ?? 0) < 1 && !alreadySaved && (
-          <p className="text-[10px] text-zinc-500 mt-1.5 text-center">
+          <p
+            className="mt-1.5 text-center"
+            style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)' }}
+          >
             Rate this generation to save it.
           </p>
         )}
@@ -288,11 +328,26 @@ function HistoryView() {
     return (
       <div className="flex-1 min-h-0 flex items-center justify-center px-6 text-center">
         <div>
-          <History size={24} className="mx-auto text-zinc-700 mb-2" />
-          <p className="text-[11px] text-zinc-500 leading-relaxed">
+          <div
+            className="mx-auto mb-2 flex items-center justify-center"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: 'var(--pb-cream-2)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-muted)',
+            }}
+          >
+            <History size={20} strokeWidth={2.2} />
+          </div>
+          <p
+            className="leading-relaxed"
+            style={{ fontSize: 11.5, color: 'var(--pb-ink)' }}
+          >
             No generations yet.
             <br />
-            <span className="text-zinc-600">
+            <span style={{ color: 'var(--pb-ink-muted)' }}>
               Switch to Generate and describe an asset to get started.
             </span>
           </p>
@@ -303,17 +358,45 @@ function HistoryView() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="shrink-0 px-3 py-2 border-b border-white/5 flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+      <div
+        className="shrink-0 px-3 py-2 flex items-center justify-between"
+        style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: 'var(--pb-ink-muted)',
+          }}
+        >
           {generations.length} run{generations.length === 1 ? '' : 's'}
         </span>
         <button
           type="button"
           onClick={clearGenerations}
           title="Clear all generations"
-          className="h-6 w-6 rounded-md flex items-center justify-center text-zinc-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+          className="flex items-center justify-center"
+          style={{
+            height: 24,
+            width: 24,
+            borderRadius: 7,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            color: 'var(--pb-ink-soft)',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--pb-coral-ink)';
+            e.currentTarget.style.color = 'var(--pb-coral-ink)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+            e.currentTarget.style.color = 'var(--pb-ink-soft)';
+          }}
         >
-          <Trash2 size={12} />
+          <Trash2 size={12} strokeWidth={2.2} />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -350,26 +433,37 @@ function HistoryCard({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        'group rounded-lg border overflow-hidden transition-colors text-left',
-        isActive
-          ? 'border-accent bg-accent/10'
-          : 'border-panel-border bg-panel-surface hover:bg-panel-surface-hover',
-      )}
+      className="group overflow-hidden text-left"
+      style={{
+        borderRadius: 12,
+        background: 'var(--pb-paper)',
+        border: `1.5px solid ${isActive ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+        boxShadow: isActive ? '0 2px 0 var(--pb-ink)' : 'none',
+        cursor: 'pointer',
+        transition: 'border-color 120ms ease',
+      }}
     >
-      <div className="aspect-square bg-zinc-900 flex items-center justify-center">
+      <div
+        className="aspect-square flex items-center justify-center"
+        style={{ background: 'var(--pb-cream-2)' }}
+      >
         <HistoryThumb generation={gen} isActive={isActive} />
       </div>
-      <div className="px-1.5 py-1 border-t border-white/5">
-        <div className="text-[10px] text-zinc-300 truncate">{gen.userPrompt}</div>
-        <div className="flex items-center gap-1 text-[9px] mt-0.5">
+      <div style={{ padding: '5px 8px', borderTop: '1.5px solid var(--pb-line-2)' }}>
+        <div
+          className="truncate"
+          style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--pb-ink)' }}
+        >
+          {gen.userPrompt}
+        </div>
+        <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 9 }}>
           {gen.rating ? (
-            <span className="text-amber-400">
+            <span style={{ color: 'var(--pb-butter-ink)', fontWeight: 700 }}>
               {'★'.repeat(gen.rating)}
-              <span className="text-zinc-700">{'★'.repeat(5 - gen.rating)}</span>
+              <span style={{ color: 'var(--pb-line-2)' }}>{'★'.repeat(5 - gen.rating)}</span>
             </span>
           ) : (
-            <span className="text-zinc-600">unrated</span>
+            <span style={{ color: 'var(--pb-ink-muted)' }}>unrated</span>
           )}
         </div>
       </div>
@@ -379,23 +473,38 @@ function HistoryCard({
 
 function HistoryThumb({
   generation,
-  isActive,
 }: {
   generation: PartGeneration;
   isActive: boolean;
 }) {
-  if (generation.error) return <div className="text-red-400/70 text-[10px]">err</div>;
-  if (!generation.model) return <div className="text-zinc-600 text-[10px] animate-pulse">…</div>;
+  if (generation.error)
+    return (
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-coral-ink)' }}>err</div>
+    );
+  if (!generation.model)
+    return (
+      <div
+        className="animate-pulse"
+        style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}
+      >
+        …
+      </div>
+    );
   const palette = Array.from(
     new Set(generation.model.parts.map((p) => p.color)),
   ).slice(0, 4);
   return (
-    <div className={cn('flex gap-0.5', isActive && 'ring-1 ring-accent rounded')}>
+    <div className="flex gap-0.5">
       {palette.map((c, i) => (
         <span
           key={i}
-          className="w-4 h-4 rounded-sm border border-white/10"
-          style={{ backgroundColor: c }}
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 4,
+            backgroundColor: c,
+            border: '1.5px solid var(--pb-ink)',
+          }}
         />
       ))}
     </div>
@@ -421,17 +530,25 @@ function RatingStars({
             type="button"
             onClick={() => !disabled && onChange(n)}
             disabled={disabled}
-            className={cn(
-              'h-7 w-7 rounded-lg flex items-center justify-center transition-colors',
-              disabled
-                ? 'text-zinc-700 cursor-not-allowed'
+            className="flex items-center justify-center"
+            style={{
+              height: 30,
+              width: 30,
+              borderRadius: 8,
+              background: filled ? 'var(--pb-butter)' : 'var(--pb-paper)',
+              border: `1.5px solid ${filled ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: filled ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+              color: disabled
+                ? 'var(--pb-line-2)'
                 : filled
-                  ? 'text-amber-400 hover:bg-white/5'
-                  : 'text-zinc-600 hover:text-zinc-400 hover:bg-white/5',
-            )}
+                  ? 'var(--pb-butter-ink)'
+                  : 'var(--pb-ink-muted)',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
             title={`Rate ${n}`}
           >
-            <Star size={16} fill={filled ? 'currentColor' : 'none'} />
+            <Star size={14} strokeWidth={2.4} fill={filled ? 'currentColor' : 'none'} />
           </button>
         );
       })}
@@ -460,50 +577,69 @@ function UsageBody() {
 
   if (!active?.usage) return null;
 
+  const monoInk: React.CSSProperties = {
+    fontFamily: 'DM Mono, monospace',
+    color: 'var(--pb-ink)',
+    fontSize: 11,
+  };
+  const monoMuted: React.CSSProperties = {
+    fontFamily: 'DM Mono, monospace',
+    color: 'var(--pb-ink-muted)',
+    fontSize: 11,
+  };
+  const monoMint: React.CSSProperties = {
+    fontFamily: 'DM Mono, monospace',
+    color: 'var(--pb-mint-ink)',
+    fontSize: 11,
+    fontWeight: 700,
+  };
   return (
     <>
       <div className="space-y-1.5 text-[11px]">
         <Row label="Model">
-          <span className="font-mono text-zinc-300">{active.usage.modelFull}</span>
+          <span style={monoInk}>{active.usage.modelFull}</span>
         </Row>
         <Row label="Input">
-          <span className="font-mono text-zinc-300">
-            {active.usage.inputTokens.toLocaleString()}
-          </span>
+          <span style={monoInk}>{active.usage.inputTokens.toLocaleString()}</span>
         </Row>
         <Row label="Output">
-          <span className="font-mono text-zinc-300">
-            {active.usage.outputTokens.toLocaleString()}
-          </span>
+          <span style={monoInk}>{active.usage.outputTokens.toLocaleString()}</span>
         </Row>
         {active.usage.cacheReadTokens > 0 && (
           <Row label="Cache read">
-            <span className="font-mono text-zinc-400">
-              {active.usage.cacheReadTokens.toLocaleString()}
-            </span>
+            <span style={monoMuted}>{active.usage.cacheReadTokens.toLocaleString()}</span>
           </Row>
         )}
         <Row label="Cost">
-          <span className="font-mono text-accent">{formatUsd(active.usage.costUsd)}</span>
+          <span style={monoMint}>{formatUsd(active.usage.costUsd)}</span>
         </Row>
         <Row label="Duration">
-          <span className="font-mono text-zinc-400">
-            {(active.usage.durationMs / 1000).toFixed(2)}s
-          </span>
+          <span style={monoMuted}>{(active.usage.durationMs / 1000).toFixed(2)}s</span>
         </Row>
       </div>
       {totals.count > 0 && (
-        <div className="mt-3 pt-3 border-t border-white/5 space-y-1.5 text-[11px]">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+        <div
+          className="mt-3 pt-3 space-y-1.5 text-[11px]"
+          style={{ borderTop: '1.5px solid var(--pb-line-2)' }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: 'var(--pb-ink-muted)',
+            }}
+          >
             Session · {totals.count} run{totals.count === 1 ? '' : 's'}
           </div>
           <Row label="In/out">
-            <span className="font-mono text-zinc-300">
+            <span style={monoInk}>
               {formatTokens(totals.inTok)} / {formatTokens(totals.outTok)}
             </span>
           </Row>
           <Row label="Cost">
-            <span className="font-mono text-accent">{formatUsd(totals.cost)}</span>
+            <span style={monoMint}>{formatUsd(totals.cost)}</span>
           </Row>
         </div>
       )}
@@ -514,7 +650,7 @@ function UsageBody() {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-zinc-500">{label}</span>
+      <span style={{ color: 'var(--pb-ink-muted)', fontSize: 11 }}>{label}</span>
       {children}
     </div>
   );
@@ -523,11 +659,25 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function InlineEmpty() {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3">
-      <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-accent/10 text-accent mb-2">
-        <Sparkles size={16} />
+      <div
+        className="inline-flex items-center justify-center mb-2"
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          background: 'var(--pb-grape)',
+          color: 'var(--pb-grape-ink)',
+          border: '1.5px solid var(--pb-grape-ink)',
+        }}
+      >
+        <Sparkles size={16} strokeWidth={2.4} />
       </div>
-      <p className="text-[11px] text-zinc-400">Enter a prompt below</p>
-      <p className="text-[10px] text-zinc-600 mt-0.5">≤ 12 primitives · ~100 verts</p>
+      <p style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--pb-ink)' }}>
+        Enter a prompt below
+      </p>
+      <p style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', marginTop: 2 }}>
+        ≤ 12 primitives · ~100 verts
+      </p>
     </div>
   );
 }
@@ -535,10 +685,23 @@ function InlineEmpty() {
 function InlineLoading({ label }: { label: string }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3">
-      <div className="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center animate-pulse mb-2">
-        <Sparkles size={14} className="text-accent" />
+      <div
+        className="flex items-center justify-center animate-pulse mb-2"
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          background: 'var(--pb-paper)',
+          border: '1.5px solid var(--pb-grape-ink)',
+          color: 'var(--pb-grape-ink)',
+        }}
+      >
+        <Sparkles size={14} strokeWidth={2.4} />
       </div>
-      <p className="text-[11px] text-zinc-300 truncate max-w-full">
+      <p
+        className="truncate max-w-full"
+        style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--pb-ink)' }}
+      >
         Generating &ldquo;{label}&rdquo;
       </p>
     </div>
@@ -548,11 +711,32 @@ function InlineLoading({ label }: { label: string }) {
 function InlineError({ error }: { error: string }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3">
-      <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-red-500/15 text-red-400 mb-2">
-        <X size={14} />
+      <div
+        className="inline-flex items-center justify-center mb-2"
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 999,
+          background: 'var(--pb-coral)',
+          border: '1.5px solid var(--pb-coral-ink)',
+          color: 'var(--pb-coral-ink)',
+        }}
+      >
+        <X size={14} strokeWidth={2.4} />
       </div>
-      <p className="text-[11px] text-zinc-300 mb-0.5">Generation failed</p>
-      <p className="text-[10px] text-zinc-600 font-mono break-all line-clamp-3">{error}</p>
+      <p style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--pb-ink)', marginBottom: 2 }}>
+        Generation failed
+      </p>
+      <p
+        className="break-all line-clamp-3"
+        style={{
+          fontSize: 10.5,
+          fontFamily: 'DM Mono, monospace',
+          color: 'var(--pb-ink-muted)',
+        }}
+      >
+        {error}
+      </p>
     </div>
   );
 }

@@ -370,7 +370,7 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
         nodesConnectable={false}
         zoomOnScroll={false}
         panOnScroll
-        panOnScrollMode={flowDirection === 'TB' ? PanOnScrollMode.Vertical : PanOnScrollMode.Horizontal}
+        panOnScrollMode={PanOnScrollMode.Free}
       >
         <Background
           variant={BackgroundVariant.Dots}

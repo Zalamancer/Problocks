@@ -60,7 +60,12 @@ function Vec3Row({
 }) {
   return (
     <div className="space-y-1 mb-2">
-      <span className="text-zinc-500 text-xs px-0.5">{label}</span>
+      <span
+        className="px-0.5"
+        style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600 }}
+      >
+        {label}
+      </span>
       <div className="grid grid-cols-3 gap-1">
         {(['x', 'y', 'z'] as const).map(axis => (
           <PanelSlider
@@ -96,12 +101,80 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: 
   }
 
   return (
-    <aside className="w-full md:w-[260px] flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden shrink-0">
-      {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
-        <div className="w-2 h-2 rounded-sm bg-cyan-400" />
-        <span className="text-zinc-200 text-sm font-semibold truncate flex-1">{part.name}</span>
-        <span className="text-zinc-600 text-xs">{part.partType}</span>
+    <aside
+      className="w-full md:w-[260px] flex flex-col rounded-xl overflow-hidden shrink-0"
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      {/* Header — part color tile + name, matches WorkspacePropertiesPanel */}
+      <div
+        className="shrink-0"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 12px',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            background: part.color,
+            border: '1.5px solid var(--pb-ink)',
+            flexShrink: 0,
+          }}
+          aria-label="Part color"
+        />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {part.name}
+        </span>
+      </div>
+
+      {/* Type-badge row — mirrors WorkspacePropertiesPanel's "Part 1 of 1 · TYPE" strip */}
+      <div
+        className="shrink-0"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 12px',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pb-ink-muted)' }}>
+          Part
+        </span>
+        <span
+          style={{
+            padding: '2px 9px',
+            borderRadius: 999,
+            background: 'var(--pb-cream-2)',
+            color: 'var(--pb-ink-muted)',
+            fontSize: 10.5,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            border: '1.5px solid var(--pb-line-2)',
+            textTransform: 'uppercase',
+          }}
+        >
+          {part.partType}
+        </span>
       </div>
 
       {/* Scrollable content */}
@@ -233,7 +306,14 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding }: 
       </div>
 
       {/* Sticky footer */}
-      <footer className="shrink-0 px-4 py-3 border-t border-white/[0.05]">
+      <footer
+        className="shrink-0"
+        style={{
+          padding: 12,
+          borderTop: '1.5px solid var(--pb-line-2)',
+          background: 'var(--pb-paper)',
+        }}
+      >
         <PanelActionButton
           onClick={onDelete}
           variant="destructive"

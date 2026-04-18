@@ -8,13 +8,6 @@ import { useAIBuildModeStore, type BuildMode } from '@/store/ai-library-store';
 
 /**
  * "+" drop-up above the chat input.
- *
- * Top of the drop-up is a single mode toggle:
- *   - "Default blocks" → AI builds using procedural building-kit pieces.
- *   - "My assets"      → AI builds using the user's imported GLB library.
- *
- * Below the toggle, a per-kind palette lets the user pin a specific piece
- * id per kind (used only when mode === 'defaults').
  */
 
 const KIND_ORDER: { kind: PieceKind; label: string }[] = [
@@ -38,7 +31,6 @@ export function ChatAssetPicker() {
   const mode = useAIBuildModeStore((s) => s.mode);
   const setMode = useAIBuildModeStore((s) => s.setMode);
 
-  // Close on outside click / Escape
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
@@ -70,44 +62,79 @@ export function ChatAssetPicker() {
 
   return (
     <div ref={rootRef} className="relative shrink-0">
-      {/* + toggle button */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors border relative ${
-          open
-            ? 'bg-accent/15 border-accent/40 text-accent'
-            : 'bg-panel-surface border-panel-border text-zinc-400 hover:bg-panel-surface-hover hover:text-zinc-200'
-        }`}
+        className="flex items-center justify-center transition-colors relative"
+        style={{
+          height: 40,
+          width: 40,
+          borderRadius: 10,
+          background: open ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+          border: `1.5px solid ${open ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+          boxShadow: open ? '0 2px 0 var(--pb-ink)' : 'none',
+          color: open ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
+          cursor: 'pointer',
+        }}
         title={`AI build source: ${mode === 'assets' ? 'My assets' : 'Default blocks'}`}
         aria-label="Open AI build source picker"
       >
-        <Plus size={18} className={open ? 'rotate-45 transition-transform' : 'transition-transform'} />
+        <Plus
+          size={18}
+          strokeWidth={2.4}
+          className={open ? 'rotate-45 transition-transform' : 'transition-transform'}
+        />
       </button>
 
-      {/* Drop-up panel */}
       {open && (
         <div
-          className="absolute bottom-full left-0 mb-2 w-[320px] max-h-[420px] bg-zinc-900/95 backdrop-blur-xl border border-panel-border rounded-xl shadow-2xl overflow-hidden z-dropdown flex flex-col"
+          className="absolute bottom-full left-0 mb-2 z-dropdown flex flex-col overflow-hidden"
+          style={{
+            width: 320,
+            maxHeight: 420,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-ink)',
+            borderRadius: 14,
+            boxShadow: '0 4px 0 var(--pb-ink), 0 16px 32px rgba(29,26,20,0.14)',
+          }}
           role="dialog"
         >
           {/* Mode toggle */}
-          <div className="shrink-0 px-3 py-2 border-b border-white/5">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">
+          <div
+            className="shrink-0 px-3 py-2"
+            style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+          >
+            <div
+              className="mb-1.5"
+              style={{
+                fontSize: 10,
+                color: 'var(--pb-ink-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                fontWeight: 700,
+              }}
+            >
               AI builds from
             </div>
-            <div className="grid grid-cols-2 gap-1 p-1 bg-panel-surface rounded-lg">
+            <div
+              className="grid grid-cols-2 gap-1 p-1"
+              style={{
+                background: 'var(--pb-cream-2)',
+                border: '1.5px solid var(--pb-line-2)',
+                borderRadius: 10,
+              }}
+            >
               <ModeButton
                 active={mode === 'defaults'}
                 onClick={() => setMode('defaults')}
-                icon={<Boxes size={13} />}
+                icon={<Boxes size={13} strokeWidth={2.2} />}
                 label="Default blocks"
                 sub="Procedural pieces"
               />
               <ModeButton
                 active={mode === 'assets'}
                 onClick={() => setMode('assets')}
-                icon={<Library size={13} />}
+                icon={<Library size={13} strokeWidth={2.2} />}
                 label="My assets"
                 sub="Imported GLB models"
               />
@@ -117,23 +144,47 @@ export function ChatAssetPicker() {
           {mode === 'defaults' ? (
             <>
               {/* Sub-header */}
-              <div className="shrink-0 px-3 py-2 border-b border-white/5 flex items-center justify-between">
-                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">
+              <div
+                className="shrink-0 px-3 py-2 flex items-center justify-between"
+                style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--pb-ink-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    fontWeight: 700,
+                  }}
+                >
                   Pin piece per kind (optional)
                 </div>
                 <button
                   type="button"
                   onClick={resetAllToDefaults}
-                  className="text-[10px] text-zinc-400 hover:text-zinc-100 flex items-center gap-1"
+                  className="flex items-center gap-1 transition-colors"
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: 'var(--pb-ink-muted)',
+                    background: 'transparent',
+                    border: 0,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pb-ink)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pb-ink-muted)'; }}
                   title="Reset all kinds to defaults"
                 >
-                  <RotateCcw size={11} />
+                  <RotateCcw size={11} strokeWidth={2.2} />
                   Reset
                 </button>
               </div>
 
               {/* Kind tabs */}
-              <div className="shrink-0 px-2 py-2 border-b border-white/5 overflow-x-auto">
+              <div
+                className="shrink-0 px-2 py-2 overflow-x-auto"
+                style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+              >
                 <div className="flex gap-1">
                   {KIND_ORDER.map(({ kind, label }) => {
                     const active = activeKind === kind;
@@ -144,14 +195,29 @@ export function ChatAssetPicker() {
                         key={kind}
                         type="button"
                         onClick={() => setActiveKind(kind)}
-                        className={`shrink-0 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border ${
-                          active
-                            ? 'bg-accent text-white border-accent'
-                            : 'bg-panel-surface text-zinc-300 border-panel-border hover:bg-panel-surface-hover'
-                        }`}
+                        className="shrink-0 transition-colors"
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 8,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          background: active ? 'var(--pb-mint)' : 'var(--pb-paper)',
+                          color: active ? 'var(--pb-mint-ink)' : 'var(--pb-ink)',
+                          border: `1.5px solid ${active ? 'var(--pb-mint-ink)' : 'var(--pb-line-2)'}`,
+                          boxShadow: active ? '0 2px 0 var(--pb-mint-ink)' : 'none',
+                          cursor: 'pointer',
+                        }}
                       >
                         {label}
-                        {!dflt && <span className="ml-1 text-[9px] opacity-70">●</span>}
+                        {!dflt && (
+                          <span
+                            className="ml-1"
+                            style={{ fontSize: 9, color: 'var(--pb-coral-ink)' }}
+                          >
+                            ●
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -159,20 +225,49 @@ export function ChatAssetPicker() {
               </div>
 
               {/* Current + default toggle row */}
-              <div className="shrink-0 px-3 py-2 border-b border-white/5 flex items-center gap-2">
-                <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Using</div>
-                <div className="text-xs text-zinc-200 font-mono truncate flex-1" title={currentId}>
+              <div
+                className="shrink-0 px-3 py-2 flex items-center gap-2"
+                style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--pb-ink-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    fontWeight: 700,
+                  }}
+                >
+                  Using
+                </div>
+                <div
+                  className="truncate flex-1"
+                  style={{
+                    fontSize: 11.5,
+                    fontFamily: 'DM Mono, monospace',
+                    color: 'var(--pb-ink)',
+                  }}
+                  title={currentId}
+                >
                   {currentId}
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedPiece(activeKind, defaultId)}
                   disabled={isAtDefault}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                    isAtDefault
-                      ? 'border-white/10 text-zinc-600 cursor-default'
-                      : 'border-panel-border text-zinc-300 hover:bg-panel-surface-hover'
-                  }`}
+                  className="transition-colors"
+                  style={{
+                    padding: '2px 10px',
+                    borderRadius: 8,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    background: isAtDefault ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+                    color: isAtDefault ? 'var(--pb-ink-muted)' : 'var(--pb-ink)',
+                    border: `1.5px solid ${isAtDefault ? 'var(--pb-line-2)' : 'var(--pb-ink)'}`,
+                    boxShadow: isAtDefault ? 'none' : '0 2px 0 var(--pb-ink)',
+                    cursor: isAtDefault ? 'default' : 'pointer',
+                  }}
                   title="Use the built-in default for this kind"
                 >
                   Default
@@ -190,25 +285,56 @@ export function ChatAssetPicker() {
                         key={p.id}
                         type="button"
                         onClick={() => setSelectedPiece(activeKind, p.id)}
-                        className={`relative group rounded-lg border overflow-hidden transition-all aspect-square flex flex-col items-center justify-end ${
-                          active
-                            ? 'border-accent ring-1 ring-accent'
-                            : 'border-panel-border hover:border-white/20'
-                        }`}
+                        className="relative group overflow-hidden transition-all aspect-square flex flex-col items-center justify-end"
+                        style={{
+                          borderRadius: 10,
+                          border: `1.5px solid ${active ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+                          boxShadow: active ? '0 2px 0 var(--pb-ink)' : 'none',
+                          cursor: 'pointer',
+                        }}
                         title={`${p.label}\n${p.id}${isDefault ? '\n(default)' : ''}`}
                       >
                         <div className="absolute inset-0" style={{ backgroundColor: p.swatch }} />
                         {active && (
-                          <div className="absolute top-1 right-1 bg-accent rounded-full p-0.5 shadow">
-                            <Check size={10} className="text-white" strokeWidth={3} />
+                          <div
+                            className="absolute top-1 right-1 flex items-center justify-center"
+                            style={{
+                              width: 16,
+                              height: 16,
+                              borderRadius: 999,
+                              background: 'var(--pb-mint)',
+                              border: '1.5px solid var(--pb-mint-ink)',
+                            }}
+                          >
+                            <Check size={9} strokeWidth={3.2} style={{ color: 'var(--pb-mint-ink)' }} />
                           </div>
                         )}
                         {isDefault && !active && (
-                          <div className="absolute top-1 right-1 text-[8px] text-white/90 bg-black/50 px-1 rounded">
+                          <div
+                            className="absolute top-1 right-1"
+                            style={{
+                              padding: '1px 5px',
+                              borderRadius: 6,
+                              fontSize: 8,
+                              fontWeight: 700,
+                              background: 'var(--pb-paper)',
+                              color: 'var(--pb-ink)',
+                              border: '1.5px solid var(--pb-ink)',
+                            }}
+                          >
                             def
                           </div>
                         )}
-                        <div className="relative w-full px-1 py-0.5 bg-black/60 backdrop-blur-sm text-[9px] text-white truncate text-left">
+                        <div
+                          className="relative w-full px-1 py-0.5 truncate text-left"
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            background: 'var(--pb-paper)',
+                            color: 'var(--pb-ink)',
+                            borderTop: '1.5px solid var(--pb-line-2)',
+                          }}
+                        >
                           {p.label}
                         </div>
                       </button>
@@ -219,18 +345,44 @@ export function ChatAssetPicker() {
             </>
           ) : (
             <div className="flex-1 overflow-y-auto px-4 py-5 text-center">
-              <Library size={28} className="mx-auto text-accent mb-2" />
-              <div className="text-sm text-zinc-200 font-medium mb-1">
+              <Library
+                size={28}
+                strokeWidth={2.2}
+                className="mx-auto mb-2"
+                style={{ color: 'var(--pb-grape-ink)' }}
+              />
+              <div
+                className="mb-1"
+                style={{ fontSize: 14, fontWeight: 700, color: 'var(--pb-ink)' }}
+              >
                 Using imported assets
               </div>
-              <div className="text-xs text-zinc-400 leading-relaxed">
+              <div
+                className="leading-relaxed"
+                style={{ fontSize: 12, color: 'var(--pb-ink-soft)' }}
+              >
                 The AI will build scenes using your GLB library from
-                <span className="mx-1 font-mono text-zinc-300">/assets/medieval/</span>
+                <span
+                  className="mx-1"
+                  style={{
+                    fontFamily: 'DM Mono, monospace',
+                    color: 'var(--pb-ink)',
+                    fontWeight: 600,
+                  }}
+                >
+                  /assets/medieval/
+                </span>
                 instead of procedural blocks.
               </div>
-              <div className="text-[10px] text-zinc-500 mt-3">
-                Switch back to <span className="text-zinc-300">Default blocks</span>
-                {' '}anytime.
+              <div
+                className="mt-3"
+                style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}
+              >
+                Switch back to{' '}
+                <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>
+                  Default blocks
+                </span>{' '}
+                anytime.
               </div>
             </div>
           )}
@@ -257,22 +409,37 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-2 rounded-md text-left transition-colors ${
-        active
-          ? 'bg-accent text-white shadow'
-          : 'text-zinc-300 hover:bg-panel-surface-hover'
-      }`}
+      className="text-left transition-colors"
+      style={{
+        padding: '7px 11px',
+        borderRadius: 8,
+        background: active ? 'var(--pb-mint)' : 'transparent',
+        color: active ? 'var(--pb-mint-ink)' : 'var(--pb-ink)',
+        border: active ? '1.5px solid var(--pb-mint-ink)' : '1.5px solid transparent',
+        boxShadow: active ? '0 2px 0 var(--pb-mint-ink)' : 'none',
+        cursor: 'pointer',
+      }}
     >
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+      <div
+        className="flex items-center gap-1.5"
+        style={{ fontSize: 11, fontWeight: 700 }}
+      >
         {icon}
         {label}
       </div>
-      <div className={`text-[9px] mt-0.5 ${active ? 'text-white/75' : 'text-zinc-500'}`}>
+      <div
+        className="mt-0.5"
+        style={{
+          fontSize: 9,
+          fontWeight: 500,
+          opacity: active ? 0.8 : 1,
+          color: active ? 'var(--pb-mint-ink)' : 'var(--pb-ink-muted)',
+        }}
+      >
         {sub}
       </div>
     </button>
   );
 }
 
-// Re-export for callers that want to read mode alongside the picker
 export type { BuildMode };

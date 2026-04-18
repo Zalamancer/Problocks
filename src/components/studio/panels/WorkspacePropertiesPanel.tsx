@@ -254,7 +254,16 @@ function RgbRow({
 
   return (
     <div className="flex items-center gap-2 py-1">
-      <label className="text-[10px] uppercase tracking-wide text-zinc-400 flex-1 truncate">
+      <label
+        className="flex-1 truncate"
+        style={{
+          fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          fontWeight: 700,
+          color: 'var(--pb-ink-muted)',
+        }}
+      >
         {label}
       </label>
       <input
@@ -268,9 +277,24 @@ function RgbRow({
             b: parseInt(h.slice(4, 6), 16),
           });
         }}
-        className="w-8 h-6 rounded border border-white/10 bg-transparent cursor-pointer"
+        className="cursor-pointer"
+        style={{
+          width: 32,
+          height: 24,
+          borderRadius: 6,
+          border: '1.5px solid var(--pb-line-2)',
+          background: 'transparent',
+        }}
       />
-      <span className="text-[10px] font-mono text-zinc-500 w-20 text-right tabular-nums">
+      <span
+        className="w-20 text-right tabular-nums"
+        style={{
+          fontSize: 10,
+          fontFamily: 'DM Mono, monospace',
+          color: 'var(--pb-ink-muted)',
+          fontWeight: 600,
+        }}
+      >
         {value.r},{value.g},{value.b}
       </span>
     </div>

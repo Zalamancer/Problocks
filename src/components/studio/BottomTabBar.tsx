@@ -1,8 +1,11 @@
 'use client';
 import { Box, Kanban, Workflow, Settings, TerminalSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useStudio, type ViewMode } from '@/store/studio-store';
+
+// Bottom view-switcher tab strip — restyled with the design-bundle's chunky
+// pastel/ink border aesthetic. Ported from the pill-pattern used in
+// /tmp/design_bundle/problocks/project/studio/topbar.jsx (pipeline legend).
 
 interface TabDef {
   id: ViewMode;
@@ -28,42 +31,93 @@ export function BottomTabBar({ terminalOpen, onToggleTerminal }: BottomTabBarPro
   const setViewMode = useStudio((s) => s.setViewMode);
 
   return (
-    <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-t border-white/5 bg-zinc-900/60">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const active = tab.id === viewMode;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setViewMode(tab.id)}
-            title={tab.shortcut ? `${tab.label} (${tab.shortcut})` : tab.label}
-            className={cn(
-              'flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-medium transition-colors',
-              active
-                ? 'bg-white text-black'
-                : 'text-zinc-400 hover:text-white hover:bg-panel-surface',
-            )}
-          >
-            <Icon size={13} className="shrink-0" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
+    <div
+      className="shrink-0"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '6px 10px',
+        background: 'var(--pb-paper)',
+        borderTop: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          padding: 2,
+          borderRadius: 999,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const active = tab.id === viewMode;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setViewMode(tab.id)}
+              title={tab.shortcut ? `${tab.label} (${tab.shortcut})` : tab.label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 12px',
+                borderRadius: 999,
+                background: active ? 'var(--pb-paper)' : 'transparent',
+                color: active ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+                border: 0,
+                boxShadow: active
+                  ? '0 1px 2px rgba(29,26,20,0.08), inset 0 0 0 1.5px var(--pb-ink)'
+                  : 'none',
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                transition: 'background 120ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = 'var(--pb-paper)';
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <Icon size={13} strokeWidth={2.2} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
       {onToggleTerminal && (
         <button
           type="button"
           onClick={onToggleTerminal}
           title={`Terminal (${typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac') ? '⌘J' : 'Ctrl+J'})`}
-          className={cn(
-            'ml-auto flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-medium transition-colors',
-            terminalOpen
-              ? 'bg-accent/15 text-accent'
-              : 'text-zinc-400 hover:text-white hover:bg-panel-surface',
-          )}
+          style={{
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '5px 12px',
+            borderRadius: 999,
+            background: terminalOpen ? 'var(--pb-grape)' : 'transparent',
+            color: terminalOpen ? 'var(--pb-grape-ink)' : 'var(--pb-ink-soft)',
+            border: `1.5px solid ${terminalOpen ? 'var(--pb-grape-ink)' : 'var(--pb-line-2)'}`,
+            boxShadow: terminalOpen ? '0 1.5px 0 var(--pb-grape-ink)' : 'none',
+            fontSize: 12,
+            fontWeight: 600,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            transition: 'background 120ms ease',
+          }}
         >
-          <TerminalSquare size={13} className="shrink-0" />
+          <TerminalSquare size={13} strokeWidth={2.2} />
           <span>Terminal</span>
         </button>
       )}

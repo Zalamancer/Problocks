@@ -434,11 +434,11 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
             pointerEvents: 'auto',
           }}
         >
-          {[
+          {([
             { icon: ZoomOut,  label: 'Zoom out' },
             { icon: Grid3x3,  label: 'Grid'     },
             { icon: ZoomIn,   label: 'Zoom in'  },
-          ].map(({ icon: I, label }) => (
+          ] as const).map(({ icon: I, label }) => (
             <button
               key={label}
               type="button"
@@ -462,6 +462,35 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Pipeline legend — ported from canvas.jsx legend strip. Shows the six
+          AI-tool tones as pastel pills in the bottom-left of the canvas. */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 14,
+          left: 14,
+          zIndex: 3,
+          display: 'flex',
+          gap: 6,
+          flexWrap: 'wrap',
+          maxWidth: 420,
+          pointerEvents: 'none',
+        }}
+      >
+        {([
+          { tone: 'grape',  label: 'Claude'     },
+          { tone: 'pink',   label: 'PixelLab'   },
+          { tone: 'sky',    label: 'Meshy'      },
+          { tone: 'mint',   label: 'Suno'       },
+          { tone: 'butter', label: 'ElevenLabs' },
+          { tone: 'ink',    label: 'Game'       },
+        ] as const).map((p) => (
+          <Pill key={p.label} tone={p.tone} style={{ pointerEvents: 'auto' }}>
+            {p.label}
+          </Pill>
+        ))}
       </div>
     </div>
   )

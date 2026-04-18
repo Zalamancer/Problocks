@@ -43,6 +43,27 @@
   /* Glass */
   --glass-bg: rgba(24, 24, 27, 0.65);
   --glass-border: rgba(255, 255, 255, 0.05);
+
+  /* Problocks Studio design-bundle tone palette. Fallback values for dark
+     and light themes — cream overrides with the full-saturation design
+     bundle values. Used by ported components (ConnectorsPanel, Pill, PBButton).
+     "Ink" is the matching dark companion used for borders + text on that tone. */
+  --pb-butter:     #ffd84d;  --pb-butter-ink: #6b4f00;
+  --pb-mint:       #b6f0c6;  --pb-mint-ink:   #0f5b2e;
+  --pb-coral:      #ffb4a2;  --pb-coral-ink:  #7a2a18;
+  --pb-sky:        #b9d9ff;  --pb-sky-ink:    #1b4a8a;
+  --pb-grape:      #dcc7ff;  --pb-grape-ink:  #4d2a8a;
+  --pb-pink:       #ffc8e0;  --pb-pink-ink:   #8a1e5c;
+
+  /* Paper surfaces — in dark fall back to the panel tokens so the chunky
+     stacked shadow still has contrast. Cream resets these to real paper. */
+  --pb-paper:     var(--panel-bg);
+  --pb-cream-2:   var(--panel-surface);
+  --pb-line:      var(--panel-border);
+  --pb-line-2:    var(--panel-border);
+  --pb-ink:       #e4e4e7;
+  --pb-ink-soft:  #a1a1aa;
+  --pb-ink-muted: #71717a;
 }
 
 /* ── Light theme: CSS var overrides ── */
@@ -480,6 +501,33 @@ body {
   /* Fonts — the playful display/body/mono stack from the design mock */
   --font-geist-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-geist-mono: var(--font-dm-mono), ui-monospace, monospace;
+
+  /* Six-tone pastel palette ported verbatim from the Problocks Studio design
+     bundle (project/studio/atoms.jsx NODE_TONES + primitives.jsx Pill tones).
+     Each tone pairs a pastel bg with a dark "ink" counterpart for border+text
+     so Pill, PBButton, and ConnectorRow can render the chunky stacked-paper
+     look (boxShadow: 0 Npx 0 var(--tone-ink)) without re-deriving colors. */
+  --pb-butter:     #ffd84d;
+  --pb-butter-ink: #6b4f00;
+  --pb-mint:       #b6f0c6;
+  --pb-mint-ink:   #0f5b2e;
+  --pb-coral:      #ffb4a2;
+  --pb-coral-ink:  #7a2a18;
+  --pb-sky:        #b9d9ff;
+  --pb-sky-ink:    #1b4a8a;
+  --pb-grape:      #dcc7ff;
+  --pb-grape-ink:  #4d2a8a;
+  --pb-pink:       #ffc8e0;
+  --pb-pink-ink:   #8a1e5c;
+
+  /* Paper surfaces used by the design's card/pill stacks. Match atoms.jsx. */
+  --pb-paper:   #fffaf0;
+  --pb-cream-2: #f7edd4;
+  --pb-line:    #e8dcbc;
+  --pb-line-2:  #d6c896;
+  --pb-ink:     #1d1a14;
+  --pb-ink-soft:  #57524a;
+  --pb-ink-muted: #8a8478;
 }
 
 .cream body {

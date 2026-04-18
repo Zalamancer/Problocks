@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageSquare, Sparkles, Square, Layers, Box } from 'lucide-react';
-import { PanelTextarea, PanelActionButton } from '@/components/ui';
+import { PanelTextarea, PanelActionButton, SectionLabel } from '@/components/ui';
 import { useSceneStore, type PartType, type ScenePart } from '@/store/scene-store';
 import { useBuildingStore, type EdgeDir, type Facing } from '@/store/building-store';
 import type { PieceKind } from '@/lib/building-kit';
@@ -516,30 +516,49 @@ function EmptyChatHint({
   onPick: (prompt: string) => void;
 }) {
   const prompts = chatMode === 'part' ? PART_PROMPTS : SCENE_PROMPTS;
-  const heading = chatMode === 'part' ? 'Generate a part' : 'Jump into the studio';
+  const heading = chatMode === 'part' ? 'Generate a part' : 'Jump into Claude';
   const sub =
     chatMode === 'part'
       ? 'Describe a low-poly asset and Claude will generate it. Try one to get started:'
       : 'Ask Claude to change anything about your scene. Try one of these to get started:';
 
   return (
-    <div className="px-1">
-      <div className="flex items-center gap-2 mb-1">
-        <MessageSquare size={14} className="text-zinc-500" />
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
-          {heading}
-        </span>
+    <div style={{ padding: '4px 4px 0' }}>
+      <SectionLabel>{heading}</SectionLabel>
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--pb-ink-soft)',
+          lineHeight: 1.45,
+          marginBottom: 12,
+        }}
+      >
+        {sub}
       </div>
-      <p className="text-xs text-zinc-500 leading-relaxed mb-3">{sub}</p>
-      <div className="flex flex-col gap-1.5">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {prompts.map((q) => (
           <button
             key={q}
             type="button"
             onClick={() => onPick(q)}
-            className="text-left px-3 py-2.5 rounded-xl bg-panel-surface border border-panel-border text-sm text-zinc-200 hover:bg-panel-surface-hover hover:border-accent/40 transition-colors"
+            style={{
+              textAlign: 'left',
+              padding: '9px 11px',
+              borderRadius: 10,
+              background: 'var(--pb-cream-2)',
+              border: '1.5px solid var(--pb-line-2)',
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: 'var(--pb-ink)',
+              lineHeight: 1.3,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
           >
-            <Sparkles size={11} className="inline-block mr-2 text-purple-300 align-[-1px]" />
+            <Sparkles
+              size={10}
+              style={{ marginRight: 6, color: 'var(--pb-grape-ink)', verticalAlign: '-1px' }}
+            />
             {q}
           </button>
         ))}

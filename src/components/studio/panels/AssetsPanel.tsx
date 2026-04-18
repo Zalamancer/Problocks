@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Box, SlidersHorizontal, Shapes, Package, Sparkles, X, Star } from 'lucide-react';
-import { PanelSearchInput, PanelSelect, PanelIconTabs, PanelActionButton } from '@/components/ui';
+import { Box, SlidersHorizontal, Shapes, Package, X, Star } from 'lucide-react';
+import { PanelSearchInput, PanelSelect, PanelIconTabs } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { AssetThumbnail } from '@/components/studio/AssetThumbnail';
 import { PiecePreview } from '@/components/studio/PiecePreview';
@@ -705,54 +705,10 @@ function PartsView() {
 function CustomModelsSection() {
   const savedModels = usePartStudio((s) => s.savedModels);
   const removeSavedModel = usePartStudio((s) => s.removeSavedModel);
-  const setLeftPanelGroup = useStudio((s) => s.setLeftPanelGroup);
-  const setPartsActiveTab = useStudio((s) => s.setPartsActiveTab);
   const [collapsed, setCollapsed] = useState(false);
 
   if (savedModels.length === 0) {
-    return (
-      <div className="shrink-0 px-3 pt-3 pb-2">
-        <div
-          className="p-3 text-center"
-          style={{
-            borderRadius: 12,
-            background: 'var(--pb-cream-2)',
-            border: '1.5px dashed var(--pb-line-2)',
-          }}
-        >
-          <div
-            className="inline-flex items-center justify-center mb-2"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 8,
-              background: 'var(--pb-grape)',
-              color: 'var(--pb-grape-ink)',
-              border: '1.5px solid var(--pb-grape-ink)',
-            }}
-          >
-            <Sparkles size={14} strokeWidth={2.4} />
-          </div>
-          <p
-            className="leading-relaxed mb-2"
-            style={{ fontSize: 11.5, color: 'var(--pb-ink-soft)' }}
-          >
-            Generate low-poly assets from prompts — each capped at ~100 verts.
-          </p>
-          <PanelActionButton
-            variant="secondary"
-            icon={Sparkles}
-            onClick={() => {
-              setLeftPanelGroup('parts');
-              setPartsActiveTab('generate');
-            }}
-            fullWidth
-          >
-            Open Part Studio
-          </PanelActionButton>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

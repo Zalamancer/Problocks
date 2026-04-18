@@ -122,12 +122,14 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, he
 
         {/* ── Transform ── */}
         <TransformControls
-          position={part.position}
-          rotation={part.rotation}
-          scale={part.scale}
-          onPositionChange={v => set('position', v)}
-          onRotationChange={v => set('rotation', v)}
-          onScaleChange={v => set('scale', v)}
+          label="Transform"
+          transform={{
+            position: part.position,
+            rotation: part.rotation,
+            scale: part.scale,
+            visible: part.visible,
+          }}
+          onChange={(t) => onUpdate(t as Partial<ScenePart>)}
         />
 
         {/* ── Appearance ── */}
@@ -184,11 +186,6 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, he
             checked={part.anchored}
             onChange={v => set('anchored', v)}
             description="won't move"
-          />
-          <PanelToggle
-            label="Visible"
-            checked={part.visible}
-            onChange={v => set('visible', v)}
           />
         </PanelSection>
       </div>

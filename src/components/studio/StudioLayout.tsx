@@ -415,15 +415,17 @@ export function StudioLayout() {
 
             {/* Main view */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              {/* Code view — opened from file tree */}
-              {openFileName && gameHtml && !terminalMaximized ? (() => {
+              {/* Code view — opened from file tree or Code tab */}
+              {openFileName && !terminalMaximized ? (() => {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
-                const directContent = activeGame?.files?.[openFileName] ?? undefined;
+                const directContent = activeGame?.files?.[openFileName];
+                // When there's no game/file yet, show an empty file instead of nothing.
+                const content = directContent ?? (gameHtml ? undefined : '');
                 return (
                   <CodeView
-                    html={gameHtml}
+                    html={gameHtml ?? ''}
                     fileName={openFileName}
-                    fileContent={directContent}
+                    fileContent={content}
                     onClose={() => setOpenFileName(null)}
                     onSwitchToPreview={() => setOpenFileName(null)}
                   />

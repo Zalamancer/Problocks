@@ -88,7 +88,8 @@ const VIEW_TABS: ViewTab[] = [
     icon: Code2,
     isActive: (c) => !!c.openFileName,
     activate: (c) => {
-      if (c.activeGameFirstFile) c.setOpenFileName(c.activeGameFirstFile);
+      // Fall back to an empty virtual file so the Code tab always shows something.
+      c.setOpenFileName(c.activeGameFirstFile ?? 'untitled.js');
     },
   },
   {

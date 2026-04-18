@@ -45,22 +45,19 @@ interface TaskNodeData {
 
 type TaskNode = Node<TaskNodeData, 'task'>
 
-const AI_TOOL_DOT: Record<AITool, string> = {
-  claude:     'bg-purple-400',
-  pixellab:   'bg-pink-400',
-  suno:       'bg-green-400',
-  elevenlabs: 'bg-blue-400',
-  freepik:    'bg-yellow-400',
-  meshy:      'bg-orange-400',
+// AI tool → design-bundle tone (NODE_TONES in atoms.jsx). Each tool gets its
+// own pastel header so the canvas reads the same as the design screenshot.
+const TOOL_TONE: Record<AITool, { bg: string; ink: string; label: string }> = {
+  claude:     { bg: 'var(--pb-grape)',  ink: 'var(--pb-grape-ink)',  label: 'CLAUDE'     },
+  pixellab:   { bg: 'var(--pb-pink)',   ink: 'var(--pb-pink-ink)',   label: 'PIXELLAB'   },
+  suno:       { bg: 'var(--pb-mint)',   ink: 'var(--pb-mint-ink)',   label: 'SUNO'       },
+  elevenlabs: { bg: 'var(--pb-butter)', ink: 'var(--pb-butter-ink)', label: 'ELEVENLABS' },
+  freepik:    { bg: 'var(--pb-coral)',  ink: 'var(--pb-coral-ink)',  label: 'FREEPIK'    },
+  meshy:      { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)',    label: 'MESHY'      },
 }
 
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  blocked:     'text-zinc-600',
-  todo:        'text-zinc-400',
-  in_progress: 'text-blue-400',
-  review:      'text-amber-400',
-  done:        'text-green-400',
-}
+// Fallback tone for tasks without an AI tool: coral = prompt/design step.
+const PROMPT_TONE = { bg: 'var(--pb-coral)', ink: 'var(--pb-coral-ink)', label: 'DESIGN' }
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   blocked:     'Blocked',
@@ -70,75 +67,172 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   done:        'Done',
 }
 
-// ─── Custom Task Node ─────────────────────────────────────────────────────────
+// Status → mint/butter/coral status pill color.
+const STATUS_TONE: Record<TaskStatus, { bg: string; ink: string }> = {
+  blocked:     { bg: 'var(--pb-paper)',  ink: 'var(--pb-ink-muted)'  },
+  todo:        { bg: 'var(--pb-paper)',  ink: 'var(--pb-ink-soft)'   },
+  in_progress: { bg: 'var(--pb-butter)', ink: 'var(--pb-butter-ink)' },
+  review:      { bg: 'var(--pb-sky)',    ink: 'var(--pb-sky-ink)'    },
+  done:        { bg: 'var(--pb-mint)',   ink: 'var(--pb-mint-ink)'   },
+}
 
-function TaskNodeComponent({ data }: NodeProps) {
+// ─── Custom Task Node ─────────────────────────────────────────────────────────
+// Ported from /tmp/design_bundle/problocks/project/studio/canvas.jsx → NodeCard:
+// colored pastel header with 1.5px ink border-bottom + uppercase label, paper
+// body, chunky stacked drop shadow (0 2px 0 <ink>). Selected state thickens
+// the shadow (0 4px 0 ink) and adds a 24px soft drop for lift.
+
+function TaskNodeComponent({ data, selected }: NodeProps) {
   const d = data as TaskNodeData
   const isBlocked = d.status === 'blocked'
   const isDone = d.status === 'done'
+  const primaryTool = d.aiTools[0]
+  const tone = primaryTool ? TOOL_TONE[primaryTool] : PROMPT_TONE
+  const statusTone = STATUS_TONE[d.status]
 
   return (
     <div
-      className={cn(
-        'w-44 bg-zinc-900 border rounded-xl overflow-hidden shadow-xl transition-all duration-150',
-        isBlocked ? 'border-white/[0.04] opacity-50' : 'border-white/[0.10]',
-        isDone && 'opacity-60',
-        d.isActiveColumn && !isBlocked && 'cursor-pointer hover:border-white/20',
-      )}
+      style={{
+        width: 200,
+        background: 'var(--pb-paper)',
+        color: 'var(--pb-ink)',
+        border: `1.5px solid ${selected ? tone.ink : 'var(--pb-line-2)'}`,
+        borderRadius: 14,
+        boxShadow: selected
+          ? `0 4px 0 ${tone.ink}, 0 8px 24px rgba(29,26,20,0.14)`
+          : `0 2px 0 var(--pb-line-2)`,
+        overflow: 'hidden',
+        opacity: isBlocked ? 0.55 : 1,
+        cursor: d.isActiveColumn && !isBlocked ? 'pointer' : 'default',
+        transition: 'box-shadow 120ms ease, border-color 120ms ease',
+      }}
     >
-      {/* Milestone color bar */}
-      <div className="h-[3px]" style={{ backgroundColor: d.milestoneColor }} />
-
-      {/* Milestone label */}
-      <div className="px-3 pt-2 pb-0">
-        <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: d.milestoneColor }}>
+      {/* Colored header: pastel bg, ink text, uppercase label, 1.5px ink border-bottom */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '7px 10px',
+          background: tone.bg,
+          color: tone.ink,
+          borderBottom: `1.5px solid ${tone.ink}`,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {tone.label}
+        </span>
+        <div style={{ flex: 1 }} />
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            opacity: 0.65,
+          }}
+          title={d.milestoneName}
+        >
           {d.milestoneName}
         </span>
       </div>
 
-      {/* Title */}
-      <div className="px-3 pt-1 pb-2">
+      {/* Body */}
+      <div style={{ padding: '9px 11px 10px' }}>
         <div className="flex items-start gap-1.5">
-          {isBlocked && <Lock size={10} className="flex-shrink-0 text-zinc-600 mt-0.5" />}
-          {isDone && <Check size={10} className="flex-shrink-0 text-green-500 mt-0.5" />}
-          <span className={cn(
-            'text-[11px] font-medium text-zinc-200 leading-snug',
-            isDone && 'line-through text-zinc-500',
-          )}>
+          {isBlocked && <Lock size={10} style={{ flexShrink: 0, color: 'var(--pb-ink-muted)', marginTop: 2 }} />}
+          {isDone && <Check size={10} style={{ flexShrink: 0, color: 'var(--pb-mint-ink)', marginTop: 2 }} />}
+          <div
+            style={{
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: 'var(--pb-ink)',
+              lineHeight: 1.3,
+              textDecoration: isDone ? 'line-through' : 'none',
+            }}
+          >
             {d.title}
+          </div>
+        </div>
+
+        {/* Status + secondary AI tool dots */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 8,
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 7px',
+              borderRadius: 999,
+              background: statusTone.bg,
+              color: statusTone.ink,
+              border: `1px solid ${statusTone.ink}`,
+              fontSize: 9.5,
+              fontWeight: 700,
+              letterSpacing: '0.02em',
+            }}
+          >
+            {STATUS_LABEL[d.status]}
           </span>
+          {d.aiTools.length > 1 && (
+            <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
+              {(d.aiTools as AITool[]).slice(1).map((tool) => (
+                <span
+                  key={tool}
+                  title={tool}
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: TOOL_TONE[tool].bg,
+                    border: `1px solid ${TOOL_TONE[tool].ink}`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-3 pb-2.5 flex items-center gap-1.5">
-        <span className={cn('text-[9px] font-medium', STATUS_COLOR[d.status])}>
-          {STATUS_LABEL[d.status]}
-        </span>
-        {d.aiTools.length > 0 && (
-          <div className="flex gap-1 ml-auto">
-            {(d.aiTools as AITool[]).map((tool) => (
-              <span key={tool} title={tool} className={cn('w-1.5 h-1.5 rounded-full', AI_TOOL_DOT[tool])} />
-            ))}
-          </div>
-        )}
-      </div>
-
+      {/* Handles — styled as chunky ink-bordered dots to match design's connector dots */}
       <Handle
         type="target"
         position={d.flowDirection === 'TB' ? Position.Top : Position.Left}
         className={cn(
-          '!w-2 !h-2 !bg-zinc-700 !border-zinc-500',
-          d.flowDirection === 'TB' ? '!-top-1' : '!-left-1',
+          d.flowDirection === 'TB' ? '!-top-1.5' : '!-left-1.5',
         )}
+        style={{
+          width: 12,
+          height: 12,
+          background: 'var(--pb-paper)',
+          border: `2px solid ${tone.ink}`,
+        }}
       />
       <Handle
         type="source"
         position={d.flowDirection === 'TB' ? Position.Bottom : Position.Right}
         className={cn(
-          '!w-2 !h-2 !bg-zinc-700 !border-zinc-500',
-          d.flowDirection === 'TB' ? '!-bottom-1' : '!-right-1',
+          d.flowDirection === 'TB' ? '!-bottom-1.5' : '!-right-1.5',
         )}
+        style={{
+          width: 12,
+          height: 12,
+          background: 'var(--pb-paper)',
+          border: `2px solid ${tone.ink}`,
+        }}
       />
     </div>
   )
@@ -148,8 +242,8 @@ const NODE_TYPES = { task: TaskNodeComponent }
 
 // ─── Layout with dagre ────────────────────────────────────────────────────────
 
-const NODE_W = 176
-const NODE_H = 110
+const NODE_W = 200
+const NODE_H = 118
 
 function applyDagreLayout(nodes: TaskNode[], edges: Edge[], direction: FlowDirection): TaskNode[] {
   const g = new dagre.graphlib.Graph()

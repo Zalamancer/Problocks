@@ -22,6 +22,11 @@ import { useSceneStore, type PartType } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 import { useLightingStore } from '@/store/lighting-store';
+import { SectionLabel, type PBTone } from '@/components/ui';
+
+// Ported from /tmp/design_bundle2/problocks/project/studio/leftpanel.jsx
+// SceneTab — grouped rows with colored ToneBadge-style tiles, chunky
+// cream-2 + ink selected state, and pastel category headers.
 
 // ── Unified layer item type ─────────────────────────────────────────────
 interface LayerItem {
@@ -29,7 +34,7 @@ interface LayerItem {
   name: string;
   type: 'part' | 'floor' | 'wall' | 'script';
   icon: typeof Box;
-  iconColor: string;
+  iconColor: string;        // part: user color hex; others: derived from category tone
   badge: string;
   visible: boolean | null;
   isSelected: boolean;
@@ -39,34 +44,22 @@ interface LayerItem {
   onRemove?: () => void;
 }
 
-const CATEGORY_ORDER = ['part', 'floor', 'wall', 'script'] as const;
+type SceneCat = 'part' | 'floor' | 'wall' | 'script';
 
-const CATEGORY_LABELS: Record<string, string> = {
-  part: 'Workspace',
-  floor: 'Floors',
-  wall: 'Walls',
-  script: 'Scripts',
-};
+const CATEGORY_ORDER: SceneCat[] = ['part', 'floor', 'wall', 'script'];
 
-const CATEGORY_SUBLABELS: Record<string, string> = {
-  part: 'Parts in your scene',
-  floor: 'Floor tiles',
-  wall: 'Wall edges',
-  script: 'Game code files',
-};
+interface CategoryMeta {
+  label: string;
+  sub: string;
+  icon: typeof Box;
+  tone: Exclude<PBTone, 'paper' | 'ink'>;
+}
 
-const CATEGORY_ICONS: Record<string, typeof Box> = {
-  part: Folder,
-  floor: Square,
-  wall: RectangleHorizontal,
-  script: FileCode,
-};
-
-const CATEGORY_ICON_BG: Record<string, string> = {
-  part: 'bg-blue-500/15 text-blue-300',
-  floor: 'bg-amber-500/15 text-amber-300',
-  wall: 'bg-rose-500/15 text-rose-300',
-  script: 'bg-emerald-500/15 text-emerald-300',
+const CATEGORY_META: Record<SceneCat, CategoryMeta> = {
+  part:   { label: 'Workspace', sub: 'Parts in your scene', icon: Folder,                tone: 'sky'    },
+  floor:  { label: 'Floors',    sub: 'Floor tiles',         icon: Square,                tone: 'butter' },
+  wall:   { label: 'Walls',     sub: 'Wall edges',          icon: RectangleHorizontal,   tone: 'coral'  },
+  script: { label: 'Scripts',   sub: 'Game code files',     icon: FileCode,              tone: 'mint'   },
 };
 
 const PART_TYPE_ICON: Record<PartType, typeof Box> = {
@@ -76,6 +69,14 @@ const PART_TYPE_ICON: Record<PartType, typeof Box> = {
   Wedge: Triangle,
   GLB: Box,
 };
+
+// ── Tile helpers ────────────────────────────────────────────────────────
+function toneVars(tone: Exclude<PBTone, 'paper' | 'ink'>) {
+  return {
+    bg: `var(--pb-${tone})`,
+    ink: `var(--pb-${tone}-ink)`,
+  };
+}
 
 interface Props {
   onSelect: (id: string) => void;
@@ -137,7 +138,6 @@ export function ScenePanel({ onSelect }: Props) {
       });
     });
 
-    // Floors (sorted by tile coords for stable order)
     Object.entries(floors)
       .sort(([a], [b]) => a.localeCompare(b))
       .forEach(([key, cell]) => {
@@ -147,7 +147,7 @@ export function ScenePanel({ onSelect }: Props) {
           name: cell.asset,
           type: 'floor',
           icon: Square,
-          iconColor: '#fbbf24', // amber-400
+          iconColor: 'var(--pb-butter-ink)',
           badge: `(${key})`,
           visible: null,
           isSelected,
@@ -162,7 +162,6 @@ export function ScenePanel({ onSelect }: Props) {
         });
       });
 
-    // Walls
     Object.entries(walls)
       .sort(([a], [b]) => a.localeCompare(b))
       .forEach(([key, edge]) => {
@@ -172,7 +171,7 @@ export function ScenePanel({ onSelect }: Props) {
           name: edge.asset,
           type: 'wall',
           icon: RectangleHorizontal,
-          iconColor: '#fb7185', // rose-400
+          iconColor: 'var(--pb-coral-ink)',
           badge: `(${key})`,
           visible: null,
           isSelected,
@@ -203,7 +202,7 @@ export function ScenePanel({ onSelect }: Props) {
           name,
           type: 'script',
           icon: FileCode,
-          iconColor: '#34d399',
+          iconColor: 'var(--pb-mint-ink)',
           badge: name.endsWith('.js') ? 'JS' : name.split('.').pop()?.toUpperCase() ?? '',
           visible: null,
           isSelected: openFileName === name,
@@ -249,54 +248,115 @@ export function ScenePanel({ onSelect }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search bar */}
-      <div className="shrink-0 px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2.5 px-3 py-2.5 bg-zinc-800/80 rounded-xl border border-white/[0.08] focus-within:border-accent/50 focus-within:bg-zinc-800 transition-all">
-          <Search size={14} className="text-zinc-400 shrink-0" />
+      {/* Search — cream-2 well with 1.5px line border */}
+      <div className="shrink-0" style={{ padding: '10px 14px 6px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+          }}
+        >
+          <Search size={13} strokeWidth={2.2} style={{ color: 'var(--pb-ink-muted)', flexShrink: 0 }} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter scene…"
-            className="flex-1 min-w-0 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 outline-none"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'transparent',
+              border: 0,
+              outline: 'none',
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: 'var(--pb-ink)',
+              fontFamily: 'inherit',
+            }}
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="text-zinc-500 hover:text-zinc-200 shrink-0 p-0.5 rounded hover:bg-white/5 transition-colors"
               aria-label="Clear search"
+              style={{
+                width: 18,
+                height: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'transparent',
+                border: 0,
+                color: 'var(--pb-ink-muted)',
+                cursor: 'pointer',
+                borderRadius: 4,
+              }}
             >
-              <X size={14} />
+              <X size={13} />
             </button>
           )}
         </div>
       </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
+      <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: '6px 14px 14px' }}>
+        <SectionLabel
+          trailing={<span style={{ color: 'var(--pb-ink-muted)' }}>{totalCount}</span>}
+        >
+          Scene
+        </SectionLabel>
+
         {totalCount === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-800/60 ring-1 ring-white/10 flex items-center justify-center mb-4">
-              <Layers size={28} className="text-zinc-500" />
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '80px 0',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                background: 'var(--pb-cream-2)',
+                border: '1.5px solid var(--pb-line-2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 14,
+              }}
+            >
+              <Layers size={24} strokeWidth={2.2} style={{ color: 'var(--pb-ink-muted)' }} />
             </div>
-            <p className="text-base font-medium text-zinc-200">Your scene is empty</p>
-            <p className="text-sm mt-1 text-zinc-500">Add parts or generate scripts to begin</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--pb-ink)', margin: 0 }}>
+              Your scene is empty
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--pb-ink-muted)', marginTop: 4 }}>
+              Add parts or generate scripts to begin
+            </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {CATEGORY_ORDER.map((cat) => {
               const items = grouped.get(cat);
               if (!items || items.length === 0) return null;
               const isCollapsed = collapsedCategories.has(cat);
-              const CategoryIcon = CATEGORY_ICONS[cat] || Box;
-              const iconBg = CATEGORY_ICON_BG[cat] || 'bg-zinc-700/40 text-zinc-300';
+              const meta = CATEGORY_META[cat];
+              const tone = toneVars(meta.tone);
+              const CategoryIcon = meta.icon;
 
               const isWorkspace = cat === 'part';
               const workspaceSelected = isWorkspace && lightingPanelOpen;
               const handleHeaderClick = () => {
                 if (isWorkspace) {
-                  // Clicking "Workspace" opens the lighting panel on the right
-                  // and clears any part/building selection so it wins the
-                  // right-panel slot. Chevron (below) still toggles collapse.
+                  // Click name → open Workspace lighting on the right.
                   setSelectedPart(null);
                   setBuildingSelection(null);
                   setLightingPanelOpen(!lightingPanelOpen);
@@ -306,43 +366,100 @@ export function ScenePanel({ onSelect }: Props) {
               };
 
               return (
-                <div key={cat} className="flex flex-col gap-1.5">
-                  {/* Category header */}
-                  <div
+                <div key={cat} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {/* Category header — ToneBadge tile + label + subtitle + chevron */}
+                  <button
+                    type="button"
                     onClick={handleHeaderClick}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all group ${
-                      workspaceSelected ? 'bg-accent/15 shadow-sm shadow-accent/10' : 'hover:bg-zinc-800/60'
-                    }`}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 10px',
+                      borderRadius: 12,
+                      background: workspaceSelected ? 'var(--pb-cream-2)' : 'transparent',
+                      border: 0,
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                      transition: 'background 120ms ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!workspaceSelected) e.currentTarget.style.background = 'var(--pb-cream-2)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!workspaceSelected) e.currentTarget.style.background = 'transparent';
+                    }}
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
-                      <CategoryIcon size={15} />
+                    <div
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 9,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: tone.bg,
+                        color: tone.ink,
+                        border: `1.5px solid ${tone.ink}`,
+                      }}
+                    >
+                      <CategoryIcon size={14} strokeWidth={2.2} />
                     </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className={`text-sm font-semibold truncate ${workspaceSelected ? 'text-white' : 'text-zinc-100'}`}>
-                        {CATEGORY_LABELS[cat]}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 700,
+                          color: 'var(--pb-ink)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {meta.label}
                       </div>
-                      <div className="text-xs text-zinc-500 truncate">
-                        {items.length} {items.length === 1 ? 'item' : 'items'} · {CATEGORY_SUBLABELS[cat]}
+                      <div
+                        style={{
+                          fontSize: 10.5,
+                          color: 'var(--pb-ink-muted)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {items.length} {items.length === 1 ? 'item' : 'items'} · {meta.sub}
                       </div>
                     </div>
-                    <button
-                      type="button"
+                    <span
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleCategory(cat);
                       }}
-                      className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-zinc-500 group-hover:text-zinc-300 group-hover:bg-white/5 transition-colors"
+                      role="button"
                       aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--pb-ink-muted)',
+                        flexShrink: 0,
+                        cursor: 'pointer',
+                      }}
                     >
-                      {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                    </button>
-                  </div>
+                      {isCollapsed ? <ChevronRight size={14} strokeWidth={2.4} /> : <ChevronDown size={14} strokeWidth={2.4} />}
+                    </span>
+                  </button>
 
-                  {/* Layer rows */}
                   {!isCollapsed && (
-                    <div className="flex flex-col gap-1 pl-1">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 2 }}>
                       {items.map((layer) => (
-                        <LayerRow key={layer.id} layer={layer} />
+                        <LayerRow key={layer.id} layer={layer} cat={cat} />
                       ))}
                     </div>
                   )}
@@ -356,8 +473,8 @@ export function ScenePanel({ onSelect }: Props) {
   );
 }
 
-// ── Individual layer row ─────────────────────────────────────────────────
-function LayerRow({ layer }: { layer: LayerItem }) {
+// ── Individual layer row — chunky cream-2 + ink selected state ─────────
+function LayerRow({ layer, cat }: { layer: LayerItem; cat: SceneCat }) {
   const Icon = layer.icon;
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(layer.name);
@@ -378,40 +495,60 @@ function LayerRow({ layer }: { layer: LayerItem }) {
     setIsRenaming(false);
   }, [renameValue, layer]);
 
+  const meta = CATEGORY_META[cat];
+  const tone = toneVars(meta.tone);
+
+  // Parts render the user's actual hex color; other categories use the
+  // category tone. Border is always ink-style for readability.
+  const tileBg = cat === 'part' ? layer.iconColor : tone.bg;
+  const tileBorder = cat === 'part' ? 'var(--pb-ink)' : tone.ink;
+  const tileIconColor = cat === 'part' ? 'var(--pb-paper)' : tone.ink;
+
   return (
     <div
       onClick={layer.onSelect}
       onDoubleClick={startRename}
-      className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all [content-visibility:auto] [contain-intrinsic-size:0_56px] ${
-        layer.isSelected
-          ? 'bg-accent/15 shadow-sm shadow-accent/10'
-          : 'hover:bg-zinc-800/60'
-      }`}
+      className="group"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '7px 10px',
+        borderRadius: 10,
+        background: layer.isSelected ? 'var(--pb-cream-2)' : 'transparent',
+        border: `1.5px solid ${layer.isSelected ? 'var(--pb-ink)' : 'transparent'}`,
+        boxShadow: layer.isSelected ? '0 2px 0 var(--pb-ink)' : 'none',
+        cursor: 'pointer',
+        transition: 'background 120ms ease',
+        contentVisibility: 'auto',
+      }}
+      onMouseEnter={(e) => {
+        if (!layer.isSelected) e.currentTarget.style.background = 'var(--pb-cream-2)';
+      }}
+      onMouseLeave={(e) => {
+        if (!layer.isSelected) e.currentTarget.style.background = 'transparent';
+      }}
     >
-      {/* Thumbnail / icon block */}
-      {layer.type === 'part' ? (
-        <div
-          className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center"
-          style={{ background: layer.iconColor }}
-        >
-          <Icon size={14} className="text-white/80 drop-shadow" />
-        </div>
-      ) : (
-        <div
-          className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center ${
-            layer.type === 'floor'
-              ? 'bg-amber-500/15'
-              : layer.type === 'wall'
-                ? 'bg-rose-500/15'
-                : 'bg-emerald-500/15'
-          }`}
-        >
-          <Icon size={16} style={{ color: layer.iconColor }} />
-        </div>
-      )}
+      {/* Tile */}
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 7,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: tileBg,
+          color: tileIconColor,
+          border: `1.5px solid ${tileBorder}`,
+        }}
+      >
+        <Icon size={14} strokeWidth={2.2} />
+      </div>
 
-      {/* Name + badge stack */}
-      <div className="flex-1 min-w-0">
+      {/* Name + badge */}
+      <div style={{ flex: 1, minWidth: 0 }}>
         {isRenaming ? (
           <input
             ref={inputRef}
@@ -423,51 +560,118 @@ function LayerRow({ layer }: { layer: LayerItem }) {
               if (e.key === 'Escape') setIsRenaming(false);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full text-sm bg-zinc-800 border border-accent/50 rounded-md px-2 py-0.5 text-white outline-none"
             autoFocus
+            style={{
+              width: '100%',
+              fontSize: 12.5,
+              fontFamily: 'inherit',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-ink)',
+              borderRadius: 6,
+              padding: '2px 6px',
+              outline: 'none',
+              color: 'var(--pb-ink)',
+            }}
           />
         ) : (
           <div
-            className={`text-sm truncate ${
-              layer.isSelected ? 'text-white font-semibold' : 'text-zinc-100 font-medium'
-            } ${layer.type === 'script' ? 'font-mono' : ''}`}
+            style={{
+              fontSize: 12.5,
+              fontWeight: layer.isSelected ? 700 : 600,
+              color: 'var(--pb-ink)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontFamily: cat === 'script' ? 'DM Mono, monospace' : 'inherit',
+            }}
           >
             {layer.name}
           </div>
         )}
-        <div className="text-xs text-zinc-500 truncate">{layer.badge}</div>
+        <div
+          style={{
+            fontSize: 10,
+            color: 'var(--pb-ink-muted)',
+            marginTop: 1,
+            fontFamily: 'DM Mono, monospace',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {layer.badge}
+        </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-1 shrink-0">
+      {/* Action buttons (hidden until hover, except visibility-off) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flexShrink: 0,
+        }}
+      >
         {layer.visible !== null && layer.onToggleVisibility && (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               layer.onToggleVisibility!();
             }}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-              layer.visible
-                ? 'text-zinc-400 hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100'
-                : 'text-zinc-600 hover:text-zinc-200 hover:bg-white/10 opacity-100'
-            }`}
+            className={layer.visible ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}
             title={layer.visible ? 'Hide' : 'Show'}
             aria-label={layer.visible ? 'Hide' : 'Show'}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 0,
+              color: layer.visible ? 'var(--pb-ink-soft)' : 'var(--pb-ink-muted)',
+              cursor: 'pointer',
+              transition: 'opacity 120ms',
+            }}
           >
-            {layer.visible ? <Eye size={15} /> : <EyeOff size={15} />}
+            {layer.visible ? <Eye size={13} /> : <EyeOff size={13} />}
           </button>
         )}
         {layer.onRemove && (
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               layer.onRemove!();
             }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-300 hover:bg-red-500/15 opacity-0 group-hover:opacity-100 transition-all"
+            className="opacity-0 group-hover:opacity-100"
             title="Remove"
             aria-label="Remove"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'transparent',
+              border: 0,
+              color: 'var(--pb-ink-muted)',
+              cursor: 'pointer',
+              transition: 'opacity 120ms, color 120ms, background 120ms',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--pb-coral-ink)';
+              e.currentTarget.style.background = 'var(--pb-coral)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--pb-ink-muted)';
+              e.currentTarget.style.background = 'transparent';
+            }}
           >
-            <Trash2 size={15} />
+            <Trash2 size={13} />
           </button>
         )}
       </div>

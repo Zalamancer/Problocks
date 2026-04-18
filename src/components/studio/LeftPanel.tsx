@@ -1,9 +1,8 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, Layers, Sparkles, Zap } from 'lucide-react';
+import { FolderOpen, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Sparkles, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
-import { IconButton } from '@/components/ui';
 import type { LucideIcon } from 'lucide-react';
 import { AssetsPanel }       from './panels/AssetsPanel';
 import { ChatPanel }         from './panels/ChatPanel';
@@ -64,36 +63,130 @@ function MainGroupHeader() {
 
   const GroupIcon = groupDef.icon;
 
-  return (
-    <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-white/5">
-      <IconButton icon={ChevronLeft} variant="ghost" size="sm" onClick={goPrev} tooltip="Previous panel" />
+  // Pager-button style from /tmp/design_bundle2/problocks/project/studio/leftpanel.jsx → PagerBtn
+  const pagerBtnStyle: React.CSSProperties = {
+    width: 30,
+    height: 30,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    background: 'var(--pb-paper)',
+    border: '1.5px solid var(--pb-line-2)',
+    color: 'var(--pb-ink-soft)',
+    cursor: 'pointer',
+  };
 
-      <div ref={dropdownRef} className="relative flex-1 min-w-0">
+  return (
+    <div
+      className="shrink-0 relative"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '10px 12px',
+        borderBottom: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      <button type="button" onClick={goPrev} aria-label="Previous panel" style={pagerBtnStyle}>
+        <ChevronLeft size={13} strokeWidth={2.4} />
+      </button>
+
+      <div ref={dropdownRef} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         <button
+          type="button"
           onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-sm font-medium text-white hover:bg-panel-surface transition-colors"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: dropdownOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+            border: `1.5px solid ${dropdownOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+            boxShadow: dropdownOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            transition: 'background 120ms ease, border-color 120ms ease',
+          }}
         >
-          <GroupIcon size={14} className="shrink-0 text-gray-400" />
-          <span className="truncate">{groupDef.label}</span>
-          <ChevronDown size={13} className={cn('shrink-0 text-gray-500 transition-transform duration-200', dropdownOpen && 'rotate-180')} />
+          <GroupIcon size={14} strokeWidth={2.2} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {groupDef.label}
+          </span>
+          <ChevronDown
+            size={11}
+            strokeWidth={2.4}
+            style={{
+              color: 'var(--pb-ink-muted)',
+              transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s',
+              flexShrink: 0,
+            }}
+          />
         </button>
 
         {dropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-1 z-dropdown bg-panel-bg border border-white/10 rounded-xl shadow-2xl py-1">
+          <div
+            className="z-dropdown"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: 0,
+              right: 0,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-ink)',
+              borderRadius: 12,
+              boxShadow: '0 4px 0 var(--pb-ink), 0 12px 28px rgba(29,26,20,0.12)',
+              padding: 6,
+            }}
+          >
             {TAB_GROUPS.map((group) => {
               const Icon = group.icon;
               const isActive = group.id === leftPanelActiveGroup;
               return (
                 <button
                   key={group.id}
+                  type="button"
                   onClick={() => { setLeftPanelGroup(group.id); setDropdownOpen(false); }}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors',
-                    isActive ? 'bg-accent/10 text-accent' : 'text-gray-400 hover:text-white hover:bg-panel-surface',
-                  )}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '9px 10px',
+                    borderRadius: 8,
+                    background: isActive ? 'var(--pb-cream-2)' : 'transparent',
+                    color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink)',
+                    fontSize: 13,
+                    fontWeight: isActive ? 700 : 500,
+                    fontFamily: 'inherit',
+                    textAlign: 'left',
+                    border: 0,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'var(--pb-cream-2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'transparent';
+                  }}
                 >
-                  <Icon size={14} className="shrink-0" />
-                  <span className="truncate">{group.label}</span>
+                  <Icon
+                    size={15}
+                    strokeWidth={2.2}
+                    style={{ color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink-muted)', flexShrink: 0 }}
+                  />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {group.label}
+                  </span>
+                  {isActive && <Check size={12} strokeWidth={2.6} style={{ color: 'var(--pb-mint-ink)', flexShrink: 0 }} />}
                 </button>
               );
             })}
@@ -101,7 +194,9 @@ function MainGroupHeader() {
         )}
       </div>
 
-      <IconButton icon={ChevronRight} variant="ghost" size="sm" onClick={goNext} tooltip="Next panel" />
+      <button type="button" onClick={goNext} aria-label="Next panel" style={pagerBtnStyle}>
+        <ChevronRight size={13} strokeWidth={2.4} />
+      </button>
     </div>
   );
 }
@@ -123,10 +218,13 @@ export function LeftPanel({ onSceneSelect }: { onSceneSelect?: (id: string) => v
   const { leftPanelCollapsed, leftPanelActiveGroup } = useStudio();
   return (
     <aside className={cn('flex-shrink-0 overflow-visible transition-all duration-300', leftPanelCollapsed ? 'w-0' : 'w-[300px]')}>
-      <div className={cn(
-        'h-full flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-visible transition-opacity duration-300',
-        leftPanelCollapsed ? 'opacity-0 border-transparent' : '',
-      )}>
+      <div
+        className={cn('h-full flex flex-col rounded-xl overflow-visible transition-opacity duration-300', leftPanelCollapsed ? 'opacity-0' : '')}
+        style={{
+          background: 'var(--pb-paper)',
+          border: leftPanelCollapsed ? '1.5px solid transparent' : '1.5px solid var(--pb-line-2)',
+        }}
+      >
         <MainGroupHeader />
         {!leftPanelCollapsed && (
           <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">

@@ -22,6 +22,7 @@ import { getGameHtml } from '@/lib/game-engine';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
 import { WorkspacePropertiesPanel } from './panels/WorkspacePropertiesPanel';
+import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
 import { useLightingStore } from '@/store/lighting-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
@@ -530,8 +531,8 @@ export function StudioLayout() {
 
           {/* Right panel — part properties when a part is selected (native
               workspace OR running iframe game); workspace lighting when the
-              user clicked "Workspace" in the scene hierarchy; task detail
-              otherwise. */}
+              user clicked "Workspace" in the scene hierarchy; Code-view file
+              list when the Code tab is active; task detail otherwise. */}
           {selectedPart ? (
             <PartPropertiesPanel
               part={selectedPart}
@@ -547,7 +548,17 @@ export function StudioLayout() {
             />
           ) : lightingPanelOpen ? (
             <WorkspacePropertiesPanel />
-          ) : board && template && selectedTaskId ? (
+          ) : openFileName ? (() => {
+            const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
+            const fileList = activeGame?.files ? Object.keys(activeGame.files) : [];
+            return (
+              <GeneratedFilesPanel
+                files={fileList}
+                activeFile={openFileName}
+                onSelectFile={(name) => setOpenFileName(name)}
+              />
+            );
+          })() : board && template && selectedTaskId ? (
             <TaskDetailPanel
               templateTaskId={selectedTaskId}
               template={template}

@@ -407,6 +407,115 @@ body {
 .light .to-zinc-900      { --tw-gradient-to: rgb(var(--t-50)) !important; }
 .light .to-zinc-950      { --tw-gradient-to: rgb(var(--t-white)) !important; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Cream Theme — "Problocks" playful light theme from the design mock.
+   Layered on top of .light (applied together by useThemeEffect). The .light
+   rules above already re-map zinc/white to --t-* palette vars; .cream just
+   swaps those vars to warm cream tones and overrides a few identity pieces
+   (accent → butter, fonts → Bricolage/DM Mono/Instrument Serif, studio bg).
+   ══════════════════════════════════════════════════════════════════════════ */
+.cream {
+  /* Ink (text) — warm near-black */
+  --t-text-900: 29 26 20;     /* --ink */
+  --t-text-800: 51 45 35;
+  --t-text-700: 87 82 74;     /* --ink-soft */
+  --t-text-600: 108 101 88;
+  --t-text-500: 138 132 120;  /* --ink-muted */
+  --t-text-400: 170 163 148;
+
+  /* Paper/cream scale — replaces light's cool grays */
+  --t-white:   253 246 230;   /* --cream   #fdf6e6 */
+  --t-50:      255 250 240;   /* --paper   #fffaf0 */
+  --t-100:     247 237 212;   /* --cream-2 #f7edd4 */
+  --t-200:     237 225 195;
+  --t-300:     232 220 188;   /* --line    #e8dcbc */
+  --t-350:     222 208 168;
+  --t-400:     214 200 150;   /* --line-2  #d6c896 */
+
+  /* Border base — warm ink tint instead of pure black */
+  --t-bdr-base: 58 47 26;
+
+  /* Panel system vars — replace zinc greys with cream papers */
+  --panel-bg: #fffaf0;
+  --panel-surface: #f7edd4;
+  --panel-surface-hover: #f0e4be;
+  --panel-border: rgba(58, 47, 26, 0.10);
+
+  /* Studio shell */
+  --studio-bg: #fdf6e6;
+  --shell-bg: rgba(255, 250, 240, 0.85);
+  --shell-border: rgba(58, 47, 26, 0.10);
+
+  /* Accent — butter yellow with dark ink for AA contrast */
+  --accent: #ffd84d;
+  --accent-hover: #f5c92e;
+
+  /* Node card vars */
+  --node-bg: #fffaf0;
+  --node-text: #1d1a14;
+  --node-text-muted: #8a8478;
+  --node-field-bg: rgba(247, 237, 212, 0.9);
+  --node-field-border: rgba(58, 47, 26, 0.10);
+  --node-field-focus: rgba(107, 79, 0, 0.4);
+  --node-border-default: rgba(58, 47, 26, 0.10);
+  --node-border-hover: rgba(58, 47, 26, 0.18);
+  --node-border-selected: rgba(107, 79, 0, 0.5);
+  --node-divider: rgba(58, 47, 26, 0.08);
+  --node-handle: #e8dcbc;
+  --node-handle-border: #d6c896;
+
+  /* Canvas dot grid */
+  --canvas-dot: #d6c896;
+  --rf-controls-bg: #fffaf0;
+  --rf-controls-border: rgba(58, 47, 26, 0.10);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(214, 200, 150, 0.7);
+  --scrollbar-thumb-hover: rgba(183, 166, 111, 0.9);
+
+  /* Glass */
+  --glass-bg: rgba(255, 250, 240, 0.80);
+  --glass-border: rgba(58, 47, 26, 0.08);
+
+  /* Fonts — the playful display/body/mono stack from the design mock */
+  --font-geist-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: var(--font-dm-mono), ui-monospace, monospace;
+}
+
+.cream body {
+  font-family: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Soft radial-gradient backdrop — the signature "cream paper" feel from the
+   design's .pb-bg layer. Attaches to html so it sits behind everything. */
+.cream {
+  background:
+    radial-gradient(900px 500px at 90% 0%, #ffeabd 0%, transparent 60%),
+    radial-gradient(700px 400px at 0% 100%, #d7e9ff 0%, transparent 55%),
+    #fdf6e6;
+}
+
+/* Accent color remaps — in cream the green becomes butter-yellow, and any
+   text/icon sitting on accent needs the dark butter-ink for contrast. */
+.cream .bg-accent           { background-color: var(--accent) !important; }
+.cream .hover\:bg-accent-hover:hover { background-color: var(--accent-hover) !important; }
+.cream .text-accent         { color: #6b4f00 !important; }
+.cream .border-accent       { border-color: var(--accent) !important; }
+.cream .bg-accent\/10       { background-color: rgba(255, 216, 77, 0.25) !important; }
+.cream .bg-accent\/20       { background-color: rgba(255, 216, 77, 0.35) !important; }
+.cream .ring-accent         { --tw-ring-color: var(--accent) !important; }
+
+/* The accent button's label needs dark ink so "Publish"/"Play" stay legible
+   on the yellow background. */
+.cream .bg-accent.text-white,
+.cream .bg-accent .text-white { color: #1d1a14 !important; }
+
+/* Serif display helper — for section labels / flourishes that want the
+   italic Instrument Serif voice. Usage: <span className="font-serif-display italic">. */
+.font-serif-display {
+  font-family: var(--font-instrument-serif, 'Instrument Serif', Georgia, serif);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Cursor reset (Tailwind v4 removed this from base) ── */

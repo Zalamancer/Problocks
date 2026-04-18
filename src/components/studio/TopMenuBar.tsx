@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Save, Upload, Play, Square, Settings, Sun, Moon, User, LogOut } from 'lucide-react';
+import { Save, Upload, Play, Square, Settings, Sun, Moon, Sparkles, User, LogOut } from 'lucide-react';
 import { useStudio } from '@/store/studio-store';
 import { useSceneStore } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
@@ -95,7 +95,11 @@ export function TopMenuBar() {
     label: 'User',
     items: [
       { id: 'settings', label: 'Settings',    icon: Settings, onClick: () => setViewMode('settings') },
-      { id: 'theme',    label: theme === 'dark' ? 'Light mode' : 'Dark mode', icon: theme === 'dark' ? Sun : Moon, onClick: toggleTheme },
+      { id: 'theme',
+        label: theme === 'dark' ? 'Switch to Light' : theme === 'light' ? 'Switch to Cream' : 'Switch to Dark',
+        icon: theme === 'dark' ? Sun : theme === 'light' ? Sparkles : Moon,
+        onClick: toggleTheme,
+      },
       { separator: true },
       { id: 'signout',  label: 'Sign out',    icon: LogOut,   onClick: () => {} },
     ],

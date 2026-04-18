@@ -6,7 +6,7 @@ export type AssetsTab = 'models' | 'parts';
 export type PartsTab = 'generate' | 'history';
 export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings';
 export type ChatMode = 'scene' | 'part';
-export type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light' | 'cream';
 export type FlowDirection = 'LR' | 'TB';
 
 export interface GeneratedGame {
@@ -86,7 +86,11 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
 
   theme: 'dark',
   setTheme: (theme) => set({ theme }),
-  toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+  toggleTheme: () => set((s) => {
+    const order: Theme[] = ['dark', 'light', 'cream'];
+    const i = order.indexOf(s.theme);
+    return { theme: order[(i + 1) % order.length] };
+  }),
 
   flowDirection: 'LR',
   setFlowDirection: (dir) => set({ flowDirection: dir }),
@@ -131,6 +135,7 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
     flowDirection: state.flowDirection,
     chatMode: state.chatMode,
     games: state.games,
+    theme: state.theme,
     // Intentionally NOT persisting activeGameId — otherwise a refresh would
     // auto-open the last previewed game, forcing the GamePreview panel on
     // users who didn't ask for it.

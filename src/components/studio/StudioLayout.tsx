@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Sparkles } from 'lucide-react';
+import { PBButton } from '@/components/ui/pb-atoms';
 import { TopMenuBar } from './TopMenuBar';
 import { StudioTerminal } from './Terminal';
 import { GamePreview, type GamePreviewHandle, type GameObjectInfo } from './GamePreview';
@@ -83,21 +84,36 @@ function stairsDefaultPos(key: string) {
 function EmptyState({ onStart }: { onStart: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-5 text-center px-8">
-      <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center">
-        <Sparkles size={24} className="text-accent" />
+      <div
+        className="flex items-center justify-center"
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 16,
+          background: 'var(--pb-butter)',
+          border: '1.5px solid var(--pb-butter-ink)',
+          boxShadow: '0 2px 0 var(--pb-butter-ink)',
+        }}
+      >
+        <Sparkles size={24} strokeWidth={2.2} style={{ color: 'var(--pb-butter-ink)' }} />
       </div>
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-1">Start a new game project</h2>
-        <p className="text-sm text-zinc-500 max-w-xs">
-          Pick a workflow template and we'll set up your milestones, tasks, and AI tools automatically.
+        <h2
+          className="mb-1"
+          style={{ fontSize: 18, fontWeight: 800, color: 'var(--pb-ink)' }}
+        >
+          Start a new game project
+        </h2>
+        <p
+          className="max-w-xs"
+          style={{ fontSize: 13, color: 'var(--pb-ink-muted)', fontWeight: 500 }}
+        >
+          Pick a workflow template and we&apos;ll set up your milestones, tasks, and AI tools automatically.
         </p>
       </div>
-      <button
-        onClick={onStart}
-        className="px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent-hover transition-colors"
-      >
+      <PBButton onClick={onStart} variant="primary" size="lg">
         Choose a template
-      </button>
+      </PBButton>
     </div>
   );
 }
@@ -380,7 +396,10 @@ export function StudioLayout() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-zinc-950 overflow-hidden text-zinc-100 font-sans p-1.5 gap-1.5">
+    <div
+      className="h-screen w-screen flex flex-col overflow-hidden font-sans p-1.5 gap-1.5"
+      style={{ background: 'var(--panel-bg)', color: 'var(--pb-ink)' }}
+    >
       <TopMenuBar />
 
       <div className="flex-1 relative min-h-0">
@@ -388,7 +407,13 @@ export function StudioLayout() {
           <LeftPanel onSceneSelect={handleSceneSelect} />
 
           {/* Center — relative container so the task panel can overlay */}
-          <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
+          <div
+            className="flex-1 relative flex flex-col rounded-xl overflow-hidden min-w-0"
+            style={{
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+            }}
+          >
 
             {/* Main view */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col">

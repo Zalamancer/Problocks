@@ -97,25 +97,63 @@ export function GameToolbar({ previewRef }: Props) {
   }
 
   return (
-    <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 bg-zinc-900/90 border-b border-white/[0.06]">
+    <div
+      className="shrink-0 flex items-center gap-1.5 px-2 py-1.5"
+      style={{
+        background: 'var(--pb-paper)',
+        borderBottom: '1.5px solid var(--pb-line-2)',
+      }}
+    >
       {/* Add Part */}
       <div className="relative" ref={addRef}>
         <button
           onClick={() => setAddOpen(o => !o)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-accent hover:bg-accent/20 text-xs font-semibold transition-all"
+          className="flex items-center gap-1.5 transition-colors"
+          style={{
+            padding: '4px 10px',
+            borderRadius: 8,
+            background: 'var(--pb-mint)',
+            color: 'var(--pb-mint-ink)',
+            border: '1.5px solid var(--pb-mint-ink)',
+            boxShadow: '0 2px 0 var(--pb-mint-ink)',
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
         >
-          <Plus size={12} />
+          <Plus size={12} strokeWidth={2.4} />
           Part
-          <ChevronDown size={11} className={`transition-transform ${addOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={11} strokeWidth={2.4} className={`transition-transform ${addOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {addOpen && (
-          <div className="absolute top-full left-0 mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl py-1 z-50 min-w-[130px]">
+          <div
+            className="absolute top-full left-0 mt-1 z-50 py-1"
+            style={{
+              minWidth: 130,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-ink)',
+              borderRadius: 12,
+              boxShadow: '0 4px 0 var(--pb-ink), 0 12px 28px rgba(29,26,20,0.12)',
+            }}
+          >
             {PART_TYPES.map(pt => (
               <button
                 key={pt.type}
                 onClick={() => addPart(pt.type)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-200 hover:bg-white/[0.07] transition-colors text-left"
+                className="w-full flex items-center gap-2.5 transition-colors text-left"
+                style={{
+                  padding: '7px 12px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--pb-ink)',
+                  background: 'transparent',
+                  border: 0,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <span>{pt.emoji}</span>
                 {pt.type}
@@ -131,9 +169,28 @@ export function GameToolbar({ previewRef }: Props) {
         disabled={!selectedPart}
         title="Duplicate"
         aria-label="Duplicate"
-        className="flex items-center justify-center w-7 h-7 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] disabled:opacity-30 disabled:pointer-events-none transition-all"
+        className="flex items-center justify-center transition-colors disabled:opacity-40 disabled:pointer-events-none"
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: 'var(--pb-paper)',
+          color: 'var(--pb-ink-soft)',
+          border: '1.5px solid var(--pb-line-2)',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = 'var(--pb-ink)';
+          e.currentTarget.style.color = 'var(--pb-ink)';
+          e.currentTarget.style.boxShadow = '0 1.5px 0 var(--pb-ink)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+          e.currentTarget.style.color = 'var(--pb-ink-soft)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
       >
-        <Copy size={13} />
+        <Copy size={13} strokeWidth={2.2} />
       </button>
 
       {/* Delete */}
@@ -142,15 +199,53 @@ export function GameToolbar({ previewRef }: Props) {
         disabled={!selectedPart}
         title="Delete"
         aria-label="Delete"
-        className="flex items-center justify-center w-7 h-7 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none transition-all"
+        className="flex items-center justify-center transition-colors disabled:opacity-40 disabled:pointer-events-none"
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: 'var(--pb-paper)',
+          color: 'var(--pb-coral-ink)',
+          border: '1.5px solid var(--pb-line-2)',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--pb-coral)';
+          e.currentTarget.style.borderColor = 'var(--pb-coral-ink)';
+          e.currentTarget.style.boxShadow = '0 1.5px 0 var(--pb-coral-ink)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'var(--pb-paper)';
+          e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
       >
-        <Trash2 size={13} />
+        <Trash2 size={13} strokeWidth={2.2} />
       </button>
 
       {/* Selected part name badge */}
       {selectedPart && (
-        <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+        <div
+          className="ml-auto flex items-center gap-1.5"
+          style={{
+            padding: '3px 10px',
+            borderRadius: 999,
+            background: 'var(--pb-sky)',
+            border: '1.5px solid var(--pb-sky-ink)',
+            color: 'var(--pb-sky-ink)',
+            fontSize: 11.5,
+            fontWeight: 700,
+          }}
+        >
+          <span
+            className="animate-pulse"
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: 'var(--pb-sky-ink)',
+            }}
+          />
           {selectedPart.name}
         </div>
       )}

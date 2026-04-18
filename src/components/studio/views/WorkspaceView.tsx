@@ -59,8 +59,14 @@ function FloatingBuildToolbar() {
 
   return (
     <div
-      className="absolute top-3 left-3 z-10 flex items-center gap-0.5 p-1 rounded-xl bg-zinc-900/90 backdrop-blur-xl border border-white/10 shadow-lg"
+      className="absolute top-3 left-3 z-10 flex items-center gap-1 p-1.5"
       onMouseDown={(e) => e.stopPropagation()}
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-ink)',
+        borderRadius: 12,
+        boxShadow: '0 3px 0 var(--pb-ink)',
+      }}
     >
       {TOOLS.map(({ id, label, icon: Icon }) => {
         const active = tool === id;
@@ -70,26 +76,53 @@ function FloatingBuildToolbar() {
             type="button"
             title={label}
             onClick={() => setTool(id)}
-            className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
-              active
-                ? 'bg-white text-black'
-                : 'text-zinc-300 hover:bg-white/10 hover:text-white'
-            }`}
+            className="flex items-center justify-center transition-colors"
+            style={{
+              height: 30,
+              width: 30,
+              borderRadius: 8,
+              background: active ? 'var(--pb-butter)' : 'var(--pb-paper)',
+              color: active ? 'var(--pb-butter-ink)' : 'var(--pb-ink-soft)',
+              border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: active ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
+              cursor: 'pointer',
+            }}
           >
-            <Icon size={15} />
+            <Icon size={14} strokeWidth={2.2} />
           </button>
         );
       })}
 
-      <div className="w-px h-5 bg-white/10 mx-1" />
+      <div
+        style={{ width: 1.5, height: 18, background: 'var(--pb-line-2)', margin: '0 2px' }}
+      />
 
       <button
         type="button"
         title="Clear all"
         onClick={clear}
-        className="h-8 w-8 rounded-lg flex items-center justify-center text-red-400 hover:bg-red-500/15 hover:text-red-300 transition-colors"
+        className="flex items-center justify-center transition-colors"
+        style={{
+          height: 30,
+          width: 30,
+          borderRadius: 8,
+          background: 'var(--pb-paper)',
+          color: 'var(--pb-coral-ink)',
+          border: '1.5px solid var(--pb-line-2)',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--pb-coral)';
+          e.currentTarget.style.borderColor = 'var(--pb-coral-ink)';
+          e.currentTarget.style.boxShadow = '0 1.5px 0 var(--pb-coral-ink)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'var(--pb-paper)';
+          e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
       >
-        <Trash2 size={15} />
+        <Trash2 size={14} strokeWidth={2.2} />
       </button>
     </div>
   );
@@ -109,17 +142,36 @@ function HintBadge() {
     Object.keys(roofs).length + Object.keys(cornersRec).length + Object.keys(stairsRec).length;
 
   return (
-    <div className="absolute bottom-3 left-3 z-10 px-3 py-1.5 rounded-lg bg-zinc-900/80 backdrop-blur-xl border border-white/10 text-[11px] text-zinc-300 flex items-center gap-3 pointer-events-none">
+    <div
+      className="absolute bottom-3 left-3 z-10 flex items-center gap-2 pointer-events-none"
+      style={{
+        padding: '5px 12px',
+        borderRadius: 10,
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        fontSize: 11,
+        color: 'var(--pb-ink-soft)',
+        fontWeight: 500,
+      }}
+    >
       <span>
-        Tool: <span className="text-white font-medium capitalize">{tool}</span>
+        Tool:{' '}
+        <span
+          className="capitalize"
+          style={{ color: 'var(--pb-ink)', fontWeight: 700 }}
+        >
+          {tool}
+        </span>
       </span>
-      <span className="text-zinc-500">·</span>
+      <span style={{ color: 'var(--pb-ink-muted)' }}>·</span>
       <span>L{level}</span>
-      <span className="text-zinc-500">·</span>
+      <span style={{ color: 'var(--pb-ink-muted)' }}>·</span>
       <span>{floorCount} tile{floorCount === 1 ? '' : 's'}</span>
       <span>{wallCount} wall{wallCount === 1 ? '' : 's'}</span>
       {extraCount > 0 && <span>{extraCount} extra</span>}
-      <span className="text-zinc-500">· Right-drag orbit · Middle-drag pan</span>
+      <span style={{ color: 'var(--pb-ink-muted)' }}>
+        · Right-drag orbit · Middle-drag pan
+      </span>
     </div>
   );
 }

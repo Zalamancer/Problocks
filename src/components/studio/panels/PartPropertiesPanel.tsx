@@ -121,14 +121,16 @@ export function PartPropertiesPanel({ part, onUpdate, onDelete, showBuilding, he
         </PanelSection>
 
         {/* ── Transform ── */}
-        <TransformControls
-          position={part.position}
-          rotation={part.rotation}
-          scale={part.scale}
-          onPositionChange={v => set('position', v)}
-          onRotationChange={v => set('rotation', v)}
-          onScaleChange={v => set('scale', v)}
-        />
+        <PanelSection title="Transform" collapsible defaultOpen>
+          <TransformControls
+            position={part.position}
+            rotation={part.rotation}
+            scale={part.scale}
+            onPositionChange={v => set('position', v)}
+            onRotationChange={v => set('rotation', v)}
+            onScaleChange={v => set('scale', v)}
+          />
+        </PanelSection>
 
         {/* ── Appearance ── */}
         <PanelSection title="Appearance" collapsible defaultOpen>

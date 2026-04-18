@@ -223,6 +223,50 @@ function drawStuds(ctx: CanvasRenderingContext2D) {
   }
 }
 
+function drawStudsSquare(ctx: CanvasRenderingContext2D) {
+  // Same idea as drawStuds but square pads — Roblox "Inlet/Universal" vibe.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  const cells = 4;
+  const cell = SIZE / cells;
+  const inset = cell * 0.18;          // gap between pads
+  const size = cell - inset * 2;      // pad edge length
+
+  // Faint plate seam at the top edge of the tile.
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.fillRect(0, 0, SIZE, 2);
+
+  for (let gy = 0; gy < cells; gy++) {
+    for (let gx = 0; gx < cells; gx++) {
+      const x = gx * cell + inset;
+      const y = gy * cell + inset;
+
+      // Drop shadow under the pad.
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fillRect(x + 1.5, y + 1.5, size, size);
+
+      // Pad body — diagonal gradient for fake bevel.
+      const grad = ctx.createLinearGradient(x, y, x + size, y + size);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.6, 'rgba(220,220,220,1)');
+      grad.addColorStop(1, 'rgba(150,150,150,1)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, size, size);
+
+      // Top + left highlight edges.
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillRect(x, y, size, 1.5);
+      ctx.fillRect(x, y, 1.5, size);
+
+      // Bottom + right shadow edges.
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(x, y + size - 1.5, size, 1.5);
+      ctx.fillRect(x + size - 1.5, y, 1.5, size);
+    }
+  }
+}
+
 function drawSmoothPlastic(ctx: CanvasRenderingContext2D) {
   // Almost flat with very faint speckle — gives PBR something to catch
   ctx.fillStyle = '#ffffff';
@@ -239,6 +283,7 @@ const DRAWERS: Partial<Record<TexturePreset, (ctx: CanvasRenderingContext2D) => 
   Neon: drawNeon,
   SmoothPlastic: drawSmoothPlastic,
   Studs: drawStuds,
+  StudsSquare: drawStudsSquare,
 };
 
 /**

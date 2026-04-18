@@ -24,6 +24,7 @@ const TEXTURE_OPTIONS: { value: TexturePreset; label: string }[] = [
   { value: 'Neon',          label: 'Neon' },
   { value: 'Diamond',       label: 'Diamond' },
   { value: 'Studs',         label: 'Studs (Lego)' },
+  { value: 'StudsSquare',   label: 'Studs (Square)' },
 ];
 
 const TEXTURE_PRESETS: Record<TexturePreset, { roughness: number; metalness: number }> = {
@@ -36,6 +37,7 @@ const TEXTURE_PRESETS: Record<TexturePreset, { roughness: number; metalness: num
   Neon:          { roughness: 0.5,  metalness: 0 },
   Diamond:       { roughness: 0,    metalness: 0.9 },
   Studs:         { roughness: 0.4,  metalness: 0 },
+  StudsSquare:   { roughness: 0.4,  metalness: 0 },
 };
 
 interface Props {

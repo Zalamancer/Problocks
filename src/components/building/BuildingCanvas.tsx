@@ -8,12 +8,13 @@ import {
   type EdgeDir,
   type Facing,
 } from '@/store/building-store';
-import { useSceneStore, type PartType } from '@/store/scene-store';
+import { useSceneStore, type PartType, type TexturePreset } from '@/store/scene-store';
 import { useQualityStore } from '@/store/quality-store';
 import { useLightingStore, rgbToHex, addRgb } from '@/store/lighting-store';
 import { UnifiedGizmo3D } from './UnifiedGizmo3D';
 import { createPlayController, type PlayController } from './play-mode';
 import { buildPiece, getPiece, TILE, WALL_HEIGHT, WALL_THICK, FLOOR_THICK, FACE_SHADE } from '@/lib/building-kit';
+import { getProceduralTexture } from '@/lib/textures/procedural';
 
 const PART_DEFAULT_SIZE = 2;
 
@@ -47,20 +48,39 @@ function makeSurfaceMaterial(params: {
   emissive: string | number | THREE.Color;
   emissiveIntensity: number;
   pbr: boolean;
+  texture?: TexturePreset;
+  /** Mesh world scale — used to set tiling repeat so patterns don't stretch. */
+  scaleHint?: { x: number; y: number; z: number };
 }): THREE.Material {
-  const { color, emissive, emissiveIntensity, pbr, roughness, metalness } = params;
+  const { color, emissive, emissiveIntensity, pbr, roughness, metalness, texture, scaleHint } = params;
+
+  let map: THREE.Texture | null = null;
+  if (texture && texture !== 'None') {
+    const base = getProceduralTexture(texture);
+    if (base) {
+      // Clone so per-mesh repeat/offset don't mutate the cached instance.
+      map = base.clone();
+      map.needsUpdate = true;
+      const sx = scaleHint ? Math.max(0.25, scaleHint.x * 0.5) : 1;
+      const sy = scaleHint ? Math.max(0.25, scaleHint.y * 0.5) : 1;
+      map.repeat.set(sx, sy);
+    }
+  }
+
   if (pbr) {
     return new THREE.MeshStandardMaterial({
       color: new THREE.Color(color as THREE.ColorRepresentation),
       roughness, metalness,
       emissive: new THREE.Color(emissive as THREE.ColorRepresentation),
       emissiveIntensity,
+      map,
     });
   }
   return new THREE.MeshLambertMaterial({
     color: new THREE.Color(color as THREE.ColorRepresentation),
     emissive: new THREE.Color(emissive as THREE.ColorRepresentation),
     emissiveIntensity,
+    map,
   });
 }
 
@@ -1438,6 +1458,8 @@ export function BuildingCanvas() {
           emissive: p.emissiveColor,
           emissiveIntensity: p.emissiveIntensity,
           pbr: quality.pbrMaterials,
+          texture: p.texture,
+          scaleHint: p.scale,
         }),
       );
       mesh.position.set(p.position.x, p.position.y, p.position.z);

@@ -403,19 +403,7 @@ export function ChatPanel() {
       {/* Message history */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2 select-text">
         {showEmpty ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <MessageSquare size={28} className="mx-auto text-gray-600 mb-2" />
-              <p className="text-sm text-gray-400">Studio Chat</p>
-              <p className="text-xs text-gray-600 mt-1">
-                Tell the AI what to build in your workspace
-              </p>
-              <p className="text-[10px] text-gray-700 mt-2">
-                e.g. &ldquo;build a red brick house with a gable roof&rdquo; &middot;
-                &ldquo;place a spiral staircase at 0,0&rdquo;
-              </p>
-            </div>
-          </div>
+          <EmptyChatHint chatMode={chatMode} onPick={(p) => setInput(p)} />
         ) : (
           <>
             {messages.map((msg, i) => {
@@ -498,6 +486,63 @@ export function ChatPanel() {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// MiniChatHint — ported from design bundle's leftpanel.jsx. Shows quick-start
+// prompt chips so users don't stare at a blank box on first open. Clicking
+// a chip drops it into the input (not auto-send) so they can tweak first.
+const SCENE_PROMPTS = [
+  'build a red brick house with a gable roof',
+  'place a spiral staircase at 0,0',
+  'add a second-floor window above the door',
+  'fill the room with medieval furniture',
+];
+
+const PART_PROMPTS = [
+  'a knight with a red cape',
+  'a glowing lantern',
+  'a stone well with moss',
+  'a wooden treasure chest',
+];
+
+function EmptyChatHint({
+  chatMode,
+  onPick,
+}: {
+  chatMode: 'scene' | 'part';
+  onPick: (prompt: string) => void;
+}) {
+  const prompts = chatMode === 'part' ? PART_PROMPTS : SCENE_PROMPTS;
+  const heading = chatMode === 'part' ? 'Generate a part' : 'Jump into the studio';
+  const sub =
+    chatMode === 'part'
+      ? 'Describe a low-poly asset and Claude will generate it. Try one to get started:'
+      : 'Ask Claude to change anything about your scene. Try one of these to get started:';
+
+  return (
+    <div className="px-1">
+      <div className="flex items-center gap-2 mb-1">
+        <MessageSquare size={14} className="text-zinc-500" />
+        <span className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">
+          {heading}
+        </span>
+      </div>
+      <p className="text-xs text-zinc-500 leading-relaxed mb-3">{sub}</p>
+      <div className="flex flex-col gap-1.5">
+        {prompts.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onPick(q)}
+            className="text-left px-3 py-2.5 rounded-xl bg-panel-surface border border-panel-border text-sm text-zinc-200 hover:bg-panel-surface-hover hover:border-accent/40 transition-colors"
+          >
+            <Sparkles size={11} className="inline-block mr-2 text-purple-300 align-[-1px]" />
+            {q}
+          </button>
+        ))}
       </div>
     </div>
   );

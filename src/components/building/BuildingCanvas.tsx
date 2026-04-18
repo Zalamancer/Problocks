@@ -255,8 +255,25 @@ export function BuildingCanvas() {
     const ZOOM_MAX = 150;
     const POLAR_EPS = 0.05;              // keep camera off the exact pole
 
+    // Pan tuning. Converts wheel-delta pixels into world-space translation,
+    // scaled by camera distance so the felt-speed stays ~constant regardless
+    // of zoom level.
+    const PAN_SPEED = 0.0015;
+
     const spherical = new THREE.Spherical();
     const sphOffset = new THREE.Vector3();
+    const panRight = new THREE.Vector3();
+    const panUp = new THREE.Vector3();
+    const panDelta = new THREE.Vector3();
+
+    // Track whether any pointer button is currently held on the canvas, so
+    // "click + two-finger swipe" can pan instead of orbit.
+    let pointerDown = false;
+    const onPointerDown = () => { pointerDown = true; };
+    const onPointerUp = () => { pointerDown = false; };
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
 
     function onWheel(e: WheelEvent) {
       e.preventDefault();
@@ -270,6 +287,22 @@ export function BuildingCanvas() {
         const newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, curDist * factor));
         sphOffset.multiplyScalar(newDist / curDist);
         camera.position.copy(controls.target).add(sphOffset);
+        return;
+      }
+
+      // Pointer-held two-finger swipe OR shift+swipe → pan (translate camera
+      // + target in the camera's right/up plane). Scaled by distance so the
+      // gesture feels the same far away as close up.
+      if (pointerDown || e.shiftKey) {
+        sphOffset.copy(camera.position).sub(controls.target);
+        const dist = sphOffset.length();
+        panRight.setFromMatrixColumn(camera.matrix, 0); // camera X axis
+        panUp.setFromMatrixColumn(camera.matrix, 1);    // camera Y axis
+        panDelta
+          .copy(panRight).multiplyScalar(-e.deltaX * PAN_SPEED * dist)
+          .addScaledVector(panUp,    e.deltaY * PAN_SPEED * dist);
+        camera.position.add(panDelta);
+        controls.target.add(panDelta);
         return;
       }
 
@@ -415,6 +448,9 @@ export function BuildingCanvas() {
     return () => {
       ro.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
       if (playRef.current) { playRef.current.stop(); playRef.current = null; }
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animId);

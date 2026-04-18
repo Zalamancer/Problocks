@@ -15,7 +15,9 @@ import { FlowchartView } from './views/FlowchartView';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { WorkspaceView } from './views/WorkspaceView';
-import { PartStudioView } from './views/PartStudioView';
+import { PartStudioCanvas } from './views/PartStudioCanvas';
+import { PartStudioHistoryPanel } from './panels/PartStudioHistoryPanel';
+import { PartStudioPropertiesPanel } from './panels/PartStudioPropertiesPanel';
 import { useStudio } from '@/store/studio-store';
 import { CodeView } from './CodeView';
 import { useProjectBoard } from '@/store/project-board-store';
@@ -386,7 +388,14 @@ export function StudioLayout() {
 
       <div className="flex-1 relative min-h-0">
         <div className="h-full flex overflow-hidden gap-1.5">
-          <LeftPanel onSceneSelect={handleSceneSelect} />
+          {/* Left panel — swapped for the Part Studio history rail while
+              in the parts-gen view so generations live next to the canvas
+              without a full-screen takeover. */}
+          {viewMode === 'parts-gen' ? (
+            <PartStudioHistoryPanel />
+          ) : (
+            <LeftPanel onSceneSelect={handleSceneSelect} />
+          )}
 
           {/* Center — relative container so the task panel can overlay */}
           <div className="flex-1 relative flex flex-col bg-zinc-900/80 backdrop-blur-xl border border-white/[0.06] rounded-xl overflow-hidden min-w-0">
@@ -406,7 +415,9 @@ export function StudioLayout() {
                     onSwitchToPreview={() => setOpenFileName(null)}
                   />
                 );
-              })() : viewMode === 'settings' ? (
+              })() : viewMode === 'parts-gen' ? (
+                <PartStudioCanvas />
+              ) : viewMode === 'settings' ? (
                 <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                   <SettingsPanel />
                 </div>
@@ -513,9 +524,12 @@ export function StudioLayout() {
 
           {/* Right panel — part properties when a part is selected (native
               workspace OR running iframe game); workspace lighting when the
-              user clicked "Workspace" in the scene hierarchy; task detail
+              user clicked "Workspace" in the scene hierarchy; Part Studio
+              prompt/rating/feedback when generating parts; task detail
               otherwise. */}
-          {selectedPart ? (
+          {viewMode === 'parts-gen' ? (
+            <PartStudioPropertiesPanel />
+          ) : selectedPart ? (
             <PartPropertiesPanel
               part={selectedPart}
               onUpdate={handlePartUpdate}
@@ -547,11 +561,6 @@ export function StudioLayout() {
         onComplete={handleWizardComplete}
         onClose={() => setWizardOpen(false)}
       />
-
-      {/* Part Studio full-screen overlay. Covers the whole layout when the
-          chat pill routes a prompt to "Part" mode or the user opens it
-          directly from the chat. Back button restores viewMode='3d'. */}
-      {viewMode === 'parts-gen' && <PartStudioView />}
     </div>
   );
 }

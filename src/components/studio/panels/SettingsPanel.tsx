@@ -23,7 +23,6 @@ import {
   PanelSlider,
   PanelSection,
 } from '@/components/ui';
-import { cn } from '@/lib/utils';
 import { useQualityStore, type QualityTier } from '@/store/quality-store';
 import {
   useEditorSettings,
@@ -132,13 +131,26 @@ export function SettingsPanel() {
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* Left column — section list */}
-      <aside className="w-[240px] shrink-0 border-r border-white/5 bg-zinc-900/40 overflow-y-auto">
+      <aside
+        className="w-[240px] shrink-0 overflow-y-auto"
+        style={{
+          background: 'var(--pb-cream-2)',
+          borderRight: '1.5px solid var(--pb-line-2)',
+        }}
+      >
         <div className="px-3 py-4">
           <div className="px-2 pb-2">
-            <h2 className="text-sm font-semibold text-white">Settings</h2>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Manage studio preferences</p>
+            <h2 style={{ fontSize: 14, fontWeight: 800, color: 'var(--pb-ink)' }}>
+              Settings
+            </h2>
+            <p
+              className="mt-0.5"
+              style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 500 }}
+            >
+              Manage studio preferences
+            </p>
           </div>
-          <nav className="flex flex-col gap-0.5 mt-2">
+          <nav className="flex flex-col gap-1 mt-2">
             {SECTIONS.map((section) => {
               const Icon = section.icon;
               const active = section.id === activeSection;
@@ -147,24 +159,37 @@ export function SettingsPanel() {
                   key={section.id}
                   type="button"
                   onClick={() => setActiveSection(section.id)}
-                  className={cn(
-                    'flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors',
-                    active
-                      ? 'bg-accent/10 text-accent'
-                      : 'text-zinc-300 hover:bg-panel-surface hover:text-white',
-                  )}
+                  className="flex items-start gap-2.5 text-left transition-colors"
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    background: active ? 'var(--pb-paper)' : 'transparent',
+                    border: `1.5px solid ${active ? 'var(--pb-ink)' : 'transparent'}`,
+                    boxShadow: active ? '0 2px 0 var(--pb-ink)' : 'none',
+                    color: 'var(--pb-ink)',
+                    cursor: 'pointer',
+                  }}
                 >
                   <Icon
                     size={15}
-                    className={cn('shrink-0 mt-0.5', active ? 'text-accent' : 'text-zinc-500')}
+                    strokeWidth={2.2}
+                    className="shrink-0 mt-0.5"
+                    style={{ color: active ? 'var(--pb-ink)' : 'var(--pb-ink-muted)' }}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-medium leading-tight">{section.label}</div>
                     <div
-                      className={cn(
-                        'text-[11px] mt-0.5 truncate',
-                        active ? 'text-accent/70' : 'text-zinc-500',
-                      )}
+                      className="leading-tight"
+                      style={{ fontSize: 13, fontWeight: 700, color: 'var(--pb-ink)' }}
+                    >
+                      {section.label}
+                    </div>
+                    <div
+                      className="mt-0.5 truncate"
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--pb-ink-muted)',
+                        fontWeight: 500,
+                      }}
                     >
                       {section.description}
                     </div>
@@ -177,7 +202,10 @@ export function SettingsPanel() {
       </aside>
 
       {/* Right column — selected section's content */}
-      <section className="flex-1 min-w-0 overflow-y-auto">
+      <section
+        className="flex-1 min-w-0 overflow-y-auto"
+        style={{ background: 'var(--pb-paper)' }}
+      >
         <SectionContent id={activeSection} />
       </section>
     </div>
@@ -186,9 +214,21 @@ export function SettingsPanel() {
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <header className="px-6 pt-6 pb-4 border-b border-white/5">
-      <h3 className="text-base font-semibold text-white">{title}</h3>
-      {subtitle && <p className="text-xs text-zinc-500 mt-1">{subtitle}</p>}
+    <header
+      className="px-6 pt-6 pb-4"
+      style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+    >
+      <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--pb-ink)' }}>
+        {title}
+      </h3>
+      {subtitle && (
+        <p
+          className="mt-1"
+          style={{ fontSize: 12, color: 'var(--pb-ink-muted)', fontWeight: 500 }}
+        >
+          {subtitle}
+        </p>
+      )}
     </header>
   );
 }
@@ -432,16 +472,28 @@ function EditorThemeSection() {
               fullWidth
             />
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-zinc-500">
+              <span
+                style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 500 }}
+              >
                 {hasOverrides ? `${Object.keys(theme.overrides).length} token${Object.keys(theme.overrides).length === 1 ? '' : 's'} customized` : 'Using preset defaults'}
               </span>
               {hasOverrides && (
                 <button
                   type="button"
                   onClick={resetThemeOverrides}
-                  className="flex items-center gap-1 text-[11px] text-accent hover:underline"
+                  className="flex items-center gap-1 transition-colors"
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--pb-grape-ink)',
+                    background: 'transparent',
+                    border: 0,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
                 >
-                  <RotateCcw size={11} />
+                  <RotateCcw size={11} strokeWidth={2.2} />
                   Reset overrides
                 </button>
               )}
@@ -453,16 +505,36 @@ function EditorThemeSection() {
           <div className="flex flex-col gap-2 px-4 py-4">
             {THEME_SWATCH_KEYS.map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between gap-3">
-                <label className="text-[12px] text-zinc-300 flex-1 min-w-0 truncate">{label}</label>
+                <label
+                  className="flex-1 min-w-0 truncate"
+                  style={{ fontSize: 12, color: 'var(--pb-ink)', fontWeight: 600 }}
+                >
+                  {label}
+                </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     value={colors[key]}
                     onChange={(e) => setThemeColor(key, e.target.value)}
-                    className="h-6 w-10 rounded cursor-pointer bg-transparent border border-white/10"
+                    className="cursor-pointer"
+                    style={{
+                      height: 24,
+                      width: 40,
+                      borderRadius: 6,
+                      background: 'transparent',
+                      border: '1.5px solid var(--pb-line-2)',
+                    }}
                     aria-label={label}
                   />
-                  <code className="text-[10px] font-mono text-zinc-500 w-[60px] text-right tabular-nums">
+                  <code
+                    className="w-[60px] text-right tabular-nums"
+                    style={{
+                      fontSize: 10,
+                      fontFamily: 'DM Mono, monospace',
+                      color: 'var(--pb-ink-muted)',
+                      fontWeight: 600,
+                    }}
+                  >
                     {colors[key]}
                   </code>
                 </div>
@@ -484,8 +556,13 @@ function EditorThemeSection() {
 function ThemePreview({ colors }: { colors: EditorThemeColors }) {
   return (
     <div
-      className="rounded-lg border border-white/10 p-3 font-mono text-[12px] leading-5"
-      style={{ background: colors.background, color: colors.textColor }}
+      className="p-3 font-mono text-[12px] leading-5"
+      style={{
+        background: colors.background,
+        color: colors.textColor,
+        borderRadius: 10,
+        border: '1.5px solid var(--pb-line-2)',
+      }}
     >
       <div>
         <span style={{ color: colors.commentColor }}>{'-- greets the player'}</span>
@@ -544,13 +621,47 @@ function ProjectSection() {
     <div className="flex flex-col">
       <SectionHeader title="Project" subtitle="Overview and editor defaults" />
       <div className="px-6 py-5 space-y-4 max-w-xl">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-300">Credits remaining</span>
-          <span className="text-sm font-medium text-accent">2,450</span>
+        <div
+          className="flex items-center justify-between"
+          style={{
+            padding: '10px 14px',
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 10,
+          }}
+        >
+          <span style={{ fontSize: 13, color: 'var(--pb-ink)', fontWeight: 600 }}>
+            Credits remaining
+          </span>
+          <span
+            style={{
+              padding: '2px 10px',
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 800,
+              background: 'var(--pb-butter)',
+              color: 'var(--pb-butter-ink)',
+              border: '1.5px solid var(--pb-butter-ink)',
+            }}
+          >
+            2,450
+          </span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-300">Classroom</span>
-          <span className="text-xs text-zinc-500">Not connected</span>
+        <div
+          className="flex items-center justify-between"
+          style={{
+            padding: '10px 14px',
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 10,
+          }}
+        >
+          <span style={{ fontSize: 13, color: 'var(--pb-ink)', fontWeight: 600 }}>
+            Classroom
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 500 }}>
+            Not connected
+          </span>
         </div>
         <div className="pt-2 space-y-3">
           <PanelToggle label="Auto-save" checked={true} onChange={() => {}} />
@@ -583,14 +694,24 @@ function PerformanceSection() {
           fullWidth
         />
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-zinc-500">
+          <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 500 }}>
             {tier === 'custom' ? 'Custom settings' : userPicked ? 'Set by you' : 'Auto-detected'}
           </span>
           {(userPicked || tier === 'custom') && (
             <button
               type="button"
               onClick={resetToAutoDetected}
-              className="text-[11px] text-accent hover:underline"
+              className="transition-colors"
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--pb-grape-ink)',
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
             >
               Reset to auto
             </button>

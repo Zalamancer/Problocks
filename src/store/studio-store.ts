@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type LeftPanelGroup = 'scene' | 'assets' | 'chat';
+export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'parts';
 export type AssetsTab = 'models' | 'parts';
-export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings' | 'parts-gen';
+export type PartsTab = 'generate' | 'history';
+export type ViewMode = 'canvas' | 'kanban' | '3d' | 'settings';
 export type ChatMode = 'scene' | 'part';
 export type Theme = 'dark' | 'light';
 export type FlowDirection = 'LR' | 'TB';
@@ -22,9 +23,11 @@ export interface StudioStore {
   leftPanelCollapsed: boolean;
   leftPanelActiveGroup: LeftPanelGroup;
   assetsActiveTab: AssetsTab;
+  partsActiveTab: PartsTab;
   toggleLeftPanel: () => void;
   setLeftPanelGroup: (group: LeftPanelGroup) => void;
   setAssetsActiveTab: (tab: AssetsTab) => void;
+  setPartsActiveTab: (tab: PartsTab) => void;
 
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
@@ -66,9 +69,11 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   leftPanelCollapsed: false,
   leftPanelActiveGroup: 'assets',
   assetsActiveTab: 'models',
+  partsActiveTab: 'generate',
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
   setLeftPanelGroup: (group) => set({ leftPanelActiveGroup: group }),
   setAssetsActiveTab: (tab) => set({ assetsActiveTab: tab }),
+  setPartsActiveTab: (tab) => set({ partsActiveTab: tab }),
 
   viewMode: '3d',
   setViewMode: (mode) => set({ viewMode: mode }),

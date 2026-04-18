@@ -121,7 +121,8 @@ export function ChatPanel() {
   // row so the user always sees what "Build" is going to do.
   const chatMode = useStudio((s) => s.chatMode);
   const setChatMode = useStudio((s) => s.setChatMode);
-  const setViewMode = useStudio((s) => s.setViewMode);
+  const setLeftPanelGroup = useStudio((s) => s.setLeftPanelGroup);
+  const setPartsActiveTab = useStudio((s) => s.setPartsActiveTab);
   const setDraftPrompt = usePartStudio((s) => s.setDraftPrompt);
 
   // Scene/building store actions (stable references)
@@ -254,13 +255,14 @@ export function ChatPanel() {
     if (!trimmed || streaming) return;
 
     // Part mode: don't stream actions — hand the prompt to Part Studio
-    // which runs its own generation + rating loop. We still push the
-    // prompt into the Part Studio draft so the full-screen view opens
-    // with the field pre-filled and the user can hit Generate.
+    // which runs its own generation + rating loop. Switch the left panel
+    // to the Part Studio tab with the prompt pre-filled on its Generate
+    // sub-tab so the user can just hit Generate.
     if (chatMode === 'part') {
       setDraftPrompt(trimmed);
       setInput('');
-      setViewMode('parts-gen');
+      setLeftPanelGroup('parts');
+      setPartsActiveTab('generate');
       return;
     }
 
@@ -378,7 +380,7 @@ export function ChatPanel() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, applyAction, chatMode, setDraftPrompt, setViewMode]);
+  }, [input, streaming, messages, applyAction, chatMode, setDraftPrompt, setLeftPanelGroup, setPartsActiveTab]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();

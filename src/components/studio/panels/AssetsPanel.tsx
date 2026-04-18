@@ -604,8 +604,8 @@ function PartsView() {
 function CustomModelsSection() {
   const savedModels = usePartStudio((s) => s.savedModels);
   const removeSavedModel = usePartStudio((s) => s.removeSavedModel);
-  const setViewMode = useStudio((s) => s.setViewMode);
-  const setChatMode = useStudio((s) => s.setChatMode);
+  const setLeftPanelGroup = useStudio((s) => s.setLeftPanelGroup);
+  const setPartsActiveTab = useStudio((s) => s.setPartsActiveTab);
   const [collapsed, setCollapsed] = useState(false);
 
   if (savedModels.length === 0) {
@@ -622,8 +622,8 @@ function CustomModelsSection() {
             variant="secondary"
             icon={Sparkles}
             onClick={() => {
-              setChatMode('part');
-              setViewMode('parts-gen');
+              setLeftPanelGroup('parts');
+              setPartsActiveTab('generate');
             }}
             fullWidth
           >

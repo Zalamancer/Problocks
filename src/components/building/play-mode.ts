@@ -16,6 +16,14 @@
  */
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import {
+  buildAvatar,
+  type Avatar,
+  CAP_HEIGHT,
+  HEAD_OFFSET,
+  LEG_HEIGHT,
+  TORSO_HEIGHT,
+} from './character';
 
 export interface PlaySceneRefs {
   scene: THREE.Scene;
@@ -35,22 +43,6 @@ export interface PlayController {
 }
 
 const CAP_RADIUS = 0.45;
-const CAP_HEIGHT = 1.8;     // body height used for AABB collision (feet → top of torso)
-const HEAD_OFFSET = 0.3;    // head center offset above CAP_HEIGHT
-// Roblox-R6-ish blocky character proportions — everything below sums to CAP_HEIGHT
-const LEG_HEIGHT = 0.85;
-const LEG_WIDTH = 0.42;
-const LEG_DEPTH = 0.5;
-const HIP_SPACING = 0.22;   // half-distance between the two legs (centers)
-const TORSO_HEIGHT = 0.95;
-const TORSO_WIDTH = 1.0;
-const TORSO_DEPTH = 0.5;
-const HEAD_SIZE = 0.55;
-const ARM_LENGTH = 0.9;
-const ARM_THICKNESS = 0.32;
-const ARM_DEPTH = 0.4;
-const SHOULDER_Y = LEG_HEIGHT + TORSO_HEIGHT - 0.12;   // pivot for arm swing
-const SHOULDER_X = TORSO_WIDTH / 2 + ARM_THICKNESS / 2 - 0.02; // tucked just outside torso
 const LIMB_SWING = 0.75;    // radians — peak leg swing at full speed
 const ARM_SWING = 0.55;
 const MOVE_SPEED = 14;
@@ -71,10 +63,11 @@ const START_CAM_OFFSET = new THREE.Vector3(0, 6, 10);
 
 export function createPlayController(refs: PlaySceneRefs): PlayController {
   let active = false;
+  let avatar: Avatar | null = null;
+  // Convenience aliases, refreshed each start() — kept non-null for TS ergonomics.
   let character: THREE.Group | null = null;
   let torso: THREE.Mesh | null = null;
   let head: THREE.Mesh | null = null;
-  // Pivot groups — rotating these swings the limb from shoulder / hip
   let armL: THREE.Group | null = null;
   let armR: THREE.Group | null = null;
   let legL: THREE.Group | null = null;
@@ -105,86 +98,6 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   const tmpSize = new THREE.Vector3();
   const camForward = new THREE.Vector3();
   const camRight = new THREE.Vector3();
-
-  function buildCharacter(): THREE.Group {
-    const g = new THREE.Group();
-    g.name = 'play-character';
-
-    const skin = new THREE.MeshStandardMaterial({ color: 0xf0c090, roughness: 0.8 });
-    const shirt = new THREE.MeshStandardMaterial({ color: 0x3a7be2, roughness: 0.6 });
-    const pants = new THREE.MeshStandardMaterial({ color: 0x2a4158, roughness: 0.85 });
-    const shoes = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 1.0 });
-
-    // Torso (shirt)
-    torso = new THREE.Mesh(
-      new THREE.BoxGeometry(TORSO_WIDTH, TORSO_HEIGHT, TORSO_DEPTH),
-      shirt,
-    );
-    torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2;
-    torso.castShadow = true;
-    g.add(torso);
-
-    // Head (skin) — eyes + mouth are children so they bob with the head
-    head = new THREE.Mesh(new THREE.BoxGeometry(HEAD_SIZE, HEAD_SIZE, HEAD_SIZE), skin);
-    head.position.y = CAP_HEIGHT + HEAD_OFFSET;
-    head.castShadow = true;
-    g.add(head);
-
-    const faceMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), faceMat);
-    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), faceMat);
-    eyeL.position.set(-0.14, 0.05, HEAD_SIZE / 2 + 0.001);
-    eyeR.position.set(0.14, 0.05, HEAD_SIZE / 2 + 0.001);
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.02), faceMat);
-    mouth.position.set(0, -0.1, HEAD_SIZE / 2 + 0.001);
-    head.add(eyeL, eyeR, mouth);
-
-    // Arms — each lives inside a pivot group at the shoulder so rotating the
-    // group swings the arm. Mesh origin is offset down by half the arm length
-    // so the arm hangs below the shoulder at rest.
-    const armGeom = new THREE.BoxGeometry(ARM_THICKNESS, ARM_LENGTH, ARM_DEPTH);
-    const armMeshL = new THREE.Mesh(armGeom, skin);
-    armMeshL.position.y = -ARM_LENGTH / 2;
-    armMeshL.castShadow = true;
-    armL = new THREE.Group();
-    armL.position.set(-SHOULDER_X, SHOULDER_Y, 0);
-    armL.add(armMeshL);
-    g.add(armL);
-
-    const armMeshR = new THREE.Mesh(armGeom.clone(), skin);
-    armMeshR.position.y = -ARM_LENGTH / 2;
-    armMeshR.castShadow = true;
-    armR = new THREE.Group();
-    armR.position.set(SHOULDER_X, SHOULDER_Y, 0);
-    armR.add(armMeshR);
-    g.add(armR);
-
-    // Legs — pants body + tiny shoe block at the foot.
-    function makeLeg(sign: number): THREE.Group {
-      const pivot = new THREE.Group();
-      pivot.position.set(sign * HIP_SPACING, LEG_HEIGHT, 0);
-      const legMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH),
-        pants,
-      );
-      legMesh.position.y = -LEG_HEIGHT / 2;
-      legMesh.castShadow = true;
-      pivot.add(legMesh);
-      const shoe = new THREE.Mesh(
-        new THREE.BoxGeometry(LEG_WIDTH + 0.02, 0.12, LEG_DEPTH + 0.1),
-        shoes,
-      );
-      shoe.position.set(0, -LEG_HEIGHT + 0.06, 0.04);
-      shoe.castShadow = true;
-      pivot.add(shoe);
-      return pivot;
-    }
-    legL = makeLeg(-1);
-    legR = makeLeg(1);
-    g.add(legL, legR);
-
-    return g;
-  }
 
   function onKeyDown(e: KeyboardEvent) {
     const wasDown = keys[e.code];
@@ -286,7 +199,14 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       if (active) return;
       active = true;
 
-      character = buildCharacter();
+      avatar = buildAvatar();
+      character = avatar.group;
+      torso = avatar.torso;
+      head = avatar.head;
+      armL = avatar.armL;
+      armR = avatar.armR;
+      legL = avatar.legL;
+      legR = avatar.legR;
       character.position.set(0, 0.1, 8);
       refs.scene.add(character);
       velocity.set(0, 0, 0);
@@ -323,17 +243,11 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       if (!active) return;
       active = false;
 
-      if (character) {
-        refs.scene.remove(character);
-        character.traverse((o) => {
-          const mesh = o as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          mesh.geometry?.dispose();
-          const mat = mesh.material as THREE.Material | THREE.Material[];
-          if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-          else mat?.dispose();
-        });
+      if (avatar) {
+        refs.scene.remove(avatar.group);
+        avatar.dispose();
       }
+      avatar = null;
       character = null;
       torso = null;
       head = null;

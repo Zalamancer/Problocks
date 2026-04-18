@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export type GizmoMode = 'select' | 'move' | 'rotate' | 'scale';
 export type PartType = 'Block' | 'Sphere' | 'Cylinder' | 'Wedge' | 'GLB';
-export type TexturePreset = 'None' | 'SmoothPlastic' | 'Brick' | 'Wood' | 'Metal' | 'Marble' | 'Neon' | 'Diamond';
+export type TexturePreset = 'None' | 'SmoothPlastic' | 'Brick' | 'Wood' | 'Metal' | 'Marble' | 'Neon' | 'Diamond' | 'Studs';
 
 export interface ScenePart {
   id: string;

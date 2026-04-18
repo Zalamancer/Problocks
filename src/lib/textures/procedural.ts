@@ -176,6 +176,53 @@ function drawNeon(ctx: CanvasRenderingContext2D) {
   }
 }
 
+function drawStuds(ctx: CanvasRenderingContext2D) {
+  // White base — multiplied by the mesh color so studs tint to any brick color.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  // 4×4 grid of studs (will tile with material repeat for larger faces).
+  const cells = 4;
+  const cell = SIZE / cells;
+  const r = cell * 0.32;
+
+  // Faint plate seam at the top edge of the tile (keeps the Lego-row look).
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.fillRect(0, 0, SIZE, 2);
+
+  for (let gy = 0; gy < cells; gy++) {
+    for (let gx = 0; gx < cells; gx++) {
+      const cx = gx * cell + cell / 2;
+      const cy = gy * cell + cell / 2;
+
+      // Outer ring shadow — gives the stud a sunken-base look.
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.fill();
+
+      // Stud body: radial gradient for fake spherical shading.
+      const grad = ctx.createRadialGradient(
+        cx - r * 0.35, cy - r * 0.35, r * 0.1,
+        cx, cy, r,
+      );
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.55, 'rgba(220,220,220,1)');
+      grad.addColorStop(1, 'rgba(140,140,140,1)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Specular highlight dot.
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.4, cy - r * 0.4, r * 0.18, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fill();
+    }
+  }
+}
+
 function drawSmoothPlastic(ctx: CanvasRenderingContext2D) {
   // Almost flat with very faint speckle — gives PBR something to catch
   ctx.fillStyle = '#ffffff';
@@ -191,6 +238,7 @@ const DRAWERS: Partial<Record<TexturePreset, (ctx: CanvasRenderingContext2D) => 
   Diamond: drawDiamond,
   Neon: drawNeon,
   SmoothPlastic: drawSmoothPlastic,
+  Studs: drawStuds,
 };
 
 /**

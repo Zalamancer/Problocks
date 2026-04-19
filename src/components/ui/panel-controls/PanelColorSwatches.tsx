@@ -77,8 +77,8 @@ export function PanelColorSwatches({
   if (!label) {
     return (
       <div className={cn('flex items-center gap-2 mb-3', className)}>
-        {trigger}
         {hexField}
+        {trigger}
       </div>
     )
   }
@@ -86,8 +86,8 @@ export function PanelColorSwatches({
   return (
     <div className={cn('flex items-center gap-3 mb-3', className)}>
       <span className="text-gray-400 text-sm w-20 shrink-0">{label}</span>
-      {trigger}
       {hexField}
+      {trigger}
     </div>
   )
 }

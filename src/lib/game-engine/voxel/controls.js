@@ -18,6 +18,7 @@ const GRAVITY = 28;      // blocks/sec^2
 const JUMP_VEL = 9;      // blocks/sec initial upward velocity
 const TERMINAL_V = 55;   // cap so falls off the world map don't nuke fp precision
 const EPS = 1e-3;        // nudge to keep AABB just outside solid cells
+const AUTO_STEP = 1.05;  // max step-up height (just over 1 block so slab/path edges grab)
 
 export function createFlyControls({ canvas, camera, world = null, isSolid = null }) {
   // Camera starts looking somewhere sensible; caller positions it before
@@ -121,26 +122,52 @@ export function createFlyControls({ canvas, camera, world = null, isSolid = null
       // --- Horizontal collision (X then Z, axis-separated) -------------
       // Move one axis at a time so sliding along a wall works. Snap the
       // moving side of the AABB flush to the block face on collision.
+      // Auto-step: if blocked while grounded AND a ≤1-block step up would
+      // clear the obstacle, lift feet to the step top instead of stopping.
       let feetY = camera.position.y - PLAYER_EYE;
+
+      // Scan upward from feetY in small increments to find the lowest
+      // clear feet height at (tx, tz). Returns >=0 (step height) or -1.
+      function stepHeight(tx, tz) {
+        if (!grounded) return -1;
+        for (let step = EPS; step <= AUTO_STEP; step += 0.1) {
+          if (!aabbCollides(tx, feetY + step, tz)) return step;
+        }
+        return -1;
+      }
 
       if (dx !== 0) {
         const newX = camera.position.x + dx;
         if (!aabbCollides(newX, feetY, camera.position.z)) {
           camera.position.x = newX;
-        } else if (dx > 0) {
-          camera.position.x = Math.floor(newX + PLAYER_RADIUS) - PLAYER_RADIUS - EPS;
         } else {
-          camera.position.x = Math.floor(newX - PLAYER_RADIUS) + 1 + PLAYER_RADIUS + EPS;
+          const lift = stepHeight(newX, camera.position.z);
+          if (lift >= 0) {
+            camera.position.x = newX;
+            camera.position.y += lift;
+            feetY += lift;
+          } else if (dx > 0) {
+            camera.position.x = Math.floor(newX + PLAYER_RADIUS) - PLAYER_RADIUS - EPS;
+          } else {
+            camera.position.x = Math.floor(newX - PLAYER_RADIUS) + 1 + PLAYER_RADIUS + EPS;
+          }
         }
       }
       if (dz !== 0) {
         const newZ = camera.position.z + dz;
         if (!aabbCollides(camera.position.x, feetY, newZ)) {
           camera.position.z = newZ;
-        } else if (dz > 0) {
-          camera.position.z = Math.floor(newZ + PLAYER_RADIUS) - PLAYER_RADIUS - EPS;
         } else {
-          camera.position.z = Math.floor(newZ - PLAYER_RADIUS) + 1 + PLAYER_RADIUS + EPS;
+          const lift = stepHeight(camera.position.x, newZ);
+          if (lift >= 0) {
+            camera.position.z = newZ;
+            camera.position.y += lift;
+            feetY += lift;
+          } else if (dz > 0) {
+            camera.position.z = Math.floor(newZ + PLAYER_RADIUS) - PLAYER_RADIUS - EPS;
+          } else {
+            camera.position.z = Math.floor(newZ - PLAYER_RADIUS) + 1 + PLAYER_RADIUS + EPS;
+          }
         }
       }
 

@@ -10,7 +10,7 @@ import { useStudio, type GameSystem } from '@/store/studio-store';
 // The chosen value becomes `gameSystem` in the studio store, which in turn
 // decides what the AssetsPanel renders (Models vs Parts vs placeholders).
 
-type WorldKind = '3d' | '2d' | 'topdown';
+type WorldKind = '3d' | '2d' | 'topdown' | 'quiz';
 
 interface KindOption {
   id: WorldKind;
@@ -29,9 +29,10 @@ interface SubKindOption {
 }
 
 const KINDS: KindOption[] = [
-  { id: '3d',      emoji: '🧊', label: '3D',       desc: 'Full 3D world you move around in.' },
-  { id: '2d',      emoji: '🕹️', label: '2D',       desc: 'Side-view platformers and shooters.',   directSystem: '2d' },
-  { id: 'topdown', emoji: '🗺️', label: 'Top-down', desc: 'Look-from-above tile maps and RPGs.',    directSystem: 'topdown' },
+  { id: '3d',      emoji: '🧊', label: '3D',        desc: 'Full 3D world you move around in.' },
+  { id: '2d',      emoji: '🕹️', label: '2D',        desc: 'Side-view platformers and shooters.',   directSystem: '2d' },
+  { id: 'topdown', emoji: '🗺️', label: 'Top-down',  desc: 'Look-from-above tile maps and RPGs.',    directSystem: 'topdown' },
+  { id: 'quiz',    emoji: '📝', label: 'Quiz Mode', desc: 'Real AP FRQ, broken into bite-sized tap-through steps.', directSystem: 'quiz' },
 ];
 
 const THREE_D_SUBKINDS: SubKindOption[] = [
@@ -216,7 +217,7 @@ export function NewGameDialog() {
         </div>
 
         {step === 0 && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {KINDS.map((k) => (
               <Card
                 key={k.id}

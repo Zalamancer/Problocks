@@ -23,7 +23,8 @@ export type GameSystem =
   | '3d-lego'
   | '3d-voxel'
   | '2d'
-  | 'topdown';
+  | 'topdown'
+  | 'quiz';
 
 // Which AssetsPanel view a given game system should show. '3d-freeform'
 // maps to Models (GLTF kit), the two grid-based 3d systems map to Parts

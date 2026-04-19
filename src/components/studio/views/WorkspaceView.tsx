@@ -8,6 +8,7 @@ import { BuildingCanvas } from '@/components/building/BuildingCanvas';
 import { useBuildingStore, type Tool } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 import { VoxelView } from './VoxelView';
+import { QuizView } from './QuizView';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and a minimal
@@ -33,6 +34,17 @@ export function WorkspaceView() {
     return (
       <div className="relative w-full h-full">
         <VoxelView />
+      </div>
+    );
+  }
+
+  // Quiz mode is a completely non-3D experience — an AP Physics FRQ
+  // runner. No canvas, no building tools, just the tap-through drill
+  // and rubric-graded homework views.
+  if (gameSystem === 'quiz') {
+    return (
+      <div className="relative w-full h-full">
+        <QuizView />
       </div>
     );
   }

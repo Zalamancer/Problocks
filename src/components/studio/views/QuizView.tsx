@@ -1,29 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { FRQ } from '@/lib/quiz/frq-content';
 import { Gamepad2, FileText } from 'lucide-react';
+import { FRQ } from '@/lib/quiz/frq-content';
 import {
   StartScreen,
   DrillPlay,
   ResultsScreen,
   type DrillState,
 } from './quiz/DrillScreens';
-import { HomeworkMode } from './quiz/HomeworkMode';
+import { DesktopHomework } from './quiz/DesktopHomework';
 
 type Screen = 'start' | 'drill' | 'results' | 'homework';
 type Mode = 'drill' | 'homework';
 
 /**
- * Quiz Mode — fourth game kind (alongside 3D/2D/Top-down). Replaces the
- * voxel / building canvases with a fully-deterministic AP Physics quiz
- * runner. Two surfaces share one content package:
- *
- *   - Drill: tap-through micro-questions, streak tracking, auto-advance.
- *   - Homework: full FRQ visible, rubric-graded on demand.
- *
- * Content lives entirely in `@/lib/quiz/frq-content` so swapping in a
- * different FRQ later is a single-file change.
+ * Quiz Mode — fourth game kind (alongside 3D/2D/Top-down). Desktop
+ * surface: drill runs in a centered card, homework runs in a full
+ * two-column layout (left rail with apparatus + data, right column
+ * with collapsible parts). No phone frame — this lives inside the
+ * Problocks studio workspace, not on a mocked device.
  */
 export function QuizView() {
   const [screen, setScreen] = useState<Screen>('start');
@@ -57,6 +53,22 @@ export function QuizView() {
     setScreen('results');
   }
 
+  // Homework gets the full viewport — it's a wide two-column page.
+  if (screen === 'homework') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: 'var(--pb-cream, var(--pb-paper))',
+        }}
+      >
+        <DesktopHomework frq={FRQ} onExit={() => setScreen('start')} />
+      </div>
+    );
+  }
+
+  // Drill / start / results: centered column on a softened page.
   return (
     <div
       style={{
@@ -64,66 +76,59 @@ export function QuizView() {
         height: '100%',
         overflow: 'auto',
         background:
-          'radial-gradient(800px 500px at 85% -10%, rgba(255,234,189,0.35) 0%, transparent 60%),' +
-          'radial-gradient(700px 400px at -10% 110%, rgba(215,233,255,0.35) 0%, transparent 55%),' +
+          'radial-gradient(800px 500px at 85% -10%, rgba(255,234,189,0.28) 0%, transparent 60%),' +
+          'radial-gradient(700px 400px at -10% 110%, rgba(215,233,255,0.28) 0%, transparent 55%),' +
           'var(--pb-cream, var(--pb-paper))',
       }}
     >
       <div
         style={{
           minHeight: '100%',
-          padding: '20px 16px',
+          padding: '24px 20px 36px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 14,
+          gap: 16,
         }}
       >
         <ModeSwitcher mode={mode} setMode={setMode} onReset={() => setScreen('start')} />
 
-        {screen === 'homework' ? (
-          <div
-            style={{
-              width: '100%',
-              maxWidth: 960,
-              minHeight: 720,
-              background: 'var(--pb-cream, var(--pb-paper))',
-              borderRadius: 20,
-              border: '1.5px solid var(--pb-line-2)',
-              boxShadow: '0 4px 0 var(--pb-line-2)',
-              overflow: 'hidden',
-              position: 'relative',
-            }}
-          >
-            <HomeworkMode frq={FRQ} onExit={() => setScreen('start')} />
-          </div>
-        ) : (
-          <PhoneFrame>
-            {screen === 'start' && (
-              <StartScreen
-                source={FRQ.source}
-                mode={mode}
-                onModeChange={setMode}
-                onStart={start}
-              />
-            )}
-            {screen === 'drill' && state && (
-              <DrillPlay
-                frq={FRQ}
-                state={state}
-                setState={(updater) =>
-                  setState((s) => (s ? updater(s) : s))
-                }
-                onFinish={finish}
-                autoAdvance
-                autoAdvanceSec={3}
-              />
-            )}
-            {screen === 'results' && state && (
-              <ResultsScreen frq={FRQ} state={state} onRestart={start} />
-            )}
-          </PhoneFrame>
-        )}
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 720,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 20,
+            boxShadow: '0 4px 0 var(--pb-line-2)',
+            overflow: 'hidden',
+            minHeight: 640,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {screen === 'start' && (
+            <StartScreen
+              source={FRQ.source}
+              mode={mode}
+              onModeChange={setMode}
+              onStart={start}
+            />
+          )}
+          {screen === 'drill' && state && (
+            <DrillPlay
+              frq={FRQ}
+              state={state}
+              setState={(updater) => setState((s) => (s ? updater(s) : s))}
+              onFinish={finish}
+              autoAdvance
+              autoAdvanceSec={3}
+            />
+          )}
+          {screen === 'results' && state && (
+            <ResultsScreen frq={FRQ} state={state} onRestart={start} />
+          )}
+        </div>
 
         <Footnote />
       </div>
@@ -145,7 +150,7 @@ function ModeSwitcher({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
         padding: '8px 14px',
         borderRadius: 999,
         background: 'var(--pb-paper)',
@@ -155,13 +160,7 @@ function ModeSwitcher({
         color: 'var(--pb-ink)',
       }}
     >
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 800,
-          letterSpacing: '-0.01em',
-        }}
-      >
+      <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '-0.01em' }}>
         AP Probe
       </span>
       <span
@@ -219,50 +218,6 @@ function ModeSwitcher({
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-// Tablet-ish frame that contains the drill screens. On desktop the quiz
-// still feels "phone-like" so classroom-style pacing cues stay intact.
-function PhoneFrame({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        width: 440,
-        height: 820,
-        maxWidth: '100%',
-        padding: 10,
-        borderRadius: 46,
-        background: 'var(--pb-ink)',
-        boxShadow: '0 12px 30px rgba(29,26,20,0.22), inset 0 0 0 2px #2b2822',
-        position: 'relative',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: 10,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 110,
-          height: 28,
-          borderRadius: 20,
-          background: '#000',
-        }}
-      />
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          borderRadius: 38,
-          overflow: 'hidden',
-          background: 'var(--pb-cream, var(--pb-paper))',
-          position: 'relative',
-        }}
-      >
-        {children}
       </div>
     </div>
   );

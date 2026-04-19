@@ -5,17 +5,17 @@ import { useRouter } from 'next/navigation';
 import { OnboardingWizard } from '@/components/studio/modals/OnboardingWizard';
 import type { TemplateId } from '@/lib/templates/types';
 
-import { Nav } from '@/components/landing/pb-site/Nav';
-import { Hero } from '@/components/landing/pb-site/Hero';
-import { Marquee } from '@/components/landing/pb-site/Marquee';
-import { How } from '@/components/landing/pb-site/How';
-import { Playground } from '@/components/landing/pb-site/Playground';
-import { Features } from '@/components/landing/pb-site/Features';
-import { Classroom } from '@/components/landing/pb-site/Classroom';
-import { Marketplace } from '@/components/landing/pb-site/Marketplace';
-import { Pricing } from '@/components/landing/pb-site/Pricing';
-import { FAQ } from '@/components/landing/pb-site/FAQ';
-import { Footer } from '@/components/landing/pb-site/Footer';
+import { Nav } from '@/components/landing/pb-learn/Nav';
+import { Hero } from '@/components/landing/pb-learn/Hero';
+import { Marquee } from '@/components/landing/pb-learn/Marquee';
+import { Learn } from '@/components/landing/pb-learn/Learn';
+import { Messaging } from '@/components/landing/pb-learn/Messaging';
+import { ForStudents } from '@/components/landing/pb-learn/ForStudents';
+import { ForTeachers } from '@/components/landing/pb-learn/ForTeachers';
+import { Subjects } from '@/components/landing/pb-learn/Subjects';
+import { Stories } from '@/components/landing/pb-learn/Stories';
+import { FAQ } from '@/components/landing/pb-learn/FAQ';
+import { Footer } from '@/components/landing/pb-learn/Footer';
 
 import '@/components/landing/pb-site/styles.css';
 
@@ -36,17 +36,17 @@ export default function Home() {
       <div className="pbs-page-noise" aria-hidden />
 
       <div className="pbs-content">
-        <Nav onStart={openWizard} />
-        <Hero onStart={openWizard} />
+        <Nav onMakeGame={openWizard} />
+        <Hero onMakeGame={openWizard} />
         <Marquee />
-        <How />
-        <Playground />
-        <Features />
-        <Classroom />
-        <Marketplace />
-        <Pricing onStart={openWizard} />
+        <Learn />
+        <Messaging />
+        <ForStudents />
+        <ForTeachers />
+        <Subjects />
+        <Stories />
         <FAQ />
-        <Footer onStart={openWizard} />
+        <Footer onMakeGame={openWizard} />
       </div>
 
       <OnboardingWizard

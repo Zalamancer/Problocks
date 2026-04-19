@@ -40,8 +40,9 @@ async function loadLibrary(): Promise<LibEntry[]> {
   }
 }
 
-function cliEnv() {
+function cliEnv(): NodeJS.ProcessEnv {
   return {
+    ...process.env,
     HOME: process.env.HOME || homedir(),
     PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
     USER: process.env.USER || '',

@@ -366,7 +366,7 @@ export function FlowchartView({ template, board, onTaskClick }: FlowchartViewPro
         onNodeClick={handleNodeClick}
         fitView
         fitViewOptions={{ padding: 0.2 }}
-        colorMode={theme}
+        colorMode={theme === 'cream' ? 'light' : theme}
         nodesConnectable={false}
         zoomOnScroll={false}
         panOnScroll

@@ -48,6 +48,7 @@ function handleWithCLI(messages: { role: string; content: string }[]) {
         '--dangerously-skip-permissions',
       ], {
         env: {
+          ...process.env,
           HOME: process.env.HOME || homedir(),
           PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
           USER: process.env.USER || '',

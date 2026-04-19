@@ -14,7 +14,7 @@ export function ClassworkPanel({ courseId }: Props) {
   const loading = courseDataLoading[courseId] ?? false;
 
   useEffect(() => {
-    if (data?.coursework?.length > 0 || data?.topics?.length > 0) return;
+    if ((data?.coursework?.length ?? 0) > 0 || (data?.topics?.length ?? 0) > 0) return;
     const load = async () => {
       setCourseDataLoading(courseId, true);
       try {

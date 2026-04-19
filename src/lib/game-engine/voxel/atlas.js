@@ -185,30 +185,203 @@ function paintDiamond(ctx, tx, ty, rand) {
   paintMetal(ctx, tx, ty, rand, '#5be0d3', '#2d9b8e', '#9ff0e8');
 }
 
-// Map from tile id → painter fn.
-const PAINTERS = [];
-PAINTERS[TILE.GRASS_TOP]  = paintGrassTop;
-PAINTERS[TILE.GRASS_SIDE] = paintGrassSide;
-PAINTERS[TILE.DIRT]       = paintDirt;
-PAINTERS[TILE.STONE]      = paintStone;
-PAINTERS[TILE.COBBLE]     = paintCobble;
-PAINTERS[TILE.LOG_TOP]    = paintLogTop;
-PAINTERS[TILE.LOG_SIDE]   = paintLogSide;
-PAINTERS[TILE.PLANKS]     = paintPlanks;
-PAINTERS[TILE.LEAVES]     = paintLeaves;
-PAINTERS[TILE.SAND]       = paintSand;
-PAINTERS[TILE.BRICK]      = paintBrick;
-PAINTERS[TILE.GLASS]      = paintGlass;
-PAINTERS[TILE.WATER]      = paintWater;
-PAINTERS[TILE.GOLD]       = paintGold;
-PAINTERS[TILE.IRON]       = paintIron;
-PAINTERS[TILE.DIAMOND]    = paintDiamond;
+// ---------------------------------------------------------------------
+// VIBRANT pack — mirrors the classic structure (same rings, plank rows,
+// brick staggering, cobble cells, ore flecks) but with high-saturation
+// palettes so the world reads as a toyetic / arcade skin.
+// ---------------------------------------------------------------------
+function vibrantGrassTop(ctx, tx, ty, rand) {
+  speckle(ctx, tx, ty, '#45e24b', '#14a82f', '#9cff86', 0.6, rand);
+}
+function vibrantGrassSide(ctx, tx, ty, rand) {
+  speckle(ctx, tx, ty, '#c96a28', '#7a2f0a', '#ff9a4a', 0.5, rand);
+  fillRect(ctx, tx, ty, TILE_PX, 3, '#45e24b');
+  for (let x = 0; x < TILE_PX; x++) {
+    if (rand() < 0.35) fillRect(ctx, tx + x, ty + 3, 1, 1, '#14a82f');
+    if (rand() < 0.25) fillRect(ctx, tx + x, ty + 4, 1, 1, '#9cff86');
+  }
+}
+function vibrantDirt(ctx, tx, ty, rand) {
+  speckle(ctx, tx, ty, '#c96a28', '#7a2f0a', '#ff9a4a', 0.55, rand);
+}
+function vibrantStone(ctx, tx, ty, rand) {
+  // Candy lavender stone — still reads as rock but pops on screen.
+  speckle(ctx, tx, ty, '#9a8cff', '#5e4ecc', '#cfc4ff', 0.5, rand);
+}
+function vibrantCobble(ctx, tx, ty, rand) {
+  fillRect(ctx, tx, ty, TILE_PX, TILE_PX, '#3b2a6e');
+  const cells = 4;
+  const s = TILE_PX / cells;
+  for (let cy = 0; cy < cells; cy++) {
+    for (let cx = 0; cx < cells; cx++) {
+      const px = tx + cx * s + 1;
+      const py = ty + cy * s + 1;
+      const w = s - 2;
+      const h = s - 2;
+      const shade = 0.7 + rand() * 0.3;
+      // Rotate between three bright cobble hues.
+      const k = (cx + cy) % 3;
+      const r = Math.floor((k === 0 ? 200 : k === 1 ? 110 : 250) * shade);
+      const g = Math.floor((k === 0 ? 120 : k === 1 ? 200 : 170) * shade);
+      const b = Math.floor((k === 0 ? 255 : k === 1 ? 255 : 110) * shade);
+      fillRect(ctx, px, py, w, h, `rgb(${r},${g},${b})`);
+    }
+  }
+}
+function vibrantLogTop(ctx, tx, ty, rand) {
+  fillRect(ctx, tx, ty, TILE_PX, TILE_PX, '#ffb54a');
+  const cx = TILE_PX / 2;
+  const cy = TILE_PX / 2;
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const ring = Math.floor(d) % 3;
+      if (ring === 0) fillRect(ctx, tx + x, ty + y, 1, 1, '#d44a22');
+      if (rand() < 0.06) fillRect(ctx, tx + x, ty + y, 1, 1, '#8a1e05');
+    }
+  }
+}
+function vibrantLogSide(ctx, tx, ty, rand) {
+  fillRect(ctx, tx, ty, TILE_PX, TILE_PX, '#a83510');
+  for (let x = 0; x < TILE_PX; x++) {
+    const shade = 0.75 + rand() * 0.4;
+    const r = Math.floor(215 * shade);
+    const g = Math.floor(95 * shade);
+    const b = Math.floor(35 * shade);
+    fillRect(ctx, tx + x, ty, 1, TILE_PX, `rgb(${r},${g},${b})`);
+    if (rand() < 0.15) {
+      const y = Math.floor(rand() * TILE_PX);
+      fillRect(ctx, tx + x, ty + y, 1, 1, '#521504');
+    }
+  }
+}
+function vibrantPlanks(ctx, tx, ty, rand) {
+  fillRect(ctx, tx, ty, TILE_PX, TILE_PX, '#ffd633');
+  const plankH = 4;
+  for (let py = 0; py < TILE_PX; py += plankH) {
+    const shade = 0.85 + rand() * 0.3;
+    const r = Math.floor(255 * shade);
+    const g = Math.floor(200 * shade);
+    const b = Math.floor(60 * shade);
+    fillRect(ctx, tx, ty + py, TILE_PX, plankH - 1, `rgb(${Math.min(r, 255)},${g},${b})`);
+    fillRect(ctx, tx, ty + py + plankH - 1, TILE_PX, 1, '#b0751a');
+    if (rand() < 0.3) {
+      const nx = Math.floor(rand() * TILE_PX);
+      fillRect(ctx, tx + nx, ty + py + 1, 1, 2, '#6a3e0c');
+    }
+  }
+}
+function vibrantLeaves(ctx, tx, ty, rand) {
+  speckle(ctx, tx, ty, '#3cff5a', '#0cb02a', '#bfffa8', 0.65, rand);
+  for (let i = 0; i < 8; i++) {
+    const x = Math.floor(rand() * TILE_PX);
+    const y = Math.floor(rand() * TILE_PX);
+    fillRect(ctx, tx + x, ty + y, 1, 1, '#055a15');
+  }
+}
+function vibrantSand(ctx, tx, ty, rand) {
+  speckle(ctx, tx, ty, '#ffea66', '#d9b020', '#fff8a0', 0.5, rand);
+}
+function vibrantBrick(ctx, tx, ty, rand) {
+  fillRect(ctx, tx, ty, TILE_PX, TILE_PX, '#1a1a1a');
+  const rowH = 4;
+  const brickW = 8;
+  for (let ry = 0; ry < TILE_PX / rowH; ry++) {
+    const off = (ry % 2) * (brickW / 2);
+    for (let bx = -brickW; bx < TILE_PX; bx += brickW) {
+      const px = tx + bx + off;
+      const py = ty + ry * rowH;
+      const shade = 0.85 + rand() * 0.35;
+      const r = Math.floor(255 * shade);
+      const g = Math.floor(60 * shade);
+      const b = Math.floor(90 * shade);
+      fillRect(ctx, px + 1, py + 1, brickW - 2, rowH - 2, `rgb(${Math.min(r, 255)},${g},${b})`);
+    }
+  }
+}
+function vibrantGlass(ctx, tx, ty) {
+  fillRect(ctx, tx, ty, TILE_PX, TILE_PX, 'rgba(80,240,255,0.4)');
+  fillRect(ctx, tx, ty, TILE_PX, 1, '#a8f8ff');
+  fillRect(ctx, tx, ty + TILE_PX - 1, TILE_PX, 1, '#a8f8ff');
+  fillRect(ctx, tx, ty, 1, TILE_PX, '#a8f8ff');
+  fillRect(ctx, tx + TILE_PX - 1, ty, 1, TILE_PX, '#a8f8ff');
+}
+function vibrantWater(ctx, tx, ty, rand) {
+  speckle(ctx, tx, ty, '#00a8ff', '#0057c2', '#7fd9ff', 0.4, rand);
+}
+function vibrantMetal(ctx, tx, ty, rand, base, dark, light, hostBase, hostDark, hostLight) {
+  speckle(ctx, tx, ty, hostBase, hostDark, hostLight, 0.45, rand);
+  for (let i = 0; i < 22; i++) {
+    const x = Math.floor(rand() * TILE_PX);
+    const y = Math.floor(rand() * TILE_PX);
+    const r2 = rand();
+    const c = r2 < 0.33 ? dark : r2 > 0.66 ? light : base;
+    fillRect(ctx, tx + x, ty + y, 1, 1, c);
+  }
+}
+function vibrantGold(ctx, tx, ty, rand) {
+  vibrantMetal(ctx, tx, ty, rand, '#ffe033', '#b48a1e', '#fff48a', '#9a8cff', '#5e4ecc', '#cfc4ff');
+}
+function vibrantIron(ctx, tx, ty, rand) {
+  vibrantMetal(ctx, tx, ty, rand, '#ff7aa8', '#c23f72', '#ffc8dc', '#9a8cff', '#5e4ecc', '#cfc4ff');
+}
+function vibrantDiamond(ctx, tx, ty, rand) {
+  vibrantMetal(ctx, tx, ty, rand, '#00d4ff', '#0091c2', '#a8f0ff', '#9a8cff', '#5e4ecc', '#cfc4ff');
+}
+
+// Pack registries — TILE id → painter fn. `classic` is the original
+// pack preserved verbatim; `vibrant` swaps every painter for a
+// saturated counterpart.
+function buildPack(painters) {
+  const out = [];
+  out[TILE.GRASS_TOP]  = painters.grassTop;
+  out[TILE.GRASS_SIDE] = painters.grassSide;
+  out[TILE.DIRT]       = painters.dirt;
+  out[TILE.STONE]      = painters.stone;
+  out[TILE.COBBLE]     = painters.cobble;
+  out[TILE.LOG_TOP]    = painters.logTop;
+  out[TILE.LOG_SIDE]   = painters.logSide;
+  out[TILE.PLANKS]     = painters.planks;
+  out[TILE.LEAVES]     = painters.leaves;
+  out[TILE.SAND]       = painters.sand;
+  out[TILE.BRICK]      = painters.brick;
+  out[TILE.GLASS]      = painters.glass;
+  out[TILE.WATER]      = painters.water;
+  out[TILE.GOLD]       = painters.gold;
+  out[TILE.IRON]       = painters.iron;
+  out[TILE.DIAMOND]    = painters.diamond;
+  return out;
+}
+
+const PACKS = {
+  classic: buildPack({
+    grassTop: paintGrassTop, grassSide: paintGrassSide, dirt: paintDirt,
+    stone: paintStone, cobble: paintCobble, logTop: paintLogTop,
+    logSide: paintLogSide, planks: paintPlanks, leaves: paintLeaves,
+    sand: paintSand, brick: paintBrick, glass: paintGlass,
+    water: paintWater, gold: paintGold, iron: paintIron, diamond: paintDiamond,
+  }),
+  vibrant: buildPack({
+    grassTop: vibrantGrassTop, grassSide: vibrantGrassSide, dirt: vibrantDirt,
+    stone: vibrantStone, cobble: vibrantCobble, logTop: vibrantLogTop,
+    logSide: vibrantLogSide, planks: vibrantPlanks, leaves: vibrantLeaves,
+    sand: vibrantSand, brick: vibrantBrick, glass: vibrantGlass,
+    water: vibrantWater, gold: vibrantGold, iron: vibrantIron, diamond: vibrantDiamond,
+  }),
+};
+
+export const TEXTURE_PACKS = Object.keys(PACKS);
+export const DEFAULT_TEXTURE_PACK = 'classic';
 
 /**
- * Build the atlas canvas. Returns the HTMLCanvasElement so the caller
- * can wrap it in a THREE.CanvasTexture and dispose when done.
+ * Build the atlas canvas for a given pack ("classic" | "vibrant").
+ * Returns the HTMLCanvasElement so the caller can wrap it in a
+ * THREE.CanvasTexture and dispose when done.
  */
-export function createAtlasCanvas() {
+export function createAtlasCanvas(packId = DEFAULT_TEXTURE_PACK) {
+  const painters = PACKS[packId] || PACKS[DEFAULT_TEXTURE_PACK];
   const c = document.createElement('canvas');
   c.width = ATLAS_W;
   c.height = ATLAS_H;
@@ -221,7 +394,7 @@ export function createAtlasCanvas() {
     const row = Math.floor(tid / ATLAS_COLS);
     const tx = col * TILE_PX;
     const ty = row * TILE_PX;
-    const paint = PAINTERS[tid];
+    const paint = painters[tid];
     if (paint) paint(ctx, tx, ty, rand);
     else {
       // Unmapped tile — magenta so mistakes are obvious.
@@ -255,8 +428,8 @@ export function tileUV(tileId) {
  * filter-free pixel art. THREE is passed in so the host app owns the
  * version (matches the voxel engine plan).
  */
-export function createAtlasTexture(THREE) {
-  const canvas = createAtlasCanvas();
+export function createAtlasTexture(THREE, { pack = DEFAULT_TEXTURE_PACK } = {}) {
+  const canvas = createAtlasCanvas(pack);
   const tex = new THREE.CanvasTexture(canvas);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;

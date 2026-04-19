@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { createVoxelEngine, HOTBAR, BLOCK_DEFS } from '@/lib/game-engine/voxel';
+import { createVoxelEngine, HOTBAR, BLOCK_DEFS, TEXTURE_PACKS, DEFAULT_TEXTURE_PACK } from '@/lib/game-engine/voxel';
 
 /**
  * Voxel (Minecraft-style) viewport. Mounts a standalone Three.js
@@ -16,12 +16,13 @@ export function VoxelView() {
   const [hotbarIndex, setHotbarIndex] = useState(0);
   const [blockName, setBlockName] = useState('Grass');
   const [locked, setLocked] = useState(false);
+  const [pack, setPack] = useState<string>(DEFAULT_TEXTURE_PACK);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = createVoxelEngine({ canvas, THREE });
+    const engine = createVoxelEngine({ canvas, THREE, texturePack: pack });
     engine.setUIListener((s: { hotbarIndex: number; blockId: number; blockName: string }) => {
       setHotbarIndex(s.hotbarIndex);
       setBlockName(s.blockName);
@@ -40,6 +41,12 @@ export function VoxelView() {
       engineRef.current = null;
     };
   }, []);
+
+  // Hot-swap the atlas when the user flips packs from the HUD — cheap
+  // (single texture rebuild, no world remesh needed).
+  useEffect(() => {
+    engineRef.current?.setTexturePack?.(pack);
+  }, [pack]);
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -126,6 +133,40 @@ export function VoxelView() {
                 </span>
               </span>
             </div>
+          );
+        })}
+      </div>
+
+      {/* Texture pack toggle */}
+      <div
+        className="absolute top-3 right-3 flex items-center gap-1 p-1"
+        style={{
+          background: 'rgba(29,26,20,0.75)',
+          border: '1.5px solid rgba(255,255,255,0.15)',
+          borderRadius: 10,
+        }}
+      >
+        {TEXTURE_PACKS.map((id) => {
+          const active = id === pack;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setPack(id)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: 'capitalize',
+                color: active ? '#1d1a14' : 'rgba(255,255,255,0.85)',
+                background: active ? '#f2c84a' : 'rgba(255,255,255,0.06)',
+                border: active ? '1.5px solid #1d1a14' : '1.5px solid rgba(255,255,255,0.08)',
+                cursor: 'pointer',
+              }}
+            >
+              {id}
+            </button>
           );
         })}
       </div>

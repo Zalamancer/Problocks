@@ -24,8 +24,10 @@ import { HOTBAR, BLOCK, BLOCK_DEFS, isSolid } from './blocks.js';
  * @param {*}                 cfg.THREE    — injected so host owns the version
  * @param {Object}            [cfg.world]  — serialized world to restore
  * @param {(s:Object)=>void}  [cfg.onBlockChange] — fired on place/break
+ * @param {string}            [cfg.texturePack] — atlas pack id ("classic" | "vibrant")
  */
-export function createVoxelEngine({ canvas, THREE, world: savedWorld, onBlockChange }) {
+export function createVoxelEngine({ canvas, THREE, world: savedWorld, onBlockChange, texturePack = 'classic' }) {
+  let currentPack = texturePack;
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: false,            // cheap on integrated GPUs
@@ -58,11 +60,21 @@ export function createVoxelEngine({ canvas, THREE, world: savedWorld, onBlockCha
   if (!restored) generateTerrain(world);
 
   // One shared material, one shared atlas texture.
-  const atlas = createAtlasTexture(THREE);
+  let atlas = createAtlasTexture(THREE, { pack: currentPack });
   const material = new THREE.MeshLambertMaterial({
     map: atlas,
     side: THREE.FrontSide,
   });
+
+  function setTexturePack(packId) {
+    if (packId === currentPack) return;
+    currentPack = packId;
+    const next = createAtlasTexture(THREE, { pack: packId });
+    material.map = next;
+    material.needsUpdate = true;
+    if (atlas) atlas.dispose();
+    atlas = next;
+  }
 
   // Chunk meshes live in a Map keyed by "cx,cy,cz". A parallel dirty
   // set tracks which chunks need remeshing — processed up to N per
@@ -246,5 +258,7 @@ export function createVoxelEngine({ canvas, THREE, world: savedWorld, onBlockCha
     start, pause, dispose,
     serialize: () => world.serialize(),
     setUIListener: (fn) => { uiListener = fn; notifyUI(); },
+    setTexturePack,
+    getTexturePack: () => currentPack,
   };
 }

@@ -5,3 +5,4 @@
 export { createVoxelEngine } from './engine.js';
 export { HOTBAR, BLOCK, BLOCK_DEFS } from './blocks.js';
 export { WORLD_W, WORLD_H, WORLD_D } from './world.js';
+export { TEXTURE_PACKS, DEFAULT_TEXTURE_PACK } from './atlas.js';

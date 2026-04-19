@@ -1,0 +1,141 @@
+/* Scoped styles for the ProBlocks landing page.
+   All rules hang off `.pbs-root` so nothing leaks into /studio or the
+   rest of the app's dark theme. Ported from the Claude Design bundle
+   (problocks/project/Problocks Website.html). */
+
+.pbs-root {
+  /* Base ink + paper */
+  --pbs-ink: #1d1a14;
+  --pbs-ink-soft: #57524a;
+  --pbs-ink-muted: #8a8478;
+  --pbs-cream: #fdf6e6;
+  --pbs-cream-2: #f7edd4;
+  --pbs-paper: #fffaf0;
+  --pbs-line: #e8dcbc;
+  --pbs-line-2: #d6c896;
+
+  /* Playful accents — matched lightness + chroma, varied hue. */
+  --pbs-butter: #ffd84d;   --pbs-butter-ink: #6b4f00;
+  --pbs-mint: #b6f0c6;     --pbs-mint-ink: #0f5b2e;
+  --pbs-coral: #ffb4a2;    --pbs-coral-ink: #7a2a18;
+  --pbs-sky: #b9d9ff;      --pbs-sky-ink: #1b4a8a;
+  --pbs-grape: #dcc7ff;    --pbs-grape-ink: #4d2a8a;
+  --pbs-pink: #ffc8e0;     --pbs-pink-ink: #8a1e5c;
+
+  --pbs-radius: 18px;
+  --pbs-radius-lg: 28px;
+
+  background: var(--pbs-cream);
+  color: var(--pbs-ink);
+  font-family: var(--font-bricolage), 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  font-optical-sizing: auto;
+  font-feature-settings: "ss01", "ss02";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.4;
+  overflow-x: hidden;
+  min-height: 100vh;
+  position: relative;
+}
+
+.pbs-root * { box-sizing: border-box; }
+
+.pbs-root ::selection { background: var(--pbs-butter); color: var(--pbs-butter-ink); }
+
+.pbs-serif {
+  font-family: var(--font-instrument-serif), 'Instrument Serif', ui-serif, Georgia, serif;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+.pbs-mono {
+  font-family: var(--font-dm-mono), 'DM Mono', ui-monospace, monospace;
+}
+
+.pbs-root a { color: inherit; text-decoration: none; }
+
+/* Textured cream background — attached to .pbs-root so it doesn't leak. */
+.pbs-page-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, #ffe9a8 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 40%, #ffd7c7 0%, transparent 55%),
+    radial-gradient(900px 500px at 110% 90%, #d7e9ff 0%, transparent 55%),
+    var(--pbs-cream);
+}
+.pbs-page-noise {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.10  0 0 0 0 0.08  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.pbs-content { position: relative; z-index: 2; }
+
+/* Chunky interactive button — :active/:hover can't be set inline, so they
+   live here while the base colors still come from the per-variant class. */
+.pbs-chunky {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 14px 22px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  border: 1.5px solid var(--pbs-ink);
+  transform: translateY(0);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pbs-chunky:disabled { cursor: default; opacity: 0.8; }
+.pbs-chunky-ink {
+  background: var(--pbs-ink); color: var(--pbs-cream); border-color: var(--pbs-ink);
+  box-shadow: 0 4px 0 #000, 0 10px 24px -10px rgba(0,0,0,0.35);
+}
+.pbs-chunky-ink:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 #000, 0 14px 28px -10px rgba(0,0,0,0.4); }
+.pbs-chunky-ink:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #000, 0 4px 12px -4px rgba(0,0,0,0.4); }
+
+.pbs-chunky-butter {
+  background: var(--pbs-butter); color: var(--pbs-butter-ink); border-color: var(--pbs-butter-ink);
+  box-shadow: 0 4px 0 var(--pbs-butter-ink), 0 10px 24px -10px rgba(107,79,0,0.45);
+}
+.pbs-chunky-butter:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 var(--pbs-butter-ink), 0 14px 28px -10px rgba(107,79,0,0.5); }
+.pbs-chunky-butter:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--pbs-butter-ink), 0 4px 12px -4px rgba(107,79,0,0.4); }
+
+.pbs-chunky-ghost {
+  background: var(--pbs-paper); color: var(--pbs-ink); border: 1.5px solid var(--pbs-ink);
+  box-shadow: 0 4px 0 var(--pbs-ink);
+}
+.pbs-chunky-ghost:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 var(--pbs-ink); }
+.pbs-chunky-ghost:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--pbs-ink); }
+
+.pbs-wrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
+
+.pbs-root :focus-visible { outline: 3px solid var(--pbs-butter); outline-offset: 3px; border-radius: 8px; }
+
+@keyframes pbs-float {
+  0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50%      { transform: translateY(-10px) rotate(calc(var(--rot, 0deg) + 1deg)); }
+}
+.pbs-float { animation: pbs-float 7s ease-in-out infinite; }
+
+@keyframes pbs-blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes pbs-marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.pbs-marquee-track { animation: pbs-marquee 40s linear infinite; }
+
+/* Responsive collapses for the dense grids. */
+@media (max-width: 860px) {
+  .pbs-playground-grid { grid-template-columns: 1fr !important; }
+  .pbs-classroom-grid  { grid-template-columns: 1fr !important; }
+  .pbs-features-grid   { grid-template-columns: repeat(4, 1fr) !important; }
+  .pbs-features-grid > * { grid-column: span 4 !important; }
+  .pbs-footer-grid     { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 520px) {
+  .pbs-footer-grid     { grid-template-columns: 1fr !important; }
+  .pbs-wrap { padding: 0 18px; }
+}

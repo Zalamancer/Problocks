@@ -38,6 +38,7 @@ const THREE_D_SUBKINDS: SubKindOption[] = [
   { id: '3d-freeform', emoji: '🏔️', label: 'Freeform',   desc: 'Drop any model anywhere. Full transform freedom.' },
   { id: '3d-tile',     emoji: '🧩', label: 'Tile-based', desc: 'Snap walls, floors, and props to a grid.' },
   { id: '3d-lego',     emoji: '🧱', label: 'Lego',       desc: 'Stud-based bricks you click together.' },
+  { id: '3d-voxel',    emoji: '🟫', label: 'Blocks',     desc: 'Minecraft-style voxel world. Click to place and break blocks.' },
 ];
 
 function StepDots({ total, current }: { total: number; current: number }) {
@@ -229,7 +230,7 @@ export function NewGameDialog() {
         )}
 
         {step === 1 && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {THREE_D_SUBKINDS.map((s) => (
               <Card
                 key={s.id}

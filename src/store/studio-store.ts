@@ -21,13 +21,15 @@ export type GameSystem =
   | '3d-freeform'
   | '3d-tile'
   | '3d-lego'
+  | '3d-voxel'
   | '2d'
   | 'topdown';
 
 // Which AssetsPanel view a given game system should show. '3d-freeform'
 // maps to Models (GLTF kit), the two grid-based 3d systems map to Parts
-// (procedural pieces). 2D/topdown use Models as a placeholder until their
-// dedicated sprite/tileset browsers are built.
+// (procedural pieces), voxel uses Models as placeholder until a dedicated
+// block palette panel exists. 2D/topdown use Models as a placeholder until
+// their dedicated sprite/tileset browsers are built.
 export function assetsTabForGameSystem(sys: GameSystem): AssetsTab {
   if (sys === '3d-tile' || sys === '3d-lego') return 'parts';
   return 'models';

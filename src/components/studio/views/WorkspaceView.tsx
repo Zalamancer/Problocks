@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { BuildingCanvas } from '@/components/building/BuildingCanvas';
 import { useBuildingStore, type Tool } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
+import { VoxelView } from './VoxelView';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and a minimal
@@ -23,6 +24,19 @@ export function WorkspaceView() {
   const showToolbar = useStudio(
     (s) => s.leftPanelActiveGroup === 'assets' && s.assetsActiveTab === 'parts',
   );
+  const gameSystem = useStudio((s) => s.gameSystem);
+
+  // The voxel (Minecraft-style) system uses a completely different
+  // engine — pointer-locked FPS camera, chunked meshing, raycast
+  // place/break — so swap the whole viewport out when it's active.
+  if (gameSystem === '3d-voxel') {
+    return (
+      <div className="relative w-full h-full">
+        <VoxelView />
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-full">
       <BuildingCanvas />

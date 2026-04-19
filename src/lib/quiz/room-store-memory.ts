@@ -32,12 +32,15 @@ const uuid = () => globalThis.crypto.randomUUID();
 export async function createRoom(input: CreateRoomInput): Promise<Room> {
   const now = Date.now();
   const pin = mintPin((p) => store.pinIndex.has(p));
+  // Self-paced rooms skip the lobby phase — students can start answering
+  // the instant they land, no host coordination needed.
+  const selfPaced = input.pacing === 'self';
   const room: Room = {
     id: uuid(),
     pin,
     frqId: input.frqId,
     pacing: input.pacing,
-    phase: 'lobby',
+    phase: selfPaced ? 'question' : 'lobby',
     partIdx: 0,
     microIdx: 0,
     questionStartedAt: null,
@@ -64,7 +67,11 @@ export async function getRoomByPin(pin: string): Promise<Room | null> {
 export async function joinRoom(roomId: string, displayName: string): Promise<JoinResult> {
   const room = store.rooms.get(roomId);
   if (!room) throw new Error('room-not-found');
-  if (room.phase !== 'lobby') throw new Error('room-already-started');
+  // Self-paced rooms accept joiners at any time (the room starts in
+  // 'question' and never has a lobby). Live rooms close at 'Start'.
+  if (room.pacing === 'live' && room.phase !== 'lobby') {
+    throw new Error('room-already-started');
+  }
   const name = displayName.trim().slice(0, 24);
   if (!name) throw new Error('display-name-required');
   if (room.players.some((p) => p.displayName.toLowerCase() === name.toLowerCase())) {
@@ -100,7 +107,11 @@ export async function submitAnswer(input: SubmitAnswerInput): Promise<SubmitAnsw
   if (!room) throw new Error('room-not-found');
   const player = room.players.find((p) => p.id === entry.playerId);
   if (!player) throw new Error('player-not-found');
-  if (room.phase !== 'question') throw new Error('not-answerable');
+  // Live: only accept during the 'question' phase (host-gated).
+  // Self-paced: accept at any time — each student progresses on their own.
+  if (room.pacing === 'live' && room.phase !== 'question') {
+    throw new Error('not-answerable');
+  }
 
   const already = room.answers.some(
     (a) => a.playerId === player.id && a.partId === input.partId && a.microId === input.microId,
@@ -115,7 +126,12 @@ export async function submitAnswer(input: SubmitAnswerInput): Promise<SubmitAnsw
     input.answerValue,
   );
   const now = Date.now();
-  const ms = room.questionStartedAt ? now - room.questionStartedAt : ANSWER_WINDOW_MS;
+  // Live scoring is time-to-answer from question reveal. Self-paced has
+  // no shared clock, so pin the "speed" at the window midpoint so
+  // accuracy + streak drive the leaderboard.
+  const ms = room.pacing === 'self'
+    ? ANSWER_WINDOW_MS / 2
+    : room.questionStartedAt ? now - room.questionStartedAt : ANSWER_WINDOW_MS;
   const nextStreak = correct ? player.streak + 1 : 0;
   const points = computePoints(correct, ms, nextStreak);
 

@@ -78,8 +78,18 @@ export function LiveHost({
     );
   }
 
+  // Self-paced rooms don't have a phase machine — they're just a shared
+  // scoreboard with a join URL. Render a dedicated layout.
+  if (room.pacing === 'self') {
+    return (
+      <HostFrame onExit={onExit} variant="self">
+        <SelfPacedPanel room={room} />
+      </HostFrame>
+    );
+  }
+
   return (
-    <HostFrame onExit={onExit}>
+    <HostFrame onExit={onExit} variant="live">
       {room.phase === 'lobby'       && <LobbyPanel  room={room} onStart={advance} />}
       {room.phase === 'question'    && <QuestionPanel room={room} onNext={advance} />}
       {room.phase === 'reveal'      && <RevealPanel   room={room} onNext={advance} />}
@@ -89,7 +99,15 @@ export function LiveHost({
   );
 }
 
-function HostFrame({ children, onExit }: { children: React.ReactNode; onExit: () => void }) {
+function HostFrame({
+  children,
+  onExit,
+  variant = 'live',
+}: {
+  children: React.ReactNode;
+  onExit: () => void;
+  variant?: 'live' | 'self';
+}) {
   return (
     <div
       style={{
@@ -128,7 +146,9 @@ function HostFrame({ children, onExit }: { children: React.ReactNode; onExit: ()
         >
           <ChevronLeft size={14} />
         </button>
-        <Pill tone="coral">LIVE · Host</Pill>
+        <Pill tone={variant === 'self' ? 'sky' : 'coral'}>
+          {variant === 'self' ? 'Self-paced · Host' : 'LIVE · Host'}
+        </Pill>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--pb-ink)' }}>
           {FRQ.source.exam} · {FRQ.source.title}
         </span>
@@ -509,6 +529,194 @@ function Leaderboard({
           {cta}
           <ArrowRight size={13} strokeWidth={2.4} />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Self-paced panel (host view) ----------
+//
+// Self-paced rooms don't have a phase machine — there's no "start",
+// no "next question", no shared clock. The host just watches a live
+// scoreboard and can share the join URL. Students iterate through the
+// whole FRQ on their own device.
+
+function SelfPacedPanel({ room }: { room: RoomPublic }) {
+  const [origin, setOrigin] = useState('');
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+  const joinUrl = origin ? `${origin}/play/quiz/${room.pin}` : `/play/quiz/${room.pin}`;
+
+  const ranked = useMemo(
+    () => [...room.players].sort((a, b) => b.score - a.score),
+    [room.players],
+  );
+
+  // One "slot" per (part, micro) so the host can see per-question
+  // participation. Each row: how many students have answered and
+  // how many got it right.
+  const slots = useMemo(() => {
+    const rows: { partLabel: string; microIdx: number; answered: number; correct: number }[] = [];
+    FRQ.parts.forEach((part) => {
+      part.micros.forEach((micro, mi) => {
+        const here = room.answers.filter((a) => a.partId === part.id && a.microId === micro.id);
+        rows.push({
+          partLabel: part.label,
+          microIdx: mi,
+          answered: here.length,
+          correct: here.filter((a) => a.correct).length,
+        });
+      });
+    });
+    return rows;
+  }, [room.answers]);
+
+  return (
+    <div style={{ padding: '32px 28px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div
+          style={{
+            padding: 24,
+            borderRadius: 20,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-ink)',
+            boxShadow: '0 4px 0 var(--pb-ink)',
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--pb-ink-muted)' }}>
+            Self-paced · Join at
+          </div>
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+              marginTop: 6,
+              fontFamily: 'DM Mono, ui-monospace, monospace',
+              wordBreak: 'break-all',
+            }}
+          >
+            {joinUrl.replace(/^https?:\/\//, '')}
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--pb-ink-muted)', marginTop: 24 }}>
+            Or enter PIN
+          </div>
+          <div
+            style={{
+              fontSize: 72,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+              marginTop: 4,
+              fontFamily: 'DM Mono, ui-monospace, monospace',
+              letterSpacing: '0.08em',
+              lineHeight: 1,
+            }}
+          >
+            {room.pin}
+          </div>
+          <div style={{ marginTop: 14, fontSize: 12, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
+            Students work at their own pace. No start button — results
+            update live as they submit.
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: 20,
+            borderRadius: 20,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            boxShadow: '0 4px 0 var(--pb-line-2)',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 320,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Trophy size={14} strokeWidth={2.4} style={{ color: 'var(--pb-butter-ink)' }} />
+            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
+              Leaderboard ({ranked.length})
+            </span>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              marginTop: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              overflow: 'auto',
+            }}
+          >
+            {ranked.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--pb-ink-muted)' }}>
+                Waiting for players to join…
+              </div>
+            )}
+            {ranked.map((p, i) => (
+              <div
+                key={p.id}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  background: i === 0 ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+                  border: `1.5px solid ${i === 0 ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <div style={{ width: 22, textAlign: 'center', fontWeight: 800, color: 'var(--pb-ink-muted)', fontSize: 12 }}>
+                  {i + 1}
+                </div>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--pb-ink)' }}>
+                  {p.displayName}
+                </div>
+                <div style={{ fontFamily: 'DM Mono, ui-monospace, monospace', fontWeight: 800, color: 'var(--pb-ink)', fontSize: 13 }}>
+                  {p.score}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 22,
+          padding: 16,
+          borderRadius: 16,
+          background: 'var(--pb-paper)',
+          border: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <Users size={13} strokeWidth={2.4} style={{ color: 'var(--pb-ink)' }} />
+          <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
+            Per-question progress
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+          {slots.map((s, i) => (
+            <div
+              key={i}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 10,
+                background: 'var(--pb-cream-2)',
+                border: '1.5px solid var(--pb-line-2)',
+                fontSize: 11,
+                color: 'var(--pb-ink)',
+              }}
+            >
+              <div style={{ fontWeight: 800, letterSpacing: '0.04em' }}>
+                {s.partLabel} · Q{s.microIdx + 1}
+              </div>
+              <div style={{ marginTop: 4, color: 'var(--pb-ink-muted)' }}>
+                {s.answered} answered · {s.correct} correct
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

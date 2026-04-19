@@ -137,7 +137,15 @@ export default function PlayQuizPage({
       {!notFound && room && !seat && (
         <JoinForm room={room} pin={pin} onJoin={join} />
       )}
-      {!notFound && room && seat && (
+      {!notFound && room && seat && room.pacing === 'self' && (
+        <SelfPacedScreen
+          room={room}
+          playerId={seat.playerId}
+          token={seat.token}
+          roomId={room.id}
+        />
+      )}
+      {!notFound && room && seat && room.pacing !== 'self' && (
         <PlayingScreen
           room={room}
           playerId={seat.playerId}
@@ -168,11 +176,13 @@ function JoinForm({
   onJoin: (name: string) => void;
 }) {
   const [name, setName] = useState('');
-  const canJoin = name.trim().length > 0 && room.phase === 'lobby';
+  // Self-paced rooms accept joiners at any time; live rooms only during lobby.
+  const joinable = room.pacing === 'self' || room.phase === 'lobby';
+  const canJoin = name.trim().length > 0 && joinable;
   return (
     <div style={{ flex: 1, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', maxWidth: 420, margin: '0 auto', width: '100%' }}>
       <div style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', opacity: 0.6 }}>
-        Join quiz · PIN {pin}
+        {room.pacing === 'self' ? 'Self-paced quiz' : 'Join quiz'} · PIN {pin}
       </div>
       <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>
         {FRQ.source.title}
@@ -181,7 +191,7 @@ function JoinForm({
         {FRQ.source.exam} · {FRQ.source.year}
       </div>
 
-      {room.phase !== 'lobby' && (
+      {!joinable && (
         <div style={{ marginTop: 18, padding: 12, borderRadius: 10, background: 'rgba(255,90,110,0.18)', border: '1px solid rgba(255,90,110,0.5)', fontSize: 13 }}>
           This quiz has already started — you can&rsquo;t join now.
         </div>
@@ -192,7 +202,7 @@ function JoinForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Your nickname"
-        disabled={room.phase !== 'lobby'}
+        disabled={!joinable}
         maxLength={24}
         onKeyDown={(e) => { if (e.key === 'Enter' && canJoin) onJoin(name.trim()); }}
         style={{
@@ -450,6 +460,183 @@ function LeaderboardSelf({ room, playerId }: { room: RoomPublic; playerId: strin
       <div style={{ fontSize: 13, opacity: 0.7 }}>Your rank</div>
       <div style={{ fontSize: 48, fontWeight: 800 }}>#{mine + 1}</div>
       <div style={{ fontSize: 14, opacity: 0.8 }}>{me?.displayName} · {me?.score} pts</div>
+    </div>
+  );
+}
+
+// ---------- Self-paced student flow ----------
+//
+// Live rooms get their progression from the host's phase machine. Self-
+// paced rooms don't have one — each student walks the whole FRQ at
+// their own speed. We keep the step state locally, POST each answer
+// to /answer (server grades + updates score), show a small reveal
+// card with the explanation, then let the student tap "Next".
+
+function SelfPacedScreen({
+  room,
+  playerId,
+  token,
+  roomId,
+}: {
+  room: RoomPublic;
+  playerId: string;
+  token: string;
+  roomId: string;
+}) {
+  // Flatten the FRQ into a single ordered list of (partIdx, microIdx)
+  // so "next" is just i++.
+  const steps = useMemo(() => {
+    const out: { partIdx: number; microIdx: number }[] = [];
+    FRQ.parts.forEach((p, pi) => p.micros.forEach((_m, mi) => out.push({ partIdx: pi, microIdx: mi })));
+    return out;
+  }, []);
+
+  const [stepIdx, setStepIdx] = useState(0);
+  const [phase, setPhase] = useState<'answering' | 'reveal' | 'done'>('answering');
+  const [lastResult, setLastResult] = useState<
+    { correct: boolean; points: number; newScore: number } | null
+  >(null);
+  const [busy, setBusy] = useState(false);
+
+  const me = room.players.find((p) => p.id === playerId);
+  const step = steps[stepIdx];
+  const part = step ? FRQ.parts[step.partIdx] : null;
+  const micro = part && step ? part.micros[step.microIdx] : null;
+
+  const submit = useCallback(
+    async (opts: { answerId?: string; answerValue?: number }) => {
+      if (!part || !micro || busy) return;
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/quiz/rooms/${roomId}/answer`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            token,
+            partId: part.id,
+            microId: micro.id,
+            ...opts,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setLastResult({
+            correct: data.correct,
+            points: data.points,
+            newScore: data.newScore,
+          });
+          setPhase('reveal');
+        } else {
+          // already-answered means we resumed an earlier session — just
+          // advance past this step without showing a reveal.
+          if (data?.error === 'already-answered') {
+            setStepIdx((i) => Math.min(i + 1, steps.length));
+            setPhase(stepIdx + 1 >= steps.length ? 'done' : 'answering');
+          } else {
+            alert(data?.error ?? 'Could not submit');
+          }
+        }
+      } finally {
+        setBusy(false);
+      }
+    },
+    [part, micro, busy, roomId, token, stepIdx, steps.length],
+  );
+
+  const next = useCallback(() => {
+    const nextIdx = stepIdx + 1;
+    if (nextIdx >= steps.length) {
+      setPhase('done');
+      return;
+    }
+    setStepIdx(nextIdx);
+    setPhase('answering');
+    setLastResult(null);
+  }, [stepIdx, steps.length]);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <StudentHeader name={me?.displayName ?? '—'} score={me?.score ?? 0} phase={room.phase} />
+
+      {phase === 'answering' && part && micro && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16 }}>
+          <div style={{ fontSize: 11, opacity: 0.6, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 8 }}>
+            {part.label} · Step {step.microIdx + 1}/{part.micros.length} · {stepIdx + 1}/{steps.length}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.4, marginBottom: 14 }}>
+            {micro.prompt}
+          </div>
+          <QuestionInput micro={micro} onSubmit={submit} />
+        </div>
+      )}
+
+      {phase === 'reveal' && lastResult && micro && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16, gap: 12 }}>
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 16,
+              background: lastResult.correct ? 'rgba(34,197,94,0.2)' : 'rgba(255,90,110,0.2)',
+              border: `1.5px solid ${lastResult.correct ? 'rgba(34,197,94,0.5)' : 'rgba(255,90,110,0.5)'}`,
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: 26, fontWeight: 800 }}>
+              {lastResult.correct ? 'Correct!' : 'Not quite'}
+            </div>
+            {lastResult.correct && (
+              <div style={{ fontSize: 15, fontWeight: 700, opacity: 0.9, marginTop: 4 }}>
+                +{lastResult.points} points
+              </div>
+            )}
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+              Total: {lastResult.newScore}
+            </div>
+          </div>
+          <div
+            style={{
+              padding: 14,
+              borderRadius: 14,
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            {micro.explain}
+          </div>
+          <button
+            type="button"
+            onClick={next}
+            style={{
+              marginTop: 'auto',
+              padding: 16,
+              borderRadius: 14,
+              border: 0,
+              background: '#22c55e',
+              color: '#06331a',
+              fontSize: 16,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            {stepIdx + 1 >= steps.length ? 'Finish' : 'Next question'}
+          </button>
+        </div>
+      )}
+
+      {phase === 'done' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 10 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', opacity: 0.6 }}>
+            Done
+          </div>
+          <div style={{ fontSize: 44, fontWeight: 800 }}>{me?.score ?? 0}</div>
+          <div style={{ fontSize: 13, opacity: 0.8 }}>points total</div>
+          <div style={{ marginTop: 14, fontSize: 12, opacity: 0.7, textAlign: 'center', maxWidth: 320, lineHeight: 1.5 }}>
+            Your teacher can see everyone&rsquo;s scores on their dashboard.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

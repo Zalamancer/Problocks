@@ -120,12 +120,15 @@ export async function createRoom(
   // PIN uniqueness: probe each candidate against the DB; the unique
   // constraint on quiz_rooms.pin is the ultimate guard if we race.
   const pin = await mintPinSupabase(supabase);
+  // Self-paced rooms jump straight to 'question' — no lobby wait.
+  const selfPaced = input.pacing === 'self';
   const { data, error } = await supabase
     .from('quiz_rooms')
     .insert({
       pin,
       frq_id: input.frqId,
       pacing: input.pacing,
+      phase: selfPaced ? 'question' : 'lobby',
       host_user_id: input.hostUserId ?? null,
     })
     .select('*')
@@ -184,7 +187,10 @@ export async function joinRoom(
   if (roomRes.error) throw roomRes.error;
   const roomRow = roomRes.data as RoomRow | null;
   if (!roomRow) throw new Error('room-not-found');
-  if (roomRow.phase !== 'lobby') throw new Error('room-already-started');
+  // Live rooms close once the host starts. Self-paced accepts all comers.
+  if (roomRow.pacing === 'live' && roomRow.phase !== 'lobby') {
+    throw new Error('room-already-started');
+  }
 
   const name = displayName.trim().slice(0, 24);
   if (!name) throw new Error('display-name-required');
@@ -279,7 +285,9 @@ export async function submitAnswer(
   if (roomRes.error) throw roomRes.error;
   const roomRow = roomRes.data as RoomRow | null;
   if (!roomRow) throw new Error('room-not-found');
-  if (roomRow.phase !== 'question') throw new Error('not-answerable');
+  if (roomRow.pacing === 'live' && roomRow.phase !== 'question') {
+    throw new Error('not-answerable');
+  }
 
   // Enforce one-answer-per-micro-per-player.
   const already = await supabase
@@ -300,7 +308,10 @@ export async function submitAnswer(
   );
   const now = Date.now();
   const startedAt = roomRow.question_started_at ? Date.parse(roomRow.question_started_at) : null;
-  const ms = startedAt ? now - startedAt : ANSWER_WINDOW_MS;
+  // Self-paced: no shared clock, pin speed at window midpoint.
+  const ms = roomRow.pacing === 'self'
+    ? ANSWER_WINDOW_MS / 2
+    : startedAt ? now - startedAt : ANSWER_WINDOW_MS;
   const nextStreak = correct ? playerRow.streak + 1 : 0;
   const points = computePoints(correct, ms, nextStreak);
 

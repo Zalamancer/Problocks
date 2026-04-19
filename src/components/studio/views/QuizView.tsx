@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Gamepad2, FileText, Radio } from 'lucide-react';
+import { Gamepad2, FileText, Radio, Clock, UserCheck, ArrowRight } from 'lucide-react';
 import { FRQ } from '@/lib/quiz/frq-content';
 import {
   StartScreen,
@@ -12,8 +12,9 @@ import {
 import { DesktopHomework } from './quiz/DesktopHomework';
 import { LiveHost } from './quiz/LiveHost';
 
-type Screen = 'start' | 'drill' | 'results' | 'homework' | 'live';
+type Screen = 'start' | 'drill' | 'results' | 'homework' | 'live-picker' | 'live';
 type Mode = 'drill' | 'homework' | 'live';
+type Pacing = 'live' | 'self';
 
 /**
  * Quiz Mode — fourth game kind (alongside 3D/2D/Top-down). Three sub-
@@ -26,6 +27,7 @@ type Mode = 'drill' | 'homework' | 'live';
 export function QuizView() {
   const [screen, setScreen] = useState<Screen>('start');
   const [mode, setMode] = useState<Mode>('drill');
+  const [pacing, setPacing] = useState<Pacing>('live');
   const [state, setState] = useState<DrillState | null>(null);
 
   function start() {
@@ -34,7 +36,7 @@ export function QuizView() {
       return;
     }
     if (mode === 'live') {
-      setScreen('live');
+      setScreen('live-picker');
       return;
     }
     setState({
@@ -67,10 +69,20 @@ export function QuizView() {
       </div>
     );
   }
+  if (screen === 'live-picker') {
+    return (
+      <div style={fullBg}>
+        <PacingPicker
+          onPick={(p) => { setPacing(p); setScreen('live'); }}
+          onExit={() => setScreen('start')}
+        />
+      </div>
+    );
+  }
   if (screen === 'live') {
     return (
       <div style={fullBg}>
-        <LiveHost pacing="live" onExit={() => setScreen('start')} />
+        <LiveHost pacing={pacing} onExit={() => setScreen('start')} />
       </div>
     );
   }
@@ -101,9 +113,9 @@ export function QuizView() {
           mode={mode}
           onPick={(m) => {
             setMode(m);
-            // Live jumps straight into the host screen; the other two
-            // land on StartScreen so the student sees the briefing.
-            setScreen(m === 'live' ? 'live' : 'start');
+            // Live requires a pacing choice first; other modes land on
+            // StartScreen so the student sees the briefing.
+            setScreen(m === 'live' ? 'live-picker' : 'start');
           }}
         />
 
@@ -236,6 +248,151 @@ function ModeSwitcher({
         })}
       </div>
     </div>
+  );
+}
+
+function PacingPicker({
+  onPick,
+  onExit,
+}: {
+  onPick: (p: Pacing) => void;
+  onExit: () => void;
+}) {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        gap: 18,
+        background: 'var(--pb-cream, var(--pb-paper))',
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--pb-ink-muted)' }}>
+        How do you want to run this?
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--pb-ink)' }}>
+        Pick a pacing mode
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 720, width: '100%', marginTop: 10 }}>
+        <PacingCard
+          icon={<UserCheck size={16} strokeWidth={2.4} />}
+          title="Live"
+          subtitle="Host-driven"
+          bullets={[
+            'All students see the same question at once',
+            'You advance with one tap per question',
+            'Speed + streak bonuses based on shared clock',
+          ]}
+          onClick={() => onPick('live')}
+        />
+        <PacingCard
+          icon={<Clock size={16} strokeWidth={2.4} />}
+          title="Self-paced"
+          subtitle="Student-driven"
+          bullets={[
+            'Students work through the FRQ at their own speed',
+            'No "start" — join any time, leave any time',
+            'Leaderboard ranks by accuracy + streak',
+          ]}
+          onClick={() => onPick('self')}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={onExit}
+        style={{
+          marginTop: 10,
+          padding: '8px 14px',
+          borderRadius: 999,
+          background: 'transparent',
+          color: 'var(--pb-ink-muted)',
+          border: '1.5px solid var(--pb-line-2)',
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+        }}
+      >
+        Back
+      </button>
+    </div>
+  );
+}
+
+function PacingCard({
+  icon,
+  title,
+  subtitle,
+  bullets,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  bullets: string[];
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: 'left',
+        padding: 22,
+        borderRadius: 20,
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        boxShadow: '0 3px 0 var(--pb-line-2)',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        color: 'var(--pb-ink)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            width: 32, height: 32, borderRadius: 10,
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--pb-ink)',
+          }}
+        >
+          {icon}
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: 16, fontWeight: 800 }}>{title}</span>
+          <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            {subtitle}
+          </span>
+        </div>
+      </div>
+      <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12.5, lineHeight: 1.6, color: 'var(--pb-ink-soft)' }}>
+        {bullets.map((b) => (<li key={b}>{b}</li>))}
+      </ul>
+      <span
+        style={{
+          marginTop: 'auto',
+          alignSelf: 'flex-end',
+          fontSize: 12,
+          fontWeight: 800,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          color: 'var(--pb-ink)',
+        }}
+      >
+        Open room <ArrowRight size={12} strokeWidth={2.4} />
+      </span>
+    </button>
   );
 }
 

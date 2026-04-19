@@ -2,9 +2,15 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 
-// Pill — small rounded label used throughout the quiz UI. Mirrors the
-// Design-bundle "Pill" atom, mapped onto Problocks' --pb-* tokens so it
-// themes correctly in dark / light / cream modes.
+// Pill — small rounded label used throughout the quiz UI (both the
+// teacher's dashboard and the student's solo screens). Mirrors the
+// Design-bundle "Pill" atom, mapped onto Problocks' --pb-* tokens so
+// it themes correctly in dark / light / cream modes.
+//
+// Lives under src/components/quiz/ (not studio/) because the teacher
+// dashboard at /teach/quiz and the student play page at /play/quiz
+// both depend on this, and neither is part of the developer studio.
+
 type Tone = 'paper' | 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink' | 'ink';
 
 const TONES: Record<Tone, [string, string, string]> = {

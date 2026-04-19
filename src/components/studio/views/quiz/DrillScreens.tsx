@@ -14,7 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { Frq } from '@/lib/quiz/frq-content';
-import { Pill } from './QuizAtoms';
+import { Pill } from '@/components/quiz/QuizAtoms';
 import { RealAPBriefing, ExperimentLine } from './Briefing';
 import { DataTable } from './DataTable';
 import { MicroQuestion, FeedbackCard, type AnswerPayload } from './Micro';

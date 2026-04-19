@@ -5,12 +5,14 @@ import { ChevronLeft, Play, ArrowRight, Users, Trophy } from 'lucide-react';
 import { FRQ } from '@/lib/quiz/frq-content';
 import type { RoomPublic } from '@/lib/quiz/room-types';
 import { useRoom } from '@/lib/quiz/use-room';
-import { Pill } from './QuizAtoms';
+import { Pill } from '@/components/quiz/QuizAtoms';
 
-// LiveHost — teacher's host screen. Lives inside the studio workspace
-// (not a separate route) so the teacher can see their class join + drive
-// the quiz without leaving Problocks. Students are on their phones at
-// /play/quiz/[pin]. Phase 1 polls every 1s; Phase 2 swaps to Realtime.
+// LiveHost — teacher's host dashboard. Mounted at /teach/quiz — it's
+// the teacher-facing product, explicitly **not** inside the developer
+// studio. Teachers drive the quiz and watch answers come in here
+// while students are on their phones at /play/quiz/[pin]. Realtime
+// keeps both sides in sync (polling fallback when Supabase isn't
+// configured locally).
 
 type HostScreen = 'creating' | 'live' | 'error';
 

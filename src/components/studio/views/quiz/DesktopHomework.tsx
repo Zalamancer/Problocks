@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ChevronDown, Wand2, Box, FileText, Check } from 'lucide-react';
 import type { Frq } from '@/lib/quiz/frq-content';
-import { Pill } from './QuizAtoms';
+import { Pill } from '@/components/quiz/QuizAtoms';
 import { ApparatusViz } from './Apparatus';
 import { DataTable } from './DataTable';
 import { MicroQuestion, type AnswerPayload } from './Micro';

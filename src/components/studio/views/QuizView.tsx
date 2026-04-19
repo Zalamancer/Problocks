@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Gamepad2, FileText } from 'lucide-react';
+import { Gamepad2, FileText, Radio } from 'lucide-react';
 import { FRQ } from '@/lib/quiz/frq-content';
 import {
   StartScreen,
@@ -10,16 +10,18 @@ import {
   type DrillState,
 } from './quiz/DrillScreens';
 import { DesktopHomework } from './quiz/DesktopHomework';
+import { LiveHost } from './quiz/LiveHost';
 
-type Screen = 'start' | 'drill' | 'results' | 'homework';
-type Mode = 'drill' | 'homework';
+type Screen = 'start' | 'drill' | 'results' | 'homework' | 'live';
+type Mode = 'drill' | 'homework' | 'live';
 
 /**
- * Quiz Mode — fourth game kind (alongside 3D/2D/Top-down). Desktop
- * surface: drill runs in a centered card, homework runs in a full
- * two-column layout (left rail with apparatus + data, right column
- * with collapsible parts). No phone frame — this lives inside the
- * Problocks studio workspace, not on a mocked device.
+ * Quiz Mode — fourth game kind (alongside 3D/2D/Top-down). Three sub-
+ * modes share the same FRQ content:
+ *   Drill    — solo tap-through practice (centered card)
+ *   Homework — solo full-rubric assignment (two-column desktop layout)
+ *   Live     — Kahoot-style hosted session with a PIN students join
+ *              from their own devices at /play/quiz/[pin]
  */
 export function QuizView() {
   const [screen, setScreen] = useState<Screen>('start');
@@ -29,6 +31,10 @@ export function QuizView() {
   function start() {
     if (mode === 'homework') {
       setScreen('homework');
+      return;
+    }
+    if (mode === 'live') {
+      setScreen('live');
       return;
     }
     setState({
@@ -53,22 +59,22 @@ export function QuizView() {
     setScreen('results');
   }
 
-  // Homework gets the full viewport — it's a wide two-column page.
+  // Homework and Live get the full viewport — both are wide desktop views.
   if (screen === 'homework') {
     return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          background: 'var(--pb-cream, var(--pb-paper))',
-        }}
-      >
+      <div style={fullBg}>
         <DesktopHomework frq={FRQ} onExit={() => setScreen('start')} />
       </div>
     );
   }
+  if (screen === 'live') {
+    return (
+      <div style={fullBg}>
+        <LiveHost pacing="live" onExit={() => setScreen('start')} />
+      </div>
+    );
+  }
 
-  // Drill / start / results: centered column on a softened page.
   return (
     <div
       style={{
@@ -91,7 +97,15 @@ export function QuizView() {
           gap: 16,
         }}
       >
-        <ModeSwitcher mode={mode} setMode={setMode} onReset={() => setScreen('start')} />
+        <ModeSwitcher
+          mode={mode}
+          onPick={(m) => {
+            setMode(m);
+            // Live jumps straight into the host screen; the other two
+            // land on StartScreen so the student sees the briefing.
+            setScreen(m === 'live' ? 'live' : 'start');
+          }}
+        />
 
         <div
           style={{
@@ -110,8 +124,8 @@ export function QuizView() {
           {screen === 'start' && (
             <StartScreen
               source={FRQ.source}
-              mode={mode}
-              onModeChange={setMode}
+              mode={mode === 'live' ? 'drill' : mode}
+              onModeChange={(m) => setMode(m)}
               onStart={start}
             />
           )}
@@ -136,14 +150,18 @@ export function QuizView() {
   );
 }
 
+const fullBg = {
+  width: '100%',
+  height: '100%',
+  background: 'var(--pb-cream, var(--pb-paper))',
+} as const;
+
 function ModeSwitcher({
   mode,
-  setMode,
-  onReset,
+  onPick,
 }: {
   mode: Mode;
-  setMode: (m: Mode) => void;
-  onReset: () => void;
+  onPick: (m: Mode) => void;
 }) {
   return (
     <div
@@ -189,6 +207,7 @@ function ModeSwitcher({
           [
             { id: 'drill' as const,    icon: Gamepad2, label: 'Drill' },
             { id: 'homework' as const, icon: FileText, label: 'Homework' },
+            { id: 'live' as const,     icon: Radio,    label: 'Live' },
           ]
         ).map(({ id, icon: Icon, label }) => {
           const on = mode === id;
@@ -196,10 +215,7 @@ function ModeSwitcher({
             <button
               key={id}
               type="button"
-              onClick={() => {
-                setMode(id);
-                onReset();
-              }}
+              onClick={() => onPick(id)}
               style={{
                 padding: '4px 10px',
                 borderRadius: 999,

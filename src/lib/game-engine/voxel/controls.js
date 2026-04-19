@@ -12,9 +12,12 @@
 //   controls.isLocked        // boolean
 
 const PLAYER_EYE = 1.6;  // camera sits this far above feet
+const PLAYER_HEIGHT = 1.8; // total height (feet → top of head)
+const PLAYER_RADIUS = 0.3; // half-width on X and Z (AABB half-extents)
 const GRAVITY = 28;      // blocks/sec^2
 const JUMP_VEL = 9;      // blocks/sec initial upward velocity
 const TERMINAL_V = 55;   // cap so falls off the world map don't nuke fp precision
+const EPS = 1e-3;        // nudge to keep AABB just outside solid cells
 
 export function createFlyControls({ canvas, camera, world = null, isSolid = null }) {
   // Camera starts looking somewhere sensible; caller positions it before
@@ -72,6 +75,27 @@ export function createFlyControls({ canvas, camera, world = null, isSolid = null
     return isSolid(world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)));
   }
 
+  // Does the player AABB (centered at px, pz; feet at feetY) overlap any
+  // solid cell? Samples the 4 horizontal corners across every Y layer the
+  // column spans — enough at PLAYER_RADIUS < 0.5 to never skip a block.
+  function aabbCollides(px, feetY, pz) {
+    const minX = px - PLAYER_RADIUS;
+    const maxX = px + PLAYER_RADIUS;
+    const minZ = pz - PLAYER_RADIUS;
+    const maxZ = pz + PLAYER_RADIUS;
+    const minY = feetY;
+    const maxY = feetY + PLAYER_HEIGHT - EPS;
+    const y0 = Math.floor(minY);
+    const y1 = Math.floor(maxY);
+    for (let y = y0; y <= y1; y++) {
+      if (solidAt(minX, y, minZ)) return true;
+      if (solidAt(maxX, y, minZ)) return true;
+      if (solidAt(minX, y, maxZ)) return true;
+      if (solidAt(maxX, y, maxZ)) return true;
+    }
+    return false;
+  }
+
   function update(dt) {
     let fx = 0;
     let fz = 0;
@@ -90,36 +114,56 @@ export function createFlyControls({ canvas, camera, world = null, isSolid = null
     // local (fx,fz) vector — see camera look math in getLook().
     const sinY = Math.sin(yaw);
     const cosY = Math.cos(yaw);
-    camera.position.x += (fx * cosY + fz * sinY) * speed;
-    camera.position.z += (-fx * sinY + fz * cosY) * speed;
+    const dx = (fx * cosY + fz * sinY) * speed;
+    const dz = (-fx * sinY + fz * cosY) * speed;
 
     if (world && isSolid) {
-      // --- Gravity / jump / ground collision ---------------------------
-      // Player occupies the 1x2 column [camera.x, camera.z] with feet at
-      // camera.y - PLAYER_EYE. Simple axis-aligned resolution: apply vy,
-      // then clamp when the block at feet is solid (landing) or when the
-      // block at head is solid (bonk).
+      // --- Horizontal collision (X then Z, axis-separated) -------------
+      // Move one axis at a time so sliding along a wall works. Snap the
+      // moving side of the AABB flush to the block face on collision.
+      let feetY = camera.position.y - PLAYER_EYE;
+
+      if (dx !== 0) {
+        const newX = camera.position.x + dx;
+        if (!aabbCollides(newX, feetY, camera.position.z)) {
+          camera.position.x = newX;
+        } else if (dx > 0) {
+          camera.position.x = Math.floor(newX + PLAYER_RADIUS) - PLAYER_RADIUS - EPS;
+        } else {
+          camera.position.x = Math.floor(newX - PLAYER_RADIUS) + 1 + PLAYER_RADIUS + EPS;
+        }
+      }
+      if (dz !== 0) {
+        const newZ = camera.position.z + dz;
+        if (!aabbCollides(camera.position.x, feetY, newZ)) {
+          camera.position.z = newZ;
+        } else if (dz > 0) {
+          camera.position.z = Math.floor(newZ + PLAYER_RADIUS) - PLAYER_RADIUS - EPS;
+        } else {
+          camera.position.z = Math.floor(newZ - PLAYER_RADIUS) + 1 + PLAYER_RADIUS + EPS;
+        }
+      }
+
+      // --- Gravity / jump / vertical collision -------------------------
       vy = Math.max(-TERMINAL_V, vy - GRAVITY * dt);
-      camera.position.y += vy * dt;
+      const dy = vy * dt;
+      const newY = camera.position.y + dy;
+      const newFeetY = newY - PLAYER_EYE;
 
-      const px = camera.position.x;
-      const pz = camera.position.z;
-      const feetY = camera.position.y - PLAYER_EYE;
-      const headY = camera.position.y;
-
-      // Landed? Block directly under feet is solid and we're falling.
-      if (vy <= 0 && solidAt(px, feetY - 0.01, pz)) {
-        const groundTop = Math.floor(feetY - 0.01) + 1;
-        camera.position.y = groundTop + PLAYER_EYE;
+      if (!aabbCollides(camera.position.x, newFeetY, camera.position.z)) {
+        camera.position.y = newY;
+        grounded = false;
+      } else if (vy <= 0) {
+        // Landing: snap feet to the top face of the block below.
+        camera.position.y = Math.floor(newFeetY) + 1 + PLAYER_EYE + EPS;
         vy = 0;
         grounded = true;
       } else {
-        grounded = false;
-      }
-
-      // Head bonk — ceiling above: stop upward motion.
-      if (vy > 0 && solidAt(px, headY + 0.01, pz)) {
+        // Head bonk: snap top of head just under the ceiling block.
+        const headTop = newFeetY + PLAYER_HEIGHT;
+        camera.position.y = Math.floor(headTop) - PLAYER_HEIGHT + PLAYER_EYE - EPS;
         vy = 0;
+        grounded = false;
       }
 
       if (grounded && keys.has('Space')) {
@@ -127,6 +171,8 @@ export function createFlyControls({ canvas, camera, world = null, isSolid = null
         grounded = false;
       }
     } else {
+      camera.position.x += dx;
+      camera.position.z += dz;
       // No world provided → legacy fly mode (Space up, Shift down).
       let fy = 0;
       if (keys.has('Space')) fy += 1;

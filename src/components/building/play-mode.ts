@@ -16,14 +16,7 @@
  */
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import {
-  buildAvatar,
-  type Avatar,
-  CAP_HEIGHT,
-  HEAD_OFFSET,
-  LEG_HEIGHT,
-  TORSO_HEIGHT,
-} from './character';
+import { buildAvatar, type Avatar } from './character';
 
 export interface PlaySceneRefs {
   scene: THREE.Scene;
@@ -72,6 +65,11 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
   let armR: THREE.Group | null = null;
   let legL: THREE.Group | null = null;
   let legR: THREE.Group | null = null;
+  // Capsule height and body-part rest Y values — populated from the avatar on
+  // start() so the same controller works for both Roblox and Minecraft styles.
+  let capHeight = 1.8;
+  let torsoRestY = 1.35;
+  let headRestY = 2.05;
   const velocity = new THREE.Vector3();
   const keys: Record<string, boolean> = {};
   let grounded = false;
@@ -125,10 +123,10 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
     // Rebuild player AABB
     tmpCenter.set(
       character.position.x,
-      character.position.y + CAP_HEIGHT / 2,
+      character.position.y + capHeight / 2,
       character.position.z,
     );
-    tmpSize.set(CAP_RADIUS * 2, CAP_HEIGHT, CAP_RADIUS * 2);
+    tmpSize.set(CAP_RADIUS * 2, capHeight, CAP_RADIUS * 2);
     playerBox.setFromCenterAndSize(tmpCenter, tmpSize);
 
     const roots: THREE.Object3D[] = [refs.partGroup, refs.floorGroup, refs.wallGroup];
@@ -159,7 +157,7 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
             grounded = true;
           } else {
             // Player jumped into bottom of box
-            character.position.y = tmpBox.min.y - CAP_HEIGHT;
+            character.position.y = tmpBox.min.y - capHeight;
             if (velocity.y > 0) velocity.y = 0;
           }
         } else if (m === dx) {
@@ -175,7 +173,7 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
         // Refresh player AABB for subsequent collisions this frame
         tmpCenter.set(
           character.position.x,
-          character.position.y + CAP_HEIGHT / 2,
+          character.position.y + capHeight / 2,
           character.position.z,
         );
         playerBox.setFromCenterAndSize(tmpCenter, tmpSize);
@@ -187,7 +185,7 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
     if (!character) return out.set(0, 0, 0);
     return out.set(
       character.position.x,
-      character.position.y + CAP_HEIGHT * 0.5,
+      character.position.y + capHeight * 0.5,
       character.position.z,
     );
   }
@@ -199,7 +197,10 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       if (active) return;
       active = true;
 
-      avatar = buildAvatar();
+      // Default to Minecraft style; toggle with ?avatar=roblox in the URL.
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const style = params?.get('avatar') === 'roblox' ? 'roblox' : 'minecraft';
+      avatar = buildAvatar({ style });
       character = avatar.group;
       torso = avatar.torso;
       head = avatar.head;
@@ -207,6 +208,9 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
       armR = avatar.armR;
       legL = avatar.legL;
       legR = avatar.legR;
+      capHeight = avatar.capHeight;
+      torsoRestY = avatar.torsoRestY;
+      headRestY = avatar.headRestY;
       character.position.set(0, 0.1, 8);
       refs.scene.add(character);
       velocity.set(0, 0, 0);
@@ -334,10 +338,10 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
           // Re-probe for the tallest top we touch within step range
           tmpCenter.set(
             preX,
-            character.position.y + CAP_HEIGHT / 2,
+            character.position.y + capHeight / 2,
             preZ,
           );
-          tmpSize.set(CAP_RADIUS * 2, CAP_HEIGHT, CAP_RADIUS * 2);
+          tmpSize.set(CAP_RADIUS * 2, capHeight, CAP_RADIUS * 2);
           const probeBox = new THREE.Box3().setFromCenterAndSize(tmpCenter, tmpSize);
           let bestTop = -Infinity;
           for (const root of [refs.partGroup, refs.floorGroup, refs.wallGroup]) {
@@ -402,8 +406,8 @@ export function createPlayController(refs: PlaySceneRefs): PlayController {
 
       // Subtle torso + head bob synced to foot-plants
       const bobY = moving ? Math.abs(Math.sin(bobPhase)) * BOB_AMP * speedRatio * 0.6 : 0;
-      if (torso) torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2 + bobY;
-      if (head) head.position.y = CAP_HEIGHT + HEAD_OFFSET + bobY * 0.85;
+      if (torso) torso.position.y = torsoRestY + bobY;
+      if (head) head.position.y = headRestY + bobY * 0.85;
 
       // Roblox-style orbit follow: translate BOTH the orbit target and the
       // camera by the character's delta this frame. OrbitControls treats the

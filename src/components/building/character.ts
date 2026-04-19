@@ -1,55 +1,22 @@
 /**
- * Roblox-R15-classic-compatible avatar builder.
+ * Avatar builder supporting two styles:
+ *   - 'roblox'    : R15 proportions, 585×559 classic shirt+pants templates
+ *   - 'minecraft' : Steve/Alex proportions, single 64×64 skin PNG
  *
- * Body proportions follow the canonical R15 ratios (torso 2:2:1, arm 1:2:1,
- * leg 1:2:1) so that a 585×559 classic shirt/pants PNG downloaded from the
- * Roblox template wraps correctly around our boxes.
+ * Both styles land on the same CAP_HEIGHT = 1.8 so the capsule collision and
+ * camera math in play-mode.ts don't have to care which style was chosen.
  *
- * The UV regions below are measured against Roblox's classic clothing template
- * (see docs/roblox-ui and create.roblox.com/docs/art/classic-clothing). Each
- * face of each body-part BoxGeometry is remapped to sample the right pixel
- * rectangle from the single texture, so when a user uploads a shirt/pants PNG
- * authored for Roblox, it lands on our avatar in the right orientation.
- *
- * Geometry convention in this codebase (matches play-mode.ts):
+ * Geometry convention (matches play-mode.ts):
  *   +X = player's right, -X = player's left, +Z = player's front, -Z = back.
  * Three.js BoxGeometry face order is +X, -X, +Y, -Y, +Z, -Z (indices 0..5).
+ * Default per-face UVs are oriented "as viewed from outside", so a direct
+ * pixel-rectangle remap lands on the right face at the right orientation.
  */
 import * as THREE from 'three';
 
-// --- Body proportions ----------------------------------------------------
-// R15 canonical ratios, scaled so CAP_HEIGHT comes out close to 1.8 (the
-// collision height that the rest of the game was tuned against).
-const S = 0.9;
-
-export const LEG_WIDTH = 0.5 * S;
-export const LEG_HEIGHT = 1.0 * S;
-export const LEG_DEPTH = 0.5 * S;
-export const HIP_SPACING = 0.25 * S;             // half-distance between leg centers
-
-export const TORSO_WIDTH = 1.0 * S;
-export const TORSO_HEIGHT = 1.0 * S;
-export const TORSO_DEPTH = 0.5 * S;
-
-export const ARM_WIDTH = 0.5 * S;
-export const ARM_HEIGHT = 1.0 * S;
-export const ARM_DEPTH = 0.5 * S;
-
-export const HEAD_SIZE = 0.5 * S;
-
-export const SHOULDER_Y = LEG_HEIGHT + TORSO_HEIGHT - 0.1 * S;
-export const SHOULDER_X = TORSO_WIDTH / 2 + ARM_WIDTH / 2 - 0.02 * S;
-
-export const CAP_HEIGHT = LEG_HEIGHT + TORSO_HEIGHT;
-export const HEAD_OFFSET = HEAD_SIZE / 2;
-
-// --- Classic clothing template regions -----------------------------------
-// Template PNG is 585×559. Regions are [x, y, w, h] in pixels from TOP-LEFT.
-// Layout mirrors the diagram in https://create.roblox.com/docs/art/classic-clothing:
-//   Torso cross centered horizontally in upper half, two arm/leg unfolded
-//   boxes side by side in lower half.
-const TEMPLATE_W = 585;
-const TEMPLATE_H = 559;
+// =========================================================================
+// Shared helpers
+// =========================================================================
 
 type FaceRegions = {
   up: readonly [number, number, number, number];
@@ -60,50 +27,23 @@ type FaceRegions = {
   right: readonly [number, number, number, number];
 };
 
-const TORSO: FaceRegions = {
-  up:    [164,  33, 128,  64],
-  front: [164,  97, 128, 128],
-  down:  [164, 225, 128,  64],
-  right: [100,  97,  64, 128],
-  left:  [292,  97,  64, 128],
-  back:  [356,  97, 128, 128],
-};
-
-const LIMB_R: FaceRegions = {
-  up:    [ 97, 303,  64,  64],
-  left:  [ 33, 367,  64, 128],
-  back:  [ 97, 367,  64, 128],
-  right: [161, 367,  64, 128],
-  front: [225, 367,  64, 128],
-  down:  [ 97, 495,  64,  64],
-};
-
-const LIMB_L: FaceRegions = {
-  up:    [289, 303,  64,  64],
-  front: [289, 367,  64, 128],
-  left:  [353, 367,  64, 128],
-  back:  [417, 367,  64, 128],
-  right: [481, 367,  64, 128],
-  down:  [289, 495,  64,  64],
-};
-
-/**
- * Remap a BoxGeometry's default UVs so each face samples the given pixel
- * rectangle from a texture of size (texW, texH). Three.js BoxGeometry's
- * default per-face UVs are oriented "as viewed from outside", so a direct
- * rectangle remap gives the correct orientation on all 6 faces.
- */
-function setBoxUVs(geom: THREE.BoxGeometry, regions: FaceRegions): void {
+/** Remap BoxGeometry UVs so each face samples [px, py, pw, ph] from a (texW, texH) image. */
+function setBoxUVs(
+  geom: THREE.BoxGeometry,
+  regions: FaceRegions,
+  texW: number,
+  texH: number,
+): void {
   const uv = geom.attributes.uv as THREE.BufferAttribute;
   const apply = (faceIdx: number, region: readonly [number, number, number, number]) => {
     const [px, py, pw, ph] = region;
-    const uL = px / TEMPLATE_W;
-    const uR = (px + pw) / TEMPLATE_W;
+    const uL = px / texW;
+    const uR = (px + pw) / texW;
     // Three.js UV: v=0 is bottom. Image pixel Y: 0 is top. Flip.
-    const vT = 1 - py / TEMPLATE_H;
-    const vB = 1 - (py + ph) / TEMPLATE_H;
+    const vT = 1 - py / texH;
+    const vB = 1 - (py + ph) / texH;
     const base = faceIdx * 4;
-    // BoxGeometry per-face vertex order is: (0,1), (1,1), (0,0), (1,0)
+    // BoxGeometry per-face vertex order: (0,1), (1,1), (0,0), (1,0)
     // i.e. top-left, top-right, bottom-left, bottom-right.
     uv.setXY(base + 0, uL, vT);
     uv.setXY(base + 1, uR, vT);
@@ -119,9 +59,136 @@ function setBoxUVs(geom: THREE.BoxGeometry, regions: FaceRegions): void {
   uv.needsUpdate = true;
 }
 
-// --- Public API ----------------------------------------------------------
+function makePivotBox(
+  width: number, height: number, depth: number,
+  pivotX: number, pivotY: number,
+  regions: FaceRegions, texW: number, texH: number,
+  material: THREE.Material,
+): { pivot: THREE.Group; mesh: THREE.Mesh } {
+  const pivot = new THREE.Group();
+  pivot.position.set(pivotX, pivotY, 0);
+  const geom = new THREE.BoxGeometry(width, height, depth);
+  setBoxUVs(geom, regions, texW, texH);
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.position.y = -height / 2;
+  mesh.castShadow = true;
+  pivot.add(mesh);
+  return { pivot, mesh };
+}
+
+// =========================================================================
+// Roblox classic — 585×559 shirt + pants templates
+// =========================================================================
+const R_SCALE = 0.9;
+const R = {
+  LEG_W: 0.5 * R_SCALE, LEG_H: 1.0 * R_SCALE, LEG_D: 0.5 * R_SCALE,
+  HIP_SPACING: 0.25 * R_SCALE,
+  TORSO_W: 1.0 * R_SCALE, TORSO_H: 1.0 * R_SCALE, TORSO_D: 0.5 * R_SCALE,
+  ARM_W: 0.5 * R_SCALE, ARM_H: 1.0 * R_SCALE, ARM_D: 0.5 * R_SCALE,
+  HEAD_SIZE: 0.5 * R_SCALE,
+  SHOULDER_Y_DROP: 0.1 * R_SCALE,
+  SHOULDER_X_TUCK: 0.02 * R_SCALE,
+  TEX_W: 585, TEX_H: 559,
+};
+
+const R_TORSO: FaceRegions = {
+  up:    [164,  33, 128,  64],
+  front: [164,  97, 128, 128],
+  down:  [164, 225, 128,  64],
+  right: [100,  97,  64, 128],
+  left:  [292,  97,  64, 128],
+  back:  [356,  97, 128, 128],
+};
+const R_LIMB_R: FaceRegions = {
+  up:    [ 97, 303,  64,  64],
+  left:  [ 33, 367,  64, 128],
+  back:  [ 97, 367,  64, 128],
+  right: [161, 367,  64, 128],
+  front: [225, 367,  64, 128],
+  down:  [ 97, 495,  64,  64],
+};
+const R_LIMB_L: FaceRegions = {
+  up:    [289, 303,  64,  64],
+  front: [289, 367,  64, 128],
+  left:  [353, 367,  64, 128],
+  back:  [417, 367,  64, 128],
+  right: [481, 367,  64, 128],
+  down:  [289, 495,  64,  64],
+};
+
+// =========================================================================
+// Minecraft — single 64×64 skin PNG
+// Leg 12 + torso 12 = 24 voxels. Scale so total height = 1.8 engine units.
+// => 1 voxel = 0.075.
+// =========================================================================
+const MC_V = 0.075;
+const MC = {
+  LEG_W:  4 * MC_V, LEG_H: 12 * MC_V, LEG_D: 4 * MC_V,
+  HIP_SPACING: 2 * MC_V,               // leg center offset (±2 voxels from body center)
+  TORSO_W: 8 * MC_V, TORSO_H: 12 * MC_V, TORSO_D: 4 * MC_V,
+  ARM_W:  4 * MC_V, ARM_H: 12 * MC_V, ARM_D: 4 * MC_V,
+  ARM_W_SLIM: 3 * MC_V,                // Alex-style slim arm width
+  HEAD_SIZE: 8 * MC_V,
+  TEX_W: 64, TEX_H: 64,
+};
+
+const MC_HEAD: FaceRegions = {
+  up:    [ 8, 0, 8, 8],
+  down:  [16, 0, 8, 8],
+  right: [ 0, 8, 8, 8],
+  front: [ 8, 8, 8, 8],
+  left:  [16, 8, 8, 8],
+  back:  [24, 8, 8, 8],
+};
+const MC_TORSO: FaceRegions = {
+  up:    [20, 16, 8,  4],
+  down:  [28, 16, 8,  4],
+  right: [16, 20, 4, 12],
+  front: [20, 20, 8, 12],
+  left:  [28, 20, 4, 12],
+  back:  [32, 20, 8, 12],
+};
+const MC_ARM_R: FaceRegions = {
+  up:    [44, 16, 4,  4],
+  down:  [48, 16, 4,  4],
+  right: [40, 20, 4, 12],
+  front: [44, 20, 4, 12],
+  left:  [48, 20, 4, 12],
+  back:  [52, 20, 4, 12],
+};
+const MC_ARM_L: FaceRegions = {
+  up:    [36, 48, 4,  4],
+  down:  [40, 48, 4,  4],
+  right: [32, 52, 4, 12],
+  front: [36, 52, 4, 12],
+  left:  [40, 52, 4, 12],
+  back:  [44, 52, 4, 12],
+};
+const MC_LEG_R: FaceRegions = {
+  up:    [ 4, 16, 4,  4],
+  down:  [ 8, 16, 4,  4],
+  right: [ 0, 20, 4, 12],
+  front: [ 4, 20, 4, 12],
+  left:  [ 8, 20, 4, 12],
+  back:  [12, 20, 4, 12],
+};
+const MC_LEG_L: FaceRegions = {
+  up:    [20, 48, 4,  4],
+  down:  [24, 48, 4,  4],
+  right: [16, 52, 4, 12],
+  front: [20, 52, 4, 12],
+  left:  [24, 52, 4, 12],
+  back:  [28, 52, 4, 12],
+};
+
+// =========================================================================
+// Public API
+// =========================================================================
+
+export type AvatarStyle = 'roblox' | 'minecraft';
 
 export interface Avatar {
+  style: AvatarStyle;
   group: THREE.Group;
   torso: THREE.Mesh;
   head: THREE.Mesh;
@@ -129,181 +196,246 @@ export interface Avatar {
   armR: THREE.Group;
   legL: THREE.Group;
   legR: THREE.Group;
-  /** Swap in a shirt texture URL at runtime; applies to torso + both arms. */
+  /** Total capsule height (feet → top of torso). Feed to play-mode collision. */
+  capHeight: number;
+  /** Y-position of the torso mesh at rest. play-mode adds bob offset. */
+  torsoRestY: number;
+  /** Y-position of the head mesh at rest. */
+  headRestY: number;
+  /** Roblox: 585×559 shirt PNG, covers torso + both arms. No-op on Minecraft. */
   setShirt(url: string | null): void;
-  /** Swap in a pants texture URL at runtime; applies to both legs. */
+  /** Roblox: 585×559 pants PNG, covers both legs. No-op on Minecraft. */
   setPants(url: string | null): void;
-  /** Dispose geometries, materials, and textures owned by this avatar. */
+  /** Minecraft: 64×64 skin PNG, covers everything. No-op on Roblox. */
+  setSkin(url: string | null): void;
   dispose(): void;
 }
 
 export interface AvatarOptions {
+  style?: AvatarStyle;     // default 'minecraft'
+  slim?: boolean;          // minecraft only — use 3-pixel Alex arms
   shirtUrl?: string | null;
   pantsUrl?: string | null;
-  skinColor?: number;      // 0xrrggbb
-  shirtColor?: number;     // fallback tint when no shirt texture
-  pantsColor?: number;     // fallback tint when no pants texture
+  skinUrl?: string | null;
+  skinColor?: number;
+  shirtColor?: number;
+  pantsColor?: number;
 }
 
-/** Default placeholder colors (Roblox "Really red" / "Really blue"-ish). */
 const DEFAULTS = {
-  skin:  0xf0c090,
+  skin:  0xc68f6b,  // generic "skin" tone (not any specific Roblox/MC character)
   shirt: 0x3a7be2,
   pants: 0x2a4158,
 };
 
+// --- Kept for any legacy importers outside this file --------------------
+// (play-mode.ts now reads capHeight/torsoRestY/headRestY from the Avatar.)
+export const CAP_HEIGHT = R.LEG_H + R.TORSO_H;           // 1.8
+export const LEG_HEIGHT = R.LEG_H;
+export const TORSO_HEIGHT = R.TORSO_H;
+export const HEAD_OFFSET = R.HEAD_SIZE / 2;
+
+// ------------------------------------------------------------------------
+
 export function buildAvatar(opts: AvatarOptions = {}): Avatar {
+  const style: AvatarStyle = opts.style ?? 'minecraft';
+  return style === 'roblox' ? buildRoblox(opts) : buildMinecraft(opts);
+}
+
+// -------------------- Roblox ---------------------------------------------
+function buildRoblox(opts: AvatarOptions): Avatar {
   const skinMat = new THREE.MeshStandardMaterial({
-    color: opts.skinColor ?? DEFAULTS.skin,
-    roughness: 0.8,
+    color: opts.skinColor ?? DEFAULTS.skin, roughness: 0.8,
   });
-  // Shirt/pants start as flat-color materials; switched to textured mats when
-  // setShirt/setPants are called (or if shirtUrl/pantsUrl are provided).
   const shirtMat = new THREE.MeshStandardMaterial({
-    color: opts.shirtColor ?? DEFAULTS.shirt,
-    roughness: 0.6,
+    color: opts.shirtColor ?? DEFAULTS.shirt, roughness: 0.6,
   });
   const pantsMat = new THREE.MeshStandardMaterial({
-    color: opts.pantsColor ?? DEFAULTS.pants,
-    roughness: 0.85,
+    color: opts.pantsColor ?? DEFAULTS.pants, roughness: 0.85,
   });
 
   const group = new THREE.Group();
-  group.name = 'avatar';
+  group.name = 'avatar-roblox';
 
-  // Torso — the single box covers both UpperTorso + LowerTorso in one piece.
-  const torsoGeom = new THREE.BoxGeometry(TORSO_WIDTH, TORSO_HEIGHT, TORSO_DEPTH);
-  setBoxUVs(torsoGeom, TORSO);
+  const torsoGeom = new THREE.BoxGeometry(R.TORSO_W, R.TORSO_H, R.TORSO_D);
+  setBoxUVs(torsoGeom, R_TORSO, R.TEX_W, R.TEX_H);
+  const torsoRestY = R.LEG_H + R.TORSO_H / 2;
   const torso = new THREE.Mesh(torsoGeom, shirtMat);
-  torso.position.y = LEG_HEIGHT + TORSO_HEIGHT / 2;
+  torso.position.y = torsoRestY;
   torso.castShadow = true;
   group.add(torso);
 
-  // Head — skin material, with eyes + mouth as decals.
+  const headRestY = R.LEG_H + R.TORSO_H + R.HEAD_SIZE / 2;
   const head = new THREE.Mesh(
-    new THREE.BoxGeometry(HEAD_SIZE, HEAD_SIZE, HEAD_SIZE),
+    new THREE.BoxGeometry(R.HEAD_SIZE, R.HEAD_SIZE, R.HEAD_SIZE),
     skinMat,
   );
-  head.position.y = LEG_HEIGHT + TORSO_HEIGHT + HEAD_SIZE / 2;
+  head.position.y = headRestY;
   head.castShadow = true;
   group.add(head);
 
+  // Roblox classic face has no head template — paint a smiley decal.
   const faceMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
   const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), faceMat);
   const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), faceMat);
-  eyeL.position.set(-0.11, 0.04, HEAD_SIZE / 2 + 0.001);
-  eyeR.position.set( 0.11, 0.04, HEAD_SIZE / 2 + 0.001);
+  eyeL.position.set(-0.11, 0.04, R.HEAD_SIZE / 2 + 0.001);
+  eyeR.position.set( 0.11, 0.04, R.HEAD_SIZE / 2 + 0.001);
   const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.03, 0.02), faceMat);
-  mouth.position.set(0, -0.08, HEAD_SIZE / 2 + 0.001);
+  mouth.position.set(0, -0.08, R.HEAD_SIZE / 2 + 0.001);
   head.add(eyeL, eyeR, mouth);
 
-  // Arms — pivot group at the shoulder so rotating the group swings the arm.
-  function makeLimb(
-    width: number, height: number, depth: number,
-    pivotX: number, pivotY: number,
-    regions: FaceRegions,
-    material: THREE.Material,
-  ): { pivot: THREE.Group; mesh: THREE.Mesh } {
-    const pivot = new THREE.Group();
-    pivot.position.set(pivotX, pivotY, 0);
-    const geom = new THREE.BoxGeometry(width, height, depth);
-    setBoxUVs(geom, regions);
-    const mesh = new THREE.Mesh(geom, material);
-    mesh.position.y = -height / 2;
-    mesh.castShadow = true;
-    pivot.add(mesh);
-    return { pivot, mesh };
-  }
+  const shoulderY = R.LEG_H + R.TORSO_H - R.SHOULDER_Y_DROP;
+  const shoulderX = R.TORSO_W / 2 + R.ARM_W / 2 - R.SHOULDER_X_TUCK;
 
-  const armLParts = makeLimb(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH,
-    -SHOULDER_X, SHOULDER_Y, LIMB_L, shirtMat);
-  const armRParts = makeLimb(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH,
-     SHOULDER_X, SHOULDER_Y, LIMB_R, shirtMat);
-  group.add(armLParts.pivot, armRParts.pivot);
+  const aL = makePivotBox(R.ARM_W, R.ARM_H, R.ARM_D, -shoulderX, shoulderY,
+    R_LIMB_L, R.TEX_W, R.TEX_H, shirtMat);
+  const aR = makePivotBox(R.ARM_W, R.ARM_H, R.ARM_D,  shoulderX, shoulderY,
+    R_LIMB_R, R.TEX_W, R.TEX_H, shirtMat);
+  const lL = makePivotBox(R.LEG_W, R.LEG_H, R.LEG_D, -R.HIP_SPACING, R.LEG_H,
+    R_LIMB_L, R.TEX_W, R.TEX_H, pantsMat);
+  const lR = makePivotBox(R.LEG_W, R.LEG_H, R.LEG_D,  R.HIP_SPACING, R.LEG_H,
+    R_LIMB_R, R.TEX_W, R.TEX_H, pantsMat);
+  group.add(aL.pivot, aR.pivot, lL.pivot, lR.pivot);
 
-  const legLParts = makeLimb(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH,
-    -HIP_SPACING, LEG_HEIGHT, LIMB_L, pantsMat);
-  const legRParts = makeLimb(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH,
-     HIP_SPACING, LEG_HEIGHT, LIMB_R, pantsMat);
-  group.add(legLParts.pivot, legRParts.pivot);
-
-  // --- Texture loading / swapping ---------------------------------------
   const loader = new THREE.TextureLoader();
-  let currentShirtTex: THREE.Texture | null = null;
-  let currentPantsTex: THREE.Texture | null = null;
+  let shirtTex: THREE.Texture | null = null;
+  let pantsTex: THREE.Texture | null = null;
 
-  function makeClothingTexture(tex: THREE.Texture): void {
+  function configureClothTex(tex: THREE.Texture) {
     tex.colorSpace = THREE.SRGBColorSpace;
-    // Crisp-pixel look — Roblox shirts are often pixel-art at 128×128 per face.
     tex.magFilter = THREE.NearestFilter;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.anisotropy = 4;
     tex.needsUpdate = true;
   }
-
-  function setShirt(url: string | null): void {
-    if (currentShirtTex) { currentShirtTex.dispose(); currentShirtTex = null; }
-    if (!url) {
-      torso.material = shirtMat;
-      armLParts.mesh.material = shirtMat;
-      armRParts.mesh.material = shirtMat;
-      return;
-    }
+  function setShirt(url: string | null) {
+    shirtTex?.dispose(); shirtTex = null;
+    if (!url) { torso.material = shirtMat; aL.mesh.material = shirtMat; aR.mesh.material = shirtMat; return; }
     loader.load(url, (tex) => {
-      makeClothingTexture(tex);
-      currentShirtTex = tex;
+      configureClothTex(tex); shirtTex = tex;
       const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 });
-      torso.material = mat;
-      armLParts.mesh.material = mat;
-      armRParts.mesh.material = mat;
+      torso.material = mat; aL.mesh.material = mat; aR.mesh.material = mat;
     });
   }
-
-  function setPants(url: string | null): void {
-    if (currentPantsTex) { currentPantsTex.dispose(); currentPantsTex = null; }
-    if (!url) {
-      legLParts.mesh.material = pantsMat;
-      legRParts.mesh.material = pantsMat;
-      return;
-    }
+  function setPants(url: string | null) {
+    pantsTex?.dispose(); pantsTex = null;
+    if (!url) { lL.mesh.material = pantsMat; lR.mesh.material = pantsMat; return; }
     loader.load(url, (tex) => {
-      makeClothingTexture(tex);
-      currentPantsTex = tex;
+      configureClothTex(tex); pantsTex = tex;
       const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
-      // Pants template also has a torso region, but shirt takes visual priority
-      // on the torso (matches Roblox layering). So only the legs get the pants
-      // texture here — if no shirt is set, the torso stays on shirtMat color.
-      legLParts.mesh.material = mat;
-      legRParts.mesh.material = mat;
+      lL.mesh.material = mat; lR.mesh.material = mat;
     });
   }
-
   if (opts.shirtUrl) setShirt(opts.shirtUrl);
   if (opts.pantsUrl) setPants(opts.pantsUrl);
 
-  function dispose(): void {
-    group.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh) return;
-      m.geometry?.dispose();
-      const mat = m.material as THREE.Material | THREE.Material[];
-      if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-      else mat?.dispose();
+  return {
+    style: 'roblox',
+    group, torso, head,
+    armL: aL.pivot, armR: aR.pivot, legL: lL.pivot, legR: lR.pivot,
+    capHeight: R.LEG_H + R.TORSO_H,
+    torsoRestY, headRestY,
+    setShirt, setPants,
+    setSkin: () => { /* n/a for roblox */ },
+    dispose() {
+      group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry?.dispose();
+        const mat = m.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose();
+      });
+      shirtTex?.dispose(); pantsTex?.dispose();
+    },
+  };
+}
+
+// -------------------- Minecraft ------------------------------------------
+function buildMinecraft(opts: AvatarOptions): Avatar {
+  const armW = opts.slim ? MC.ARM_W_SLIM : MC.ARM_W;
+
+  // Single material per body part — swapped atomically when setSkin loads.
+  // All start as flat skin-toned; colors matter only until a skin PNG arrives.
+  const headMat  = new THREE.MeshStandardMaterial({ color: opts.skinColor ?? DEFAULTS.skin, roughness: 0.9 });
+  const torsoMat = new THREE.MeshStandardMaterial({ color: opts.shirtColor ?? DEFAULTS.shirt, roughness: 0.9 });
+  const armLMat  = new THREE.MeshStandardMaterial({ color: opts.skinColor ?? DEFAULTS.skin, roughness: 0.9 });
+  const armRMat  = new THREE.MeshStandardMaterial({ color: opts.skinColor ?? DEFAULTS.skin, roughness: 0.9 });
+  const legLMat  = new THREE.MeshStandardMaterial({ color: opts.pantsColor ?? DEFAULTS.pants, roughness: 0.9 });
+  const legRMat  = new THREE.MeshStandardMaterial({ color: opts.pantsColor ?? DEFAULTS.pants, roughness: 0.9 });
+
+  const group = new THREE.Group();
+  group.name = 'avatar-minecraft';
+
+  const torsoGeom = new THREE.BoxGeometry(MC.TORSO_W, MC.TORSO_H, MC.TORSO_D);
+  setBoxUVs(torsoGeom, MC_TORSO, MC.TEX_W, MC.TEX_H);
+  const torsoRestY = MC.LEG_H + MC.TORSO_H / 2;
+  const torso = new THREE.Mesh(torsoGeom, torsoMat);
+  torso.position.y = torsoRestY;
+  torso.castShadow = true;
+  group.add(torso);
+
+  const headGeom = new THREE.BoxGeometry(MC.HEAD_SIZE, MC.HEAD_SIZE, MC.HEAD_SIZE);
+  setBoxUVs(headGeom, MC_HEAD, MC.TEX_W, MC.TEX_H);
+  const headRestY = MC.LEG_H + MC.TORSO_H + MC.HEAD_SIZE / 2;
+  const head = new THREE.Mesh(headGeom, headMat);
+  head.position.y = headRestY;
+  head.castShadow = true;
+  group.add(head);
+
+  // Arms hang flush against torso side, tops aligned with torso top.
+  const shoulderY = MC.LEG_H + MC.TORSO_H;
+  const shoulderX = MC.TORSO_W / 2 + armW / 2;
+
+  const aL = makePivotBox(armW, MC.ARM_H, MC.ARM_D, -shoulderX, shoulderY,
+    MC_ARM_L, MC.TEX_W, MC.TEX_H, armLMat);
+  const aR = makePivotBox(armW, MC.ARM_H, MC.ARM_D,  shoulderX, shoulderY,
+    MC_ARM_R, MC.TEX_W, MC.TEX_H, armRMat);
+  const lL = makePivotBox(MC.LEG_W, MC.LEG_H, MC.LEG_D, -MC.HIP_SPACING, MC.LEG_H,
+    MC_LEG_L, MC.TEX_W, MC.TEX_H, legLMat);
+  const lR = makePivotBox(MC.LEG_W, MC.LEG_H, MC.LEG_D,  MC.HIP_SPACING, MC.LEG_H,
+    MC_LEG_R, MC.TEX_W, MC.TEX_H, legRMat);
+  group.add(aL.pivot, aR.pivot, lL.pivot, lR.pivot);
+
+  const loader = new THREE.TextureLoader();
+  let skinTex: THREE.Texture | null = null;
+
+  function setSkin(url: string | null) {
+    skinTex?.dispose(); skinTex = null;
+    const parts: THREE.MeshStandardMaterial[] = [headMat, torsoMat, armLMat, armRMat, legLMat, legRMat];
+    if (!url) { parts.forEach((m) => { m.map = null; m.needsUpdate = true; }); return; }
+    loader.load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      // Minecraft skins MUST be nearest-filtered — any linear sampling blurs
+      // the pixel art and bleeds neighboring face regions into each other.
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      tex.generateMipmaps = false;
+      tex.anisotropy = 1;
+      tex.needsUpdate = true;
+      skinTex = tex;
+      parts.forEach((m) => { m.map = tex; m.color.setHex(0xffffff); m.needsUpdate = true; });
     });
-    currentShirtTex?.dispose();
-    currentPantsTex?.dispose();
   }
+  if (opts.skinUrl) setSkin(opts.skinUrl);
 
   return {
-    group,
-    torso,
-    head,
-    armL: armLParts.pivot,
-    armR: armRParts.pivot,
-    legL: legLParts.pivot,
-    legR: legRParts.pivot,
-    setShirt,
-    setPants,
-    dispose,
+    style: 'minecraft',
+    group, torso, head,
+    armL: aL.pivot, armR: aR.pivot, legL: lL.pivot, legR: lR.pivot,
+    capHeight: MC.LEG_H + MC.TORSO_H,
+    torsoRestY, headRestY,
+    setShirt: () => { /* n/a */ },
+    setPants: () => { /* n/a */ },
+    setSkin,
+    dispose() {
+      group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry?.dispose();
+        const mat = m.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose();
+      });
+      skinTex?.dispose();
+    },
   };
 }

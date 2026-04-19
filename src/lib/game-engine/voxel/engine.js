@@ -16,7 +16,7 @@ import { generateTerrain, spawnPoint } from './terrain.js';
 import { meshChunk, chunkKey, parseChunkKey, allChunks } from './mesher.js';
 import { raycastVoxel } from './raycast.js';
 import { createFlyControls } from './controls.js';
-import { HOTBAR, BLOCK, BLOCK_DEFS } from './blocks.js';
+import { HOTBAR, BLOCK, BLOCK_DEFS, isSolid } from './blocks.js';
 
 /**
  * @param {Object} cfg
@@ -90,8 +90,9 @@ export function createVoxelEngine({ canvas, THREE, world: savedWorld, onBlockCha
   // a single frame on a Celeron N4000 with face-culled meshing.
   for (const [cx, cy, cz] of allChunks()) ensureMesh(cx, cy, cz);
 
-  // Fly camera controls.
-  const controls = createFlyControls({ canvas, camera });
+  // Pointer-lock camera + jump/gravity (world passed in so controls do
+  // ground collision instead of free-fly).
+  const controls = createFlyControls({ canvas, camera, world, isSolid });
 
   // Hotbar — index into HOTBAR; persists across pointer-lock toggles.
   let hotbarIndex = 0;

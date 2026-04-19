@@ -1,17 +1,22 @@
-// Pointer-locked first-person fly controls. Intentionally minimal — no
-// physics, no gravity, no collisions. The voxel engine spec targets
-// Chromebooks at 60 FPS and a physics step would eat a meaningful
-// fraction of our frame budget for a first-pass builder experience.
-// Gravity + block collision can be layered in later by replacing
-// updateFly with a "character controller" variant.
+// Pointer-locked first-person controls. Minecraft-style: horizontal
+// WASD, mouselook, gravity-pulled jump on Space. When a `world` (plus
+// `isSolid` block predicate) is provided the controls do cheap ground
+// collision so Space becomes a real jump and the player lands on
+// terrain instead of drifting through it. Without a world passed in
+// the module degrades to free-fly so tooling/tests still work.
 //
 // Exposes a tiny imperative API:
-//   const controls = createFlyControls({ canvas, camera })
+//   const controls = createFlyControls({ canvas, camera, world, isSolid })
 //   controls.update(dt)      // call each frame
 //   controls.dispose()       // detach listeners on teardown
 //   controls.isLocked        // boolean
 
-export function createFlyControls({ canvas, camera }) {
+const PLAYER_EYE = 1.6;  // camera sits this far above feet
+const GRAVITY = 28;      // blocks/sec^2
+const JUMP_VEL = 9;      // blocks/sec initial upward velocity
+const TERMINAL_V = 55;   // cap so falls off the world map don't nuke fp precision
+
+export function createFlyControls({ canvas, camera, world = null, isSolid = null }) {
   // Camera starts looking somewhere sensible; caller positions it before
   // the first update.
   let yaw = 0;    // rotation around world +Y
@@ -24,6 +29,8 @@ export function createFlyControls({ canvas, camera }) {
   const lookSens = 0.0022;
 
   let locked = false;
+  let vy = 0;              // vertical velocity (blocks/sec), driven by gravity + jump
+  let grounded = false;    // updated each frame by landing check
 
   function onPointerLockChange() {
     locked = document.pointerLockElement === canvas;
@@ -57,16 +64,21 @@ export function createFlyControls({ canvas, camera }) {
     camera.rotation.z = 0;
   }
 
+  function solidAt(x, y, z) {
+    // Treat out-of-bounds as non-solid so falling out doesn't lock the
+    // player in mid-air. Callers pass in the block predicate so we stay
+    // decoupled from the block registry.
+    if (!world || !isSolid) return false;
+    return isSolid(world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)));
+  }
+
   function update(dt) {
     let fx = 0;
     let fz = 0;
-    let fy = 0;
     if (keys.has('KeyW')) fz -= 1;
     if (keys.has('KeyS')) fz += 1;
     if (keys.has('KeyA')) fx -= 1;
     if (keys.has('KeyD')) fx += 1;
-    if (keys.has('Space')) fy += 1;
-    if (keys.has('ShiftLeft') || keys.has('ShiftRight')) fy -= 1;
 
     const len = Math.hypot(fx, fz);
     if (len > 0) { fx /= len; fz /= len; }
@@ -74,12 +86,53 @@ export function createFlyControls({ canvas, camera }) {
     const speed = moveSpeed * (keys.has('ControlLeft') ? sprintMult : 1) * dt;
 
     // Horizontal movement respects yaw only so looking down doesn't dip
-    // forward motion underground.
+    // forward motion underground. Rotation is yaw around +Y applied to a
+    // local (fx,fz) vector — see camera look math in getLook().
     const sinY = Math.sin(yaw);
     const cosY = Math.cos(yaw);
-    camera.position.x += (fx * cosY - fz * sinY) * speed;
-    camera.position.z += (fx * sinY + fz * cosY) * speed;
-    camera.position.y += fy * speed;
+    camera.position.x += (fx * cosY + fz * sinY) * speed;
+    camera.position.z += (-fx * sinY + fz * cosY) * speed;
+
+    if (world && isSolid) {
+      // --- Gravity / jump / ground collision ---------------------------
+      // Player occupies the 1x2 column [camera.x, camera.z] with feet at
+      // camera.y - PLAYER_EYE. Simple axis-aligned resolution: apply vy,
+      // then clamp when the block at feet is solid (landing) or when the
+      // block at head is solid (bonk).
+      vy = Math.max(-TERMINAL_V, vy - GRAVITY * dt);
+      camera.position.y += vy * dt;
+
+      const px = camera.position.x;
+      const pz = camera.position.z;
+      const feetY = camera.position.y - PLAYER_EYE;
+      const headY = camera.position.y;
+
+      // Landed? Block directly under feet is solid and we're falling.
+      if (vy <= 0 && solidAt(px, feetY - 0.01, pz)) {
+        const groundTop = Math.floor(feetY - 0.01) + 1;
+        camera.position.y = groundTop + PLAYER_EYE;
+        vy = 0;
+        grounded = true;
+      } else {
+        grounded = false;
+      }
+
+      // Head bonk — ceiling above: stop upward motion.
+      if (vy > 0 && solidAt(px, headY + 0.01, pz)) {
+        vy = 0;
+      }
+
+      if (grounded && keys.has('Space')) {
+        vy = JUMP_VEL;
+        grounded = false;
+      }
+    } else {
+      // No world provided → legacy fly mode (Space up, Shift down).
+      let fy = 0;
+      if (keys.has('Space')) fy += 1;
+      if (keys.has('ShiftLeft') || keys.has('ShiftRight')) fy -= 1;
+      camera.position.y += fy * speed;
+    }
   }
 
   canvas.addEventListener('click', requestLock);

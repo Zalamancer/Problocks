@@ -17,7 +17,7 @@ export async function POST(
     const microId = String(body?.microId ?? '');
     const answerId = typeof body?.answerId === 'string' ? body.answerId : undefined;
     const answerValue = typeof body?.answerValue === 'number' ? body.answerValue : undefined;
-    const result = submitAnswer({ token, partId, microId, answerId, answerValue });
+    const result = await submitAnswer({ token, partId, microId, answerId, answerValue });
     return NextResponse.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';

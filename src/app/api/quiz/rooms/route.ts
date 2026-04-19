@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const frqId = typeof body?.frqId === 'string' ? body.frqId : 'cart-on-incline';
     const pacing = body?.pacing === 'self' ? 'self' : 'live';
-    const room = createRoom({ frqId, pacing });
+    const room = await createRoom({ frqId, pacing });
     return NextResponse.json({
       room: toPublic(room),
       roomId: room.id,
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const pin = req.nextUrl.searchParams.get('pin');
   if (!pin) return NextResponse.json({ error: 'pin-required' }, { status: 400 });
-  const room = getRoomByPin(pin);
+  const room = await getRoomByPin(pin);
   if (!room) return NextResponse.json({ error: 'not-found' }, { status: 404 });
   return NextResponse.json({ room: toPublic(room) });
 }

@@ -12,7 +12,7 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    const room = advancePhase(roomId);
+    const room = await advancePhase(roomId);
     return NextResponse.json({ room: toPublic(room) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';

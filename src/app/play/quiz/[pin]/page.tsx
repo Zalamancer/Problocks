@@ -4,16 +4,11 @@ import { useCallback, useEffect, useMemo, useState, use } from 'react';
 import { FRQ } from '@/lib/quiz/frq-content';
 import type { Micro } from '@/lib/quiz/frq-content';
 import type { RoomPublic, RoomPlayer } from '@/lib/quiz/room-types';
+import { useRoom } from '@/lib/quiz/use-room';
 
 // Public student page. Kahoot-style: big colored buttons, no question
 // text (question lives on the teacher's screen). Students land here by
 // clicking the Classroom link or typing the PIN from the host screen.
-
-type Screen =
-  | { kind: 'loading' }
-  | { kind: 'notfound' }
-  | { kind: 'joining'; room: RoomPublic }
-  | { kind: 'playing'; room: RoomPublic; playerId: string; token: string };
 
 const CHOICE_TONES = [
   { bg: '#ff5a6e', ink: '#ffffff' },
@@ -22,73 +17,66 @@ const CHOICE_TONES = [
   { bg: '#22c55e', ink: '#06331a' },
 ];
 
+interface StoredSeat {
+  token: string;
+  playerId: string;
+  roomId: string;
+}
+
 export default function PlayQuizPage({
   params,
 }: {
   params: Promise<{ pin: string }>;
 }) {
   const { pin } = use(params);
-  const [screen, setScreen] = useState<Screen>({ kind: 'loading' });
+
+  // Phase A: resolve PIN → roomId. One-shot lookup; subsequent state
+  // comes from useRoom which is realtime-capable when Supabase is set up.
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [seat, setSeat] = useState<StoredSeat | null>(null);
   const [lastResult, setLastResult] = useState<
     { correct: boolean; points: number; newScore: number } | null
   >(null);
   const [answeredKey, setAnsweredKey] = useState<string | null>(null);
 
-  // Look up room by PIN on mount. If we already have a token stored for
-  // this PIN, rehydrate into the 'playing' screen without re-joining.
+  const { room } = useRoom(roomId);
+
+  // PIN lookup + rehydrate from localStorage if we've joined this room before.
   useEffect(() => {
     (async () => {
       const res = await fetch(`/api/quiz/rooms?pin=${encodeURIComponent(pin)}`);
-      if (!res.ok) {
-        setScreen({ kind: 'notfound' });
-        return;
-      }
+      if (!res.ok) { setNotFound(true); return; }
       const data = await res.json();
-      const room: RoomPublic = data.room;
-      const storageKey = `pb:quiz:${pin}`;
-      const cached = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+      const r: RoomPublic = data.room;
+      setRoomId(r.id);
+
+      const cached = typeof window !== 'undefined'
+        ? localStorage.getItem(`pb:quiz:${pin}`)
+        : null;
       if (cached) {
-        const parsed = JSON.parse(cached) as { token: string; playerId: string };
-        if (room.players.some((p) => p.id === parsed.playerId)) {
-          setScreen({ kind: 'playing', room, playerId: parsed.playerId, token: parsed.token });
-          return;
+        const parsed = JSON.parse(cached) as StoredSeat;
+        // Only trust the cache if the player still exists in the room
+        // (Supabase could have been wiped, etc).
+        if (r.players.some((p) => p.id === parsed.playerId)) {
+          setSeat(parsed);
         }
       }
-      setScreen({ kind: 'joining', room });
     })();
   }, [pin]);
 
-  // Poll while in 'joining' or 'playing' state.
+  // Clear "last result" whenever the host moves to the next question.
   useEffect(() => {
-    if (screen.kind !== 'joining' && screen.kind !== 'playing') return;
-    const roomId = screen.room.id;
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/quiz/rooms/${roomId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setScreen((prev) => {
-          if (prev.kind === 'joining')  return { ...prev, room: data.room };
-          if (prev.kind === 'playing')  return { ...prev, room: data.room };
-          return prev;
-        });
-      } catch { /* transient */ }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [screen.kind, screen.kind === 'joining' || screen.kind === 'playing' ? screen.room.id : null]);
-
-  // Clear "last result" as soon as the host moves to the next question.
-  useEffect(() => {
-    if (screen.kind !== 'playing') return;
-    const key = `${screen.room.partIdx}:${screen.room.microIdx}`;
-    if (screen.room.phase === 'question' && answeredKey !== key) {
+    if (!room || !seat) return;
+    const key = `${room.partIdx}:${room.microIdx}`;
+    if (room.phase === 'question' && answeredKey !== key) {
       setLastResult(null);
     }
-  }, [screen, answeredKey]);
+  }, [room?.phase, room?.partIdx, room?.microIdx, seat, answeredKey]);
 
   const join = useCallback(async (displayName: string) => {
-    if (screen.kind !== 'joining') return;
-    const res = await fetch(`/api/quiz/rooms/${screen.room.id}/join`, {
+    if (!room) return;
+    const res = await fetch(`/api/quiz/rooms/${room.id}/join`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ displayName }),
@@ -98,24 +86,23 @@ export default function PlayQuizPage({
       alert(data?.error ?? 'Could not join');
       return;
     }
-    const token: string = data.token;
-    const playerId: string = data.player.id;
-    localStorage.setItem(`pb:quiz:${pin}`, JSON.stringify({ token, playerId }));
-    setScreen({ kind: 'playing', room: data.room, playerId, token });
-  }, [screen, pin]);
+    const next: StoredSeat = { token: data.token, playerId: data.player.id, roomId: room.id };
+    localStorage.setItem(`pb:quiz:${pin}`, JSON.stringify(next));
+    setSeat(next);
+  }, [room, pin]);
 
   const submit = useCallback(async (opts: { answerId?: string; answerValue?: number }) => {
-    if (screen.kind !== 'playing') return;
-    const part = FRQ.parts[screen.room.partIdx];
-    const micro = part?.micros[screen.room.microIdx];
+    if (!room || !seat) return;
+    const part = FRQ.parts[room.partIdx];
+    const micro = part?.micros[room.microIdx];
     if (!part || !micro) return;
-    const key = `${screen.room.partIdx}:${screen.room.microIdx}`;
+    const key = `${room.partIdx}:${room.microIdx}`;
     setAnsweredKey(key);
-    const res = await fetch(`/api/quiz/rooms/${screen.room.id}/answer`, {
+    const res = await fetch(`/api/quiz/rooms/${room.id}/answer`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        token: screen.token,
+        token: seat.token,
         partId: part.id,
         microId: micro.id,
         ...opts,
@@ -125,7 +112,7 @@ export default function PlayQuizPage({
     if (res.ok) {
       setLastResult({ correct: data.correct, points: data.points, newScore: data.newScore });
     }
-  }, [screen]);
+  }, [room, seat]);
 
   return (
     <div
@@ -138,8 +125,7 @@ export default function PlayQuizPage({
         flexDirection: 'column',
       }}
     >
-      {screen.kind === 'loading' && <CenterText>Loading…</CenterText>}
-      {screen.kind === 'notfound' && (
+      {notFound && (
         <CenterText>
           <div style={{ fontSize: 18, fontWeight: 700 }}>Room not found</div>
           <div style={{ marginTop: 8, opacity: 0.7, fontSize: 13 }}>
@@ -147,13 +133,14 @@ export default function PlayQuizPage({
           </div>
         </CenterText>
       )}
-      {screen.kind === 'joining' && (
-        <JoinForm room={screen.room} pin={pin} onJoin={join} />
+      {!notFound && !room && <CenterText>Loading…</CenterText>}
+      {!notFound && room && !seat && (
+        <JoinForm room={room} pin={pin} onJoin={join} />
       )}
-      {screen.kind === 'playing' && (
+      {!notFound && room && seat && (
         <PlayingScreen
-          room={screen.room}
-          playerId={screen.playerId}
+          room={room}
+          playerId={seat.playerId}
           lastResult={lastResult}
           answeredKey={answeredKey}
           onSubmit={submit}
@@ -497,4 +484,3 @@ function FinalCard({ room, playerId }: { room: RoomPublic; playerId: string }) {
     </div>
   );
 }
-

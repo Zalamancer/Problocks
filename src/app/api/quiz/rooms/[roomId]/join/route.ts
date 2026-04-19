@@ -13,7 +13,7 @@ export async function POST(
     const { roomId } = await params;
     const body = await req.json();
     const displayName = typeof body?.displayName === 'string' ? body.displayName : '';
-    const { room, player, token } = joinRoom(roomId, displayName);
+    const { room, player, token } = await joinRoom(roomId, displayName);
     return NextResponse.json({
       room: toPublic(room),
       player,

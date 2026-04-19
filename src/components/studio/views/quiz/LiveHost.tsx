@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Play, ArrowRight, Users, Trophy } from 'lucide-react';
 import { FRQ } from '@/lib/quiz/frq-content';
 import type { RoomPublic } from '@/lib/quiz/room-types';
+import { useRoom } from '@/lib/quiz/use-room';
 import { Pill } from './QuizAtoms';
 
 // LiveHost — teacher's host screen. Lives inside the studio workspace
@@ -21,10 +22,12 @@ export function LiveHost({
   pacing: 'live' | 'self';
 }) {
   const [screen, setScreen] = useState<HostScreen>('creating');
-  const [room, setRoom] = useState<RoomPublic | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const { room, refresh } = useRoom(roomId);
 
-  // One-shot room creation on mount.
+  // One-shot room creation on mount. After we have an id, `useRoom`
+  // keeps the snapshot fresh via realtime (or polling fallback).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -37,7 +40,7 @@ export function LiveHost({
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? 'failed');
         if (cancelled) return;
-        setRoom(data.room);
+        setRoomId(data.roomId);
         setScreen('live');
       } catch (e) {
         if (cancelled) return;
@@ -48,28 +51,14 @@ export function LiveHost({
     return () => { cancelled = true; };
   }, [pacing]);
 
-  // Poll the room state while the session is live. 1s is plenty for Phase 1.
-  useEffect(() => {
-    if (screen !== 'live' || !room) return;
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/quiz/rooms/${room.id}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setRoom(data.room);
-      } catch { /* transient */ }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [screen, room?.id]);
-
   const advance = useCallback(async () => {
-    if (!room) return;
+    if (!roomId) return;
     try {
-      const res = await fetch(`/api/quiz/rooms/${room.id}/advance`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) setRoom(data.room);
+      await fetch(`/api/quiz/rooms/${roomId}/advance`, { method: 'POST' });
+      // Kick the hook immediately — don't wait for realtime tick.
+      refresh();
     } catch { /* ignore */ }
-  }, [room?.id]);
+  }, [roomId, refresh]);
 
   if (screen === 'creating') {
     return <HostFrame onExit={onExit}><Center>Opening room…</Center></HostFrame>;

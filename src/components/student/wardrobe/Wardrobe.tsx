@@ -176,86 +176,91 @@ export const Wardrobe = () => {
         </div>
 
         {/* ─── Right: category tabs + filters + grid ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0, height: '100%', overflowY: 'auto', paddingRight: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
 
-          {/* Category tabs */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 6, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)', borderRadius: 14 }}>
-            {CATEGORY_ORDER.map((c) => (
-              <CategoryTab key={c} category={c} active={c === category} onClick={() => setCategory(c)}/>
-            ))}
+          {/* Sticky header: category tabs + filters */}
+          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 12 }}>
+            {/* Category tabs */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 6, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)', borderRadius: 14 }}>
+              {CATEGORY_ORDER.map((c) => (
+                <CategoryTab key={c} category={c} active={c === category} onClick={() => setCategory(c)}/>
+              ))}
+            </div>
+
+            {/* Filters (only for mesh categories) */}
+            {(category !== 'skin' && category !== 'body' && category !== 'emote') && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: '1 1 220px' }}>
+                  <Icon name="compass" size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}/>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search items…"
+                    style={{
+                      width: '100%', padding: '10px 12px 10px 30px',
+                      borderRadius: 12, border: '1.5px solid var(--pbs-line-2)',
+                      background: 'var(--pbs-paper)', fontSize: 13.5, fontFamily: 'inherit',
+                      color: 'var(--pbs-ink)',
+                    }}
+                  />
+                </div>
+                <Select
+                  value={theme}
+                  onChange={(v) => setTheme(v as Theme | 'all')}
+                  options={[['all', 'All themes'], ...Object.entries(THEME_LABELS)]}
+                />
+                <Select
+                  value={rarity}
+                  onChange={(v) => setRarity(v as Rarity | 'all')}
+                  options={[
+                    ['all', 'All rarity'],
+                    ...Object.entries(RARITY_COLORS).map(([k, v]) => [k, v.label] as [string, string]),
+                  ]}
+                />
+                <ToggleRow label="Owned only" on={ownedOnly} onChange={setOwnedOnly}/>
+              </div>
+            )}
           </div>
 
-          {/* Filters (only for mesh categories) */}
-          {(category !== 'skin' && category !== 'body' && category !== 'emote') && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              <div style={{ position: 'relative', flex: '1 1 220px' }}>
-                <Icon name="compass" size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}/>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search items…"
-                  style={{
-                    width: '100%', padding: '10px 12px 10px 30px',
-                    borderRadius: 12, border: '1.5px solid var(--pbs-line-2)',
-                    background: 'var(--pbs-paper)', fontSize: 13.5, fontFamily: 'inherit',
-                    color: 'var(--pbs-ink)',
-                  }}
-                />
+          {/* Scrollable body: grid / panels */}
+          <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 6 }}>
+            {category === 'skin' && (
+              <SkinPanel outfit={outfit} onChange={(skin) => setOutfit((o) => ({ ...o, skin }))}/>
+            )}
+            {category === 'body' && (
+              <BodyPanel
+                gender={outfit.gender}
+                onChange={(g) => setOutfit((o) => ({ ...o, gender: g }))}
+              />
+            )}
+            {category === 'emote' && (
+              <EmotePanel emote={outfit.emote} onChange={(e) => setOutfit((o) => ({ ...o, emote: e }))}/>
+            )}
+
+            {(category !== 'skin' && category !== 'body' && category !== 'emote') && (
+              <div style={{
+                display: 'grid', gap: 10,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+              }}>
+                {meshItems.map((it) => (
+                  <ItemTile
+                    key={it.id}
+                    item={it}
+                    equipped={outfit[it.category as MeshCategory] === it.id}
+                    owned={isOwned(it.id, owned)}
+                    canAfford={blocks >= it.cost}
+                    onClick={() => equipMesh(it)}
+                  />
+                ))}
+                {meshItems.length === 0 && (
+                  <div style={{
+                    gridColumn: '1 / -1', textAlign: 'center',
+                    padding: 40, color: 'var(--pbs-ink-muted)', fontSize: 13,
+                  }}>No items match those filters.</div>
+                )}
               </div>
-              <Select
-                value={theme}
-                onChange={(v) => setTheme(v as Theme | 'all')}
-                options={[['all', 'All themes'], ...Object.entries(THEME_LABELS)]}
-              />
-              <Select
-                value={rarity}
-                onChange={(v) => setRarity(v as Rarity | 'all')}
-                options={[
-                  ['all', 'All rarity'],
-                  ...Object.entries(RARITY_COLORS).map(([k, v]) => [k, v.label] as [string, string]),
-                ]}
-              />
-              <ToggleRow label="Owned only" on={ownedOnly} onChange={setOwnedOnly}/>
-            </div>
-          )}
-
-          {/* Grid / panel body */}
-          {category === 'skin' && (
-            <SkinPanel outfit={outfit} onChange={(skin) => setOutfit((o) => ({ ...o, skin }))}/>
-          )}
-          {category === 'body' && (
-            <BodyPanel
-              gender={outfit.gender}
-              onChange={(g) => setOutfit((o) => ({ ...o, gender: g }))}
-            />
-          )}
-          {category === 'emote' && (
-            <EmotePanel emote={outfit.emote} onChange={(e) => setOutfit((o) => ({ ...o, emote: e }))}/>
-          )}
-
-          {(category !== 'skin' && category !== 'body' && category !== 'emote') && (
-            <div style={{
-              display: 'grid', gap: 10,
-              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-            }}>
-              {meshItems.map((it) => (
-                <ItemTile
-                  key={it.id}
-                  item={it}
-                  equipped={outfit[it.category as MeshCategory] === it.id}
-                  owned={isOwned(it.id, owned)}
-                  canAfford={blocks >= it.cost}
-                  onClick={() => equipMesh(it)}
-                />
-              ))}
-              {meshItems.length === 0 && (
-                <div style={{
-                  gridColumn: '1 / -1', textAlign: 'center',
-                  padding: 40, color: 'var(--pbs-ink-muted)', fontSize: 13,
-                }}>No items match those filters.</div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

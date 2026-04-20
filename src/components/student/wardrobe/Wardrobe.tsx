@@ -388,15 +388,9 @@ const ItemTile = ({
           ? `linear-gradient(160deg, ${tileSwatchColor(item)} 0%, ${r.bg} 100%)`
           : `linear-gradient(160deg, ${r.bg} 0%, var(--pbs-paper) 100%)`,
         border: `1.5px solid ${r.ink}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 32,
         overflow: 'hidden',
         position: 'relative',
-        color: tileSwatchColor(item) ? '#fff' : 'inherit',
-        textShadow: tileSwatchColor(item) ? '0 2px 0 rgba(0,0,0,0.35)' : 'none',
-      }}>
-        {CATEGORY_ICONS[item.category]}
-      </div>
+      }}/>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.005em', lineHeight: 1.2 }}>
         {item.label}
       </div>

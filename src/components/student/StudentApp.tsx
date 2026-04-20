@@ -10,6 +10,7 @@ import type { Session } from '@supabase/supabase-js';
 import { AuthScreen } from './AuthScreen';
 import { JoinScreen } from './JoinScreen';
 import { Dashboard, type AnyGame } from './Dashboard';
+import { ClassDetail } from './ClassDetail';
 import { PlayModal, Toast, type ToastState } from './atoms';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
@@ -23,7 +24,7 @@ import {
   type StudentUser,
 } from './sample-data';
 
-type View = 'auth' | 'join' | 'dashboard';
+type View = 'auth' | 'join' | 'dashboard' | 'class';
 
 const parseHashInvite = (): Invite | null => {
   if (typeof window === 'undefined') return null;
@@ -72,6 +73,7 @@ export const StudentApp = () => {
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [playing, setPlaying] = useState<AnyGame | null>(null);
+  const [openClassId, setOpenClassId] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string, tone: ToastState['tone'] = 'butter') => {
     const next: ToastState = { msg, tone, id: Date.now() };
@@ -249,9 +251,23 @@ export const StudentApp = () => {
           assigned={assigned}
           onPlay={(g) => setPlaying(g)}
           onJoinClass={() => setView('join')}
+          onOpenClass={(c) => { setOpenClassId(c.id); setView('class'); }}
           onLogout={handleLogout}
         />
       )}
+      {view === 'class' && user && openClassId && (() => {
+        const cls = classes.find((c) => c.id === openClassId);
+        if (!cls) { setView('dashboard'); return null; }
+        return (
+          <ClassDetail
+            cls={cls}
+            user={user}
+            assigned={assigned}
+            onPlay={(g) => setPlaying(g)}
+            onBack={() => { setOpenClassId(null); setView('dashboard'); }}
+          />
+        );
+      })()}
 
       {toast && <Toast toast={toast}/>}
       {playing && <PlayModal game={playing} onClose={() => setPlaying(null)}/>}

@@ -21,13 +21,14 @@ type Tab = 'home' | 'classes' | 'explore' | 'library';
 export type AnyGame = AssignedGame | ExploreGame | RecentGame | { title: string; icon?: string; tone?: string; questions?: number; minutes?: number };
 
 export const Dashboard = ({
-  user, classes, assigned, onPlay, onJoinClass, onLogout,
+  user, classes, assigned, onPlay, onJoinClass, onOpenClass, onLogout,
 }: {
   user: StudentUser;
   classes: ClassRecord[];
   assigned: AssignedGame[];
   onPlay: (g: AnyGame) => void;
   onJoinClass: () => void;
+  onOpenClass: (c: ClassRecord) => void;
   onLogout: () => void;
 }) => {
   const [tab, setTab] = useState<Tab>('home');
@@ -77,10 +78,17 @@ export const Dashboard = ({
             xpNext={xpNext}
             onPlay={onPlay}
             onJoinClass={onJoinClass}
+            onOpenClass={onOpenClass}
           />
         )}
         {tab === 'classes' && (
-          <ClassesTab classes={classes} assigned={assigned} onPlay={onPlay} onJoinClass={onJoinClass}/>
+          <ClassesTab
+            classes={classes}
+            assigned={assigned}
+            onPlay={onPlay}
+            onJoinClass={onJoinClass}
+            onOpenClass={onOpenClass}
+          />
         )}
         {tab === 'explore' && <ExploreTab onPlay={onPlay}/>}
         {tab === 'library' && <LibraryTab onPlay={onPlay}/>}
@@ -93,7 +101,7 @@ export const Dashboard = ({
 // ─────────────── Home tab ───────────────
 
 const HomeTab = ({
-  user, classes, assigned, xp, xpNext, onPlay, onJoinClass,
+  user, classes, assigned, xp, xpNext, onPlay, onJoinClass, onOpenClass,
 }: {
   user: StudentUser;
   classes: ClassRecord[];
@@ -102,6 +110,7 @@ const HomeTab = ({
   xpNext: number;
   onPlay: (g: AnyGame) => void;
   onJoinClass: () => void;
+  onOpenClass: (c: ClassRecord) => void;
 }) => {
   const firstName = (user?.name || 'You').split(' ')[0];
   const next = assigned[0];
@@ -299,7 +308,7 @@ const HomeTab = ({
             >+ Join</button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {classes.map((c) => <ClassRow key={c.id} c={c}/>)}
+            {classes.map((c) => <ClassRow key={c.id} c={c} onOpen={() => onOpenClass(c)}/>)}
           </div>
         </Block>
 
@@ -328,12 +337,13 @@ const HomeTab = ({
 // ─────────────── Classes tab ───────────────
 
 const ClassesTab = ({
-  classes, assigned, onPlay, onJoinClass,
+  classes, assigned, onPlay, onJoinClass, onOpenClass,
 }: {
   classes: ClassRecord[];
   assigned: AssignedGame[];
   onPlay: (g: AnyGame) => void;
   onJoinClass: () => void;
+  onOpenClass: (c: ClassRecord) => void;
 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 18 }}>
@@ -353,7 +363,7 @@ const ClassesTab = ({
       {classes.map((c) => {
         const cAssigned = assigned.filter((a) => a.classId === c.id);
         return (
-          <Block key={c.id} tone={c.tone} style={{ padding: 20 }}>
+          <Block key={c.id} tone={c.tone} style={{ padding: 20, cursor: 'pointer' }} onClick={() => onOpenClass(c)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 fontSize: 32, width: 52, height: 52, borderRadius: 14,
@@ -377,7 +387,7 @@ const ClassesTab = ({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {cAssigned.length ? cAssigned.map((a) => (
-                  <button key={a.id} onClick={() => onPlay(a)} style={mini}>
+                  <button key={a.id} onClick={(e) => { e.stopPropagation(); onPlay(a); }} style={mini}>
                     <Icon name={a.icon as 'bolt'} size={14} stroke={2.2}/>
                     <div style={{ flex: 1, textAlign: 'left', fontSize: 13, fontWeight: 600 }}>{a.title}</div>
                     <span style={{ fontSize: 11, opacity: 0.7 }}>{a.due.replace('Due ', '')}</span>
@@ -518,8 +528,16 @@ const RecentCard = ({ r }: { r: RecentGame }) => (
   </Block>
 );
 
-const ClassRow = ({ c }: { c: ClassRecord }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px' }}>
+const ClassRow = ({ c, onOpen }: { c: ClassRecord; onOpen: () => void }) => (
+  <button
+    onClick={onOpen}
+    style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px',
+      background: 'transparent', border: 0, width: '100%',
+      cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+      color: 'inherit',
+    }}
+  >
     <div style={{
       width: 32, height: 32, borderRadius: 9,
       background: `var(--pbs-${c.tone})`, border: `1.5px solid var(--pbs-${c.tone}-ink)`,
@@ -532,7 +550,7 @@ const ClassRow = ({ c }: { c: ClassRecord }) => (
       }}>{c.subject}</div>
       <div style={{ fontSize: 11, color: 'var(--pbs-ink-muted)' }}>{c.teacher}</div>
     </div>
-  </div>
+  </button>
 );
 
 const AvatarMenu = ({

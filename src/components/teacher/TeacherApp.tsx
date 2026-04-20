@@ -116,9 +116,9 @@ export const TeacherApp = () => {
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [cls, setCls] = useState<ClassRecord>(CLASSES[0]);
-  // Locally-created assignments. Sample-data is the source of truth for the
-  // seeded ones; new ones live here in-memory until persistence exists.
-  const [createdAssignments, setCreatedAssignments] = useState<Assignment[]>([]);
+  // Composer output — drafts AND published both get prepended to the
+  // Assignments list; drafts are distinguished by a "Draft" pill.
+  const [drafts, setDrafts] = useState<Assignment[]>([]);
 
   const goAssignment = (a: Assignment) => { setDetailAssignment(a); setView('assignment'); };
   const goStudent    = (s: Student)    => { setDetailStudent(s);    setView('student'); };
@@ -126,8 +126,8 @@ export const TeacherApp = () => {
   // detailStudent so StudentSelf renders THIS student, not a hard-coded one.
   const goSelf       = (s: Student)    => { setDetailStudent(s);    setView('self'); };
   const goNew        = ()              => { setView('new-assignment'); };
-  const handleCreate = (a: Assignment) => {
-    setCreatedAssignments((prev) => [a, ...prev]);
+  const handleCreated = (a: Assignment, _asDraft: boolean) => {
+    setDrafts((prev) => [a, ...prev]);
     setView('assignments');
   };
 
@@ -191,17 +191,13 @@ export const TeacherApp = () => {
       <main style={{ ...teacherWrap, padding: '28px 28px 80px' }}>
         {view === 'overview'    && <Overview cls={cls} onStudent={goStudent} onAssignment={goAssignment}/>}
         {view === 'assignments' && (
-          <AssignmentsList
-            onAssignment={goAssignment}
-            onNew={goNew}
-            extraAssignments={createdAssignments}
-          />
+          <AssignmentsList onAssignment={goAssignment} onNew={goNew} drafts={drafts}/>
         )}
         {view === 'assignment'  && detailAssignment && (
           <AssignmentDetail a={detailAssignment} onBack={() => setView('assignments')} onStudent={goStudent}/>
         )}
         {view === 'new-assignment' && (
-          <NewAssignment onBack={() => setView('assignments')} onCreate={handleCreate}/>
+          <NewAssignment cls={cls} onBack={() => setView('assignments')} onCreated={handleCreated}/>
         )}
         {view === 'students'    && <StudentsList onStudent={goStudent}/>}
         {view === 'student'     && detailStudent && (

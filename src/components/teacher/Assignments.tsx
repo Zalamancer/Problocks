@@ -9,13 +9,15 @@ import { ASSIGNMENTS, STUDENTS, type Assignment, type Student } from './sample-d
 import { backBtn, kickerSty, MiniKpi } from './shared';
 
 export const AssignmentsList = ({
-  onAssignment, onNew, extraAssignments = [],
+  onAssignment, onNew, drafts = [],
 }: {
   onAssignment: (a: Assignment) => void;
   onNew: () => void;
-  extraAssignments?: Assignment[];
+  // Composer output (drafts + published). Prepended to the static seed list
+  // so newly-created cards appear at the top. Drafts render a "Draft" pill.
+  drafts?: Assignment[];
 }) => {
-  const all = [...extraAssignments, ...ASSIGNMENTS];
+  const all = [...drafts, ...ASSIGNMENTS];
   return (
   <div className="pbs-fade-in">
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
@@ -41,6 +43,7 @@ export const AssignmentsList = ({
               <Icon name={a.icon as 'bolt'} size={18} stroke={2.2}/>
             </div>
             <Pill tone="paper">{a.kind}</Pill>
+            {a.draft && <Pill tone="paper">Draft</Pill>}
             <span style={{ marginLeft: 'auto', fontSize: 11.5, opacity: 0.8 }}>{a.due}</span>
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{a.title}</div>

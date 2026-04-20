@@ -36,11 +36,19 @@ export type Student = {
   avatar: AvatarOutfit;
 };
 
+// Widened for the New Assignment composer: the design adds
+//   • kinds: "Live relay", "Practice", "Quiz" (alongside the seeded "Live"/"Homework")
+//   • topics: "Ratios", "Functions" (alongside the four mastery topics)
+//   • draft: composer output can be saved as a draft (renders a Draft pill in the list)
+// hardestQ is optional because composer output has no submissions yet.
+export type AssignmentKind  = 'Live' | 'Homework' | 'Live relay' | 'Practice' | 'Quiz';
+export type AssignmentTopic = 'Algebra' | 'Geometry' | 'Numbers' | 'Probability' | 'Ratios' | 'Functions';
+
 export type Assignment = {
   id: string;
   title: string;
-  kind: 'Live' | 'Homework';
-  topic: 'Algebra' | 'Geometry' | 'Numbers' | 'Probability';
+  kind: AssignmentKind;
+  topic: AssignmentTopic;
   due: string;
   avg: number;
   submitted: number;
@@ -49,7 +57,8 @@ export type Assignment = {
   minutes: number;
   tone: TeacherTone;
   icon: string;
-  hardestQ: number;
+  hardestQ?: number;
+  draft?: boolean;
 };
 
 export type ClassRecord = {

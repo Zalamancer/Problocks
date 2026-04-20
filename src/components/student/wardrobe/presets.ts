@@ -12,7 +12,10 @@ const DEFAULT_OUTFIT: Outfit = {
   backpack: 'bag-school-blue',
   accessory: null,
   pet: null,
-  skin: '#e4b888',
+  // Kraft-cardboard tan — `outfitToAvatar` strips this exact value so
+  // RobloxAvatar's textured cardboard skin path activates (the same default
+  // a freshly-joined student sees on their profile card).
+  skin: '#c9a173',
   bodyShape: 'classic',
   emote: 'idle',
 };

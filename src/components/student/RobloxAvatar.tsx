@@ -238,7 +238,7 @@ export const RobloxAvatar = ({
     scene.add(fill);
 
     const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
-    camera.position.set(0, 0.4, 11);
+    camera.position.set(0, 0.4, 15);
     camera.lookAt(0, 0.2, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

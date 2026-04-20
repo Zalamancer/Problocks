@@ -47,7 +47,14 @@ const SelfKpi = ({ icon, l, v }: { icon: IconName; l: string; v: React.ReactNode
   </div>
 );
 
-export const StudentSelf = ({ s, onBack }: { s: Student; onBack: () => void }) => {
+export const StudentSelf = ({
+  s, onBack, backLabel,
+}: {
+  s: Student;
+  onBack: () => void;
+  /** Override for the back-button copy. Defaults to the teacher-flow wording. */
+  backLabel?: string;
+}) => {
   // Render whichever student the teacher chose to "view as", instead of
   // hard-coding STUDENTS[0]. Local alias `me` so the rest of the body
   // (ported from the original "I'm a student" view) reads naturally.
@@ -75,7 +82,9 @@ export const StudentSelf = ({ s, onBack }: { s: Student; onBack: () => void }) =
 
   return (
     <div className="pbs-fade-in">
-      <button type="button" onClick={onBack} style={backBtn}>← Back to {me.name.split(' ')[0]}&apos;s detail</button>
+      <button type="button" onClick={onBack} style={backBtn}>
+        ← {backLabel ?? `Back to ${me.name.split(' ')[0]}'s detail`}
+      </button>
 
       {/* Hero progress */}
       <Block tone="butter" style={{ padding: 24, marginTop: 14 }}>

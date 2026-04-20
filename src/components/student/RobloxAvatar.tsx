@@ -46,42 +46,44 @@ const PROPORTIONS: Record<AvatarGender, Proportions> = {
 
 const STROKE = '#1d1a14';
 
-// Paint kraft-cardboard onto a canvas context: warm-tan gradient, soft
-// corrugation bands, paper grain, and a few darker fibers.
-// Used both as the skin map and as the face-texture background so the
-// head's front face blends seamlessly with the head's other cardboard faces.
+// Paint a cardboard *luminance* pattern: near-white base with a subtle
+// vertical lightness gradient, semi-transparent black corrugation ridges,
+// neutral paper grain, and dark fibers. The point is that this canvas is
+// applied as `material.map` and tinted by `material.color = skin`, so
+// kraft tan looks like kraft cardboard AND any other skin tone shows the
+// same corrugation/grain pattern instead of being a flat colour.
 function paintCardboard(ctx: CanvasRenderingContext2D, size: number) {
   const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0, '#d4b081');
-  grad.addColorStop(0.5, '#c9a173');
-  grad.addColorStop(1, '#b88a5a');
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(0.5, '#f5f5f5');
+  grad.addColorStop(1, '#e6e6e6');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
-  // Horizontal corrugation ridges — subtle highlight/shadow pairs.
+  // Horizontal corrugation ridges — neutral highlight then darker shadow.
   const ridge = Math.max(8, Math.round(size / 26));
   for (let y = 0; y < size; y += ridge) {
     const g = ctx.createLinearGradient(0, y, 0, y + ridge);
-    g.addColorStop(0, 'rgba(255,240,200,0.22)');
+    g.addColorStop(0, 'rgba(255,255,255,0.22)');
     g.addColorStop(0.5, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(70,40,10,0.18)');
+    g.addColorStop(1, 'rgba(0,0,0,0.18)');
     ctx.fillStyle = g;
     ctx.fillRect(0, y, size, ridge);
   }
 
-  // Paper grain.
+  // Paper grain — neutral so it doesn't push the hue around when tinted.
   const img = ctx.getImageData(0, 0, size, size);
   const data = img.data;
   for (let i = 0; i < data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 22;
+    const n = (Math.random() - 0.5) * 18;
     data[i]     = Math.max(0, Math.min(255, data[i] + n));
-    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + n * 0.9));
-    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + n * 0.6));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + n));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + n));
   }
   ctx.putImageData(img, 0, 0);
 
-  // Darker fibers.
-  ctx.fillStyle = 'rgba(70,45,15,0.35)';
+  // Darker fibers — pure black at low alpha, lets the skin tint show through.
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
   const fibers = Math.round(size / 6);
   for (let i = 0; i < fibers; i++) {
     const x = Math.random() * size;
@@ -107,20 +109,15 @@ function makeCardboardTexture(): THREE.CanvasTexture {
 
 // Paint a 256x256 face onto a canvas and return it as a CanvasTexture.
 // Drawn on the +Z face of the head so the character "looks out" of the screen.
-// When `cardboard` is true, the background is rendered with the same
-// cardboard pattern used on the skin so the head face blends in; otherwise
-// a flat `skin` fill is used (for non-default skin colors).
-function makeFaceTexture(face: AvatarFace, skin: string, cardboard: boolean): THREE.CanvasTexture {
+// The background is always the same neutral cardboard luminance pattern; the
+// head face material multiplies it by the skin colour so the front of the
+// head matches the rest of the head regardless of which skin tone is picked.
+function makeFaceTexture(face: AvatarFace): THREE.CanvasTexture {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
-  if (cardboard) {
-    paintCardboard(ctx, size);
-  } else {
-    ctx.fillStyle = skin;
-    ctx.fillRect(0, 0, size, size);
-  }
+  paintCardboard(ctx, size);
 
   ctx.fillStyle = STROKE;
   ctx.strokeStyle = STROKE;
@@ -274,17 +271,17 @@ export const RobloxAvatar = ({
     const ro = new ResizeObserver(applySize);
     ro.observe(el);
 
-    // Cardboard look only kicks in when the caller didn't override `skin`
-    // (i.e. the default kraft tan is being used). Custom skin colors fall
-    // back to a flat material so the wardrobe can still recolor freely.
-    const useCardboard = !outfit?.skin;
-    const cardboardTex = useCardboard ? makeCardboardTexture() : null;
+    // Cardboard texture is always created and applied as the base luminance
+    // map on the skin. The chosen skin colour multiplies that texture so the
+    // corrugation/grain pattern reads with any tone (kraft tan, peach, brown,
+    // etc.) instead of disappearing into a flat fill.
+    const cardboardTex = makeCardboardTexture();
 
-    // Materials. For cardboard skin, we keep `color` white so the texture's
-    // baked-in tones come through unmodulated.
+    // Materials. `color = skin` tints the near-white cardboard map so picking
+    // a different skin in the wardrobe just retints the same pattern.
     const skinMat = new THREE.MeshStandardMaterial({
-      color: useCardboard ? 0xffffff : o.skin,
-      map: cardboardTex ?? null,
+      color: o.skin,
+      map: cardboardTex,
       roughness: 0.95,
       metalness: 0.0,
     });
@@ -293,8 +290,11 @@ export const RobloxAvatar = ({
     const hairMat = new THREE.MeshStandardMaterial({ color: o.hairColor, roughness: 0.9 });
     const hatMat = new THREE.MeshStandardMaterial({ color: o.hatColor, roughness: 0.7 });
 
-    const faceTex = makeFaceTexture(o.face, o.skin, useCardboard);
-    const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.9 });
+    // Face is now always painted on the cardboard background; the head face
+    // material also takes `color = skin` so the background tints to match the
+    // surrounding skin material (otherwise the face would read as plain white).
+    const faceTex = makeFaceTexture(o.face);
+    const faceMat = new THREE.MeshStandardMaterial({ color: o.skin, map: faceTex, roughness: 0.9 });
 
     const character = new THREE.Group();
     const prop = PROPORTIONS[o.gender];
@@ -453,7 +453,7 @@ export const RobloxAvatar = ({
       el.removeEventListener('pointercancel', onPointerUp);
       renderer.dispose();
       faceTex.dispose();
-      cardboardTex?.dispose();
+      cardboardTex.dispose();
       scene.traverse((obj) => {
         if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
         const mat = (obj as THREE.Mesh).material;

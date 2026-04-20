@@ -144,55 +144,6 @@ export const AvatarBlob = ({
   </div>
 );
 
-// Blocky Roblox-style minifig avatar. Pure SVG so it scales cleanly on dark
-// or light backgrounds. `tone` picks the shirt/pants palette from the cream
-// design tokens; head + limbs stay the classic yellow.
-export const RobloxAvatar = ({
-  tone = 'butter', size = 56,
-}: { tone?: string; size?: number }) => {
-  const head = '#ffd84d';        // classic Roblox yellow head
-  const headInk = '#7a5a00';
-  const skin = '#ffd84d';
-  const shirt = `var(--pbs-${tone})`;
-  const shirtInk = `var(--pbs-${tone}-ink)`;
-  const pants = '#2a2b36';
-  const ink = '#1d1a14';
-  return (
-    <div style={{
-      width: size, height: size,
-      borderRadius: size * 0.2,
-      background: 'var(--pbs-cream-2)',
-      border: `1.5px solid ${ink}`,
-      boxShadow: `0 2px 0 ${ink}`,
-      overflow: 'hidden', position: 'relative', flexShrink: 0,
-    }}>
-      <svg width={size} height={size} viewBox="0 0 64 64" style={{ display: 'block' }}>
-        {/* soft floor shadow */}
-        <ellipse cx="32" cy="58" rx="16" ry="2.5" fill="rgba(0,0,0,0.18)"/>
-        {/* legs */}
-        <rect x="22" y="44" width="8" height="14" fill={pants} stroke={ink} strokeWidth="1.5"/>
-        <rect x="34" y="44" width="8" height="14" fill={pants} stroke={ink} strokeWidth="1.5"/>
-        {/* torso / shirt */}
-        <rect x="20" y="28" width="24" height="18" fill={shirt} stroke={shirtInk} strokeWidth="1.5"/>
-        {/* shirt collar v */}
-        <path d="M28 28 L32 32 L36 28" stroke={shirtInk} strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-        {/* arms */}
-        <rect x="10" y="28" width="8" height="16" fill={skin} stroke={ink} strokeWidth="1.5"/>
-        <rect x="46" y="28" width="8" height="16" fill={skin} stroke={ink} strokeWidth="1.5"/>
-        {/* head */}
-        <rect x="18" y="8" width="28" height="22" rx="2" fill={head} stroke={ink} strokeWidth="1.6"/>
-        {/* eyes */}
-        <rect x="25" y="16" width="3.5" height="5" fill={ink}/>
-        <rect x="35.5" y="16" width="3.5" height="5" fill={ink}/>
-        {/* classic smile */}
-        <path d="M26 24 Q32 28 38 24" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round"/>
-        {/* head shading */}
-        <rect x="18" y="8" width="28" height="3" fill="rgba(255,255,255,0.25)"/>
-      </svg>
-    </div>
-  );
-};
-
 // Decorative QR glyph (deterministic 9x9 pattern). Pure visual — not a real QR.
 export const QrGlyph = ({
   size = 120, color = '#1d1a14',

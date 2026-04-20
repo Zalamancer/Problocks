@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 .env.local
+
+# large binary asset directories — do NOT commit
+/assets/
+/public/assets/
+/public/games/curriculum/

@@ -3,6 +3,7 @@
 // Reuses the cream pb-site theme (.pbs-root) so it matches the rest of the site.
 
 import { ClassroomSetupApp } from '@/components/teacher-setup/ClassroomSetupApp';
+import { ClassroomProviders } from '@/app/classroom/Providers';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
@@ -12,12 +13,14 @@ export const metadata = {
 
 export default function TeacherSetupPage() {
   return (
-    <div className="pbs-root">
-      <div className="pbs-page-bg" aria-hidden />
-      <div className="pbs-page-noise" aria-hidden />
-      <div className="pbs-content">
-        <ClassroomSetupApp />
+    <ClassroomProviders>
+      <div className="pbs-root">
+        <div className="pbs-page-bg" aria-hidden />
+        <div className="pbs-page-noise" aria-hidden />
+        <div className="pbs-content">
+          <ClassroomSetupApp />
+        </div>
       </div>
-    </div>
+    </ClassroomProviders>
   );
 }

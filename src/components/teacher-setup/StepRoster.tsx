@@ -2,10 +2,17 @@
 // Ported from Claude Design bundle (pb_classroom_setup/step_roster.jsx).
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import { Icon, Chunky } from '@/components/landing/pb-site/primitives';
 import { Field, StepCard, StepHeader } from './form';
 import type { SetupData, RosterMethod } from './types';
+import { classroomFetch } from '@/lib/classroom-api';
+import type {
+  ListCoursesResponse,
+  ListStudentsResponse,
+  ClassroomCourse,
+} from '@/lib/classroom-api';
 
 export const ROSTER_METHODS: Array<{
   id: RosterMethod;
@@ -160,7 +167,11 @@ export const StepRoster = ({
         </StepCard>
       )}
 
-      {(method === 'google' || method === 'clever' || method === 'teams') && (
+      {method === 'google' && (
+        <GoogleClassroomConnect data={data} set={set} selectedMethod={selectedMethod}/>
+      )}
+
+      {(method === 'clever' || method === 'teams') && (
         <StepCard>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
@@ -257,6 +268,7 @@ export const StepRoster = ({
         </StepCard>
       )}
 
+      {/* method === 'later' */}
       {method === 'later' && (
         <StepCard style={{ textAlign: 'center', padding: 32 }}>
           <div style={{
@@ -278,3 +290,226 @@ export const StepRoster = ({
     </div>
   );
 };
+
+// ── Google Classroom live connect ────────────────────────────────────────────
+// Uses next-auth (Google provider, Classroom scopes) to sign the teacher in,
+// then lists their Classroom courses and lets them import a roster in one tap.
+
+function GoogleClassroomConnect({
+  data, set, selectedMethod,
+}: {
+  data: SetupData;
+  set: <K extends keyof SetupData>(k: K, v: SetupData[K]) => void;
+  selectedMethod: typeof ROSTER_METHODS[number];
+}) {
+  const { data: session, status } = useSession();
+  const [courses, setCourses] = useState<ClassroomCourse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
+  const [importedCourseId, setImportedCourseId] = useState<string | null>(null);
+
+  // Fetch courses once authenticated.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await classroomFetch<ListCoursesResponse>('/courses');
+        if (cancelled) return;
+        setCourses(res.courses ?? []);
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Failed to load courses');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [status]);
+
+  const importRoster = async (course: ClassroomCourse) => {
+    setImportingId(course.id);
+    setError(null);
+    try {
+      const res = await classroomFetch<ListStudentsResponse>(`/courses/${course.id}/people`);
+      const names = (res.students ?? [])
+        .map((s) => s.profile?.name?.fullName)
+        .filter((n): n is string => Boolean(n));
+      set('pastedNames', names.join('\n'));
+      if (course.name) set('className', course.name);
+      setImportedCourseId(course.id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to import roster');
+    } finally {
+      setImportingId(null);
+    }
+  };
+
+  // ── Not signed in: the original marketing card with a real Connect CTA ───
+  if (status !== 'authenticated') {
+    const isLoading = status === 'loading';
+    return (
+      <StepCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14,
+            background: `var(--pbs-${selectedMethod.tone})`,
+            border: `1.5px solid var(--pbs-${selectedMethod.tone}-ink)`,
+            color: `var(--pbs-${selectedMethod.tone}-ink)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Icon name={selectedMethod.icon} size={24} stroke={2}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
+              Connect {selectedMethod.label}
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 13.5, color: 'var(--pbs-ink-soft)', lineHeight: 1.5, maxWidth: 440 }}>
+              We&apos;ll open a pop-up to authorise. Your roster auto-syncs every morning, so add/drops are handled.
+            </p>
+          </div>
+          <Chunky
+            tone="ink"
+            trailing="arrow-up-right"
+            onClick={() => signIn('google', { callbackUrl: '/teacher/setup' })}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Loading…' : 'Connect'}
+          </Chunky>
+        </div>
+      </StepCard>
+    );
+  }
+
+  // ── Token expired ───────────────────────────────────────────────────────
+  if (session?.error === 'AccessTokenExpired') {
+    return (
+      <StepCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Your Google session expired</div>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--pbs-ink-soft)' }}>
+              Re-authorise to refresh your Classroom roster.
+            </p>
+          </div>
+          <Chunky tone="ink" trailing="arrow-up-right" onClick={() => signIn('google', { callbackUrl: '/teacher/setup' })}>
+            Re-authorise
+          </Chunky>
+        </div>
+      </StepCard>
+    );
+  }
+
+  // ── Signed in ───────────────────────────────────────────────────────────
+  return (
+    <StepCard>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 12,
+          background: `var(--pbs-${selectedMethod.tone})`,
+          border: `1.5px solid var(--pbs-${selectedMethod.tone}-ink)`,
+          color: `var(--pbs-${selectedMethod.tone}-ink)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <Icon name="book" size={18} stroke={2.2}/>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
+            Connected to Google Classroom
+          </div>
+          <div className="pbs-mono" style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {session?.user?.email ?? ''}
+          </div>
+        </div>
+        <span style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+          padding: '4px 10px', borderRadius: 999,
+          background: 'var(--pbs-mint)', color: 'var(--pbs-mint-ink)',
+          border: '1.5px solid var(--pbs-mint-ink)',
+        }}>Live</span>
+      </div>
+
+      {loading && (
+        <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--pbs-ink-muted)' }}>
+          Loading your courses…
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          padding: 12, borderRadius: 12,
+          background: 'var(--pbs-coral)', color: 'var(--pbs-coral-ink)',
+          border: '1.5px solid var(--pbs-coral-ink)',
+          fontSize: 13,
+        }}>{error}</div>
+      )}
+
+      {!loading && !error && courses.length === 0 && (
+        <div style={{
+          padding: 16, borderRadius: 12,
+          background: 'var(--pbs-paper)', border: '1.5px dashed var(--pbs-line-2)',
+          fontSize: 13, color: 'var(--pbs-ink-soft)',
+        }}>
+          No Google Classroom courses found on this account. Create one in Classroom, then come back and refresh.
+        </div>
+      )}
+
+      {courses.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Pick a course to import
+          </div>
+          {courses.map((c) => {
+            const done = importedCourseId === c.id;
+            const busy = importingId === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => importRoster(c)}
+                disabled={busy}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 14px', textAlign: 'left',
+                  background: done ? 'var(--pbs-mint)' : 'var(--pbs-paper)',
+                  color: done ? 'var(--pbs-mint-ink)' : 'var(--pbs-ink)',
+                  border: `1.5px solid ${done ? 'var(--pbs-mint-ink)' : 'var(--pbs-line-2)'}`,
+                  borderRadius: 12,
+                  cursor: busy ? 'progress' : 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'all 120ms',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.name}
+                  </div>
+                  {(c.section || c.room) && (
+                    <div style={{ fontSize: 12, color: done ? 'inherit' : 'var(--pbs-ink-muted)', opacity: done ? 0.85 : 1 }}>
+                      {[c.section, c.room].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                <span className="pbs-mono" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  {busy ? 'Importing…' : done ? 'Imported ✓' : 'Import →'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {data.pastedNames && importedCourseId && (
+        <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--pbs-ink-soft)' }}>
+          Imported <strong style={{ color: 'var(--pbs-ink)' }}>{data.pastedNames.split(/\n/).filter(Boolean).length}</strong> students. You can tweak the list in <em>Paste a list</em> if needed.
+        </div>
+      )}
+    </StepCard>
+  );
+}

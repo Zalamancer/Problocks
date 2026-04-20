@@ -1,6 +1,7 @@
 // Teacher Messages view — group chat (per-class channels) + direct messages
 // (per-student threads). Ported from problocks/project/pb_teacher/messages.jsx.
-// Layout: [sidebar] [thread + composer] [details panel].
+// Layout: [rail] [sidebar] [thread + composer] [details panel]. The rail is
+// Discord-inspired — a DM pill at the top and one chunky square per class.
 'use client';
 
 import React, { useState } from 'react';
@@ -20,6 +21,92 @@ const initialThreads = (): ThreadsState => {
   for (const [id, v] of Object.entries(SEED_DM))   initial[`dm:${id}`] = [...v];
   return initial;
 };
+
+// --- Left rail (Discord-inspired) -------------------------------------------
+// A 72px-wide vertical column. Top: DM pill. Below: one chunky square per
+// class. Active item shows an ink indicator bar on the far left.
+
+const RailIndicator = ({ active }: { active: boolean }) => (
+  <span
+    aria-hidden
+    style={{
+      position: 'absolute', left: -10, top: '50%',
+      width: 4, height: active ? 24 : 0,
+      transform: 'translateY(-50%)',
+      background: 'var(--pbs-ink)', borderRadius: 4,
+      transition: 'height 140ms ease',
+    }}
+  />
+);
+
+const DmRailButton = ({
+  active, onClick,
+}: { active: boolean; onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title="Direct messages"
+    style={{
+      position: 'relative',
+      width: 48, height: 48, borderRadius: 14,
+      background: active ? 'var(--pbs-ink)' : 'var(--pbs-cream-2)',
+      color: active ? 'var(--pbs-cream)' : 'var(--pbs-ink)',
+      border: `1.5px solid ${active ? 'var(--pbs-ink)' : 'var(--pbs-line-2)'}`,
+      boxShadow: active
+        ? '0 3px 0 var(--pbs-ink)'
+        : '0 2px 0 var(--pbs-line-2)',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      cursor: 'pointer', fontFamily: 'inherit',
+      transition: 'transform 120ms ease',
+    }}
+  >
+    <RailIndicator active={active}/>
+    <span style={{ fontSize: 20, lineHeight: 1 }}>💬</span>
+  </button>
+);
+
+const ClassRailButton = ({
+  c, active, unread, onClick,
+}: { c: ClassRecord; active: boolean; unread?: number; onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={c.name}
+    style={{
+      position: 'relative',
+      width: 48, height: 48, borderRadius: 14,
+      background: `var(--pbs-${c.tone})`,
+      color: `var(--pbs-${c.tone}-ink)`,
+      border: `1.5px solid var(--pbs-${c.tone}-ink)`,
+      boxShadow: active
+        ? `0 3px 0 var(--pbs-${c.tone}-ink), 0 0 0 2.5px var(--pbs-ink)`
+        : `0 2px 0 var(--pbs-${c.tone}-ink)`,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 20, cursor: 'pointer', fontFamily: 'inherit',
+      transition: 'transform 120ms ease',
+    }}
+  >
+    <RailIndicator active={active}/>
+    <span>{c.emoji}</span>
+    {unread && unread > 0 ? (
+      <span style={{
+        position: 'absolute', bottom: -4, right: -4,
+        minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
+        background: 'var(--pbs-butter)', color: 'var(--pbs-butter-ink)',
+        fontSize: 10, fontWeight: 700,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        border: '1.5px solid var(--pbs-butter-ink)',
+      }}>{unread}</span>
+    ) : null}
+  </button>
+);
+
+const RailDivider = () => (
+  <div style={{
+    width: 28, height: 2, borderRadius: 2,
+    background: 'var(--pbs-line-2)', margin: '2px 0',
+  }}/>
+);
 
 // --- Sidebar rows ------------------------------------------------------------
 
@@ -99,12 +186,6 @@ const DmRow = ({
   </button>
 );
 
-const otherClassRow: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8,
-  padding: '7px 10px', borderRadius: 10,
-  background: 'var(--pbs-cream)', border: '1.5px solid var(--pbs-line)',
-};
-
 const newDmRow: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
   padding: '7px 10px', borderRadius: 10,
@@ -116,8 +197,12 @@ const newDmRow: React.CSSProperties = {
 // --- Main component ----------------------------------------------------------
 
 export const Messages = ({
-  cls, onStudent,
-}: { cls: ClassRecord; onStudent?: (s: Student) => void }) => {
+  cls, onCls, onStudent,
+}: {
+  cls: ClassRecord;
+  onCls?: (c: ClassRecord) => void;
+  onStudent?: (s: Student) => void;
+}) => {
   const [mode, setMode]         = useState<Mode>('group');
   const [channelId, setChannel] = useState('general');
   const [dmStudentId, setDm]    = useState('s5');
@@ -140,6 +225,16 @@ export const Messages = ({
     }));
   };
 
+  const pickDm = () => setMode('dm');
+  const pickClass = (c: ClassRecord) => {
+    setMode('group');
+    if (c.id !== cls.id) onCls?.(c);
+  };
+
+  // Unread total per class — sum of channel unreads for the current seed data.
+  const unreadFor = (cid: string) =>
+    (CHANNELS_BY_CLASS[cid] || []).reduce((n, ch) => n + (ch.unread || 0), 0);
+
   return (
     <div className="pbs-fade-in" style={{
       display: 'flex', flexDirection: 'column',
@@ -155,35 +250,32 @@ export const Messages = ({
             margin: '6px 0 0',
             fontSize: 'clamp(28px, 3.4vw, 42px)',
             fontWeight: 700, letterSpacing: '-0.025em',
-          }}>Talk to your class</h1>
-        </div>
-        <div style={{
-          display: 'flex', gap: 4, padding: 3,
-          background: 'var(--pbs-paper)',
-          border: '1.5px solid var(--pbs-line-2)',
-          borderRadius: 14,
-        }}>
-          {([['group', 'Group chat'], ['dm', 'Direct messages']] as [Mode, string][]).map(([k, l]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setMode(k)}
-              style={{
-                padding: '9px 14px', borderRadius: 10,
-                background: mode === k ? 'var(--pbs-ink)' : 'transparent',
-                color: mode === k ? 'var(--pbs-cream)' : 'var(--pbs-ink-soft)',
-                fontSize: 12.5, fontWeight: 600,
-                border: 0, cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >{l}</button>
-          ))}
+          }}>{mode === 'group' ? 'Talk to your class' : 'Direct messages'}</h1>
         </div>
       </div>
 
       <div style={{
-        display: 'grid', gridTemplateColumns: '280px 1fr 300px', gap: 14,
+        display: 'grid', gridTemplateColumns: '72px 280px 1fr 300px', gap: 14,
         flex: 1, minHeight: 0, alignItems: 'stretch', overflow: 'hidden',
       }}>
+        {/* RAIL: Discord-inspired class / DM switcher */}
+        <Block tone="cream" style={{
+          padding: '12px 0', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: 10, minHeight: 0, overflowY: 'auto',
+        }}>
+          <DmRailButton active={mode === 'dm'} onClick={pickDm}/>
+          <RailDivider/>
+          {CLASSES.map((c) => (
+            <ClassRailButton
+              key={c.id}
+              c={c}
+              active={mode === 'group' && c.id === cls.id}
+              unread={unreadFor(c.id)}
+              onClick={() => pickClass(c)}
+            />
+          ))}
+        </Block>
+
         {/* LEFT: sidebar */}
         <Block tone="paper" style={{ padding: 10, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <input
@@ -208,23 +300,6 @@ export const Messages = ({
                   .map((c) => (
                     <ChannelRow key={c.id} c={c} active={c.id === channelId} onClick={() => setChannel(c.id)}/>
                   ))}
-              </div>
-
-              <SidebarSection label="Your other classes" mt/>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {CLASSES.filter((c) => c.id !== cls.id).map((c) => (
-                  <div key={c.id} style={otherClassRow}>
-                    <span style={{
-                      width: 22, height: 22, borderRadius: 6,
-                      background: `var(--pbs-${c.tone})`,
-                      border: `1.5px solid var(--pbs-${c.tone}-ink)`,
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12,
-                    }}>{c.emoji}</span>
-                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.name}</span>
-                    <span className="pbs-mono" style={{ fontSize: 10, color: 'var(--pbs-ink-muted)' }}>{c.members}</span>
-                  </div>
-                ))}
               </div>
             </>
           ) : (

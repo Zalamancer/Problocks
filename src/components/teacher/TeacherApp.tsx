@@ -202,7 +202,7 @@ export const TeacherApp = () => {
           <NewAssignment cls={cls} onBack={() => setView('assignments')} onCreated={handleCreated}/>
         )}
         {view === 'students'    && <StudentsList onStudent={goStudent}/>}
-        {view === 'messages'    && <Messages cls={cls} onStudent={goStudent}/>}
+        {view === 'messages'    && <Messages cls={cls} onCls={setCls} onStudent={goStudent}/>}
         {view === 'student'     && detailStudent && (
           <StudentDetail
             s={detailStudent}

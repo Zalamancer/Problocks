@@ -1,0 +1,108 @@
+/* Unboxing animation keyframes. All scoped under .crate-* classes so they
+   can't bleed into unrelated UI. Timings are coordinated with CrateUnboxing's
+   phase machine (idle → shake → crack → burst → reveal). */
+
+@keyframes crate-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+@keyframes crate-aura {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.9;  transform: scale(1.08); }
+}
+
+@keyframes crate-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-3px, 1px) rotate(-2deg); }
+  20% { transform: translate(4px, -1px) rotate(3deg); }
+  30% { transform: translate(-4px, 2px) rotate(-3deg); }
+  40% { transform: translate(5px, -2px) rotate(4deg); }
+  50% { transform: translate(-5px, 1px) rotate(-4deg); }
+  60% { transform: translate(6px, -1px) rotate(5deg); }
+  70% { transform: translate(-6px, 2px) rotate(-5deg); }
+  80% { transform: translate(7px, -2px) rotate(6deg); }
+  90% { transform: translate(-7px, 1px) rotate(-6deg); }
+}
+
+@keyframes crate-crack-lid {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-48px) rotate(-18deg); opacity: 0.85; }
+}
+
+@keyframes crate-crack-body {
+  0%   { transform: scale(1); }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(0.92); }
+}
+
+@keyframes crate-flash {
+  0%   { opacity: 0; transform: scale(0.2); }
+  30%  { opacity: 1; transform: scale(1.8); }
+  100% { opacity: 0; transform: scale(3.5); }
+}
+
+@keyframes crate-burst-fade {
+  0%   { opacity: 1; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(4); }
+}
+
+@keyframes crate-rays-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes crate-rays-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 0.8;  transform: scale(1.15); }
+}
+
+@keyframes crate-item-float {
+  0%   { transform: translateY(40px) scale(0.6); opacity: 0; }
+  40%  { transform: translateY(-10px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes crate-item-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-10px) rotate(2deg); }
+}
+
+@keyframes crate-banner-in {
+  0%   { transform: translateY(20px) scale(0.7); opacity: 0; }
+  70%  { transform: translateY(-4px) scale(1.05); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes crate-sparkle {
+  0%   { opacity: 0; transform: scale(0) rotate(0deg); }
+  50%  { opacity: 1; transform: scale(1.1) rotate(180deg); }
+  100% { opacity: 0; transform: scale(0.3) rotate(360deg); }
+}
+
+@keyframes crate-particle {
+  0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: var(--crate-particle-dest) scale(0.2); }
+}
+
+@keyframes crate-overlay-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Utility classes used by CrateUnboxing + CrateVisual. */
+
+.crate-bob       { animation: crate-bob 2.4s ease-in-out infinite; }
+.crate-aura      { animation: crate-aura 2s ease-in-out infinite; }
+.crate-shake     { animation: crate-shake 0.5s linear; animation-iteration-count: 3; }
+.crate-lid       { animation: crate-crack-lid 0.45s cubic-bezier(.3,.8,.4,1) forwards; }
+.crate-body-pop  { animation: crate-crack-body 0.45s cubic-bezier(.5,.2,.7,1) forwards; }
+.crate-flash     { animation: crate-flash 0.55s ease-out forwards; }
+.crate-burst     { animation: crate-burst-fade 0.9s ease-out forwards; }
+.crate-rays      { animation: crate-rays-spin 8s linear infinite, crate-rays-pulse 2s ease-in-out infinite; }
+.crate-item-in   { animation: crate-item-float 0.7s cubic-bezier(.2,.9,.3,1.1) forwards; }
+.crate-item-idle { animation: crate-item-bob 3s ease-in-out infinite; }
+.crate-banner    { animation: crate-banner-in 0.6s cubic-bezier(.2,.9,.3,1.1) 0.2s backwards; }
+.crate-sparkle   { animation: crate-sparkle 1.4s ease-in-out infinite; }
+.crate-particle  { animation: crate-particle 0.9s ease-out forwards; }
+.crate-overlay-in { animation: crate-overlay-in 0.25s ease-out forwards; }

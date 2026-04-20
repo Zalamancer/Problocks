@@ -229,6 +229,16 @@ const HomeTab = ({
             >
               Customize avatar
             </Chunky>
+            <Chunky
+              as="a"
+              href="/student/crates"
+              tone="ghost"
+              icon="star"
+              trailing="arrow-right"
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              Open crates
+            </Chunky>
           </div>
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>

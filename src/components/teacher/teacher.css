@@ -1,0 +1,15 @@
+/* Teacher-only responsive collapses. Scoped under .pbs-root so nothing leaks. */
+
+.pbs-root .pb-teacher-hero   { grid-template-columns: 1.6fr 1fr; }
+.pbs-root .pb-teacher-split  { grid-template-columns: 1.3fr 1fr; }
+.pbs-root .pb-teacher-tri    { grid-template-columns: 1fr 1fr 1fr; }
+
+@media (max-width: 1040px) {
+  .pbs-root .pb-teacher-hero  { grid-template-columns: 1fr !important; }
+  .pbs-root .pb-teacher-split { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 760px) {
+  .pbs-root .pb-teacher-tri   { grid-template-columns: 1fr !important; }
+  .pbs-root .pb-teacher-kpis  { grid-template-columns: 1fr 1fr !important; }
+}

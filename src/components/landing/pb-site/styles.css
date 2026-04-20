@@ -145,6 +145,12 @@
 }
 .pbs-pop-in { animation: pbs-pop 420ms cubic-bezier(.2,.8,.2,1) both; }
 
+@keyframes pbs-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.pbs-fade-in { animation: pbs-fade 360ms ease both; }
+
 .pbs-dots-bg {
   background-image: radial-gradient(rgba(29,26,20,0.14) 1.2px, transparent 1.2px);
   background-size: 22px 22px;

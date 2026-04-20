@@ -2,7 +2,7 @@
 // Roblox-style avatar. Lives under the same cream pb-site theme as the
 // rest of the student app.
 
-import { Wardrobe } from '@/components/student/Wardrobe';
+import { Wardrobe } from '@/components/student/wardrobe/Wardrobe';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {

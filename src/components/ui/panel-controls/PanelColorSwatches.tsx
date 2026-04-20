@@ -67,17 +67,17 @@ export function PanelColorSwatches({
           }
         }}
         spellCheck={false}
-        className="w-full bg-panel-surface text-white text-sm py-2 pl-7 pr-11 rounded-lg focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-gray-600"
+        className="w-full bg-panel-surface text-white text-sm py-2 pl-7 pr-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-gray-600"
       />
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
-        <ColorPicker color={safeValue || '#000000'} onChange={onChange} presets={colors} />
-      </div>
     </div>
   )
 
+  const trigger = <ColorPicker color={safeValue || '#000000'} onChange={onChange} presets={colors} />
+
   if (!label) {
     return (
-      <div className={cn('flex items-center mb-3', className)}>
+      <div className={cn('flex items-center gap-2 mb-3', className)}>
+        {trigger}
         {hexField}
       </div>
     )
@@ -86,6 +86,7 @@ export function PanelColorSwatches({
   return (
     <div className={cn('flex items-center gap-3 mb-3', className)}>
       <span className="text-gray-400 text-sm w-20 shrink-0">{label}</span>
+      {trigger}
       {hexField}
     </div>
   )

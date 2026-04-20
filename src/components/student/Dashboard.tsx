@@ -227,7 +227,7 @@ const HomeTab = ({
               trailing="arrow-right"
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              Wardrobe
+              Customize avatar
             </Chunky>
           </div>
           <div style={{ marginTop: 16 }}>

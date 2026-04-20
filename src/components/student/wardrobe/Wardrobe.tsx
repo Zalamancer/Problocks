@@ -5,14 +5,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { RobloxAvatar } from '../RobloxAvatar';
-import {
-  outfitToAvatar,
-  HAT_COLOR, HAIR_COLOR, SHIRT_COLOR, PANTS_COLOR,
-} from './avatar-map';
+import { outfitToAvatar } from './avatar-map';
 import {
   CATEGORY_ICONS, CATEGORY_LABELS, ITEMS_BY_CATEGORY, ITEMS_BY_ID,
   defaultOwned, isOwned,
 } from './catalog';
+import { ItemPreview } from './ItemPreview';
 import { PRESETS, defaultOutfit, randomizeOutfit } from './presets';
 import {
   EMOTE_LABELS, GENDER_LABELS, RARITY_COLORS, SKIN_COLORS, THEME_LABELS,
@@ -36,22 +34,6 @@ const GROUP_FOR_CATEGORY: Record<Category, Group> = GROUPS.reduce((acc, g) => {
   for (const c of g.categories) acc[c] = g.id;
   return acc;
 }, {} as Record<Category, Group>);
-
-// Tile previews are 2D (color-accurate, no WebGL). Each avatar-renderable
-// category pulls its swatch colour from the same maps the main stage uses, so
-// an item's red shirt vs blue shirt reads instantly in the grid without
-// mounting a WebGL context per tile. Per-tile WebGL would exhaust Chrome's
-// 16-context cap (main stage goes blank) and blow the budget on our target
-// Celeron N4000 Chromebooks.
-function tileSwatchColor(item: Item): string | null {
-  switch (item.category) {
-    case 'hat':   return HAT_COLOR[item.id]   ?? null;
-    case 'hair':  return HAIR_COLOR[item.id]  ?? null;
-    case 'shirt': return SHIRT_COLOR[item.id] ?? null;
-    case 'pants': return PANTS_COLOR[item.id] ?? null;
-    default:      return null;
-  }
-}
 
 const STARTING_BLOCKS = 1240;
 
@@ -397,13 +379,14 @@ const ItemTile = ({
       <div style={{
         aspectRatio: '1 / 1',
         borderRadius: 10,
-        background: tileSwatchColor(item)
-          ? `linear-gradient(160deg, ${tileSwatchColor(item)} 0%, ${r.bg} 100%)`
-          : `linear-gradient(160deg, ${r.bg} 0%, var(--pbs-paper) 100%)`,
+        background: `linear-gradient(160deg, ${r.bg} 0%, var(--pbs-paper) 100%)`,
         border: `1.5px solid ${r.ink}`,
         overflow: 'hidden',
         position: 'relative',
-      }}/>
+        padding: 8,
+      }}>
+        <ItemPreview item={item}/>
+      </div>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.005em', lineHeight: 1.2 }}>
         {item.label}
       </div>

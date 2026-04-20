@@ -178,12 +178,12 @@ const CrateCard = ({ tier, count, canAfford, onOpen, onBuy }: CrateCardProps) =>
   return (
     <div style={{
       position: 'relative',
-      padding: '24px 20px 20px',
+      padding: '20px 18px 18px',
       borderRadius: 'var(--pbs-radius, 18px)',
       background: 'var(--pbs-paper)',
-      border: '1.5px solid var(--pbs-line)',
-      boxShadow: '0 3px 0 var(--pbs-line), 0 8px 24px -12px rgba(0,0,0,0.12)',
-      display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 14,
+      border: '1.5px solid var(--pbs-ink)',
+      boxShadow: '0 4px 0 var(--pbs-ink)',
+      display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 12,
     }}>
       {/* aura behind crate */}
       <div style={{

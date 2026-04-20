@@ -1,87 +1,90 @@
-// Crate tier definitions + loot-table logic for the unboxing system.
-// A "crate tier" is the visual/material quality of the box itself. Each tier
-// has a weighted rarity distribution that governs what comes out of it.
+// Crate tier definitions + loot-table logic. Colors use the pb-site tokens
+// (cream/butter/mint/coral/pink/ink) so crates read in the same chunky-
+// pastel visual language as the rest of the student app. Ink outlines and
+// tone blocks, not realistic materials.
 import type { Rarity } from '../wardrobe/types';
 
 export type CrateTier = 'paper' | 'cardboard' | 'wooden' | 'metal' | 'crystal';
 
 export interface CrateStyle {
-  /** Hex — primary body color of the crate. */
+  /** Primary body color (flat tone block). */
   body: string;
-  /** Hex — accent color (straps, rivets, trim). */
+  /** Accent stamp / decoration color. */
   accent: string;
-  /** Hex — deeper shade used for shadows / edges. */
+  /** Deep ink color used for outlines + drop shadow. */
   shadow: string;
-  /** Hex — the glow/aura color (used for light rays + particle burst). */
+  /** Aura / point-light glow color. */
   glow: string;
-  /** Secondary glow hex for multi-stop gradients (legendary). */
+  /** Optional second glow for multi-tone particle bursts. */
   glow2?: string;
-  /** Label shown on the crate card. */
   label: string;
-  /** Short flavor text. */
   tagline: string;
-  /** Cost in blocks to buy this crate in the shop. */
+  /** DM-Mono badge text painted into the texture (e.g. "// 01"). */
+  code: string;
   cost: number;
-  /** Shake/animation intensity multiplier (1 = baseline). */
   intensity: number;
-  /** Probability of each rarity dropping, must sum to 1. */
   loot: Record<Rarity, number>;
 }
 
 export const CRATE_TIERS: Record<CrateTier, CrateStyle> = {
   paper: {
-    body: '#e8dcbc',
-    accent: '#c9a173',
-    shadow: '#a0824f',
-    glow: '#fff3c4',
+    body: '#fdf6e6',   // pbs-cream
+    accent: '#ffd84d', // pbs-butter
+    shadow: '#1d1a14', // pbs-ink
+    glow: '#ffd84d',   // butter
     label: 'Paper Parcel',
-    tagline: 'Scrappy finds wrapped in twine.',
+    tagline: 'Tied with twine. Scrappy finds.',
+    code: '// 01',
     cost: 120,
     intensity: 0.7,
     loot: { common: 0.75, uncommon: 0.22, rare: 0.03, epic: 0, legendary: 0 },
   },
   cardboard: {
-    body: '#b08150',
-    accent: '#7a5530',
-    shadow: '#4e3620',
-    glow: '#b6f0c6',
+    body: '#ffd84d',   // butter
+    accent: '#1d1a14', // ink
+    shadow: '#6b4f00', // butter-ink
+    glow: '#b6f0c6',   // mint
     label: 'Cardboard Crate',
-    tagline: 'Standard school supply drop.',
+    tagline: 'School-supply drop. Reliable.',
+    code: '// 02',
     cost: 300,
     intensity: 1,
     loot: { common: 0.4, uncommon: 0.45, rare: 0.13, epic: 0.02, legendary: 0 },
   },
   wooden: {
-    body: '#a16a3a',
-    accent: '#6d4320',
-    shadow: '#3d2312',
-    glow: '#7ec5ff',
+    body: '#ffb4a2',   // coral (playful wood-red)
+    accent: '#1d1a14', // ink
+    shadow: '#7a2a18', // coral-ink
+    glow: '#b9d9ff',   // sky
     label: 'Wooden Chest',
-    tagline: 'Heavy. Something rare rattles inside.',
+    tagline: 'Plank-and-nail. Something rare rattles.',
+    code: '// 03',
     cost: 700,
     intensity: 1.2,
     loot: { common: 0.15, uncommon: 0.35, rare: 0.4, epic: 0.09, legendary: 0.01 },
   },
   metal: {
-    body: '#7c8893',
-    accent: '#3e4956',
-    shadow: '#1c222b',
-    glow: '#c8a2ff',
-    glow2: '#ff7de9',
+    body: '#1d1a14',   // ink (dark vault)
+    accent: '#fdf6e6', // cream
+    shadow: '#000000',
+    glow: '#dcc7ff',   // grape
+    glow2: '#ffc8e0',  // pink
     label: 'Metal Vault',
-    tagline: 'Forged locks. Epic-grade guaranteed.',
+    tagline: 'Bolted shut. Epic-grade guaranteed.',
+    code: '// 04',
     cost: 1500,
     intensity: 1.5,
     loot: { common: 0, uncommon: 0.15, rare: 0.4, epic: 0.38, legendary: 0.07 },
   },
   crystal: {
-    body: '#fff8d6',
-    accent: '#ffd84d',
-    shadow: '#b48a00',
-    glow: '#ffd84d',
-    glow2: '#ffb4a2',
+    body: '#ffc8e0',   // pink
+    accent: '#ffd84d', // butter
+    shadow: '#8a1e5c', // pink-ink
+    glow: '#b6f0c6',   // mint
+    glow2: '#ffd84d',  // butter
     label: 'Crystal Reliquary',
-    tagline: 'Light pulses inside. Legendary odds.',
+    tagline: 'Glows from within. Legendary odds.',
+    code: '// 05',
     cost: 4000,
     intensity: 2,
     loot: { common: 0, uncommon: 0, rare: 0.2, epic: 0.55, legendary: 0.25 },

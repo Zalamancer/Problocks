@@ -68,9 +68,10 @@ export const CrateUnboxing = ({ tier, onClose, onClaim }: CrateUnboxingProps) =>
       className="crate-overlay-in"
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.95) 80%)',
+        background: 'radial-gradient(ellipse at center, rgba(253,246,230,0.96) 0%, rgba(247,237,212,0.98) 70%, rgba(232,220,188,1) 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexDirection: 'column', gap: 24, padding: 24,
+        color: 'var(--pbs-ink)',
         animationFillMode: 'forwards',
       }}
     >
@@ -136,10 +137,10 @@ export const CrateUnboxing = ({ tier, onClose, onClaim }: CrateUnboxingProps) =>
             <div
               className="crate-item-idle"
               style={{
-                width: 200, height: 200, borderRadius: 24,
-                background: `linear-gradient(145deg, ${rarityStyle.bg}, #fff)`,
-                border: `3px solid ${rarityStyle.ink}`,
-                boxShadow: `0 0 60px ${style.glow}aa, 0 10px 0 ${rarityStyle.ink}, 0 20px 40px -10px ${rarityStyle.ink}`,
+                width: 200, height: 200, borderRadius: 22,
+                background: rarityStyle.bg,
+                border: `2px solid var(--pbs-ink)`,
+                boxShadow: `0 8px 0 var(--pbs-ink), 0 0 0 4px ${style.glow}55, 0 0 80px ${style.glow}66`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 96,
               }}
@@ -155,21 +156,25 @@ export const CrateUnboxing = ({ tier, onClose, onClaim }: CrateUnboxingProps) =>
       {phase === 'reveal' && (
         <div className="crate-banner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <div
+            className="pbs-mono"
             style={{
               padding: '6px 18px', borderRadius: 999,
               background: rarityStyle.bg, color: rarityStyle.ink,
-              border: `2px solid ${rarityStyle.ink}`,
-              fontWeight: 800, fontSize: 13, letterSpacing: '0.08em',
+              border: `1.5px solid var(--pbs-ink)`,
+              fontWeight: 800, fontSize: 12, letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              boxShadow: `0 3px 0 ${rarityStyle.ink}`,
+              boxShadow: `0 3px 0 var(--pbs-ink)`,
             }}
           >
             {rarityStyle.label}
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: '#fdf6e6', letterSpacing: '-0.02em', textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>
+          <div
+            className="pbs-serif"
+            style={{ fontSize: 40, fontWeight: 700, color: 'var(--pbs-ink)', letterSpacing: '-0.025em', lineHeight: 1 }}
+          >
             {item.label}
           </div>
-          <div style={{ fontSize: 13, color: '#c9a173', textTransform: 'capitalize' }}>
+          <div style={{ fontSize: 12, color: 'var(--pbs-ink-soft)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
             {item.category} · {item.theme}
           </div>
         </div>
@@ -188,7 +193,7 @@ export const CrateUnboxing = ({ tier, onClose, onClaim }: CrateUnboxingProps) =>
           </button>
         )}
         {phase !== 'idle' && phase !== 'reveal' && (
-          <div style={{ color: '#fdf6e6', opacity: 0.6, fontSize: 13, fontStyle: 'italic' }}>
+          <div className="pbs-mono" style={{ color: 'var(--pbs-ink-soft)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
             Opening…
           </div>
         )}
@@ -284,20 +289,21 @@ function categoryEmoji(cat: string): string {
 
 const closeBtn: React.CSSProperties = {
   position: 'absolute', top: 20, right: 20,
-  width: 44, height: 44, borderRadius: '50%',
-  background: 'rgba(255,255,255,0.1)', color: '#fdf6e6',
-  border: '1.5px solid rgba(255,255,255,0.2)',
-  fontSize: 28, fontWeight: 300,
+  width: 44, height: 44, borderRadius: 14,
+  background: 'var(--pbs-paper)', color: 'var(--pbs-ink)',
+  border: '1.5px solid var(--pbs-ink)',
+  boxShadow: '0 3px 0 var(--pbs-ink)',
+  fontSize: 24, fontWeight: 600, lineHeight: 1,
   cursor: 'pointer', fontFamily: 'inherit',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backdropFilter: 'blur(8px)',
 };
 
+// Chunky button: ink base with butter glow aura matching pbs-chunky-ink style.
 const primaryBtn = (glow: string): React.CSSProperties => ({
   padding: '14px 28px', borderRadius: 14,
-  background: 'var(--pbs-butter)', color: 'var(--pbs-butter-ink)',
-  border: '1.5px solid var(--pbs-butter-ink)',
-  boxShadow: `0 4px 0 var(--pbs-butter-ink), 0 0 40px ${glow}88`,
-  fontSize: 16, fontWeight: 800, letterSpacing: '-0.01em',
+  background: 'var(--pbs-ink)', color: 'var(--pbs-cream)',
+  border: '1.5px solid var(--pbs-ink)',
+  boxShadow: `0 4px 0 var(--pbs-ink), 0 0 0 6px ${glow}33, 0 0 40px ${glow}66`,
+  fontSize: 15, fontWeight: 700, letterSpacing: '-0.005em',
   cursor: 'pointer', fontFamily: 'inherit',
 });

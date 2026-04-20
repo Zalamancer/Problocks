@@ -3,7 +3,7 @@
 // Outfit-driven so a future wardrobe UI can dress the character live.
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 export type AvatarFace = 'smile' | 'happy' | 'cool' | 'wink' | 'neutral';
@@ -235,6 +235,23 @@ export const RobloxAvatar = ({
   const zoomRef = useRef<number>(1.0);
   // Handle back into the effect so the +/- buttons can trigger a re-fit.
   const refitRef = useRef<(() => void) | null>(null);
+  // Bumped whenever the WebGL context was lost (Chrome bfcache restore on
+  // history.back(), tab-discard, GPU process crash). The scene effect reads
+  // this in its dep array so it tears down and rebuilds cleanly — otherwise
+  // the canvas stays black until the user hard-refreshes.
+  const [glEpoch, setGlEpoch] = useState(0);
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      // `persisted === true` means the page was restored from the browser
+      // back-forward cache. In that case our WebGL context is gone and the
+      // scene-build effect did NOT re-run (the component never unmounted),
+      // so we bump the epoch to force a rebuild.
+      if (e.persisted) setGlEpoch((n) => n + 1);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -262,6 +279,15 @@ export const RobloxAvatar = ({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
+
+    // If the GPU context goes away (bfcache restore, tab discard, driver
+    // crash), preventDefault + bump the epoch so the outer effect rebuilds
+    // the whole scene against a fresh context.
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+      setGlEpoch((n) => n + 1);
+    };
+    renderer.domElement.addEventListener('webglcontextlost', onContextLost);
 
     // Forward-declared so applySize can call it once the character is built.
     let fitCameraToCharacter: (() => void) | null = null;
@@ -510,6 +536,7 @@ export const RobloxAvatar = ({
       el.removeEventListener('pointermove', onPointerMove);
       el.removeEventListener('pointerup', onPointerUp);
       el.removeEventListener('pointercancel', onPointerUp);
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
       renderer.dispose();
       faceTex.dispose();
       cardboardTex.dispose();
@@ -525,8 +552,9 @@ export const RobloxAvatar = ({
   // Scene is rebuilt only when the outfit or autoRotate flag changes. Size
   // changes are handled live by the ResizeObserver above, so we don't want
   // `size` in the dep array. `JSON.stringify(outfit)` covers gender too.
+  // `glEpoch` forces a full rebuild after bfcache restore / WebGL ctx loss.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRotate, JSON.stringify(outfit)]);
+  }, [autoRotate, JSON.stringify(outfit), glEpoch]);
 
   // Fill mode takes the full width AND height of the parent (which the caller
   // is expected to be — e.g. the black "preview card" in the wardrobe). No

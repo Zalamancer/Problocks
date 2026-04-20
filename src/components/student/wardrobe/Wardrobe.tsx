@@ -310,8 +310,17 @@ export const Wardrobe = () => {
             )}
           </div>
 
-          {/* Scrollable body: grid / panels */}
-          <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 6 }}>
+          {/* Scrollable body: grid / panels.
+              `scroll-snap-type: y mandatory` + `scroll-snap-align: start` on
+              each tile makes the grid lock row-by-row instead of free-scrolling.
+              Tiles in the same row share the same snap line, so a single wheel
+              tick advances one full row. `scroll-padding-top` accounts for the
+              tile's own top padding so the row sits flush under the filters. */}
+          <div style={{
+            flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 6,
+            scrollSnapType: 'y mandatory',
+            scrollPaddingTop: 4,
+          }}>
             {category === 'skin' && (
               <SkinPanel outfit={outfit} onChange={(skin) => setOutfit((o) => ({ ...o, skin }))}/>
             )}
@@ -379,6 +388,10 @@ const ItemTile = ({
         boxShadow: equipped ? '0 3px 0 var(--pbs-ink)' : '0 2px 0 rgba(0,0,0,0.08)',
         cursor: 'pointer', fontFamily: 'inherit', color: 'inherit',
         textAlign: 'left',
+        // Row-by-row snap: every tile is a snap target at its top edge, but
+        // since all tiles in a row share that Y, the scroll viewport locks to
+        // one full row at a time rather than free-scrolling between rows.
+        scrollSnapAlign: 'start',
       }}
     >
       <div style={{

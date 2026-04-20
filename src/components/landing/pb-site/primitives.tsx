@@ -4,6 +4,7 @@
 'use client';
 
 import React from 'react';
+import NextLink from 'next/link';
 
 type Tone = 'paper' | 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink' | 'ink' | 'cream';
 
@@ -189,6 +190,20 @@ export const Chunky = ({
 }) => {
   const common = { className: `pbs-chunky pbs-chunky-${tone}`, style };
   if (Tag === 'a') {
+    // Internal hrefs (start with '/') use Next's <Link> so navigation is
+    // client-side and Back restores from bfcache without reflashing any
+    // "Loading…" placeholder. External or anchor-only hrefs fall back to
+    // a plain <a>.
+    const isInternal = typeof href === 'string' && href.startsWith('/');
+    if (isInternal) {
+      return (
+        <NextLink href={href!} onClick={onClick} {...common}>
+          {icon && <Icon name={icon} size={16} stroke={2.2}/>}
+          {children}
+          {trailing && <Icon name={trailing} size={16} stroke={2.2}/>}
+        </NextLink>
+      );
+    }
     return (
       <a href={href} onClick={onClick} {...common}>
         {icon && <Icon name={icon} size={16} stroke={2.2}/>}

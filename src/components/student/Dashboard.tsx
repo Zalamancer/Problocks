@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { AvatarBlob } from './atoms';
 import { RobloxAvatar } from './RobloxAvatar';
@@ -576,14 +577,14 @@ const AvatarMenu = ({
               {user?.email || ''}
             </div>
           </div>
-          <a href="/student/profile" role="menuitem" style={menuItemSty} onClick={() => setOpen(false)}>
+          <Link href="/student/profile" role="menuitem" style={menuItemSty} onClick={() => setOpen(false)}>
             <Icon name="users" size={14} stroke={2.2}/>
             <span>Profile</span>
-          </a>
-          <a href="/student/settings" role="menuitem" style={menuItemSty} onClick={() => setOpen(false)}>
+          </Link>
+          <Link href="/student/settings" role="menuitem" style={menuItemSty} onClick={() => setOpen(false)}>
             <Icon name="bolt" size={14} stroke={2.2}/>
             <span>Settings</span>
-          </a>
+          </Link>
           <div style={menuDividerSty}/>
           <button
             role="menuitem"

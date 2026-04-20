@@ -22,7 +22,7 @@ export interface AvatarOutfit {
 }
 
 const DEFAULT_OUTFIT: Required<AvatarOutfit> = {
-  skin: '#ffd84d',
+  skin: '#c9a173',      // kraft-cardboard tan
   shirt: '#6fbf73',
   pants: '#3a3c4a',
   face: 'smile',
@@ -34,78 +34,146 @@ const DEFAULT_OUTFIT: Required<AvatarOutfit> = {
 
 const STROKE = '#1d1a14';
 
-// Paint a 128x128 face onto a canvas and return it as a CanvasTexture.
-// Drawn on the +Z face of the head so the character "looks out" of the screen.
-function makeFaceTexture(face: AvatarFace, skin: string): THREE.CanvasTexture {
-  const size = 128;
+// Paint kraft-cardboard onto a canvas context: warm-tan gradient, soft
+// corrugation bands, paper grain, and a few darker fibers.
+// Used both as the skin map and as the face-texture background so the
+// head's front face blends seamlessly with the head's other cardboard faces.
+function paintCardboard(ctx: CanvasRenderingContext2D, size: number) {
+  const grad = ctx.createLinearGradient(0, 0, 0, size);
+  grad.addColorStop(0, '#d4b081');
+  grad.addColorStop(0.5, '#c9a173');
+  grad.addColorStop(1, '#b88a5a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Horizontal corrugation ridges — subtle highlight/shadow pairs.
+  const ridge = Math.max(8, Math.round(size / 26));
+  for (let y = 0; y < size; y += ridge) {
+    const g = ctx.createLinearGradient(0, y, 0, y + ridge);
+    g.addColorStop(0, 'rgba(255,240,200,0.22)');
+    g.addColorStop(0.5, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(70,40,10,0.18)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y, size, ridge);
+  }
+
+  // Paper grain.
+  const img = ctx.getImageData(0, 0, size, size);
+  const data = img.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 22;
+    data[i]     = Math.max(0, Math.min(255, data[i] + n));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + n * 0.9));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + n * 0.6));
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Darker fibers.
+  ctx.fillStyle = 'rgba(70,45,15,0.35)';
+  const fibers = Math.round(size / 6);
+  for (let i = 0; i < fibers; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const len = 4 + Math.random() * 10;
+    ctx.fillRect(x, y, len, 1);
+  }
+}
+
+function makeCardboardTexture(): THREE.CanvasTexture {
+  const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
-  // Fill background with skin so head front blends seamlessly.
-  ctx.fillStyle = skin;
-  ctx.fillRect(0, 0, size, size);
+  paintCardboard(ctx, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Paint a 256x256 face onto a canvas and return it as a CanvasTexture.
+// Drawn on the +Z face of the head so the character "looks out" of the screen.
+// When `cardboard` is true, the background is rendered with the same
+// cardboard pattern used on the skin so the head face blends in; otherwise
+// a flat `skin` fill is used (for non-default skin colors).
+function makeFaceTexture(face: AvatarFace, skin: string, cardboard: boolean): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  if (cardboard) {
+    paintCardboard(ctx, size);
+  } else {
+    ctx.fillStyle = skin;
+    ctx.fillRect(0, 0, size, size);
+  }
 
   ctx.fillStyle = STROKE;
   ctx.strokeStyle = STROKE;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
+  // Scale factor vs the previous 128px face (all the decal constants were
+  // authored against a 128 canvas — just double them for 256).
+  const s = size / 128;
   const cx = size / 2;
   const eyeY = size * 0.44;
   const mouthY = size * 0.7;
 
-  const drawEye = (x: number, y: number, w = 10, h = 16) => {
+  const drawEye = (x: number, y: number, w = 10 * s, h = 16 * s) => {
     ctx.fillRect(x - w / 2, y - h / 2, w, h);
   };
 
   switch (face) {
     case 'happy':
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 6 * s;
       ctx.beginPath();
-      ctx.arc(cx - 18, eyeY, 9, Math.PI, 0, false);
+      ctx.arc(cx - 18 * s, eyeY, 9 * s, Math.PI, 0, false);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(cx + 18, eyeY, 9, Math.PI, 0, false);
+      ctx.arc(cx + 18 * s, eyeY, 9 * s, Math.PI, 0, false);
       ctx.stroke();
-      ctx.lineWidth = 7;
+      ctx.lineWidth = 7 * s;
       ctx.beginPath();
-      ctx.arc(cx, mouthY - 2, 16, 0, Math.PI, false);
+      ctx.arc(cx, mouthY - 2 * s, 16 * s, 0, Math.PI, false);
       ctx.stroke();
       break;
     case 'cool':
-      ctx.fillRect(cx - 32, eyeY - 10, 64, 16);
+      ctx.fillRect(cx - 32 * s, eyeY - 10 * s, 64 * s, 16 * s);
       ctx.fillStyle = '#9ad7ff';
-      ctx.fillRect(cx - 26, eyeY - 6, 16, 8);
-      ctx.fillRect(cx + 10, eyeY - 6, 16, 8);
+      ctx.fillRect(cx - 26 * s, eyeY - 6 * s, 16 * s, 8 * s);
+      ctx.fillRect(cx + 10 * s, eyeY - 6 * s, 16 * s, 8 * s);
       ctx.fillStyle = STROKE;
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 6 * s;
       ctx.beginPath();
-      ctx.arc(cx, mouthY, 12, 0, Math.PI, false);
+      ctx.arc(cx, mouthY, 12 * s, 0, Math.PI, false);
       ctx.stroke();
       break;
     case 'wink':
-      drawEye(cx - 18, eyeY);
-      ctx.lineWidth = 5;
+      drawEye(cx - 18 * s, eyeY);
+      ctx.lineWidth = 5 * s;
       ctx.beginPath();
-      ctx.arc(cx + 18, eyeY, 8, Math.PI, 0, false);
+      ctx.arc(cx + 18 * s, eyeY, 8 * s, Math.PI, 0, false);
       ctx.stroke();
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 6 * s;
       ctx.beginPath();
-      ctx.arc(cx, mouthY - 2, 14, 0, Math.PI, false);
+      ctx.arc(cx, mouthY - 2 * s, 14 * s, 0, Math.PI, false);
       ctx.stroke();
       break;
     case 'neutral':
-      drawEye(cx - 18, eyeY);
-      drawEye(cx + 18, eyeY);
-      ctx.fillRect(cx - 14, mouthY, 28, 5);
+      drawEye(cx - 18 * s, eyeY);
+      drawEye(cx + 18 * s, eyeY);
+      ctx.fillRect(cx - 14 * s, mouthY, 28 * s, 5 * s);
       break;
     case 'smile':
     default:
-      drawEye(cx - 18, eyeY);
-      drawEye(cx + 18, eyeY);
-      ctx.lineWidth = 6;
+      drawEye(cx - 18 * s, eyeY);
+      drawEye(cx + 18 * s, eyeY);
+      ctx.lineWidth = 6 * s;
       ctx.beginPath();
-      ctx.arc(cx, mouthY - 2, 14, 0, Math.PI, false);
+      ctx.arc(cx, mouthY - 2 * s, 14 * s, 0, Math.PI, false);
       ctx.stroke();
       break;
   }
@@ -179,15 +247,27 @@ export const RobloxAvatar = ({
     renderer.setClearColor(0x000000, 0);
     el.appendChild(renderer.domElement);
 
-    // Materials
-    const skinMat = new THREE.MeshStandardMaterial({ color: o.skin, roughness: 0.7, metalness: 0.0 });
+    // Cardboard look only kicks in when the caller didn't override `skin`
+    // (i.e. the default kraft tan is being used). Custom skin colors fall
+    // back to a flat material so the wardrobe can still recolor freely.
+    const useCardboard = !outfit?.skin;
+    const cardboardTex = useCardboard ? makeCardboardTexture() : null;
+
+    // Materials. For cardboard skin, we keep `color` white so the texture's
+    // baked-in tones come through unmodulated.
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: useCardboard ? 0xffffff : o.skin,
+      map: cardboardTex ?? null,
+      roughness: 0.95,
+      metalness: 0.0,
+    });
     const shirtMat = new THREE.MeshStandardMaterial({ color: o.shirt, roughness: 0.8 });
     const pantsMat = new THREE.MeshStandardMaterial({ color: o.pants, roughness: 0.85 });
     const hairMat = new THREE.MeshStandardMaterial({ color: o.hairColor, roughness: 0.9 });
     const hatMat = new THREE.MeshStandardMaterial({ color: o.hatColor, roughness: 0.7 });
 
-    const faceTex = makeFaceTexture(o.face, o.skin);
-    const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.75 });
+    const faceTex = makeFaceTexture(o.face, o.skin, useCardboard);
+    const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.9 });
 
     const character = new THREE.Group();
 
@@ -343,6 +423,7 @@ export const RobloxAvatar = ({
       el.removeEventListener('pointercancel', onPointerUp);
       renderer.dispose();
       faceTex.dispose();
+      cardboardTex?.dispose();
       scene.traverse((obj) => {
         if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
         const mat = (obj as THREE.Mesh).material;

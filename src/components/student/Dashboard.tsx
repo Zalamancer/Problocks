@@ -207,7 +207,7 @@ const HomeTab = ({
             <RobloxAvatar
               size={88}
               outfit={{
-                skin: '#ffd84d',
+                // Omit `skin` → default kraft-cardboard look kicks in.
                 shirt: '#6fbf73',
                 pants: '#3a3c4a',
                 face: 'smile',

@@ -1,19 +1,19 @@
-// Roblox-style 3D minifig avatar, rendered in pure SVG with oblique
-// projection (front + top + right side visible per cube). Outfit-driven so
-// a future wardrobe UI can dress the character: shirt/pants/skin colors,
-// face expression, optional hat + hair.
+// Roblox-style 3D avatar, rendered with Three.js (WebGL). Real 3D boxes for
+// head / torso / arms / legs / hair / hat, with lighting + slow auto-orbit.
+// Outfit-driven so a future wardrobe UI can dress the character live.
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import * as THREE from 'three';
 
 export type AvatarFace = 'smile' | 'happy' | 'cool' | 'wink' | 'neutral';
 export type AvatarHat = 'none' | 'cap' | 'beanie' | 'tophat';
 export type AvatarHair = 'none' | 'short' | 'spike' | 'long';
 
 export interface AvatarOutfit {
-  skin?: string;       // head + arm color
-  shirt?: string;      // torso color
-  pants?: string;      // leg color
+  skin?: string;
+  shirt?: string;
+  pants?: string;
   face?: AvatarFace;
   hat?: AvatarHat;
   hatColor?: string;
@@ -21,259 +21,363 @@ export interface AvatarOutfit {
   hairColor?: string;
 }
 
-const DEFAULT_OUTFIT: Required<Pick<AvatarOutfit, 'skin' | 'shirt' | 'pants' | 'face' | 'hat' | 'hair' | 'hatColor' | 'hairColor'>> = {
+const DEFAULT_OUTFIT: Required<AvatarOutfit> = {
   skin: '#ffd84d',
   shirt: '#6fbf73',
-  pants: '#2a2b36',
+  pants: '#3a3c4a',
   face: 'smile',
   hat: 'none',
   hatColor: '#c24949',
-  hair: 'none',
+  hair: 'short',
   hairColor: '#3a2a1a',
 };
 
 const STROKE = '#1d1a14';
 
-// Oblique ("cabinet") projection: depth offset = (d * DX, d * DY).
-// Shallow angle reads as "3D" but keeps the face readable.
-const DX = 0.5;
-const DY = -0.3;
+// Paint a 128x128 face onto a canvas and return it as a CanvasTexture.
+// Drawn on the +Z face of the head so the character "looks out" of the screen.
+function makeFaceTexture(face: AvatarFace, skin: string): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  // Fill background with skin so head front blends seamlessly.
+  ctx.fillStyle = skin;
+  ctx.fillRect(0, 0, size, size);
 
-// One beveled cube with shaded top + right side faces.
-function Cube3D({
-  x, y, w, h, d, color, sx = 0, sy = 0,
-}: { x: number; y: number; w: number; h: number; d: number; color: string; sx?: number; sy?: number }) {
-  const X = x + sx, Y = y + sy;
-  const dx = d * DX, dy = d * DY;
-  const front = `${X},${Y} ${X + w},${Y} ${X + w},${Y + h} ${X},${Y + h}`;
-  const top = `${X},${Y} ${X + w},${Y} ${X + w + dx},${Y + dy} ${X + dx},${Y + dy}`;
-  const right = `${X + w},${Y} ${X + w + dx},${Y + dy} ${X + w + dx},${Y + h + dy} ${X + w},${Y + h}`;
-  return (
-    <g>
-      <polygon points={front} fill={color} />
-      <polygon points={top} fill={color} />
-      <polygon points={right} fill={color} />
-      {/* shading */}
-      <polygon points={top} fill="rgba(255,255,255,0.32)" />
-      <polygon points={right} fill="rgba(0,0,0,0.28)" />
-      {/* outlines (front box + visible back edges) */}
-      <polygon points={front} fill="none" stroke={STROKE} strokeWidth="1.1" strokeLinejoin="round" />
-      <polyline
-        points={`${X},${Y} ${X + dx},${Y + dy} ${X + w + dx},${Y + dy} ${X + w},${Y}`}
-        fill="none" stroke={STROKE} strokeWidth="1.1" strokeLinejoin="round"
-      />
-      <polyline
-        points={`${X + w + dx},${Y + dy} ${X + w + dx},${Y + h + dy} ${X + w},${Y + h}`}
-        fill="none" stroke={STROKE} strokeWidth="1.1" strokeLinejoin="round"
-      />
-    </g>
-  );
-}
+  ctx.fillStyle = STROKE;
+  ctx.strokeStyle = STROKE;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
-// Face decals on the head's front face. `fx, fy` is the head front top-left.
-function FaceDecal({ face, fx, fy, w, h }: { face: AvatarFace; fx: number; fy: number; w: number; h: number }) {
-  const eyeY = fy + h * 0.38;
-  const mouthY = fy + h * 0.7;
-  const cx = fx + w / 2;
+  const cx = size / 2;
+  const eyeY = size * 0.44;
+  const mouthY = size * 0.7;
+
+  const drawEye = (x: number, y: number, w = 10, h = 16) => {
+    ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  };
+
   switch (face) {
     case 'happy':
-      return (
-        <g>
-          <path d={`M${cx - 5},${eyeY - 1} q2.5,-3 5,0`} stroke={STROKE} strokeWidth="1.4" fill="none" strokeLinecap="round" />
-          <path d={`M${cx + 1.5},${eyeY - 1} q2.5,-3 5,0`} stroke={STROKE} strokeWidth="1.4" fill="none" strokeLinecap="round" />
-          <path d={`M${cx - 4},${mouthY - 2} q4,5 8,0`} stroke={STROKE} strokeWidth="1.6" fill="none" strokeLinecap="round" />
-        </g>
-      );
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx - 18, eyeY, 9, Math.PI, 0, false);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 18, eyeY, 9, Math.PI, 0, false);
+      ctx.stroke();
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - 2, 16, 0, Math.PI, false);
+      ctx.stroke();
+      break;
     case 'cool':
-      return (
-        <g>
-          <rect x={cx - 7.5} y={eyeY - 2.5} width="15" height="4" fill={STROKE} rx="0.8" />
-          <rect x={cx - 4} y={eyeY} width="2.5" height="2" fill="#9ad7ff" />
-          <rect x={cx + 1.5} y={eyeY} width="2.5" height="2" fill="#9ad7ff" />
-          <path d={`M${cx - 3},${mouthY} q3,2 6,0`} stroke={STROKE} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        </g>
-      );
+      ctx.fillRect(cx - 32, eyeY - 10, 64, 16);
+      ctx.fillStyle = '#9ad7ff';
+      ctx.fillRect(cx - 26, eyeY - 6, 16, 8);
+      ctx.fillRect(cx + 10, eyeY - 6, 16, 8);
+      ctx.fillStyle = STROKE;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx, mouthY, 12, 0, Math.PI, false);
+      ctx.stroke();
+      break;
     case 'wink':
-      return (
-        <g>
-          <rect x={cx - 5.5} y={eyeY} width="2.5" height="3.5" fill={STROKE} />
-          <path d={`M${cx + 2},${eyeY + 1.5} q1.5,-2 3,0`} stroke={STROKE} strokeWidth="1.4" fill="none" strokeLinecap="round" />
-          <path d={`M${cx - 4},${mouthY - 1} q4,4 8,0`} stroke={STROKE} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        </g>
-      );
+      drawEye(cx - 18, eyeY);
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(cx + 18, eyeY, 8, Math.PI, 0, false);
+      ctx.stroke();
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - 2, 14, 0, Math.PI, false);
+      ctx.stroke();
+      break;
     case 'neutral':
-      return (
-        <g>
-          <rect x={cx - 5} y={eyeY} width="2.5" height="3.5" fill={STROKE} />
-          <rect x={cx + 2.5} y={eyeY} width="2.5" height="3.5" fill={STROKE} />
-          <rect x={cx - 3} y={mouthY + 0.5} width="6" height="1.4" fill={STROKE} />
-        </g>
-      );
+      drawEye(cx - 18, eyeY);
+      drawEye(cx + 18, eyeY);
+      ctx.fillRect(cx - 14, mouthY, 28, 5);
+      break;
     case 'smile':
     default:
-      return (
-        <g>
-          <rect x={cx - 5} y={eyeY} width="2.5" height="3.5" fill={STROKE} />
-          <rect x={cx + 2.5} y={eyeY} width="2.5" height="3.5" fill={STROKE} />
-          <path d={`M${cx - 4},${mouthY - 1} q4,3.5 8,0`} stroke={STROKE} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        </g>
-      );
+      drawEye(cx - 18, eyeY);
+      drawEye(cx + 18, eyeY);
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - 2, 14, 0, Math.PI, false);
+      ctx.stroke();
+      break;
   }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
 }
 
-// Optional hat, rendered after the head so it sits on top.
-function Hat({
-  kind, color, hx, hy, hw, hd,
-}: { kind: AvatarHat; color: string; hx: number; hy: number; hw: number; hd: number }) {
-  switch (kind) {
-    case 'cap':
-      return (
-        <g>
-          <Cube3D x={hx} y={hy - 6} w={hw} h={6} d={hd} color={color} />
-          {/* brim */}
-          <rect x={hx - 2} y={hy - 1.5} width={hw / 2 + 4} height="2.2" fill={color} stroke={STROKE} strokeWidth="1" />
-        </g>
-      );
-    case 'beanie':
-      return (
-        <g>
-          <Cube3D x={hx} y={hy - 7} w={hw} h={7} d={hd} color={color} />
-          {/* band */}
-          <rect x={hx} y={hy - 3} width={hw} height="2.5" fill="rgba(0,0,0,0.22)" />
-          {/* pom */}
-          <circle cx={hx + hw / 2 + hd * DX / 2} cy={hy - 9} r="2.2" fill={color} stroke={STROKE} strokeWidth="1" />
-        </g>
-      );
-    case 'tophat':
-      return (
-        <g>
-          {/* brim (thin slab) */}
-          <Cube3D x={hx - 2} y={hy - 1.5} w={hw + 4} h={1.8} d={hd + 4} color={color} />
-          {/* crown */}
-          <Cube3D x={hx + 2} y={hy - 10} w={hw - 4} h={9} d={hd} color={color} />
-        </g>
-      );
-    case 'none':
-    default:
-      return null;
-  }
+// Build a 6-material cube where the +Z face uses `faceMat` and the others
+// use `bodyMat`. This is how we pin the smile onto the head front only.
+function makeHeadMaterials(bodyMat: THREE.Material, faceMat: THREE.Material): THREE.Material[] {
+  // Order: +x, -x, +y, -y, +z, -z
+  return [bodyMat, bodyMat, bodyMat, bodyMat, faceMat, bodyMat];
 }
 
-// Simple hair cap on top/sides of the head.
-function Hair({
-  kind, color, hx, hy, hw, hd,
-}: { kind: AvatarHair; color: string; hx: number; hy: number; hw: number; hd: number }) {
-  switch (kind) {
-    case 'short':
-      return (
-        <g>
-          <Cube3D x={hx} y={hy - 2.5} w={hw} h={3} d={hd} color={color} />
-          {/* side tufts */}
-          <rect x={hx} y={hy} width="2.5" height="4" fill={color} stroke={STROKE} strokeWidth="1" />
-          <rect x={hx + hw - 2.5} y={hy} width="2.5" height="4" fill={color} stroke={STROKE} strokeWidth="1" />
-        </g>
-      );
-    case 'spike':
-      return (
-        <g>
-          <Cube3D x={hx} y={hy - 3} w={hw} h={3.5} d={hd} color={color} />
-          {[0, 1, 2, 3].map((i) => (
-            <path key={i}
-              d={`M${hx + 3 + i * 5},${hy - 2.5} l2,-4 l2,4 z`}
-              fill={color} stroke={STROKE} strokeWidth="1" strokeLinejoin="round"/>
-          ))}
-        </g>
-      );
-    case 'long':
-      return (
-        <g>
-          <Cube3D x={hx} y={hy - 3} w={hw} h={4} d={hd} color={color} />
-          {/* long sides down past the head */}
-          <rect x={hx} y={hy} width="3" height={14} fill={color} stroke={STROKE} strokeWidth="1" />
-          <rect x={hx + hw - 3} y={hy} width="3" height={14} fill={color} stroke={STROKE} strokeWidth="1" />
-        </g>
-      );
-    case 'none':
-    default:
-      return null;
-  }
+// Add a thin black edge around a BoxGeometry (Roblox studs feel chunky).
+function withEdges(mesh: THREE.Mesh, color = 0x1d1a14): THREE.Group {
+  const group = new THREE.Group();
+  group.add(mesh);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(mesh.geometry as THREE.BufferGeometry),
+    new THREE.LineBasicMaterial({ color, linewidth: 1 }),
+  );
+  mesh.add(edges);
+  return group;
 }
 
 export const RobloxAvatar = ({
-  size = 80,
+  size = 120,
   outfit,
   framed = true,
+  autoRotate = true,
 }: {
   size?: number;
   outfit?: AvatarOutfit;
-  /** Wrap the SVG in the chunky cream tile used on the dashboard cards. */
   framed?: boolean;
+  autoRotate?: boolean;
 }) => {
-  const o = { ...DEFAULT_OUTFIT, ...(outfit || {}) };
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; yaw: number; dragging: boolean }>({ x: 0, yaw: 0, dragging: false });
 
-  // Layout is in viewBox units; we'll set viewBox to encompass it.
-  // Studs:  head 24x24x14, torso 24x24x12, arm 12x24x12, leg 12x24x12.
-  const HEAD = { x: 8, y: 0, w: 24, h: 22, d: 14 };
-  const TORSO = { x: 8, y: HEAD.y + HEAD.h, w: 24, h: 22, d: 12 };
-  const L_ARM = { x: -4, y: TORSO.y, w: 12, h: 22, d: 12 };
-  const R_ARM = { x: 32, y: TORSO.y, w: 12, h: 22, d: 12 };
-  const L_LEG = { x: 8, y: TORSO.y + TORSO.h, w: 12, h: 20, d: 12 };
-  const R_LEG = { x: 20, y: TORSO.y + TORSO.h, w: 12, h: 20, d: 12 };
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-  // Overall extents (include oblique depth offset).
-  const maxD = 14;
-  const xMin = L_ARM.x - 2;
-  const xMax = R_ARM.x + R_ARM.w + maxD * DX + 2;
-  const yMin = HEAD.y + maxD * DY - 12; // -12 for hat/hair room
-  const yMax = L_LEG.y + L_LEG.h + 4;
-  const vbW = xMax - xMin;
-  const vbH = yMax - yMin;
+    const o = { ...DEFAULT_OUTFIT, ...(outfit || {}) };
 
-  const svg = (
-    <svg width={size} height={size} viewBox={`${xMin} ${yMin} ${vbW} ${vbH}`} style={{ display: 'block' }}>
-      {/* floor shadow */}
-      <ellipse cx={(HEAD.x + HEAD.w / 2) + maxD * DX * 0.3} cy={yMax - 2} rx="18" ry="2.4" fill="rgba(0,0,0,0.22)" />
+    const scene = new THREE.Scene();
+    scene.background = null; // transparent
 
-      {/* legs first (bottom) */}
-      <Cube3D {...L_LEG} color={o.pants} />
-      <Cube3D {...R_LEG} color={o.pants} />
+    // Lighting: soft sky + directional key for clear face shading.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb09060, 0.85));
+    const key = new THREE.DirectionalLight(0xffffff, 0.95);
+    key.position.set(3, 5, 4);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffe8c8, 0.35);
+    fill.position.set(-3, 2, 3);
+    scene.add(fill);
 
-      {/* arms */}
-      <Cube3D {...L_ARM} color={o.skin} />
-      <Cube3D {...R_ARM} color={o.skin} />
+    const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+    camera.position.set(0, 0.4, 11);
+    camera.lookAt(0, 0.2, 0);
 
-      {/* torso */}
-      <Cube3D {...TORSO} color={o.shirt} />
-      {/* shirt collar v on front face */}
-      <path
-        d={`M${TORSO.x + 7},${TORSO.y + 1} L${TORSO.x + TORSO.w / 2},${TORSO.y + 5} L${TORSO.x + TORSO.w - 7},${TORSO.y + 1}`}
-        stroke="rgba(0,0,0,0.35)" strokeWidth="1.3" fill="none" strokeLinecap="round"
-      />
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(size, size);
+    renderer.setClearColor(0x000000, 0);
+    el.appendChild(renderer.domElement);
 
-      {/* head */}
-      <Cube3D {...HEAD} color={o.skin} />
-      {/* face decals on head front */}
-      <FaceDecal face={o.face} fx={HEAD.x} fy={HEAD.y} w={HEAD.w} h={HEAD.h} />
+    // Materials
+    const skinMat = new THREE.MeshStandardMaterial({ color: o.skin, roughness: 0.7, metalness: 0.0 });
+    const shirtMat = new THREE.MeshStandardMaterial({ color: o.shirt, roughness: 0.8 });
+    const pantsMat = new THREE.MeshStandardMaterial({ color: o.pants, roughness: 0.85 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: o.hairColor, roughness: 0.9 });
+    const hatMat = new THREE.MeshStandardMaterial({ color: o.hatColor, roughness: 0.7 });
 
-      {/* hair then hat on top */}
-      <Hair kind={o.hair} color={o.hairColor} hx={HEAD.x} hy={HEAD.y} hw={HEAD.w} hd={HEAD.d} />
-      <Hat kind={o.hat} color={o.hatColor} hx={HEAD.x} hy={HEAD.y} hw={HEAD.w} hd={HEAD.d} />
-    </svg>
+    const faceTex = makeFaceTexture(o.face, o.skin);
+    const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.75 });
+
+    const character = new THREE.Group();
+
+    // Torso: 2w x 2h x 1d
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), shirtMat);
+    torso.position.set(0, 0, 0);
+    character.add(withEdges(torso));
+
+    // Head: 1.6 cube sitting on top of torso
+    const headGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
+    const head = new THREE.Mesh(headGeo, makeHeadMaterials(skinMat, faceMat));
+    head.position.set(0, 1 + 0.8 + 0.05, 0); // torso half + head half + gap
+    character.add(withEdges(head));
+
+    // Arms: 1 x 2 x 1 on each side
+    const armGeoL = new THREE.BoxGeometry(1, 2, 1);
+    const armL = new THREE.Mesh(armGeoL, skinMat);
+    armL.position.set(-1.5, 0, 0);
+    character.add(withEdges(armL));
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), skinMat);
+    armR.position.set(1.5, 0, 0);
+    character.add(withEdges(armR));
+
+    // Legs: 1 x 2 x 1
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), pantsMat);
+    legL.position.set(-0.5, -2, 0);
+    character.add(withEdges(legL));
+    const legR = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), pantsMat);
+    legR.position.set(0.5, -2, 0);
+    character.add(withEdges(legR));
+
+    // Hair
+    if (o.hair !== 'none') {
+      const hairGroup = new THREE.Group();
+      if (o.hair === 'short') {
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 1.7), hairMat);
+        top.position.y = 0.9;
+        hairGroup.add(withEdges(top));
+      } else if (o.hair === 'spike') {
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.35, 1.7), hairMat);
+        cap.position.y = 0.85;
+        hairGroup.add(withEdges(cap));
+        for (let i = 0; i < 4; i++) {
+          const spike = new THREE.Mesh(
+            new THREE.ConeGeometry(0.22, 0.5, 4),
+            hairMat,
+          );
+          spike.position.set(-0.55 + i * 0.38, 1.25, 0.1);
+          spike.rotation.y = Math.PI / 4;
+          hairGroup.add(spike);
+        }
+      } else if (o.hair === 'long') {
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.5, 1.75), hairMat);
+        top.position.y = 0.9;
+        hairGroup.add(withEdges(top));
+        const backDrop = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.4, 0.3), hairMat);
+        backDrop.position.set(0, 0.15, -0.7);
+        hairGroup.add(withEdges(backDrop));
+        const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.3, 1.7), hairMat);
+        sideL.position.set(-0.75, 0.1, 0);
+        hairGroup.add(withEdges(sideL));
+        const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.3, 1.7), hairMat);
+        sideR.position.set(0.75, 0.1, 0);
+        hairGroup.add(withEdges(sideR));
+      }
+      hairGroup.position.copy(head.position);
+      character.add(hairGroup);
+    }
+
+    // Hat
+    if (o.hat !== 'none') {
+      const hatGroup = new THREE.Group();
+      if (o.hat === 'cap') {
+        const crown = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.55, 1.75), hatMat);
+        crown.position.y = 1.05;
+        hatGroup.add(withEdges(crown));
+        const brim = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.12, 1.1), hatMat);
+        brim.position.set(0, 0.85, 0.85);
+        hatGroup.add(withEdges(brim));
+      } else if (o.hat === 'beanie') {
+        const crown = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.75, 1.75), hatMat);
+        crown.position.y = 1.15;
+        hatGroup.add(withEdges(crown));
+        const pom = new THREE.Mesh(
+          new THREE.SphereGeometry(0.22, 10, 8),
+          hatMat,
+        );
+        pom.position.y = 1.65;
+        hatGroup.add(pom);
+      } else if (o.hat === 'tophat') {
+        const brim = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 2.2), hatMat);
+        brim.position.y = 0.88;
+        hatGroup.add(withEdges(brim));
+        const crown = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 1.4), hatMat);
+        crown.position.y = 1.65;
+        hatGroup.add(withEdges(crown));
+      }
+      hatGroup.position.copy(head.position);
+      character.add(hatGroup);
+    }
+
+    // Faint ground shadow disc so it doesn't look like it's floating.
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.18,
+    });
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.0, 24), shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = -3.02;
+    character.add(shadow);
+
+    // Slight overall lift so the mid-torso sits at y≈0 in the viewport.
+    character.position.y = 0.5;
+    // Start angled a touch so 3D reads immediately even without rotation.
+    character.rotation.y = Math.PI * 0.12;
+    scene.add(character);
+
+    // Mouse drag to spin.
+    const onPointerDown = (e: PointerEvent) => {
+      dragRef.current.dragging = true;
+      dragRef.current.x = e.clientX;
+      dragRef.current.yaw = character.rotation.y;
+      el.setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragRef.current.dragging) return;
+      const dx = e.clientX - dragRef.current.x;
+      character.rotation.y = dragRef.current.yaw + dx * 0.01;
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      dragRef.current.dragging = false;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    };
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+
+    let raf = 0;
+    const animate = () => {
+      if (autoRotate && !dragRef.current.dragging) {
+        character.rotation.y += 0.005;
+      }
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(animate);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('pointerup', onPointerUp);
+      el.removeEventListener('pointercancel', onPointerUp);
+      renderer.dispose();
+      faceTex.dispose();
+      scene.traverse((obj) => {
+        if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
+        const mat = (obj as THREE.Mesh).material;
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+        else if (mat) mat.dispose();
+      });
+      if (renderer.domElement.parentElement === el) el.removeChild(renderer.domElement);
+    };
+  // Rebuild when outfit or size changes — cheap for a 12-box scene.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size, autoRotate, JSON.stringify(outfit)]);
+
+  const inner = (
+    <div
+      ref={containerRef}
+      style={{
+        width: size, height: size,
+        cursor: 'grab', touchAction: 'none',
+      }}
+    />
   );
 
-  if (!framed) return svg;
+  if (!framed) return inner;
 
   return (
     <div style={{
       width: size, height: size,
       borderRadius: size * 0.2,
-      background: 'var(--pbs-cream-2)',
+      background: 'linear-gradient(180deg, var(--pbs-cream) 0%, var(--pbs-cream-2) 100%)',
       border: `1.5px solid ${STROKE}`,
       boxShadow: `0 2px 0 ${STROKE}`,
       overflow: 'hidden', position: 'relative', flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {svg}
+      {inner}
     </div>
   );
 };

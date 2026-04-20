@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { AssignmentDetail, AssignmentsList } from './Assignments';
+import { Messages } from './Messages';
 import { NewAssignment } from './NewAssignment';
 import { Overview } from './Overview';
 import { StudentDetail } from './StudentDetail';
@@ -15,7 +16,7 @@ import { StudentsList } from './StudentsList';
 import { CLASSES, type Assignment, type ClassRecord, type Student } from './sample-data';
 import { teacherWrap } from './shared';
 
-type View = 'overview' | 'assignments' | 'assignment' | 'new-assignment' | 'students' | 'student' | 'self';
+type View = 'overview' | 'assignments' | 'assignment' | 'new-assignment' | 'students' | 'student' | 'self' | 'messages';
 
 // "Student view" intentionally is NOT a top-level tab. It's reached from a
 // "View as student" button on a specific StudentDetail — teachers don't
@@ -26,6 +27,7 @@ const TABS: { k: View; l: string }[] = [
   { k: 'overview',    l: 'Overview' },
   { k: 'assignments', l: 'Assignments' },
   { k: 'students',    l: 'Students' },
+  { k: 'messages',    l: 'Messages' },
 ];
 
 const ClassPicker = ({
@@ -200,6 +202,7 @@ export const TeacherApp = () => {
           <NewAssignment cls={cls} onBack={() => setView('assignments')} onCreated={handleCreated}/>
         )}
         {view === 'students'    && <StudentsList onStudent={goStudent}/>}
+        {view === 'messages'    && <Messages cls={cls} onStudent={goStudent}/>}
         {view === 'student'     && detailStudent && (
           <StudentDetail
             s={detailStudent}

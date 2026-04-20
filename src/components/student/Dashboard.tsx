@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
-import { AvatarBlob } from './atoms';
+import { AvatarBlob, RobloxAvatar } from './atoms';
 import {
   EXPLORE,
   SAMPLE_RECENT,
@@ -203,7 +203,7 @@ const HomeTab = ({
 
         <Block tone="ink" style={{ padding: 22, color: 'var(--pbs-cream)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <AvatarBlob tone="butter" size={56}/>
+            <RobloxAvatar tone="butter" size={64}/>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 17, fontWeight: 700 }}>{user?.name || 'You'}</div>
               <div style={{ fontSize: 12, opacity: 0.7 }}>{user?.email || 'student@school.edu'}</div>

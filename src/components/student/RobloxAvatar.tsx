@@ -563,8 +563,12 @@ export const RobloxAvatar = ({
     <div
       style={{
         position: 'absolute',
-        right: 8,
-        bottom: 8,
+        // Right edge: pulled in further so the +/- stack clears the floating
+        // Clear outfit button that the caller may overlay on the same card.
+        right: 12,
+        // Bottom: sit above the floating control row (Auto-rotate pill /
+        // Clear outfit button are ~36px tall + 16px padding in Wardrobe).
+        bottom: 64,
         display: 'flex',
         flexDirection: 'column',
         gap: 6,

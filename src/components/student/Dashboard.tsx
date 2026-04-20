@@ -2,7 +2,7 @@
 // Ported from problocks/project/pb_student/dashboard.jsx.
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { AvatarBlob } from './atoms';
 import { RobloxAvatar } from './RobloxAvatar';
@@ -61,9 +61,7 @@ export const Dashboard = ({
           <div style={{ flex: 1 }}/>
           <StatChip icon="bolt" tone="butter" value={String(streak)} label="day streak"/>
           <StatChip icon="coin" tone="mint" value={coins.toLocaleString()} label="blocks"/>
-          <button style={avatarBtn} onClick={onLogout} title="Log out">
-            <AvatarBlob tone="butter" size={36}/>
-          </button>
+          <AvatarMenu user={user} onLogout={onLogout}/>
         </div>
       </header>
 
@@ -536,6 +534,71 @@ const ClassRow = ({ c }: { c: ClassRecord }) => (
   </div>
 );
 
+const AvatarMenu = ({
+  user, onLogout,
+}: { user: StudentUser; onLogout: () => void }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <button
+        style={avatarBtn}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={user?.name || 'Account'}
+      >
+        <AvatarBlob tone="butter" size={36}/>
+      </button>
+      {open && (
+        <div role="menu" style={menuSty}>
+          <div style={menuHeaderSty}>
+            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>
+              {user?.name || 'Student'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>
+              {user?.email || ''}
+            </div>
+          </div>
+          <a href="/student/profile" role="menuitem" style={menuItemSty} onClick={() => setOpen(false)}>
+            <Icon name="users" size={14} stroke={2.2}/>
+            <span>Profile</span>
+          </a>
+          <a href="/student/settings" role="menuitem" style={menuItemSty} onClick={() => setOpen(false)}>
+            <Icon name="bolt" size={14} stroke={2.2}/>
+            <span>Settings</span>
+          </a>
+          <div style={menuDividerSty}/>
+          <button
+            role="menuitem"
+            style={{ ...menuItemSty, color: 'var(--pbs-coral-ink)' }}
+            onClick={() => { setOpen(false); onLogout(); }}
+          >
+            <Icon name="arrow-right" size={14} stroke={2.2}/>
+            <span>Log out</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const StatChip = ({
   icon, tone, value, label,
 }: { icon: 'bolt' | 'coin'; tone: 'butter' | 'mint'; value: string; label: string }) => (
@@ -573,6 +636,32 @@ const tabBtn = (active: boolean): React.CSSProperties => ({
 });
 const avatarBtn: React.CSSProperties = {
   padding: 2, borderRadius: 12, background: 'transparent', border: 0, cursor: 'pointer',
+};
+const menuSty: React.CSSProperties = {
+  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+  minWidth: 200, padding: 6,
+  background: 'var(--pbs-paper)',
+  border: '1.5px solid var(--pbs-line-2)',
+  borderRadius: 14,
+  boxShadow: '0 4px 0 var(--pbs-line-2), 0 18px 40px -12px rgba(0,0,0,0.25)',
+  zIndex: 40,
+  display: 'flex', flexDirection: 'column', gap: 2,
+};
+const menuHeaderSty: React.CSSProperties = {
+  padding: '10px 12px 8px',
+  borderBottom: '1px solid var(--pbs-line)',
+  marginBottom: 4,
+};
+const menuItemSty: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  padding: '9px 12px', borderRadius: 10,
+  background: 'transparent', border: 0,
+  color: 'var(--pbs-ink)', fontSize: 13, fontWeight: 600,
+  cursor: 'pointer', fontFamily: 'inherit',
+  textDecoration: 'none', textAlign: 'left', width: '100%',
+};
+const menuDividerSty: React.CSSProperties = {
+  height: 1, background: 'var(--pbs-line)', margin: '4px 0',
 };
 const kickerSty: React.CSSProperties = {
   fontSize: 11, color: 'var(--pbs-ink-muted)',

@@ -525,8 +525,13 @@ export const RobloxAvatar = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRotate, JSON.stringify(outfit)]);
 
+  // Fill mode takes the full width AND height of the parent (which the caller
+  // is expected to be — e.g. the black "preview card" in the wardrobe). No
+  // aspect lock: aspect follows the parent, so on a tall card the avatar can
+  // actually use the extra vertical space instead of being boxed into a
+  // centered square.
   const sizeStyle: React.CSSProperties = size === 'fill'
-    ? { width: '100%', aspectRatio: '1 / 1' }
+    ? { width: '100%', height: '100%' }
     : { width: size, height: size };
 
   // Zoom buttons nudge the persistent zoom factor and ask the scene to
@@ -599,8 +604,10 @@ export const RobloxAvatar = ({
   );
 
   if (!framed) {
+    // overflow: visible so the caller's container (e.g. the wardrobe black
+    // card) is the true clipping boundary — not this wrapper.
     return (
-      <div style={{ ...sizeStyle, position: 'relative' }}>
+      <div style={{ ...sizeStyle, position: 'relative', overflow: 'visible' }}>
         {inner}
         {zoomButtons}
       </div>

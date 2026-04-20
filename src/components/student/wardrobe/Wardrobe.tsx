@@ -139,7 +139,7 @@ export const Wardrobe = () => {
         {/* ─── Left: avatar stage + controls + presets ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, height: '100%', overflow: 'hidden' }}>
           <Block tone="ink" style={{ padding: 16, color: 'var(--pbs-cream)', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ flex: '1 1 auto', minHeight: 0, borderRadius: 14, overflow: 'hidden', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: '1 1 auto', minHeight: 0, borderRadius: 14, overflow: 'visible', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <RobloxAvatar size="fill" framed={false} outfit={avatarOutfit} autoRotate={autoRotate}/>
               {flash && (
                 <div style={{

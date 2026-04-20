@@ -163,6 +163,7 @@
   .pbs-features-grid   { grid-template-columns: repeat(4, 1fr) !important; }
   .pbs-features-grid > * { grid-column: span 4 !important; }
   .pbs-footer-grid     { grid-template-columns: 1fr 1fr !important; }
+  .pbs-student-home    { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 520px) {
   .pbs-footer-grid     { grid-template-columns: 1fr !important; }

@@ -60,7 +60,7 @@ export const Nav = ({ onMakeGame }: { onMakeGame?: () => void }) => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            <Link href="/studio" style={{ fontSize: 13.5, fontWeight: 500, padding: '7px 10px', color: 'var(--pbs-ink-soft)', whiteSpace: 'nowrap' }}>Log in</Link>
+            <Link href="/student" style={{ fontSize: 13.5, fontWeight: 500, padding: '7px 10px', color: 'var(--pbs-ink-soft)', whiteSpace: 'nowrap' }}>Log in</Link>
             <button
               type="button"
               onClick={onMakeGame}

@@ -2,9 +2,10 @@
 // filters (search / theme / rarity / owned-only), economy, presets, randomize.
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
-import { AvatarScene, type AvatarSceneHandle } from './AvatarScene';
+import { RobloxAvatar } from '../RobloxAvatar';
+import { outfitToAvatar } from './avatar-map';
 import {
   CATEGORY_ICONS, CATEGORY_LABELS, ITEMS_BY_CATEGORY, ITEMS_BY_ID,
   defaultOwned, isOwned,
@@ -36,7 +37,9 @@ export const Wardrobe = () => {
   const [autoRotate, setAutoRotate] = useState(true);
   const [savedPresets, setSavedPresets] = useState<{ id: string; label: string; outfit: Outfit }[]>([]);
   const [flash, setFlash] = useState<string | null>(null);
-  const sceneRef = useRef<AvatarSceneHandle>(null);
+  // Memoize the converted outfit so RobloxAvatar's WebGL scene only rebuilds
+  // when something it actually renders changes (skin/shirt/pants/face/hat/hair).
+  const avatarOutfit = useMemo(() => outfitToAvatar(outfit), [outfit]);
 
   const showFlash = (msg: string) => {
     setFlash(msg);
@@ -127,8 +130,8 @@ export const Wardrobe = () => {
         {/* ─── Left: avatar stage + controls + presets ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 16 }}>
           <Block tone="ink" style={{ padding: 16, color: 'var(--pbs-cream)' }}>
-            <div style={{ aspectRatio: '1 / 1.12', borderRadius: 14, overflow: 'hidden', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative' }}>
-              <AvatarScene ref={sceneRef} outfit={outfit} autoRotate={autoRotate}/>
+            <div style={{ aspectRatio: '1 / 1.12', borderRadius: 14, overflow: 'hidden', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <RobloxAvatar size="fill" framed={false} outfit={avatarOutfit} autoRotate={autoRotate}/>
               {flash && (
                 <div style={{
                   position: 'absolute', left: 0, right: 0, bottom: 14,
@@ -140,9 +143,6 @@ export const Wardrobe = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
               <ToggleRow label="Auto-rotate" on={autoRotate} onChange={setAutoRotate}/>
-              <button onClick={() => sceneRef.current?.reset()} style={ghostBtn}>
-                <Icon name="compass" size={13}/> Reset view
-              </button>
               <button onClick={reset} style={ghostBtn}>
                 <Icon name="minus" size={13}/> Clear outfit
               </button>

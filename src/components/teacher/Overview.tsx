@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Block, Icon, Pill } from '@/components/landing/pb-site/primitives';
+import { CardboardHead } from './CardboardHead';
 import { BarRow, MasteryHeatmap, TopicBars } from './charts';
 import { Kpi, kickerSty, LegendDot } from './shared';
 import {
@@ -171,7 +172,7 @@ export const Overview = ({
                   background: q.resolved ? 'var(--pbs-cream)' : 'var(--pbs-pink)',
                   border: `1.5px solid ${q.resolved ? 'var(--pbs-line-2)' : 'var(--pbs-pink-ink)'}`,
                 }}>
-                  <span style={{ fontSize: 18 }}>{s?.emoji || '·'}</span>
+                  {s ? <CardboardHead outfit={s.avatar} px={22}/> : <span style={{ fontSize: 18 }}>·</span>}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, lineHeight: 1.35 }}>&quot;{q.q}&quot;</div>
                     <div style={{
@@ -199,7 +200,7 @@ export const Overview = ({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
           {highRisk.map((s) => (
             <button key={s.id} type="button" onClick={() => onStudent(s)} style={riskCard}>
-              <span style={{ fontSize: 24 }}>{s.emoji}</span>
+              <CardboardHead outfit={s.avatar} px={32}/>
               <div style={{ flex: 1, textAlign: 'left' }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</div>
                 <div style={{ fontSize: 11, color: 'var(--pbs-coral-ink)', opacity: 0.8 }}>{s.avg}% · {s.risk === 'high' ? 'no activity 5d' : 'slipping 2 wks'}</div>

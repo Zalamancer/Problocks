@@ -80,7 +80,7 @@ export const StudentSelf = ({ s, onBack }: { s: Student; onBack: () => void }) =
       {/* Hero progress */}
       <Block tone="butter" style={{ padding: 24, marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-          <StudentAvatar s={me} px={104} spinning/>
+          <StudentAvatar s={me} px={104}/>
           <div style={{ flex: 1, minWidth: 240 }}>
             <div className="pbs-mono" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.75 }}>YOUR PROGRESS</div>
             <h1 style={{ margin: '4px 0 2px', fontSize: 40, fontWeight: 700, letterSpacing: '-0.025em' }}>

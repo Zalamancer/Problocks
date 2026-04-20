@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
+import { CardboardHead } from './CardboardHead';
 import { ASSIGNMENTS, STUDENTS, type Assignment, type Student } from './sample-data';
 import { backBtn, kickerSty, MiniKpi } from './shared';
 
@@ -151,7 +152,7 @@ export const AssignmentDetail = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {[...rows].sort((x, y) => y.score - x.score).map(({ s, score, submitted: sub, timeMin }) => (
             <button key={s.id} type="button" onClick={() => onStudent(s)} style={submissionRow}>
-              <span style={{ fontSize: 18 }}>{s.emoji}</span>
+              <CardboardHead outfit={s.avatar} px={28}/>
               <div style={{ width: 150, fontSize: 13, fontWeight: 600 }}>{s.name}</div>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, height: 8, borderRadius: 999, background: 'var(--pbs-cream-2)', border: '1.5px solid var(--pbs-line-2)', overflow: 'hidden' }}>

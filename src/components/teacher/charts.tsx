@@ -4,6 +4,7 @@
 'use client';
 
 import React from 'react';
+import { CardboardHead } from './CardboardHead';
 import type { Student, Topic } from './sample-data';
 
 export const Sparkline = ({
@@ -112,7 +113,7 @@ export const MasteryHeatmap = ({
                   onClick={() => onPick && onPick(s)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 0, background: 'none', border: 0, cursor: 'pointer', color: 'inherit', font: 'inherit' }}
                 >
-                  <span style={{ fontSize: 16 }}>{s.emoji}</span> {s.name}
+                  <CardboardHead outfit={s.avatar} px={22}/> {s.name}
                 </button>
               </td>
               {topics.map((t) => {

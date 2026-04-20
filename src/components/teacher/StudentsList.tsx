@@ -78,10 +78,8 @@ export const StudentsList = ({
           >
             <Block tone="paper" style={{ padding: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {/* RobloxAvatar tile — autoRotate stays OFF in the roster
-                    (12 simultaneous spinning Three.js scenes would melt
-                    the Celeron Chromebook target). It still spins on
-                    StudentDetail/StudentSelf where it's a single canvas. */}
+                {/* Static cardboard-head tile (shared renderer + PNG
+                    cache in CardboardHead.tsx — safe to render many). */}
                 <StudentAvatar s={s} px={56}/>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 700 }}>{s.name}</div>

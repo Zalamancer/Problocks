@@ -86,7 +86,7 @@ export const StudentDetail = ({
       <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, marginTop: 14 }}>
         <Block tone={s.tone} style={{ padding: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <StudentAvatar s={s} px={96} spinning/>
+            <StudentAvatar s={s} px={96}/>
             <div style={{ flex: 1, minWidth: 220 }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                 <Pill tone="paper" icon="users">Period 3</Pill>

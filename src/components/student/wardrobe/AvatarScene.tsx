@@ -13,7 +13,6 @@
 
 import React, { useEffect, useImperativeHandle, useRef } from 'react';
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { ITEMS_BY_ID } from './catalog';
 import { FACE_PAINTERS } from './builders/face';
 import type { BodyShape, Emote, Outfit } from './types';
@@ -63,8 +62,12 @@ function paintFace(faceId: string, skin: string, blinkAmt: number): THREE.Canvas
   return tex;
 }
 
-function rounded(w: number, h: number, d: number, r = 0.1): THREE.BufferGeometry {
-  return new RoundedBoxGeometry(w, h, d, 3, Math.max(0.02, Math.min(r, Math.min(w, h, d) / 2 - 0.01)));
+function rounded(w: number, h: number, d: number, _r = 0.1): THREE.BufferGeometry {
+  // Plain box geometry — kept the `rounded` name so callers don't change.
+  // The radius arg is intentionally ignored to keep the GPU/CPU cost low
+  // for Chromebook-tier integrated GPUs (UHD 600).
+  void _r;
+  return new THREE.BoxGeometry(w, h, d);
 }
 
 function withEdges(mesh: THREE.Mesh, opacity = 0.55): THREE.Group {

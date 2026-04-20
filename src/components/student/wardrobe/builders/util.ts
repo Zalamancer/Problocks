@@ -2,7 +2,6 @@
 // placed at the origin — the AvatarScene moves each group to its mount
 // (head top, torso back, etc.).
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const STROKE = 0x1d1a14;
 
@@ -14,9 +13,11 @@ export function mat(color: string | number, opts: { rough?: number; metal?: numb
   });
 }
 
-export function rbox(w: number, h: number, d: number, r = 0.08): THREE.BufferGeometry {
-  const radius = Math.min(r, Math.min(w, h, d) / 2 - 0.01);
-  return new RoundedBoxGeometry(w, h, d, 3, Math.max(0.02, radius));
+export function rbox(w: number, h: number, d: number, _r = 0.08): THREE.BufferGeometry {
+  // Plain BoxGeometry — name kept for compat with builders. Radius ignored
+  // to keep vert counts Chromebook-friendly.
+  void _r;
+  return new THREE.BoxGeometry(w, h, d);
 }
 
 /** Wrap a mesh in a group and add dark edge lines for chunky readability. */

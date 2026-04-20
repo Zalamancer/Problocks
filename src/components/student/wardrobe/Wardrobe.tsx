@@ -138,7 +138,8 @@ export const Wardrobe = () => {
 
         {/* ─── Left: avatar stage + controls + presets ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, height: '100%', overflow: 'hidden' }}>
-          <Block tone="ink" style={{ padding: 16, color: 'var(--pbs-cream)', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <Block tone="ink" style={{ padding: 16, color: 'var(--pbs-cream)', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+            {/* Avatar stage — takes the full card height; controls float over it */}
             <div style={{ flex: '1 1 auto', minHeight: 0, borderRadius: 14, overflow: 'visible', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <RobloxAvatar size="fill" framed={false} outfit={avatarOutfit} autoRotate={autoRotate}/>
               {flash && (
@@ -150,9 +151,18 @@ export const Wardrobe = () => {
                 }}>{flash}</div>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
-              <ToggleRow label="Auto-rotate" on={autoRotate} onChange={setAutoRotate}/>
-              <button onClick={reset} style={ghostBtn}>
+            {/* Floating controls — absolute so the avatar can render behind the
+                bottom of the card; transparent row background, only the pill /
+                button backgrounds themselves are visible. */}
+            <div style={{
+              position: 'absolute', left: 16, right: 16, bottom: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+              background: 'transparent', pointerEvents: 'none', zIndex: 2,
+            }}>
+              <div style={{ pointerEvents: 'auto' }}>
+                <ToggleRow label="Auto-rotate" on={autoRotate} onChange={setAutoRotate}/>
+              </div>
+              <button onClick={reset} style={{ ...ghostBtn, pointerEvents: 'auto' }}>
                 <Icon name="minus" size={13}/> Clear outfit
               </button>
             </div>

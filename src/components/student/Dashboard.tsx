@@ -203,9 +203,9 @@ const HomeTab = ({
       <aside style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         <Block tone="ink" style={{ padding: 22, color: 'var(--pbs-cream)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
             <RobloxAvatar
-              size={220}
+              size="fill"
               outfit={{
                 // Omit `skin` → default kraft-cardboard look kicks in.
                 shirt: '#6fbf73',
@@ -216,7 +216,7 @@ const HomeTab = ({
               }}
             />
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{user?.name || 'You'}</div>
+              <div style={{ fontSize: 19, fontWeight: 700 }}>{user?.name || 'You'}</div>
               <div style={{ fontSize: 12, opacity: 0.7 }}>{user?.email || 'student@school.edu'}</div>
             </div>
           </div>

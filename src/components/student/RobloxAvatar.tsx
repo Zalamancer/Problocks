@@ -205,12 +205,13 @@ function withEdges(mesh: THREE.Mesh, color = 0x1d1a14): THREE.Group {
 }
 
 export const RobloxAvatar = ({
-  size = 120,
+  size = 'fill',
   outfit,
   framed = true,
   autoRotate = true,
 }: {
-  size?: number;
+  /** `'fill'` = match container (width/height). Pass a number for fixed px. */
+  size?: number | 'fill';
   outfit?: AvatarOutfit;
   framed?: boolean;
   autoRotate?: boolean;
@@ -243,9 +244,23 @@ export const RobloxAvatar = ({
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(size, size);
     renderer.setClearColor(0x000000, 0);
+
+    const applySize = () => {
+      const w = Math.max(1, el.clientWidth);
+      const h = Math.max(1, el.clientHeight);
+      renderer.setSize(w, h, false);
+      renderer.domElement.style.width = '100%';
+      renderer.domElement.style.height = '100%';
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    applySize();
     el.appendChild(renderer.domElement);
+
+    // Track parent resizes (card width changes, font-size changes, etc.).
+    const ro = new ResizeObserver(applySize);
+    ro.observe(el);
 
     // Cardboard look only kicks in when the caller didn't override `skin`
     // (i.e. the default kraft tan is being used). Custom skin colors fall
@@ -417,6 +432,7 @@ export const RobloxAvatar = ({
 
     return () => {
       cancelAnimationFrame(raf);
+      ro.disconnect();
       el.removeEventListener('pointerdown', onPointerDown);
       el.removeEventListener('pointermove', onPointerMove);
       el.removeEventListener('pointerup', onPointerUp);
@@ -432,29 +448,39 @@ export const RobloxAvatar = ({
       });
       if (renderer.domElement.parentElement === el) el.removeChild(renderer.domElement);
     };
-  // Rebuild when outfit or size changes — cheap for a 12-box scene.
+  // Scene is rebuilt only when the outfit or autoRotate flag changes. Size
+  // changes are handled live by the ResizeObserver above, so we don't want
+  // `size` in the dep array.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size, autoRotate, JSON.stringify(outfit)]);
+  }, [autoRotate, JSON.stringify(outfit)]);
+
+  const sizeStyle: React.CSSProperties = size === 'fill'
+    ? { width: '100%', aspectRatio: '1 / 1' }
+    : { width: size, height: size };
 
   const inner = (
     <div
       ref={containerRef}
       style={{
-        width: size, height: size,
-        cursor: 'grab', touchAction: 'none',
+        ...sizeStyle,
+        cursor: 'grab',
+        touchAction: 'none',
       }}
     />
   );
 
   if (!framed) return inner;
 
+  // Chunky cream tile with the same ink border/offset-shadow used across the
+  // student-app cards — beefed up (2px border, 4px offset) so it reads even
+  // at small sizes against the dark user-card background.
   return (
     <div style={{
-      width: size, height: size,
-      borderRadius: size * 0.2,
+      ...sizeStyle,
+      borderRadius: 22,
       background: 'linear-gradient(180deg, var(--pbs-cream) 0%, var(--pbs-cream-2) 100%)',
-      border: `1.5px solid ${STROKE}`,
-      boxShadow: `0 2px 0 ${STROKE}`,
+      border: `2px solid ${STROKE}`,
+      boxShadow: `0 4px 0 ${STROKE}`,
       overflow: 'hidden', position: 'relative', flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>

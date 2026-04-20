@@ -5,7 +5,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { RobloxAvatar } from '../RobloxAvatar';
-import { outfitToAvatar } from './avatar-map';
+import {
+  outfitToAvatar,
+  HAT_COLOR, HAIR_COLOR, SHIRT_COLOR, PANTS_COLOR,
+} from './avatar-map';
 import {
   CATEGORY_ICONS, CATEGORY_LABELS, ITEMS_BY_CATEGORY, ITEMS_BY_ID,
   defaultOwned, isOwned,
@@ -34,11 +37,21 @@ const GROUP_FOR_CATEGORY: Record<Category, Group> = GROUPS.reduce((acc, g) => {
   return acc;
 }, {} as Record<Category, Group>);
 
-// Categories the RobloxAvatar renderer actually draws. Other mesh categories
-// (shoes, backpack, accessory, pet) fall back to the category emoji in tiles.
-const AVATAR_RENDERED: ReadonlySet<MeshCategory> = new Set([
-  'hat', 'hair', 'face', 'shirt', 'pants',
-]);
+// Tile previews are 2D (color-accurate, no WebGL). Each avatar-renderable
+// category pulls its swatch colour from the same maps the main stage uses, so
+// an item's red shirt vs blue shirt reads instantly in the grid without
+// mounting a WebGL context per tile. Per-tile WebGL would exhaust Chrome's
+// 16-context cap (main stage goes blank) and blow the budget on our target
+// Celeron N4000 Chromebooks.
+function tileSwatchColor(item: Item): string | null {
+  switch (item.category) {
+    case 'hat':   return HAT_COLOR[item.id]   ?? null;
+    case 'hair':  return HAIR_COLOR[item.id]  ?? null;
+    case 'shirt': return SHIRT_COLOR[item.id] ?? null;
+    case 'pants': return PANTS_COLOR[item.id] ?? null;
+    default:      return null;
+  }
+}
 
 const STARTING_BLOCKS = 1240;
 
@@ -371,24 +384,18 @@ const ItemTile = ({
       <div style={{
         aspectRatio: '1 / 1',
         borderRadius: 10,
-        background: `linear-gradient(160deg, ${r.bg} 0%, var(--pbs-paper) 100%)`,
+        background: tileSwatchColor(item)
+          ? `linear-gradient(160deg, ${tileSwatchColor(item)} 0%, ${r.bg} 100%)`
+          : `linear-gradient(160deg, ${r.bg} 0%, var(--pbs-paper) 100%)`,
         border: `1.5px solid ${r.ink}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 32,
         overflow: 'hidden',
         position: 'relative',
+        color: tileSwatchColor(item) ? '#fff' : 'inherit',
+        textShadow: tileSwatchColor(item) ? '0 2px 0 rgba(0,0,0,0.35)' : 'none',
       }}>
-        {AVATAR_RENDERED.has(item.category) ? (
-          <RobloxAvatar
-            size="fill"
-            framed={false}
-            outfit={outfitToAvatar(previewOutfit(item))}
-            autoRotate={false}
-            showControls={false}
-          />
-        ) : (
-          CATEGORY_ICONS[item.category]
-        )}
+        {CATEGORY_ICONS[item.category]}
       </div>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.005em', lineHeight: 1.2 }}>
         {item.label}
@@ -546,24 +553,6 @@ const ChunkySelect = ({
     </div>
   );
 };
-
-/** Minimal outfit with only this item equipped — used to render isolated
- *  previews inside wardrobe tiles. Matches the helper in CrateUnboxing. */
-function previewOutfit(item: Item): Outfit {
-  const base = defaultOutfit();
-  return {
-    ...base,
-    hat:       item.category === 'hat'   ? item.id      : null,
-    hair:      item.category === 'hair'  ? item.id      : null,
-    face:      item.category === 'face'  ? item.id      : 'face-smile',
-    shirt:     item.category === 'shirt' ? item.id      : null,
-    pants:     item.category === 'pants' ? item.id      : null,
-    shoes:     null,
-    backpack:  null,
-    accessory: null,
-    pet:       null,
-  };
-}
 
 const ToggleRow = ({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) => (
   <button

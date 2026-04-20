@@ -12,7 +12,7 @@ import type { Outfit } from './types';
 
 // ─── Hat (item id → shape + colour) ───────────────────────────────────────
 
-const HAT_SHAPE: Record<string, AvatarHat> = {
+export const HAT_SHAPE: Record<string, AvatarHat> = {
   'hat-cap-red': 'cap',
   'hat-cap-blue': 'cap',
   'hat-cap-green': 'cap',
@@ -30,7 +30,7 @@ const HAT_SHAPE: Record<string, AvatarHat> = {
   'hat-chef': 'tophat',
 };
 
-const HAT_COLOR: Record<string, string> = {
+export const HAT_COLOR: Record<string, string> = {
   'hat-cap-red': '#c24949',
   'hat-cap-blue': '#5fa8ff',
   'hat-cap-green': '#6fbf73',
@@ -50,7 +50,7 @@ const HAT_COLOR: Record<string, string> = {
 
 // ─── Hair (item id → shape + colour) ──────────────────────────────────────
 
-const HAIR_SHAPE: Record<string, AvatarHair> = {
+export const HAIR_SHAPE: Record<string, AvatarHair> = {
   'hair-short-brown': 'short',
   'hair-short-black': 'short',
   'hair-short-blond': 'short',
@@ -68,7 +68,7 @@ const HAIR_SHAPE: Record<string, AvatarHair> = {
   'hair-mohawk': 'spike',
 };
 
-const HAIR_COLOR: Record<string, string> = {
+export const HAIR_COLOR: Record<string, string> = {
   'hair-short-brown': '#3a2a1a',
   'hair-short-black': '#1d1a14',
   'hair-short-blond': '#f2c85c',
@@ -88,7 +88,7 @@ const HAIR_COLOR: Record<string, string> = {
 
 // ─── Shirt / pants (item id → primary colour) ─────────────────────────────
 
-const SHIRT_COLOR: Record<string, string> = {
+export const SHIRT_COLOR: Record<string, string> = {
   'shirt-green': '#6fbf73',
   'shirt-red': '#c24949',
   'shirt-blue': '#5fa8ff',
@@ -108,7 +108,7 @@ const SHIRT_COLOR: Record<string, string> = {
   'shirt-tuxedo': '#1d1a14',
 };
 
-const PANTS_COLOR: Record<string, string> = {
+export const PANTS_COLOR: Record<string, string> = {
   'pants-navy': '#3a3c4a',
   'pants-black': '#1d1a14',
   'pants-blue': '#5fa8ff',

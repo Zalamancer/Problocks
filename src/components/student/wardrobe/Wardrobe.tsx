@@ -2,7 +2,7 @@
 // filters (search / theme / rarity / owned-only), economy, presets, randomize.
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { RobloxAvatar } from '../RobloxAvatar';
 import { outfitToAvatar } from './avatar-map';
@@ -17,11 +17,28 @@ import {
   type Outfit, type Rarity, type Theme,
 } from './types';
 
-const CATEGORY_ORDER: Category[] = [
-  'hat', 'hair', 'face', 'shirt', 'pants', 'shoes',
-  'backpack', 'accessory', 'pet',
-  'skin', 'body', 'emote',
+// Two-level grouping: user clicks a group (Head / Clothes / Gear / Character)
+// and the relevant sub-categories expand underneath. This keeps the 12-cat
+// picker from being a wall of icons.
+type Group = 'head' | 'clothes' | 'gear' | 'character';
+
+const GROUPS: { id: Group; label: string; icon: string; categories: Category[] }[] = [
+  { id: 'head',      label: 'Head',      icon: '🎩', categories: ['hat', 'hair', 'face'] },
+  { id: 'clothes',   label: 'Clothes',   icon: '👕', categories: ['shirt', 'pants', 'shoes'] },
+  { id: 'gear',      label: 'Gear',      icon: '🎒', categories: ['backpack', 'accessory', 'pet'] },
+  { id: 'character', label: 'Character', icon: '💪', categories: ['skin', 'body', 'emote'] },
 ];
+
+const GROUP_FOR_CATEGORY: Record<Category, Group> = GROUPS.reduce((acc, g) => {
+  for (const c of g.categories) acc[c] = g.id;
+  return acc;
+}, {} as Record<Category, Group>);
+
+// Categories the RobloxAvatar renderer actually draws. Other mesh categories
+// (shoes, backpack, accessory, pet) fall back to the category emoji in tiles.
+const AVATAR_RENDERED: ReadonlySet<MeshCategory> = new Set([
+  'hat', 'hair', 'face', 'shirt', 'pants',
+]);
 
 const STARTING_BLOCKS = 1240;
 
@@ -29,6 +46,7 @@ export const Wardrobe = () => {
   const [outfit, setOutfit] = useState<Outfit>(defaultOutfit());
   const [owned, setOwned] = useState<Set<string>>(defaultOwned());
   const [blocks, setBlocks] = useState<number>(STARTING_BLOCKS);
+  const [group, setGroup] = useState<Group>('head');
   const [category, setCategory] = useState<Category>('hat');
   const [search, setSearch] = useState('');
   const [theme, setTheme] = useState<Theme | 'all'>('all');
@@ -202,11 +220,29 @@ export const Wardrobe = () => {
         {/* ─── Right: category tabs + filters + grid ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
 
-          {/* Sticky header: category tabs + filters */}
-          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 12 }}>
-            {/* Category tabs */}
+          {/* Sticky header: group tabs → sub-category tabs → filters */}
+          <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 12 }}>
+            {/* Group tabs (top level) */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 6, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)', borderRadius: 14 }}>
-              {CATEGORY_ORDER.map((c) => (
+              {GROUPS.map((g) => (
+                <GroupTab
+                  key={g.id}
+                  label={g.label}
+                  icon={g.icon}
+                  active={g.id === group}
+                  onClick={() => {
+                    setGroup(g.id);
+                    // When a new group is picked, jump to its first sub-category.
+                    const first = g.categories[0];
+                    if (first && GROUP_FOR_CATEGORY[category] !== g.id) setCategory(first);
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Sub-category tabs (filtered to the active group) */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '4px 6px' }}>
+              {GROUPS.find((g) => g.id === group)!.categories.map((c) => (
                 <CategoryTab key={c} category={c} active={c === category} onClick={() => setCategory(c)}/>
               ))}
             </div>
@@ -228,12 +264,12 @@ export const Wardrobe = () => {
                     }}
                   />
                 </div>
-                <Select
+                <ChunkySelect
                   value={theme}
                   onChange={(v) => setTheme(v as Theme | 'all')}
                   options={[['all', 'All themes'], ...Object.entries(THEME_LABELS)]}
                 />
-                <Select
+                <ChunkySelect
                   value={rarity}
                   onChange={(v) => setRarity(v as Rarity | 'all')}
                   options={[
@@ -324,8 +360,20 @@ const ItemTile = ({
         border: `1.5px solid ${r.ink}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 32,
+        overflow: 'hidden',
+        position: 'relative',
       }}>
-        {CATEGORY_ICONS[item.category]}
+        {AVATAR_RENDERED.has(item.category) ? (
+          <RobloxAvatar
+            size="fill"
+            framed={false}
+            outfit={outfitToAvatar(previewOutfit(item))}
+            autoRotate={false}
+            showControls={false}
+          />
+        ) : (
+          CATEGORY_ICONS[item.category]
+        )}
       </div>
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '-0.005em', lineHeight: 1.2 }}>
         {item.label}
@@ -387,26 +435,116 @@ const CategoryTab = ({ category, active, onClick }: { category: Category; active
   );
 };
 
-const Select = ({
+const GroupTab = ({
+  label, icon, active, onClick,
+}: { label: string; icon: string; active: boolean; onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    style={{
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      padding: '9px 16px', borderRadius: 999,
+      background: active ? 'var(--pbs-ink)' : 'transparent',
+      color: active ? 'var(--pbs-cream)' : 'var(--pbs-ink)',
+      border: `1.5px solid ${active ? 'var(--pbs-ink)' : 'transparent'}`,
+      fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.005em',
+      cursor: 'pointer', fontFamily: 'inherit',
+    }}
+  >
+    <span style={{ fontSize: 15 }}>{icon}</span>{label}
+  </button>
+);
+
+// Chunky-pastel styled dropdown — no native <select>, matches the rest of
+// the wardrobe (paper surface, line-2 border, ink hover).
+const ChunkySelect = ({
   value, onChange, options,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: [string, string][];
-}) => (
-  <select
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    style={{
-      padding: '9px 12px', borderRadius: 12,
-      border: '1.5px solid var(--pbs-line-2)',
-      background: 'var(--pbs-paper)', color: 'var(--pbs-ink)',
-      fontSize: 13, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer',
-    }}
-  >
-    {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-  </select>
-);
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  const current = options.find((o) => o[0] === value);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '9px 14px', borderRadius: 12,
+          border: '1.5px solid var(--pbs-line-2)',
+          background: 'var(--pbs-paper)', color: 'var(--pbs-ink)',
+          fontSize: 13, fontFamily: 'inherit', fontWeight: 700, cursor: 'pointer',
+          boxShadow: '0 2px 0 rgba(0,0,0,0.06)',
+        }}
+      >
+        {current ? current[1] : ''}
+        <span style={{ fontSize: 10, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
+          minWidth: '100%', padding: 6,
+          background: 'var(--pbs-paper)',
+          border: '1.5px solid var(--pbs-line-2)',
+          borderRadius: 12,
+          boxShadow: '0 6px 0 rgba(0,0,0,0.08), 0 2px 10px rgba(0,0,0,0.06)',
+          maxHeight: 260, overflowY: 'auto',
+        }}>
+          {options.map(([v, l]) => {
+            const active = v === value;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => { onChange(v); setOpen(false); }}
+                style={{
+                  display: 'block', width: '100%', padding: '8px 10px',
+                  borderRadius: 8,
+                  background: active ? 'var(--pbs-ink)' : 'transparent',
+                  color: active ? 'var(--pbs-cream)' : 'var(--pbs-ink)',
+                  border: 'none', fontSize: 13, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {l}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** Minimal outfit with only this item equipped — used to render isolated
+ *  previews inside wardrobe tiles. Matches the helper in CrateUnboxing. */
+function previewOutfit(item: Item): Outfit {
+  const base = defaultOutfit();
+  return {
+    ...base,
+    hat:       item.category === 'hat'   ? item.id      : null,
+    hair:      item.category === 'hair'  ? item.id      : null,
+    face:      item.category === 'face'  ? item.id      : 'face-smile',
+    shirt:     item.category === 'shirt' ? item.id      : null,
+    pants:     item.category === 'pants' ? item.id      : null,
+    shoes:     null,
+    backpack:  null,
+    accessory: null,
+    pet:       null,
+  };
+}
 
 const ToggleRow = ({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) => (
   <button

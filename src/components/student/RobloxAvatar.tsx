@@ -218,12 +218,15 @@ export const RobloxAvatar = ({
   outfit,
   framed = true,
   autoRotate = true,
+  showControls = true,
 }: {
   /** `'fill'` = match container (width/height). Pass a number for fixed px. */
   size?: number | 'fill';
   outfit?: AvatarOutfit;
   framed?: boolean;
   autoRotate?: boolean;
+  /** Hide zoom +/- controls (they nest <button> and break HTML inside tiles). */
+  showControls?: boolean;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; yaw: number; dragging: boolean }>({ x: 0, yaw: 0, dragging: false });
@@ -613,7 +616,7 @@ export const RobloxAvatar = ({
     return (
       <div style={{ ...sizeStyle, position: 'relative', overflow: 'visible' }}>
         {inner}
-        {zoomButtons}
+        {showControls && zoomButtons}
       </div>
     );
   }

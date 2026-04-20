@@ -29,6 +29,7 @@ export default function Home() {
   }
 
   const openWizard = () => setWizardOpen(true);
+  const startPlaying = () => router.push('/student');
 
   return (
     <div className="pbs-root">
@@ -37,7 +38,7 @@ export default function Home() {
 
       <div className="pbs-content">
         <Nav onMakeGame={openWizard} />
-        <Hero onMakeGame={openWizard} />
+        <Hero onMakeGame={openWizard} onStartPlaying={startPlaying} />
         <Marquee />
         <Learn />
         <Messaging />

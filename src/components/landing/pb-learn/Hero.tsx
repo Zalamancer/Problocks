@@ -119,7 +119,13 @@ const HeroShowcase = () => (
   </div>
 );
 
-export const Hero = ({ onMakeGame }: { onMakeGame?: () => void }) => {
+export const Hero = ({
+  onMakeGame,
+  onStartPlaying,
+}: {
+  onMakeGame?: () => void;
+  onStartPlaying?: () => void;
+}) => {
   const [mode, setMode] = React.useState<Mode>('student');
 
   return (
@@ -199,7 +205,12 @@ export const Hero = ({ onMakeGame }: { onMakeGame?: () => void }) => {
           </p>
 
           <div style={{ marginTop: 28, display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Chunky tone="butter" icon="sparkle" trailing="arrow-right" onClick={onMakeGame}>
+            <Chunky
+              tone="butter"
+              icon="sparkle"
+              trailing="arrow-right"
+              onClick={mode === 'student' ? onStartPlaying : onMakeGame}
+            >
               {mode === 'student' ? 'Start playing' : 'Set up a classroom'}
             </Chunky>
             <Chunky tone="ghost" icon="play">Watch a 60-sec tour</Chunky>

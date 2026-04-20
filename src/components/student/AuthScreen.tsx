@@ -10,17 +10,19 @@ import type { Invite, StudentUser } from './sample-data';
 type Method = 'email' | 'google' | 'clever';
 
 export const AuthScreen = ({
-  pendingInvite, onAuthed, goJoin,
+  pendingInvite, onAuthed, goJoin, startMode = 'signup',
 }: {
   pendingInvite: Invite | null;
-  onAuthed: (u: StudentUser) => void;
+  onAuthed: (u: StudentUser, classCode?: string) => void;
   goJoin: () => void;
+  startMode?: 'login' | 'signup';
 }) => {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup'>(startMode);
   const [method, setMethod] = useState<Method>('email');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [pw, setPw] = useState('');
+  const [classCode, setClassCode] = useState('');
 
   const submit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -29,7 +31,7 @@ export const AuthScreen = ({
       name: name || inferred,
       email: email || 'student@school.edu',
       avatar: 'butter',
-    });
+    }, mode === 'signup' && classCode.trim() ? classCode.trim().toUpperCase() : undefined);
   };
 
   return (
@@ -106,6 +108,15 @@ export const AuthScreen = ({
             )}
             <Field label="Email or username" value={email} onChange={setEmail} placeholder="ava@ridgewood.school" />
             <Field label="Password" value={pw} onChange={setPw} placeholder="••••••••" type="password" />
+
+            {mode === 'signup' && (
+              <Field
+                label="Class code (optional)"
+                value={classCode}
+                onChange={(v) => setClassCode(v.toUpperCase())}
+                placeholder="e.g. R7K2Q"
+              />
+            )}
 
             {mode === 'login' && (
               <div style={{ textAlign: 'right' }}>

@@ -73,10 +73,23 @@ export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView 
     return () => window.removeEventListener('hashchange', check);
   }, [user]);
 
-  const handleAuthed = (u: StudentUser) => {
+  const handleAuthed = (u: StudentUser, classCode?: string) => {
     setUser(u);
-    if (pendingInvite) setView('join');
-    else setView('dashboard');
+    if (classCode) {
+      setPendingInvite({
+        code: classCode,
+        className: 'Your class',
+        teacher: 'Your teacher',
+        game: '',
+        questions: 0,
+        minutes: 0,
+      });
+      setView('join');
+    } else if (pendingInvite) {
+      setView('join');
+    } else {
+      setView('dashboard');
+    }
     showToast(`Welcome, ${u.name.split(' ')[0]}!`, 'butter');
   };
 

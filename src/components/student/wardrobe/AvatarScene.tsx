@@ -182,6 +182,41 @@ function clearEquipped(rig: Rig) {
   rig.equipped = [];
 }
 
+// Item builders author each part in the original RobloxAvatar coordinate
+// system (`y=0` ≈ body-part center). The rig joint groups, however, have
+// their origins at the joint *pivot* (head center, shoulder, hip, ankle).
+// These per-mount Y offsets bring the author space onto the rig so hats
+// sit on top of the head, sleeves wrap the arm, pants cover the legs, and
+// shoes land on the floor instead of overlapping or floating.
+const MOUNT_OFFSET_Y: Record<string, number> = {
+  head: 0.8,      // head pivot is head center; items expect y=0 = top of head
+  torso: 0,       // torso pivot is torso center; items already centered there
+  armL: -1,       // shoulder pivot → arm center
+  armR: -1,
+  legL: -1,       // hip pivot → leg center
+  legR: -1,
+  footL: 1.15,    // ankle (leg bottom) → tuned so the shoe sole lands on the floor
+  footR: 1.15,
+  handL: -1.85,   // alias of armL — bring origin down to the hand
+  handR: -1.85,
+  root: 0,
+  pet: 0,
+};
+
+function mountOnto(mount: THREE.Group, mountName: string, child: THREE.Object3D): THREE.Object3D {
+  const dy = MOUNT_OFFSET_Y[mountName] ?? 0;
+  if (dy === 0) {
+    mount.add(child);
+    return child;
+  }
+  // Wrap the child so we can offset it without mutating the item builder.
+  const wrap = new THREE.Group();
+  wrap.position.y = dy;
+  wrap.add(child);
+  mount.add(wrap);
+  return wrap;
+}
+
 function equip(rig: Rig, outfit: Outfit) {
   clearEquipped(rig);
   const ctx = { skin: outfit.skin };
@@ -189,6 +224,19 @@ function equip(rig: Rig, outfit: Outfit) {
     outfit.hat, outfit.hair, outfit.shirt, outfit.pants,
     outfit.shoes, outfit.backpack, outfit.accessory, outfit.pet,
   ];
+  // Default mount when an item builder didn't tag any children with a joint
+  // name. The matching mount-name is what `MOUNT_OFFSET_Y` looks up.
+  const defaultMount: Record<string, { group: THREE.Group; name: string }> = {
+    hat:       { group: rig.head,  name: 'head' },
+    hair:      { group: rig.head,  name: 'head' },
+    accessory: { group: rig.head,  name: 'head' },
+    face:      { group: rig.head,  name: 'head' },
+    shirt:     { group: rig.torso, name: 'torso' },
+    backpack:  { group: rig.torso, name: 'torso' },
+    pants:     { group: rig.legL,  name: 'legL' },
+    shoes:     { group: rig.footL, name: 'footL' },
+    pet:       { group: rig.pet,   name: 'pet' },
+  };
   // Hats go on top of head; hair underneath (so a hat overrides hair on top).
   // We mount them in this order: hair first, then hat, so hat reads above.
   const order = [outfit.hair, outfit.shirt, outfit.pants, outfit.shoes,
@@ -202,21 +250,15 @@ function equip(rig: Rig, outfit: Outfit) {
     // built object on its category's default mount.
     const namedChildren = built.children.filter((c) => c.name && rig.mounts[c.name]);
     if (namedChildren.length === 0) {
-      const defaultMount: Record<string, THREE.Group> = {
-        hat: rig.head, hair: rig.head, accessory: rig.head,
-        shirt: rig.torso, backpack: rig.torso,
-        pants: rig.legL, shoes: rig.footL,
-        face: rig.head, pet: rig.pet,
-      };
-      const mount = defaultMount[item.category] ?? rig.root;
-      mount.add(built);
-      rig.equipped.push(built);
+      const mountInfo = defaultMount[item.category] ?? { group: rig.root, name: 'root' };
+      const placed = mountOnto(mountInfo.group, mountInfo.name, built);
+      rig.equipped.push(placed);
     } else {
-      // Move each named child onto its mount; track for cleanup.
+      // Move each named child onto its mount, with the per-mount Y offset.
       for (const child of [...namedChildren]) {
         const mount = rig.mounts[child.name];
-        mount.add(child); // re-parents
-        rig.equipped.push(child);
+        const placed = mountOnto(mount, child.name, child);
+        rig.equipped.push(placed);
       }
     }
   }

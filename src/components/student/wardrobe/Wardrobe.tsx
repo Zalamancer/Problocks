@@ -222,29 +222,44 @@ export const Wardrobe = () => {
 
           {/* Sticky header: group tabs → sub-category tabs → filters */}
           <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 12 }}>
-            {/* Group tabs (top level) */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 6, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)', borderRadius: 14 }}>
-              {GROUPS.map((g) => (
-                <GroupTab
-                  key={g.id}
-                  label={g.label}
-                  icon={g.icon}
-                  active={g.id === group}
-                  onClick={() => {
-                    setGroup(g.id);
-                    // When a new group is picked, jump to its first sub-category.
-                    const first = g.categories[0];
-                    if (first && GROUP_FOR_CATEGORY[category] !== g.id) setCategory(first);
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Sub-category tabs (filtered to the active group) */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '4px 6px' }}>
-              {GROUPS.find((g) => g.id === group)!.categories.map((c) => (
-                <CategoryTab key={c} category={c} active={c === category} onClick={() => setCategory(c)}/>
-              ))}
+            {/* Unified category picker — groups on top, the active group's
+                sub-categories live on the same paper surface under a hair
+                divider. Reads as one tab-bar-with-subnav, not two strips. */}
+            <div style={{
+              background: 'var(--pbs-paper)',
+              border: '1.5px solid var(--pbs-line-2)',
+              borderRadius: 16,
+              overflow: 'hidden',
+            }}>
+              {/* Groups */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: 6 }}>
+                {GROUPS.map((g) => (
+                  <GroupTab
+                    key={g.id}
+                    label={g.label}
+                    icon={g.icon}
+                    active={g.id === group}
+                    onClick={() => {
+                      setGroup(g.id);
+                      // When a new group is picked, jump to its first sub-category.
+                      const first = g.categories[0];
+                      if (first && GROUP_FOR_CATEGORY[category] !== g.id) setCategory(first);
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Sub-row — lower contrast, hair divider above, tighter pills.
+                  Visually nested under the groups so the hierarchy is obvious. */}
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 4,
+                padding: '6px 8px',
+                borderTop: '1.5px dashed var(--pbs-line-2)',
+                background: 'color-mix(in srgb, var(--pbs-paper) 60%, transparent)',
+              }}>
+                {GROUPS.find((g) => g.id === group)!.categories.map((c) => (
+                  <CategoryTab key={c} category={c} active={c === category} onClick={() => setCategory(c)}/>
+                ))}
+              </div>
             </div>
 
             {/* Filters (only for mesh categories) */}
@@ -417,20 +432,24 @@ const CategoryTab = ({ category, active, onClick }: { category: Category; active
     : category === 'body' ? '💪'
     : category === 'emote' ? '💃'
     : CATEGORY_ICONS[category];
+  // Sub-nav pill: quieter than the group tab. Active state uses butter (not
+  // ink) so it reads as "selected within the active group" rather than
+  // competing with the group's ink highlight above it.
   return (
     <button
       onClick={onClick}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '7px 13px', borderRadius: 999,
-        background: active ? 'var(--pbs-ink)' : 'transparent',
-        color: active ? 'var(--pbs-cream)' : 'var(--pbs-ink)',
-        border: `1.5px solid ${active ? 'var(--pbs-ink)' : 'transparent'}`,
-        fontSize: 12.5, fontWeight: 700,
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '5px 11px', borderRadius: 999,
+        background: active ? 'var(--pbs-butter)' : 'transparent',
+        color: active ? 'var(--pbs-butter-ink)' : 'var(--pbs-ink-muted)',
+        border: `1.5px solid ${active ? 'var(--pbs-butter-ink)' : 'transparent'}`,
+        fontSize: 12, fontWeight: 700,
         cursor: 'pointer', fontFamily: 'inherit',
+        boxShadow: active ? '0 2px 0 var(--pbs-butter-ink)' : 'none',
       }}
     >
-      <span style={{ fontSize: 14 }}>{icon}</span>{label}
+      <span style={{ fontSize: 13 }}>{icon}</span>{label}
     </button>
   );
 };

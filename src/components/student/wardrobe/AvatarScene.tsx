@@ -126,7 +126,10 @@ function buildRig(skin: string, body: BodyShape): Rig {
   root.add(head);
 
   // Arms — pivot at the shoulder, mesh hangs down from pivot.
-  const armOffset = 1.05 * sc.torso.x;
+  // Torso is 2 wide → right edge at x=1; arm is 1 wide → halfwidth 0.5.
+  // Shoulder pivot at x=1.5 puts the arm's inner edge flush with the torso
+  // edge instead of letting half the arm clip inside the body.
+  const armOffset = 1.5 * sc.torso.x;
   const makeArm = (side: 1 | -1): THREE.Group => {
     const grp = new THREE.Group();
     grp.position.set(side * armOffset, 0.85, 0);

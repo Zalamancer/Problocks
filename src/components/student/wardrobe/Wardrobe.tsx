@@ -115,6 +115,39 @@ export const Wardrobe = () => {
   // Reset everything to default (unlocks/blocks untouched).
   const reset = () => setOutfit(defaultOutfit());
 
+  // Row-by-row scroll lock. CSS scroll-snap on macOS trackpads is unreliable
+  // (inertia slides between snap points), so we intercept wheel events on the
+  // grid container and scroll exactly one row per tick. Row height is read
+  // live from the first tile so it stays correct if tile sizing changes.
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = gridScrollRef.current;
+    if (!el) return;
+    let locked = false;
+    const onWheel = (e: WheelEvent) => {
+      const firstTile = el.querySelector<HTMLElement>('[data-wardrobe-tile]');
+      if (!firstTile) return;
+      const rowH = firstTile.offsetHeight + 10; // tile + grid gap
+      if (rowH <= 0) return;
+      e.preventDefault();
+      if (locked) return;
+      const dir = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0;
+      if (!dir) return;
+      locked = true;
+      const currentRow = Math.round(el.scrollTop / rowH);
+      const nextTop = Math.max(0, (currentRow + dir) * rowH);
+      el.scrollTo({ top: nextTop, behavior: 'smooth' });
+      window.setTimeout(() => { locked = false; }, 240);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [category]);
+
+  // Reset scroll position when category changes so the first row shows.
+  useEffect(() => {
+    if (gridScrollRef.current) gridScrollRef.current.scrollTop = 0;
+  }, [category]);
+
   return (
     <div
       className="pbs-wrap"
@@ -292,17 +325,16 @@ export const Wardrobe = () => {
             )}
           </div>
 
-          {/* Scrollable body: grid / panels.
-              `scroll-snap-type: y mandatory` + `scroll-snap-align: start` on
-              each tile makes the grid lock row-by-row instead of free-scrolling.
-              Tiles in the same row share the same snap line, so a single wheel
-              tick advances one full row. `scroll-padding-top` accounts for the
-              tile's own top padding so the row sits flush under the filters. */}
-          <div style={{
-            flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 6,
-            scrollSnapType: 'y mandatory',
-            scrollPaddingTop: 4,
-          }}>
+          {/* Scrollable body: grid / panels. Wheel events are intercepted by
+              the effect above (gridScrollRef) to advance exactly one row per
+              tick, which is more reliable than CSS scroll-snap on macOS. */}
+          <div
+            ref={gridScrollRef}
+            style={{
+              flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 6,
+              overscrollBehavior: 'contain',
+            }}
+          >
             {category === 'skin' && (
               <SkinPanel outfit={outfit} onChange={(skin) => setOutfit((o) => ({ ...o, skin }))}/>
             )}
@@ -361,6 +393,7 @@ const ItemTile = ({
   return (
     <button
       onClick={onClick}
+      data-wardrobe-tile=""
       style={{
         position: 'relative', display: 'flex', flexDirection: 'column',
         padding: 10, gap: 8,
@@ -370,10 +403,6 @@ const ItemTile = ({
         boxShadow: equipped ? '0 3px 0 var(--pbs-ink)' : '0 2px 0 rgba(0,0,0,0.08)',
         cursor: 'pointer', fontFamily: 'inherit', color: 'inherit',
         textAlign: 'left',
-        // Row-by-row snap: every tile is a snap target at its top edge, but
-        // since all tiles in a row share that Y, the scroll viewport locks to
-        // one full row at a time rather than free-scrolling between rows.
-        scrollSnapAlign: 'start',
       }}
     >
       <div style={{

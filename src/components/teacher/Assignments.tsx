@@ -8,23 +8,27 @@ import { ASSIGNMENTS, STUDENTS, type Assignment, type Student } from './sample-d
 import { backBtn, kickerSty, MiniKpi } from './shared';
 
 export const AssignmentsList = ({
-  onAssignment,
+  onAssignment, onNew, extraAssignments = [],
 }: {
   onAssignment: (a: Assignment) => void;
-}) => (
+  onNew: () => void;
+  extraAssignments?: Assignment[];
+}) => {
+  const all = [...extraAssignments, ...ASSIGNMENTS];
+  return (
   <div className="pbs-fade-in">
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
       <div>
         <div className="pbs-mono" style={kickerSty}>ASSIGNMENTS</div>
         <h1 style={{ margin: '6px 0 0', fontSize: 'clamp(28px, 3.4vw, 42px)', fontWeight: 700, letterSpacing: '-0.025em' }}>
-          {ASSIGNMENTS.length} assignments, {ASSIGNMENTS.reduce((s, a) => s + a.submitted, 0)} submissions
+          {all.length} assignments, {all.reduce((s, a) => s + a.submitted, 0)} submissions
         </h1>
       </div>
-      <Chunky tone="butter" icon="plus">New assignment</Chunky>
+      <Chunky tone="butter" icon="plus" onClick={onNew}>New assignment</Chunky>
     </div>
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-      {ASSIGNMENTS.map((a) => (
+      {all.map((a) => (
         <Block key={a.id} tone={a.tone} style={{ padding: 18, cursor: 'pointer' }} onClick={() => onAssignment(a)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <div style={{
@@ -55,7 +59,8 @@ export const AssignmentsList = ({
       ))}
     </div>
   </div>
-);
+  );
+};
 
 // Deterministic jitter so distribution/rows don't re-randomize per render.
 const jitterFor = (s: Student) => ((s.id.charCodeAt(1) * 7) % 16) - 8;

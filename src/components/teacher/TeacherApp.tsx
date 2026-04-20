@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { AssignmentDetail, AssignmentsList } from './Assignments';
+import { NewAssignment } from './NewAssignment';
 import { Overview } from './Overview';
 import { StudentDetail } from './StudentDetail';
 import { StudentSelf } from './StudentSelf';
@@ -14,7 +15,7 @@ import { StudentsList } from './StudentsList';
 import { CLASSES, type Assignment, type ClassRecord, type Student } from './sample-data';
 import { teacherWrap } from './shared';
 
-type View = 'overview' | 'assignments' | 'assignment' | 'students' | 'student' | 'self';
+type View = 'overview' | 'assignments' | 'assignment' | 'new-assignment' | 'students' | 'student' | 'self';
 
 // "Student view" intentionally is NOT a top-level tab. It's reached from a
 // "View as student" button on a specific StudentDetail — teachers don't
@@ -103,7 +104,7 @@ const ClassPicker = ({
 
 const isTabActive = (view: View, k: View): boolean => {
   if (view === k) return true;
-  if (k === 'assignments' && view === 'assignment') return true;
+  if (k === 'assignments' && (view === 'assignment' || view === 'new-assignment')) return true;
   // `student` and `self` are both entered from the Students roster, so
   // keep the Students tab highlighted when the teacher is in either view.
   if (k === 'students'    && (view === 'student' || view === 'self')) return true;
@@ -115,12 +116,20 @@ export const TeacherApp = () => {
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [cls, setCls] = useState<ClassRecord>(CLASSES[0]);
+  // Locally-created assignments. Sample-data is the source of truth for the
+  // seeded ones; new ones live here in-memory until persistence exists.
+  const [createdAssignments, setCreatedAssignments] = useState<Assignment[]>([]);
 
   const goAssignment = (a: Assignment) => { setDetailAssignment(a); setView('assignment'); };
   const goStudent    = (s: Student)    => { setDetailStudent(s);    setView('student'); };
   // "View as student" from inside a student's detail page. Reuses the same
   // detailStudent so StudentSelf renders THIS student, not a hard-coded one.
   const goSelf       = (s: Student)    => { setDetailStudent(s);    setView('self'); };
+  const goNew        = ()              => { setView('new-assignment'); };
+  const handleCreate = (a: Assignment) => {
+    setCreatedAssignments((prev) => [a, ...prev]);
+    setView('assignments');
+  };
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -181,9 +190,18 @@ export const TeacherApp = () => {
 
       <main style={{ ...teacherWrap, padding: '28px 28px 80px' }}>
         {view === 'overview'    && <Overview cls={cls} onStudent={goStudent} onAssignment={goAssignment}/>}
-        {view === 'assignments' && <AssignmentsList onAssignment={goAssignment}/>}
+        {view === 'assignments' && (
+          <AssignmentsList
+            onAssignment={goAssignment}
+            onNew={goNew}
+            extraAssignments={createdAssignments}
+          />
+        )}
         {view === 'assignment'  && detailAssignment && (
           <AssignmentDetail a={detailAssignment} onBack={() => setView('assignments')} onStudent={goStudent}/>
+        )}
+        {view === 'new-assignment' && (
+          <NewAssignment onBack={() => setView('assignments')} onCreate={handleCreate}/>
         )}
         {view === 'students'    && <StudentsList onStudent={goStudent}/>}
         {view === 'student'     && detailStudent && (

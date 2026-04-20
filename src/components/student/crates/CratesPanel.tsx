@@ -4,7 +4,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Icon } from '@/components/landing/pb-site/primitives';
+import { Chunky, Icon } from '@/components/landing/pb-site/primitives';
 import { RARITY_COLORS, type Item, type Rarity } from '../wardrobe/types';
 import { CRATE_ORDER, CRATE_TIERS, type CrateTier } from './crate-types';
 import { Crate3D } from './Crate3D';
@@ -101,17 +101,34 @@ export const CratesPanel = () => {
               Earn blocks by playing, then crack open crates for skins, clothes, and accessories.
             </p>
           </div>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '8px 16px 8px 12px', borderRadius: 999,
-            background: 'var(--pbs-mint)',
-            color: 'var(--pbs-mint-ink)',
-            border: '1.5px solid var(--pbs-mint-ink)',
-            fontSize: 15, fontWeight: 700,
-          }}>
-            <Icon name="coin" size={16} stroke={2.4}/>
-            {blocks.toLocaleString()}
-            <span style={{ fontWeight: 500, opacity: 0.8, fontSize: 12 }}>blocks</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px 8px 12px', borderRadius: 999,
+              background: 'var(--pbs-mint)',
+              color: 'var(--pbs-mint-ink)',
+              border: '1.5px solid var(--pbs-mint-ink)',
+              fontSize: 15, fontWeight: 700,
+            }}>
+              <Icon name="coin" size={16} stroke={2.4}/>
+              {blocks.toLocaleString()}
+              <span style={{ fontWeight: 500, opacity: 0.8, fontSize: 12 }}>blocks</span>
+            </div>
+            <Chunky
+              as="a"
+              href="/student"
+              tone="ghost"
+              icon="chevron"
+              onClick={(e: React.MouseEvent) => {
+                // Prefer going back to whatever referred here (dashboard,
+                // wardrobe) instead of re-landing on /student which boots
+                // at the auth screen.
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  e.preventDefault();
+                  window.history.back();
+                }
+              }}
+            >Back</Chunky>
           </div>
         </div>
 

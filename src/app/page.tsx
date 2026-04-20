@@ -5,6 +5,20 @@ import { useRouter } from 'next/navigation';
 import { OnboardingWizard } from '@/components/studio/modals/OnboardingWizard';
 import type { TemplateId } from '@/lib/templates/types';
 
+import { Nav } from '@/components/landing/pb-learn/Nav';
+import { Hero } from '@/components/landing/pb-learn/Hero';
+import { Marquee } from '@/components/landing/pb-learn/Marquee';
+import { Learn } from '@/components/landing/pb-learn/Learn';
+import { Messaging } from '@/components/landing/pb-learn/Messaging';
+import { ForStudents } from '@/components/landing/pb-learn/ForStudents';
+import { ForTeachers } from '@/components/landing/pb-learn/ForTeachers';
+import { Subjects } from '@/components/landing/pb-learn/Subjects';
+import { Stories } from '@/components/landing/pb-learn/Stories';
+import { FAQ } from '@/components/landing/pb-learn/FAQ';
+import { Footer } from '@/components/landing/pb-learn/Footer';
+
+import '@/components/landing/pb-site/styles.css';
+
 // Palettes ported from the Claude Design bundle (pb_learn/tweaks.jsx).
 // One is picked at random on every landing-page mount.
 const PALETTES = {
@@ -29,20 +43,6 @@ function paletteVars(key: PaletteKey): CSSProperties {
     '--pbs-ink-muted': p.inkMuted,
   } as CSSProperties;
 }
-
-import { Nav } from '@/components/landing/pb-learn/Nav';
-import { Hero } from '@/components/landing/pb-learn/Hero';
-import { Marquee } from '@/components/landing/pb-learn/Marquee';
-import { Learn } from '@/components/landing/pb-learn/Learn';
-import { Messaging } from '@/components/landing/pb-learn/Messaging';
-import { ForStudents } from '@/components/landing/pb-learn/ForStudents';
-import { ForTeachers } from '@/components/landing/pb-learn/ForTeachers';
-import { Subjects } from '@/components/landing/pb-learn/Subjects';
-import { Stories } from '@/components/landing/pb-learn/Stories';
-import { FAQ } from '@/components/landing/pb-learn/FAQ';
-import { Footer } from '@/components/landing/pb-learn/Footer';
-
-import '@/components/landing/pb-site/styles.css';
 
 export default function Home() {
   const [wizardOpen, setWizardOpen] = useState(false);

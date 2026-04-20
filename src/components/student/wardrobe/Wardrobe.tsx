@@ -7,7 +7,7 @@ import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitiv
 import { RobloxAvatar } from '../RobloxAvatar';
 import { outfitToAvatar } from './avatar-map';
 import {
-  CATEGORY_ICONS, CATEGORY_LABELS, ITEMS_BY_CATEGORY, ITEMS_BY_ID,
+  CATEGORY_LABELS, ITEMS_BY_CATEGORY, ITEMS_BY_ID,
   defaultOwned, isOwned,
 } from './catalog';
 import { ItemPreview } from './ItemPreview';
@@ -265,7 +265,6 @@ export const Wardrobe = () => {
                   <GroupTab
                     key={g.id}
                     label={g.label}
-                    icon={g.icon}
                     active={g.id === group}
                     onClick={() => {
                       setGroup(g.id);
@@ -454,18 +453,15 @@ const CategoryTab = ({ category, active, onClick }: { category: Category; active
     : category === 'body' ? 'Body'
     : category === 'emote' ? 'Emote'
     : CATEGORY_LABELS[category];
-  const icon = category === 'skin' ? '🎨'
-    : category === 'body' ? '💪'
-    : category === 'emote' ? '💃'
-    : CATEGORY_ICONS[category];
   // Sub-nav pill: quieter than the group tab. Active state uses butter (not
   // ink) so it reads as "selected within the active group" rather than
-  // competing with the group's ink highlight above it.
+  // competing with the group's ink highlight above it. Label-only — user
+  // asked to drop the emoji icons here and in the group row above.
   return (
     <button
       onClick={onClick}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
+        display: 'inline-flex', alignItems: 'center',
         padding: '5px 11px', borderRadius: 999,
         background: active ? 'var(--pbs-butter)' : 'transparent',
         color: active ? 'var(--pbs-butter-ink)' : 'var(--pbs-ink-muted)',
@@ -475,18 +471,18 @@ const CategoryTab = ({ category, active, onClick }: { category: Category; active
         boxShadow: active ? '0 2px 0 var(--pbs-butter-ink)' : 'none',
       }}
     >
-      <span style={{ fontSize: 13 }}>{icon}</span>{label}
+      {label}
     </button>
   );
 };
 
 const GroupTab = ({
-  label, icon, active, onClick,
-}: { label: string; icon: string; active: boolean; onClick: () => void }) => (
+  label, active, onClick,
+}: { label: string; active: boolean; onClick: () => void }) => (
   <button
     onClick={onClick}
     style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8,
+      display: 'inline-flex', alignItems: 'center',
       padding: '9px 16px', borderRadius: 999,
       background: active ? 'var(--pbs-ink)' : 'transparent',
       color: active ? 'var(--pbs-cream)' : 'var(--pbs-ink)',
@@ -495,7 +491,7 @@ const GroupTab = ({
       cursor: 'pointer', fontFamily: 'inherit',
     }}
   >
-    <span style={{ fontSize: 15 }}>{icon}</span>{label}
+    {label}
   </button>
 );
 

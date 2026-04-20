@@ -181,7 +181,7 @@ export const Chunky = ({
   tone?: ChunkyTone;
   icon?: IconName;
   trailing?: IconName;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
   as?: 'button' | 'a';
   href?: string;
   style?: React.CSSProperties;

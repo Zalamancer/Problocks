@@ -130,7 +130,21 @@ export const Wardrobe = () => {
           <BlocksChip value={blocks}/>
           <Chunky tone="butter" icon="sparkle" onClick={doRandomize}>Randomize</Chunky>
           <Chunky tone="ghost" icon="check" onClick={savePreset}>Save outfit</Chunky>
-          <Chunky as="a" href="/student" tone="ghost" icon="chevron">Back</Chunky>
+          <Chunky
+            as="a"
+            href="/student"
+            tone="ghost"
+            icon="chevron"
+            onClick={(e: React.MouseEvent) => {
+              // Prefer returning to the previous page (e.g. dashboard) with
+              // its in-memory state intact, instead of landing on /student
+              // which always boots at the auth screen.
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                e.preventDefault();
+                window.history.back();
+              }
+            }}
+          >Back</Chunky>
         </div>
       </div>
 

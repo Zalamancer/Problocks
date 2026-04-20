@@ -227,6 +227,11 @@ export const RobloxAvatar = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; yaw: number; dragging: boolean }>({ x: 0, yaw: 0, dragging: false });
+  // Persistent zoom factor applied on top of the auto-fit distance. Lower
+  // values = closer, higher = farther. Clamped in the button handlers.
+  const zoomRef = useRef<number>(1.0);
+  // Handle back into the effect so the +/- buttons can trigger a re-fit.
+  const refitRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -432,12 +437,14 @@ export const RobloxAvatar = ({
       const aspect = Math.max(0.0001, camera.aspect);
       const distV = (size.y * margin) / (2 * Math.tan(vFov / 2));
       const distH = (size.x * margin) / (2 * Math.tan(vFov / 2) * aspect);
-      const dist = Math.max(distV, distH) + size.z / 2 + 0.5;
+      const baseDist = Math.max(distV, distH) + size.z / 2 + 0.5;
+      const dist = baseDist * zoomRef.current;
       camera.position.set(0, center.y, dist);
       camera.lookAt(0, center.y, 0);
       camera.updateProjectionMatrix();
     };
     fitCameraToCharacter();
+    refitRef.current = fitCameraToCharacter;
 
     // Mouse drag to spin.
     const onPointerDown = (e: PointerEvent) => {
@@ -487,6 +494,7 @@ export const RobloxAvatar = ({
         else if (mat) mat.dispose();
       });
       if (renderer.domElement.parentElement === el) el.removeChild(renderer.domElement);
+      refitRef.current = null;
     };
   // Scene is rebuilt only when the outfit or autoRotate flag changes. Size
   // changes are handled live by the ResizeObserver above, so we don't want
@@ -497,6 +505,64 @@ export const RobloxAvatar = ({
   const sizeStyle: React.CSSProperties = size === 'fill'
     ? { width: '100%', aspectRatio: '1 / 1' }
     : { width: size, height: size };
+
+  // Zoom buttons nudge the persistent zoom factor and ask the scene to
+  // re-fit. Clamp so the user can't zoom so far out they lose the character
+  // or zoom so far in the camera flips through the head.
+  const adjustZoom = (factor: number) => {
+    const next = Math.max(0.4, Math.min(2.5, zoomRef.current * factor));
+    zoomRef.current = next;
+    refitRef.current?.();
+  };
+
+  const zoomBtnStyle: React.CSSProperties = {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    border: `2px solid var(--pbs-butter-ink)`,
+    background: 'var(--pbs-butter)',
+    color: 'var(--pbs-butter-ink)',
+    font: '700 16px/1 system-ui, sans-serif',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 0 var(--pbs-butter-ink)',
+    padding: 0,
+  };
+
+  const zoomButtons = (
+    <div
+      style={{
+        position: 'absolute',
+        right: 8,
+        bottom: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        zIndex: 2,
+        // Don't block pointer drags on the canvas area itself.
+        pointerEvents: 'none',
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Zoom in"
+        onClick={() => adjustZoom(0.85)}
+        style={{ ...zoomBtnStyle, pointerEvents: 'auto' }}
+      >
+        +
+      </button>
+      <button
+        type="button"
+        aria-label="Zoom out"
+        onClick={() => adjustZoom(1 / 0.85)}
+        style={{ ...zoomBtnStyle, pointerEvents: 'auto' }}
+      >
+        −
+      </button>
+    </div>
+  );
 
   const inner = (
     <div
@@ -509,7 +575,14 @@ export const RobloxAvatar = ({
     />
   );
 
-  if (!framed) return inner;
+  if (!framed) {
+    return (
+      <div style={{ ...sizeStyle, position: 'relative' }}>
+        {inner}
+        {zoomButtons}
+      </div>
+    );
+  }
 
   // Chunky butter-yellow frame — matches the "Chunky" button treatment used
   // across the student app (butter face + butter-ink outline + offset
@@ -527,6 +600,7 @@ export const RobloxAvatar = ({
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       {inner}
+      {zoomButtons}
     </div>
   );
 };

@@ -414,6 +414,10 @@ export const RobloxAvatar = ({
     const shadow = new THREE.Mesh(new THREE.CircleGeometry(2.0, 24), shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = -3.02;
+    // Tagged so fitCameraToCharacter can exclude the shadow disc — the disc
+    // is 2u radius on XZ and would inflate the horizontal fit, pushing the
+    // camera too far back and leaving the legs clipped at the bottom.
+    shadow.userData.isShadow = true;
     character.add(shadow);
 
     // Slight overall lift so the mid-torso sits at y≈0 in the viewport.
@@ -427,12 +431,31 @@ export const RobloxAvatar = ({
     // top of the frame. Uses vertical FOV at current aspect and picks the
     // tighter of vertical/horizontal fits so narrow containers still work.
     fitCameraToCharacter = () => {
-      const box = new THREE.Box3().setFromObject(character);
+      // Make sure transforms (character.position/rotation, hair/hat groups
+      // copied after their parent was positioned) are flushed — otherwise
+      // Box3.setFromObject reads stale matrixWorlds and the fit misaligns.
+      character.updateMatrixWorld(true);
+      // Manual bbox that skips the shadow disc and the edge-outline
+      // LineSegments (edges extend slightly past the box geometry in world
+      // space). This gives a tight bound on the actual body silhouette.
+      const box = new THREE.Box3();
+      let hasAny = false;
+      character.traverse((obj) => {
+        if (!(obj as THREE.Mesh).isMesh) return;
+        if (obj.userData && obj.userData.isShadow) return;
+        const mesh = obj as THREE.Mesh;
+        const geom = mesh.geometry as THREE.BufferGeometry;
+        if (!geom.boundingBox) geom.computeBoundingBox();
+        const meshBox = geom.boundingBox!.clone().applyMatrix4(mesh.matrixWorld);
+        if (hasAny) box.union(meshBox);
+        else { box.copy(meshBox); hasAny = true; }
+      });
+      if (!hasAny) return;
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
       box.getSize(size);
       box.getCenter(center);
-      const margin = 1.15; // 15% padding
+      const margin = 1.2; // 20% padding — keeps arms/legs off the edge
       const vFov = (camera.fov * Math.PI) / 180;
       const aspect = Math.max(0.0001, camera.aspect);
       const distV = (size.y * margin) / (2 * Math.tan(vFov / 2));

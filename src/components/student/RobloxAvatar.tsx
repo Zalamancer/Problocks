@@ -471,16 +471,18 @@ export const RobloxAvatar = ({
 
   if (!framed) return inner;
 
-  // Chunky cream tile with the same ink border/offset-shadow used across the
-  // student-app cards — beefed up (2px border, 4px offset) so it reads even
-  // at small sizes against the dark user-card background.
+  // Chunky butter-yellow frame — matches the "Chunky" button treatment used
+  // across the student app (butter face + butter-ink outline + offset
+  // shadow). Reads as a highlighted, playful tile on the dark user card.
   return (
     <div style={{
       ...sizeStyle,
       borderRadius: 22,
       background: 'linear-gradient(180deg, var(--pbs-cream) 0%, var(--pbs-cream-2) 100%)',
-      border: `2px solid ${STROKE}`,
-      boxShadow: `0 4px 0 ${STROKE}`,
+      border: `4px solid var(--pbs-butter)`,
+      outline: `2px solid var(--pbs-butter-ink)`,
+      outlineOffset: 0,
+      boxShadow: `0 6px 0 var(--pbs-butter-ink), 0 14px 28px -10px rgba(107,79,0,0.5)`,
       overflow: 'hidden', position: 'relative', flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>

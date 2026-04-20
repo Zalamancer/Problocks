@@ -9,6 +9,7 @@ import * as THREE from 'three';
 export type AvatarFace = 'smile' | 'happy' | 'cool' | 'wink' | 'neutral';
 export type AvatarHat = 'none' | 'cap' | 'beanie' | 'tophat';
 export type AvatarHair = 'none' | 'short' | 'spike' | 'long';
+export type AvatarGender = 'boy' | 'girl';
 
 export interface AvatarOutfit {
   skin?: string;
@@ -19,6 +20,7 @@ export interface AvatarOutfit {
   hatColor?: string;
   hair?: AvatarHair;
   hairColor?: string;
+  gender?: AvatarGender;
 }
 
 const DEFAULT_OUTFIT: Required<AvatarOutfit> = {
@@ -30,6 +32,16 @@ const DEFAULT_OUTFIT: Required<AvatarOutfit> = {
   hatColor: '#c24949',
   hair: 'short',
   hairColor: '#3a2a1a',
+  gender: 'boy',
+};
+
+// Boy / girl proportions. Heads stay the same size so hats / hair / face
+// keep their existing offsets — only torso width + shoulder spacing change,
+// which gives a clearly slimmer silhouette without breaking any item placement.
+interface Proportions { torsoW: number; armX: number }
+const PROPORTIONS: Record<AvatarGender, Proportions> = {
+  boy:  { torsoW: 2.0, armX: 1.5 },
+  girl: { torsoW: 1.7, armX: 1.35 }, // torsoW/2 (0.85) + armW/2 (0.5) = 1.35 → arms flush with torso
 };
 
 const STROKE = '#1d1a14';
@@ -285,25 +297,27 @@ export const RobloxAvatar = ({
     const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.9 });
 
     const character = new THREE.Group();
+    const prop = PROPORTIONS[o.gender];
 
-    // Torso: 2w x 2h x 1d
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), shirtMat);
+    // Torso: width = boy 2.0 / girl 1.7, height 2, depth 1.
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(prop.torsoW, 2, 1), shirtMat);
     torso.position.set(0, 0, 0);
     character.add(withEdges(torso));
 
-    // Head: 1.6 cube sitting on top of torso
+    // Head: 1.6 cube sitting on top of torso (same size for both genders so
+    // hats / hair / face decals keep their tuned offsets).
     const headGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
     const head = new THREE.Mesh(headGeo, makeHeadMaterials(skinMat, faceMat));
     head.position.set(0, 1 + 0.8 + 0.05, 0); // torso half + head half + gap
     character.add(withEdges(head));
 
-    // Arms: 1 x 2 x 1 on each side
+    // Arms: 1 x 2 x 1; shoulders shift in for the slimmer girl silhouette.
     const armGeoL = new THREE.BoxGeometry(1, 2, 1);
     const armL = new THREE.Mesh(armGeoL, skinMat);
-    armL.position.set(-1.5, 0, 0);
+    armL.position.set(-prop.armX, 0, 0);
     character.add(withEdges(armL));
     const armR = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), skinMat);
-    armR.position.set(1.5, 0, 0);
+    armR.position.set(prop.armX, 0, 0);
     character.add(withEdges(armR));
 
     // Legs: 1 x 2 x 1
@@ -450,7 +464,7 @@ export const RobloxAvatar = ({
     };
   // Scene is rebuilt only when the outfit or autoRotate flag changes. Size
   // changes are handled live by the ResizeObserver above, so we don't want
-  // `size` in the dep array.
+  // `size` in the dep array. `JSON.stringify(outfit)` covers gender too.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRotate, JSON.stringify(outfit)]);
 

@@ -100,7 +100,11 @@ const SHIRT_COLOR: Record<string, string> = {
   'shirt-jersey': '#c24949',
   'shirt-wizard': '#4d2a8a',
   'shirt-armor': '#b9b9b9',
-  'shirt-apron': '#ffffff',
+  // Maps the apron to pink rather than its all-white base, so the girl
+  // default outfit reads pink on RobloxAvatar (which renders a single
+  // shirt colour). The actual built mesh in clothing.ts is white-with-
+  // pink-overlay; that detail only matters when AvatarScene was rendering.
+  'shirt-apron': '#ffc8e0',
   'shirt-tuxedo': '#1d1a14',
 };
 
@@ -155,5 +159,6 @@ export function outfitToAvatar(outfit: Outfit): AvatarOutfit {
     ...(hatColor ? { hatColor } : {}),
     hair: hairShape,
     ...(hairColor ? { hairColor } : {}),
+    gender: outfit.gender,
   };
 }

@@ -14,6 +14,8 @@ export type Theme = 'school' | 'subject' | 'street' | 'fantasy' | 'food';
 
 export type BodyShape = 'classic' | 'stocky' | 'slim';
 
+export type Gender = 'boy' | 'girl';
+
 export type Emote = 'idle' | 'wave' | 'dance' | 'jump' | 'think' | 'cheer';
 
 export interface MeshBuilderContext {
@@ -43,7 +45,8 @@ export interface Outfit {
   accessory: string | null;
   pet: string | null;
   skin: string;          // hex
-  bodyShape: BodyShape;
+  bodyShape: BodyShape;  // legacy: drove the old AvatarScene rig; ignored by RobloxAvatar
+  gender: Gender;        // drives RobloxAvatar's torso width + shoulder offset
   emote: Emote;
 }
 
@@ -82,6 +85,11 @@ export const BODY_LABELS: Record<BodyShape, string> = {
   classic: 'Classic',
   stocky:  'Stocky',
   slim:    'Slim',
+};
+
+export const GENDER_LABELS: Record<Gender, string> = {
+  boy:  'Boy',
+  girl: 'Girl',
 };
 
 export const SKIN_COLORS = [

@@ -12,8 +12,8 @@ import {
 } from './catalog';
 import { PRESETS, defaultOutfit, randomizeOutfit } from './presets';
 import {
-  BODY_LABELS, EMOTE_LABELS, RARITY_COLORS, SKIN_COLORS, THEME_LABELS,
-  type BodyShape, type Category, type Emote, type Item, type MeshCategory,
+  EMOTE_LABELS, GENDER_LABELS, RARITY_COLORS, SKIN_COLORS, THEME_LABELS,
+  type Category, type Emote, type Gender, type Item, type MeshCategory,
   type Outfit, type Rarity, type Theme,
 } from './types';
 
@@ -215,7 +215,10 @@ export const Wardrobe = () => {
             <SkinPanel outfit={outfit} onChange={(skin) => setOutfit((o) => ({ ...o, skin }))}/>
           )}
           {category === 'body' && (
-            <BodyPanel shape={outfit.bodyShape} onChange={(s) => setOutfit((o) => ({ ...o, bodyShape: s }))}/>
+            <BodyPanel
+              gender={outfit.gender}
+              onChange={(g) => setOutfit((o) => ({ ...o, gender: g }))}
+            />
           )}
           {category === 'emote' && (
             <EmotePanel emote={outfit.emote} onChange={(e) => setOutfit((o) => ({ ...o, emote: e }))}/>
@@ -434,20 +437,20 @@ const SkinPanel = ({ outfit, onChange }: { outfit: Outfit; onChange: (s: string)
   </Block>
 );
 
-const BodyPanel = ({ shape, onChange }: { shape: BodyShape; onChange: (s: BodyShape) => void }) => (
+const BodyPanel = ({ gender, onChange }: { gender: Gender; onChange: (g: Gender) => void }) => (
   <Block tone="paper" style={{ padding: 18 }}>
-    <SubLabel>Body shape</SubLabel>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-      {(Object.keys(BODY_LABELS) as BodyShape[]).map((s) => {
-        const active = s === shape;
+    <SubLabel>Body type</SubLabel>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+      {(Object.keys(GENDER_LABELS) as Gender[]).map((g) => {
+        const active = g === gender;
         return (
-          <button key={s} onClick={() => onChange(s)} style={{
+          <button key={g} onClick={() => onChange(g)} style={{
             padding: 14, borderRadius: 14,
             background: active ? 'var(--pbs-ink)' : 'var(--pbs-paper)',
             color: active ? 'var(--pbs-cream)' : 'var(--pbs-ink)',
             border: `2px solid ${active ? 'var(--pbs-ink)' : 'var(--pbs-line-2)'}`,
             fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-          }}>{BODY_LABELS[s]}</button>
+          }}>{GENDER_LABELS[g]}</button>
         );
       })}
     </div>

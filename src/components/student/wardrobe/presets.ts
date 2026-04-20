@@ -1,8 +1,9 @@
 // Built-in preset outfits + randomize helper.
 import { ALL_ITEMS, ITEMS_BY_CATEGORY } from './catalog';
-import type { MeshCategory, Outfit, Preset } from './types';
+import type { Gender, MeshCategory, Outfit, Preset } from './types';
 
-const DEFAULT_OUTFIT: Outfit = {
+// Boy default — what every freshly-joined student sees on their profile card.
+const BOY_DEFAULT: Outfit = {
   hat: null,
   hair: 'hair-short-brown',
   face: 'face-smile',
@@ -13,15 +14,34 @@ const DEFAULT_OUTFIT: Outfit = {
   accessory: null,
   pet: null,
   // Kraft-cardboard tan — `outfitToAvatar` strips this exact value so
-  // RobloxAvatar's textured cardboard skin path activates (the same default
-  // a freshly-joined student sees on their profile card).
+  // RobloxAvatar's textured cardboard skin path activates.
   skin: '#c9a173',
   bodyShape: 'classic',
+  gender: 'boy',
   emote: 'idle',
 };
 
+// Girl default — slimmer body (driven by `gender: 'girl'` in RobloxAvatar),
+// long pink hair, happy face, pink-leaning items where the catalog allows.
+const GIRL_DEFAULT: Outfit = {
+  ...BOY_DEFAULT,
+  hair: 'hair-long-pink',
+  face: 'face-happy',
+  shirt: 'shirt-apron',          // mapped to pink in avatar-map
+  pants: 'pants-skirt-red',      // closest-to-pink skirt the catalog ships
+  gender: 'girl',
+};
+
+const DEFAULT_OUTFIT: Outfit = BOY_DEFAULT;
+
+export const DEFAULTS_BY_GENDER: Record<Gender, Outfit> = {
+  boy:  BOY_DEFAULT,
+  girl: GIRL_DEFAULT,
+};
+
 export const PRESETS: Preset[] = [
-  { id: 'preset-default', label: 'Default', outfit: DEFAULT_OUTFIT },
+  { id: 'preset-default-boy',  label: 'Boy',  outfit: BOY_DEFAULT },
+  { id: 'preset-default-girl', label: 'Girl', outfit: GIRL_DEFAULT },
   {
     id: 'preset-school', label: 'School',
     outfit: {

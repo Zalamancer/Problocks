@@ -10,10 +10,37 @@
 
 import './animations.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { RobloxAvatar } from '../RobloxAvatar';
 import { ALL_ITEMS } from '../wardrobe/catalog';
-import { RARITY_COLORS, type Item, type Rarity } from '../wardrobe/types';
+import { outfitToAvatar } from '../wardrobe/avatar-map';
+import { defaultOutfit } from '../wardrobe/presets';
+import { RARITY_COLORS, type Item, type MeshCategory, type Outfit, type Rarity } from '../wardrobe/types';
 import { CRATE_TIERS, rollRarity, type CrateTier } from './crate-types';
 import { Crate3D } from './Crate3D';
+
+// Categories the RobloxAvatar renderer actually draws. Anything outside this
+// set falls back to a styled emoji chip in the reveal (shoes, backpack, etc.).
+const AVATAR_RENDERED: ReadonlySet<MeshCategory> = new Set([
+  'hat', 'hair', 'face', 'shirt', 'pants',
+]);
+
+/** Build a minimal outfit that isolates a single reward item on an otherwise
+ *  neutral avatar, so the unboxing reveal shows what the user just won. */
+function previewOutfit(item: Item): Outfit {
+  const base = defaultOutfit();
+  return {
+    ...base,
+    hat:       item.category === 'hat'       ? item.id      : null,
+    hair:      item.category === 'hair'      ? item.id      : null,
+    face:      item.category === 'face'      ? item.id      : 'face-smile',
+    shirt:     item.category === 'shirt'     ? item.id      : null,
+    pants:     item.category === 'pants'     ? item.id      : null,
+    shoes:     null,
+    backpack:  null,
+    accessory: null,
+    pet:       null,
+  };
+}
 
 type Phase = 'idle' | 'shake' | 'crack' | 'burst' | 'reveal';
 
@@ -137,15 +164,27 @@ export const CrateUnboxing = ({ tier, onClose, onClaim }: CrateUnboxingProps) =>
             <div
               className="crate-item-idle"
               style={{
-                width: 200, height: 200, borderRadius: 22,
+                width: 240, height: 240, borderRadius: 22,
                 background: rarityStyle.bg,
                 border: `2px solid var(--pbs-ink)`,
                 boxShadow: `0 8px 0 var(--pbs-ink), 0 0 0 4px ${style.glow}55, 0 0 80px ${style.glow}66`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 96,
+                overflow: 'hidden',
+                position: 'relative',
               }}
             >
-              {categoryEmoji(item.category)}
+              {AVATAR_RENDERED.has(item.category) ? (
+                <RobloxAvatar
+                  size="fill"
+                  framed={false}
+                  outfit={outfitToAvatar(previewOutfit(item))}
+                  autoRotate
+                />
+              ) : (
+                <div style={{ fontSize: 112, lineHeight: 1 }}>
+                  {categoryEmoji(item.category)}
+                </div>
+              )}
             </div>
             <Sparkles color={style.glow}/>
           </div>

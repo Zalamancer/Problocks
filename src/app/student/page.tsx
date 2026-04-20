@@ -15,7 +15,7 @@ export default function StudentPage() {
       <div className="pbs-page-bg" aria-hidden />
       <div className="pbs-page-noise" aria-hidden />
       <div className="pbs-content">
-        <StudentApp startView="dashboard" />
+        <StudentApp />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { Block, Chunky, FloatBlock, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { GoogleGlyph } from './atoms';
+import { supabase } from '@/lib/supabase';
 import type { Invite, StudentUser } from './sample-data';
 
 type Method = 'email' | 'google' | 'clever';
@@ -23,15 +24,79 @@ export const AuthScreen = ({
   const [name, setName] = useState('');
   const [pw, setPw] = useState('');
   const [classCode, setClassCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const submit = (e?: React.FormEvent) => {
+  const submit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const inferred = (email.split('@')[0] || 'Student').replace(/\b\w/g, (c) => c.toUpperCase());
-    onAuthed({
-      name: name || inferred,
-      email: email || 'student@school.edu',
-      avatar: 'butter',
-    }, mode === 'signup' && classCode.trim() ? classCode.trim().toUpperCase() : undefined);
+    setError(null);
+    setInfo(null);
+
+    if (!supabase) {
+      setError('Authentication is not configured.');
+      return;
+    }
+    if (!email.trim() || !pw) {
+      setError('Enter your email and password to continue.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (mode === 'login') {
+        const { data, error: err } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: pw,
+        });
+        if (err) { setError(err.message); return; }
+        if (!data.session) { setError('Could not start a session.'); return; }
+        const meta = data.user?.user_metadata || {};
+        onAuthed({
+          name: (meta.name as string) || (email.split('@')[0] || 'Student'),
+          email: data.user?.email || email.trim(),
+          avatar: (meta.avatar as string) || 'butter',
+        });
+      } else {
+        const { data, error: err } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: pw,
+          options: {
+            data: {
+              name: name.trim() || undefined,
+              role: 'student',
+              avatar: 'butter',
+            },
+          },
+        });
+        if (err) { setError(err.message); return; }
+        // If email confirmation is on, session will be null; tell the user.
+        if (!data.session) {
+          setInfo('Check your email to confirm your account, then log in.');
+          setMode('login');
+          setPw('');
+          return;
+        }
+        onAuthed(
+          {
+            name: name.trim() || (email.split('@')[0] || 'Student'),
+            email: data.user?.email || email.trim(),
+            avatar: 'butter',
+          },
+          classCode.trim() ? classCode.trim().toUpperCase() : undefined,
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    setError(null);
+    if (!supabase) { setError('Authentication is not configured.'); return; }
+    const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/student` : undefined;
+    const { error: err } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+    if (err) setError(err.message);
   };
 
   return (
@@ -87,10 +152,15 @@ export const AuthScreen = ({
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            <button onClick={() => setMethod('google')} style={ssoStyle(method === 'google')}>
+            <button type="button" onClick={signInWithGoogle} style={ssoStyle(method === 'google')}>
               <GoogleGlyph/> Google
             </button>
-            <button onClick={() => setMethod('clever')} style={ssoStyle(method === 'clever')}>
+            <button
+              type="button"
+              disabled
+              title="Clever SSO coming soon"
+              style={{ ...ssoStyle(method === 'clever'), opacity: 0.5, cursor: 'not-allowed' }}
+            >
               <div style={{ width: 18, height: 18, borderRadius: 5, background: 'var(--pbs-sky)', border: '1.5px solid var(--pbs-sky-ink)' }}/>
               Clever
             </button>
@@ -124,13 +194,31 @@ export const AuthScreen = ({
               </div>
             )}
 
+            {error && (
+              <div style={{
+                fontSize: 12.5, padding: '8px 10px', borderRadius: 10,
+                background: 'var(--pbs-coral)', color: 'var(--pbs-coral-ink)',
+                border: '1.5px solid var(--pbs-coral-ink)',
+              }}>{error}</div>
+            )}
+            {info && (
+              <div style={{
+                fontSize: 12.5, padding: '8px 10px', borderRadius: 10,
+                background: 'var(--pbs-mint)', color: 'var(--pbs-mint-ink)',
+                border: '1.5px solid var(--pbs-mint-ink)',
+              }}>{info}</div>
+            )}
+
             <Chunky
               tone="butter"
-              trailing="arrow-right"
-              onClick={() => submit()}
-              style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
+              trailing={busy ? undefined : 'arrow-right'}
+              onClick={() => { if (!busy) submit(); }}
+              style={{
+                width: '100%', justifyContent: 'center', marginTop: 4,
+                opacity: busy ? 0.6 : 1, pointerEvents: busy ? 'none' : 'auto',
+              }}
             >
-              {mode === 'login' ? 'Log in' : 'Create account'}
+              {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}
             </Chunky>
           </form>
 

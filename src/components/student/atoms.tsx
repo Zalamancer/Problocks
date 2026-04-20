@@ -1,5 +1,5 @@
-// Shared atoms for the Student app — Toast, PlayModal, DemoNav, AvatarBlob,
-// QrGlyph. Ported from problocks/project/pb_student/{app,join,dashboard}.jsx.
+// Shared atoms for the Student app — Toast, PlayModal, AvatarBlob, QrGlyph.
+// Ported from problocks/project/pb_student/{app,join,dashboard}.jsx.
 'use client';
 
 import React from 'react';
@@ -80,48 +80,6 @@ export const PlayModal = ({ game, onClose }: { game: PlayableGame; onClose: () =
         </div>
       </Block>
     </div>
-  </div>
-);
-
-type DemoView = 'auth' | 'join' | 'dashboard';
-
-export const DemoNav = ({
-  view, setView, hasUser, onNeedUser,
-}: {
-  view: DemoView;
-  setView: (v: DemoView) => void;
-  hasUser: boolean;
-  onNeedUser: () => void;
-}) => (
-  <div style={{
-    position: 'fixed', left: 16, bottom: 16, zIndex: 90,
-    background: 'var(--pbs-ink)', color: 'var(--pbs-cream)',
-    padding: '6px 6px 6px 14px', borderRadius: 999,
-    display: 'flex', alignItems: 'center', gap: 6,
-    boxShadow: '0 4px 0 #000, 0 18px 40px -12px rgba(0,0,0,0.4)',
-    fontSize: 11.5,
-  }}>
-    <span className="pbs-mono" style={{ opacity: 0.6, letterSpacing: '0.08em' }}>DEMO</span>
-    {([
-      ['auth', 'Login'],
-      ['join', 'Join'],
-      ['dashboard', 'Dashboard'],
-    ] as const).map(([k, l]) => (
-      <button
-        key={k}
-        onClick={() => {
-          if (k === 'dashboard' && !hasUser) onNeedUser();
-          setView(k);
-        }}
-        style={{
-          padding: '6px 12px', borderRadius: 999,
-          fontSize: 11.5, fontWeight: 700,
-          background: view === k ? 'var(--pbs-butter)' : 'transparent',
-          color: view === k ? 'var(--pbs-butter-ink)' : 'var(--pbs-cream)',
-          border: 0, cursor: 'pointer', fontFamily: 'inherit',
-        }}
-      >{l}</button>
-    ))}
   </div>
 );
 

@@ -1,14 +1,17 @@
-// Student app router: handles deep-link invites, auth, join, dashboard.
-// Ported from problocks/project/pb_student/app.jsx (TWEAKS panel removed —
-// replaced with the persistent DemoNav so the rest of the app stays in
-// sync with the design's interactive demo).
+// Student app router — real Supabase auth (no more DemoNav).
+// View derives from session: signed-out → AuthScreen, signed-in → Dashboard,
+// deep-link `#/join/CODE` routes to JoinScreen once the user is signed in.
+// Sample class/assignment data still seeds the dashboard (wiring to the DB is
+// a separate task tracked in the vault roadmap).
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { AuthScreen } from './AuthScreen';
 import { JoinScreen } from './JoinScreen';
 import { Dashboard, type AnyGame } from './Dashboard';
-import { DemoNav, PlayModal, Toast, type ToastState } from './atoms';
+import { PlayModal, Toast, type ToastState } from './atoms';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   EMOJI_CYCLE,
   SAMPLE_ASSIGNED,
@@ -30,21 +33,30 @@ const parseHashInvite = (): Invite | null => {
   const params = new URLSearchParams(h.split('?')[1] || '');
   return {
     code: m[1].toUpperCase(),
-    className: params.get('class') || 'Ms. Rivera — Period 3',
-    teacher: params.get('teacher') || 'Ms. Rivera',
-    game: params.get('game') || 'Linear Equations Relay',
-    questions: Number(params.get('q')) || 12,
-    minutes: Number(params.get('min')) || 15,
+    className: params.get('class') || 'Your class',
+    teacher: params.get('teacher') || 'Your teacher',
+    game: params.get('game') || '',
+    questions: Number(params.get('q')) || 0,
+    minutes: Number(params.get('min')) || 0,
   };
 };
 
-export type StartView = View;
+const sessionToUser = (session: Session | null): StudentUser | null => {
+  if (!session?.user) return null;
+  const meta = session.user.user_metadata || {};
+  const email = session.user.email || '';
+  const inferred = (email.split('@')[0] || 'Student').replace(/\b\w/g, (c) => c.toUpperCase());
+  return {
+    name: (meta.name as string) || (meta.full_name as string) || inferred,
+    email,
+    avatar: (meta.avatar as string) || 'butter',
+  };
+};
 
-export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView }) => {
-  const [view, setView] = useState<View>(startView);
-  const [user, setUser] = useState<StudentUser | null>(
-    startView === 'dashboard' ? { name: 'Ava Park', email: 'ava@ridgewood.school' } : null,
-  );
+export const StudentApp = () => {
+  const [sessionReady, setSessionReady] = useState(false);
+  const [user, setUser] = useState<StudentUser | null>(null);
+  const [view, setView] = useState<View>('auth');
   const [classes, setClasses] = useState<ClassRecord[]>(SAMPLE_CLASSES);
   const [assigned, setAssigned] = useState<AssignedGame[]>(SAMPLE_ASSIGNED);
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
@@ -57,6 +69,34 @@ export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView 
     window.setTimeout(() => {
       setToast((cur) => (cur && cur.id === next.id ? null : cur));
     }, 2800);
+  }, []);
+
+  // Bootstrap + subscribe to Supabase session.
+  useEffect(() => {
+    if (!supabase) {
+      setSessionReady(true);
+      return;
+    }
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      const u = sessionToUser(data.session);
+      setUser(u);
+      setView(u ? 'dashboard' : 'auth');
+      setSessionReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = sessionToUser(session);
+      setUser(u);
+      if (!u) {
+        setView('auth');
+        setPendingInvite(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   // Deep-link handling — pick up `#/join/CODE?...` and route appropriately.
@@ -73,8 +113,9 @@ export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView 
     return () => window.removeEventListener('hashchange', check);
   }, [user]);
 
-  const handleAuthed = (u: StudentUser, classCode?: string) => {
-    setUser(u);
+  const handleAuthed = (_u: StudentUser, classCode?: string) => {
+    // Real Supabase auth has already fired onAuthStateChange — we just decide
+    // where to land next based on any pending invite or a typed class code.
     if (classCode) {
       setPendingInvite({
         code: classCode,
@@ -90,7 +131,7 @@ export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView 
     } else {
       setView('dashboard');
     }
-    showToast(`Welcome, ${u.name.split(' ')[0]}!`, 'butter');
+    showToast(`Welcome, ${_u.name.split(' ')[0]}!`, 'butter');
   };
 
   const handleJoined = (invite: Invite) => {
@@ -133,15 +174,38 @@ export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView 
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (supabase) await supabase.auth.signOut();
     setUser(null);
     setView('auth');
     setPendingInvite(null);
   };
 
-  const ensureDemoUser = () => {
-    if (!user) setUser({ name: 'Ava Park', email: 'ava@ridgewood.school' });
-  };
+  if (!isSupabaseConfigured()) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div style={{
+          maxWidth: 520, padding: 24, borderRadius: 16,
+          background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)',
+          boxShadow: '0 4px 0 var(--pbs-line-2)',
+        }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Supabase is not configured.</h1>
+          <p style={{ marginTop: 10, fontSize: 14, lineHeight: 1.5, color: 'var(--pbs-ink-soft)' }}>
+            Add <code>NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+            <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to <code>.env.local</code>, then restart the dev server.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sessionReady) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <div className="pbs-mono" style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>Loading…</div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -176,13 +240,6 @@ export const StudentApp = ({ startView = 'dashboard' }: { startView?: StartView 
 
       {toast && <Toast toast={toast}/>}
       {playing && <PlayModal game={playing} onClose={() => setPlaying(null)}/>}
-
-      <DemoNav
-        view={view}
-        setView={setView}
-        hasUser={!!user}
-        onNeedUser={ensureDemoUser}
-      />
     </>
   );
 };

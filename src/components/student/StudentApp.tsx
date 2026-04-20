@@ -41,6 +41,11 @@ const parseHashInvite = (): Invite | null => {
   };
 };
 
+// Module-scoped cache so remounts (e.g. browser back from /student/wardrobe)
+// don't flash the "Loading…" screen while getSession() re-resolves. The
+// value is `undefined` until the first resolution, then `Session | null`.
+let cachedSession: Session | null | undefined = undefined;
+
 const sessionToUser = (session: Session | null): StudentUser | null => {
   if (!session?.user) return null;
   const meta = session.user.user_metadata || {};
@@ -54,9 +59,14 @@ const sessionToUser = (session: Session | null): StudentUser | null => {
 };
 
 export const StudentApp = () => {
-  const [sessionReady, setSessionReady] = useState(false);
-  const [user, setUser] = useState<StudentUser | null>(null);
-  const [view, setView] = useState<View>('auth');
+  // Hydrate from the module-scoped cache on every mount. If we've already
+  // resolved a session in this page lifetime, we skip the loading flash.
+  const initialUser = cachedSession !== undefined ? sessionToUser(cachedSession) : null;
+  const [sessionReady, setSessionReady] = useState(cachedSession !== undefined);
+  const [user, setUser] = useState<StudentUser | null>(initialUser);
+  const [view, setView] = useState<View>(
+    cachedSession !== undefined ? (initialUser ? 'dashboard' : 'auth') : 'auth',
+  );
   const [classes, setClasses] = useState<ClassRecord[]>(SAMPLE_CLASSES);
   const [assigned, setAssigned] = useState<AssignedGame[]>(SAMPLE_ASSIGNED);
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
@@ -79,13 +89,17 @@ export const StudentApp = () => {
     }
     let cancelled = false;
     supabase.auth.getSession().then(({ data }) => {
+      cachedSession = data.session;
       if (cancelled) return;
       const u = sessionToUser(data.session);
       setUser(u);
-      setView(u ? 'dashboard' : 'auth');
+      // Only redirect to auth on the very first resolution; on warm
+      // remounts the user may already be on `join` mid-flow.
+      setView((cur) => (cur === 'auth' && u ? 'dashboard' : cur));
       setSessionReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      cachedSession = session;
       const u = sessionToUser(session);
       setUser(u);
       if (!u) {
@@ -176,6 +190,7 @@ export const StudentApp = () => {
 
   const handleLogout = async () => {
     if (supabase) await supabase.auth.signOut();
+    cachedSession = null;
     setUser(null);
     setView('auth');
     setPendingInvite(null);

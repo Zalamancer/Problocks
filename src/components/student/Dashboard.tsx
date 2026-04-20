@@ -205,7 +205,7 @@ const HomeTab = ({
         <Block tone="ink" style={{ padding: 22, color: 'var(--pbs-cream)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
             <RobloxAvatar
-              size="fill"
+              size={260}
               outfit={{
                 // Omit `skin` → default kraft-cardboard look kicks in.
                 shirt: '#6fbf73',

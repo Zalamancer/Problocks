@@ -103,10 +103,19 @@ export const Wardrobe = () => {
   const reset = () => setOutfit(defaultOutfit());
 
   return (
-    <div className="pbs-wrap" style={{ padding: '28px 28px 80px' }}>
+    <div
+      className="pbs-wrap"
+      style={{
+        padding: '20px 28px 20px',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 22 }}>
+      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 18 }}>
         <div>
           <Pill tone="butter" icon="sparkle">Wardrobe</Pill>
           <h1 style={{
@@ -125,12 +134,12 @@ export const Wardrobe = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: 22, alignItems: 'start' }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: 22, alignItems: 'stretch' }}>
 
         {/* ─── Left: avatar stage + controls + presets ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 16 }}>
-          <Block tone="ink" style={{ padding: 16, color: 'var(--pbs-cream)' }}>
-            <div style={{ aspectRatio: '1 / 1.12', borderRadius: 14, overflow: 'hidden', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, height: '100%', overflow: 'hidden' }}>
+          <Block tone="ink" style={{ padding: 16, color: 'var(--pbs-cream)', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: '1 1 auto', minHeight: 0, borderRadius: 14, overflow: 'hidden', background: 'radial-gradient(circle at 50% 35%, #2a2720 0%, #1d1a14 70%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <RobloxAvatar size="fill" framed={false} outfit={avatarOutfit} autoRotate={autoRotate}/>
               {flash && (
                 <div style={{
@@ -149,7 +158,7 @@ export const Wardrobe = () => {
             </div>
           </Block>
 
-          <Block tone="paper" style={{ padding: 14 }}>
+          <Block tone="paper" style={{ padding: 14, flex: '0 0 auto' }}>
             <SubLabel>Presets</SubLabel>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
               {PRESETS.map((p) => (
@@ -167,7 +176,7 @@ export const Wardrobe = () => {
         </div>
 
         {/* ─── Right: category tabs + filters + grid ─── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0, height: '100%', overflowY: 'auto', paddingRight: 6 }}>
 
           {/* Category tabs */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 6, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)', borderRadius: 14 }}>

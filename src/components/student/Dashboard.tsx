@@ -232,7 +232,14 @@ const HomeTab = ({
               tone="butter"
               icon="sparkle"
               trailing="arrow-right"
-              style={{ width: '100%', justifyContent: 'center' }}
+              // Inline color: parent <Block tone="ink"> sets color:cream
+              // inline, which the .pbs-chunky-butter class can't beat in
+              // this layer order — so spell out butter-ink directly.
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                color: 'var(--pbs-butter-ink)',
+              }}
             >
               Customize avatar
             </Chunky>
@@ -242,7 +249,16 @@ const HomeTab = ({
               tone="ghost"
               icon="star"
               trailing="arrow-right"
-              style={{ width: '100%', justifyContent: 'center' }}
+              // Match Footer.tsx's "ghost on dark bg" treatment: transparent
+              // body + cream outline + cream text so it reads on the ink card.
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                background: 'transparent',
+                color: 'var(--pbs-cream)',
+                borderColor: 'var(--pbs-cream)',
+                boxShadow: '0 4px 0 var(--pbs-cream)',
+              }}
             >
               Open crates
             </Chunky>

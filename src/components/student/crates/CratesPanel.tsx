@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { RARITY_COLORS, type Item, type Rarity } from '../wardrobe/types';
 import { CRATE_ORDER, CRATE_TIERS, type CrateTier } from './crate-types';
-import { CrateVisual } from './CrateVisual';
+import { Crate3D } from './Crate3D';
 import { CrateUnboxing } from './CrateUnboxing';
 
 const STORAGE_KEY = 'pb-unlocked';
@@ -188,14 +188,14 @@ const CrateCard = ({ tier, count, canAfford, onOpen, onBuy }: CrateCardProps) =>
       {/* aura behind crate */}
       <div style={{
         position: 'relative',
-        height: 170,
+        height: 190,
         borderRadius: 14,
         background: `radial-gradient(circle at 50% 55%, ${style.glow}55 0%, transparent 70%)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden',
       }}>
-        <div className="crate-bob">
-          <CrateVisual tier={tier} size={160}/>
+        <div style={{ width: '100%', height: '100%' }}>
+          <Crate3D tier={tier} seed={CRATE_ORDER.indexOf(tier) * 0.9}/>
         </div>
         {count > 0 && (
           <div style={{

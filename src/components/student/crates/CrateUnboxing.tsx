@@ -13,7 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ALL_ITEMS } from '../wardrobe/catalog';
 import { RARITY_COLORS, type Item, type Rarity } from '../wardrobe/types';
 import { CRATE_TIERS, rollRarity, type CrateTier } from './crate-types';
-import { CrateVisual } from './CrateVisual';
+import { Crate3D } from './Crate3D';
 
 type Phase = 'idle' | 'shake' | 'crack' | 'burst' | 'reveal';
 
@@ -120,23 +120,10 @@ export const CrateUnboxing = ({ tier, onClose, onClaim }: CrateUnboxingProps) =>
         {/* particle burst */}
         {phase === 'burst' && <Particles color={style.glow} color2={style.glow2}/>}
 
-        {/* crate itself (hidden once item revealed) */}
+        {/* 3D crate — Three.js scene drives all opening animation internally. */}
         {phase !== 'reveal' && (
-          <div
-            className={
-              phase === 'idle' ? 'crate-bob'
-              : phase === 'shake' ? 'crate-shake'
-              : ''
-            }
-            style={{ position: 'relative', transformOrigin: 'center bottom' }}
-          >
-            <CrateVisual
-              tier={tier}
-              size={260}
-              lidClassName={phase === 'crack' ? 'crate-lid' : phase === 'burst' ? 'crate-lid' : ''}
-              bodyClassName={phase === 'crack' || phase === 'burst' ? 'crate-body-pop' : ''}
-              lidHidden={phase === 'burst'}
-            />
+          <div style={{ width: 380, height: 380, position: 'relative' }}>
+            <Crate3D tier={tier} phase={phase}/>
           </div>
         )}
 

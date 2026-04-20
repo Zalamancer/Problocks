@@ -63,6 +63,24 @@ const BookFallback = ({ s }: { s: React.SVGProps<SVGSVGElement> }) => (
   </svg>
 );
 
+// --- Direct messages icon ----------------------------------------------------
+// Chunky speech bubble with a bottom-left tail and three dots. Sibling of the
+// class glyphs so the DM rail button matches the tile language.
+export const DirectMessagesIcon = ({
+  size = 22, stroke = 2, style,
+}: { size?: number; stroke?: number; style?: React.CSSProperties }) => (
+  <svg
+    width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth={stroke}
+    strokeLinecap="round" strokeLinejoin="round" style={style}
+  >
+    <path d="M4 6.5 Q4 4.5 6 4.5 L18 4.5 Q20 4.5 20 6.5 L20 15 Q20 17 18 17 L10.5 17 L7 20 L7 17 L6 17 Q4 17 4 15 Z"/>
+    <circle cx="9"  cy="10.8" r="0.9" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="10.8" r="0.9" fill="currentColor" stroke="none"/>
+    <circle cx="15" cy="10.8" r="0.9" fill="currentColor" stroke="none"/>
+  </svg>
+);
+
 // --- Registry ----------------------------------------------------------------
 
 const REGISTRY: Record<string, React.FC<{ s: React.SVGProps<SVGSVGElement> }>> = {

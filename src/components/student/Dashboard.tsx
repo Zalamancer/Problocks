@@ -202,7 +202,17 @@ const HomeTab = ({
 
       <aside style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-        <Block tone="ink" style={{ padding: 22, color: 'var(--pbs-cream)' }}>
+        <Block
+          tone="ink"
+          style={{
+            padding: 22,
+            color: 'var(--pbs-cream)',
+            border: '4px solid var(--pbs-butter)',
+            outline: '2px solid var(--pbs-butter-ink)',
+            outlineOffset: 0,
+            boxShadow: '0 6px 0 var(--pbs-butter-ink), 0 14px 28px -10px rgba(107,79,0,0.5)',
+          }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
             <RobloxAvatar
               size="fill"

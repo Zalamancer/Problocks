@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { Block, Icon } from '@/components/landing/pb-site/primitives';
 import { CardboardHead } from './CardboardHead';
+import { ClassIcon } from './ClassIcon';
 import { CHANNELS_BY_CLASS, SEED_DM, SEED_GROUP, type Channel, type ChatMessage } from './messages-data';
 import { ChannelDetails, DmThread, GroupThread, StudentDetails } from './MessagesThread';
 import { CLASSES, STUDENTS, type ClassRecord, type Student } from './sample-data';
@@ -88,7 +89,7 @@ const ClassRailButton = ({
     }}
   >
     <RailIndicator active={active}/>
-    <span>{c.emoji}</span>
+    <ClassIcon id={c.id} size={26} stroke={2}/>
     {unread && unread > 0 ? (
       <span style={{
         position: 'absolute', bottom: -4, right: -4,

@@ -175,3 +175,32 @@
   .pbs-footer-grid     { grid-template-columns: 1fr !important; }
   .pbs-wrap { padding: 0 18px; }
 }
+
+/* Student dashboard: mobile adaptations. Inline styles on the header need
+   !important to win specificity. Goal: keep the logo + avatar visible,
+   wrap the nav below on a second row, hide non-essential stat chips. */
+@media (max-width: 760px) {
+  .pbs-student-header-row {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    padding: 12px 18px !important;
+  }
+  .pbs-student-nav {
+    order: 99;
+    width: 100%;
+    margin-left: 0 !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .pbs-student-nav::-webkit-scrollbar { display: none; }
+  .pbs-student-stats {
+    gap: 8px !important;
+  }
+  .pbs-student-main {
+    padding: 20px 18px 60px !important;
+  }
+}
+@media (max-width: 520px) {
+  .pbs-student-stats { display: none !important; }
+}

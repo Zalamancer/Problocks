@@ -179,7 +179,7 @@ const StreamTab = ({
   const myRow = leaderboard.find((l) => l.me);
   const next = pending[0];
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 24 }}>
+    <div className="pbs-student-home" style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 24 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
         {next && (

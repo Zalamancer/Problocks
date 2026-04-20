@@ -75,7 +75,7 @@ function PacingPicker({ onPick }: { onPick: (p: Pacing) => void }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: 16,
           maxWidth: 760,
           width: '100%',

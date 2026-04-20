@@ -40,17 +40,17 @@ export const Dashboard = ({
   return (
     <div style={{ minHeight: '100vh' }}>
 
-      <header style={{
+      <header className="pbs-student-header" style={{
         position: 'sticky', top: 0, zIndex: 20,
         background: 'rgba(253,246,230,0.85)', backdropFilter: 'blur(10px)',
         borderBottom: '1.5px solid var(--pbs-line)',
       }}>
-        <div className="pbs-wrap" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 28px' }}>
+        <div className="pbs-wrap pbs-student-header-row" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="logo-block" size={26}/>
             <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>ProBlocks</span>
           </div>
-          <nav style={{ display: 'flex', gap: 4, marginLeft: 24 }}>
+          <nav className="pbs-student-nav" style={{ display: 'flex', gap: 4, marginLeft: 24 }}>
             {([
               ['home', 'Home'],
               ['classes', 'My classes'],
@@ -61,13 +61,15 @@ export const Dashboard = ({
             ))}
           </nav>
           <div style={{ flex: 1 }}/>
-          <StatChip icon="bolt" tone="butter" value={String(streak)} label="day streak"/>
-          <StatChip icon="coin" tone="mint" value={coins.toLocaleString()} label="blocks"/>
+          <div className="pbs-student-stats" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <StatChip icon="bolt" tone="butter" value={String(streak)} label="day streak"/>
+            <StatChip icon="coin" tone="mint" value={coins.toLocaleString()} label="blocks"/>
+          </div>
           <AvatarMenu user={user} onLogout={onLogout}/>
         </div>
       </header>
 
-      <main className="pbs-wrap" style={{ padding: '32px 28px 80px' }}>
+      <main className="pbs-wrap pbs-student-main" style={{ padding: '32px 28px 80px' }}>
 
         {tab === 'home' && (
           <HomeTab
@@ -202,7 +204,7 @@ const HomeTab = ({
 
         <section>
           <SectionHead title="Recent plays" linkLabel="View all"/>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
             {SAMPLE_RECENT.map((r) => <RecentCard key={r.id} r={r}/>)}
           </div>
         </section>
@@ -453,7 +455,7 @@ const LibraryTab = ({ onPlay: _onPlay }: { onPlay: (g: AnyGame) => void }) => (
     <h1 style={{ margin: '6px 0 20px', fontSize: 44, fontWeight: 700, letterSpacing: '-0.025em' }}>
       Games you&rsquo;ve <span className="pbs-serif">loved.</span>
     </h1>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
       {[...SAMPLE_RECENT, ...EXPLORE.slice(0, 3).map((e) => ({
         id: e.id, title: e.title, plays: e.plays, tone: e.tone, icon: e.icon,
       } as RecentGame))].map((r, i) => <RecentCard key={r.id + i} r={r}/>)}

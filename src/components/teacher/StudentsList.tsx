@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { Block, Pill } from '@/components/landing/pb-site/primitives';
 import { STUDENTS, type Student } from './sample-data';
 import { kickerSty } from './shared';
+import { StudentAvatar } from './StudentAvatar';
 
 type SortKey = 'avg' | 'risk' | 'name';
 const riskRank = { none: 0, low: 1, medium: 2, high: 3 } as const;
@@ -77,12 +78,11 @@ export const StudentsList = ({
           >
             <Block tone="paper" style={{ padding: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{
-                  fontSize: 28, width: 48, height: 48, borderRadius: 12,
-                  background: `var(--pbs-${s.tone})`,
-                  border: `1.5px solid var(--pbs-${s.tone}-ink)`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>{s.emoji}</div>
+                {/* RobloxAvatar tile — autoRotate stays OFF in the roster
+                    (12 simultaneous spinning Three.js scenes would melt
+                    the Celeron Chromebook target). It still spins on
+                    StudentDetail/StudentSelf where it's a single canvas. */}
+                <StudentAvatar s={s} px={56}/>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 700 }}>{s.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>{s.lastActive} · {s.submitted} done</div>

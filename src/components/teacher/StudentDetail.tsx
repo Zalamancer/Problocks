@@ -8,6 +8,7 @@ import React from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { Donut, Sparkline, TopicBars } from './charts';
 import { backBtn, MiniKpi } from './shared';
+import { StudentAvatar } from './StudentAvatar';
 import {
   activityFor, scoreTrendFor,
   type ActivityEvent, type Student, type Topic,
@@ -55,10 +56,12 @@ const TimelineRow = ({ e }: { e: ActivityEvent }) => {
 };
 
 export const StudentDetail = ({
-  s, onBack,
+  s, onBack, onViewAsStudent,
 }: {
   s: Student;
   onBack: () => void;
+  /** Open the "as student" view for THIS student (replaces the old top tab). */
+  onViewAsStudent?: (s: Student) => void;
 }) => {
   const activity = activityFor(s);
   const trend = scoreTrendFor(s);
@@ -83,13 +86,7 @@ export const StudentDetail = ({
       <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, marginTop: 14 }}>
         <Block tone={s.tone} style={{ padding: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{
-              fontSize: 52, lineHeight: 1,
-              width: 80, height: 80, borderRadius: 20,
-              background: 'var(--pbs-paper)', border: '1.5px solid currentColor',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 3px 0 currentColor',
-            }}>{s.emoji}</div>
+            <StudentAvatar s={s} px={96} spinning/>
             <div style={{ flex: 1, minWidth: 220 }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                 <Pill tone="paper" icon="users">Period 3</Pill>
@@ -99,7 +96,14 @@ export const StudentDetail = ({
               <h2 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: '-0.025em' }}>{s.name}</h2>
               <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>Last active {s.lastActive} · {s.submitted} assignments submitted</div>
             </div>
-            <Chunky tone="ink" icon="send">Message</Chunky>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {onViewAsStudent && (
+                <Chunky tone="butter" icon="users" onClick={() => onViewAsStudent(s)}>
+                  View as student
+                </Chunky>
+              )}
+              <Chunky tone="ink" icon="send">Message</Chunky>
+            </div>
           </div>
 
           <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>

@@ -16,11 +16,15 @@ import { teacherWrap } from './shared';
 
 type View = 'overview' | 'assignments' | 'assignment' | 'students' | 'student' | 'self';
 
+// "Student view" intentionally is NOT a top-level tab. It's reached from a
+// "View as student" button on a specific StudentDetail — teachers don't
+// browse the abstract idea of "the student experience", they ask "what
+// does this kid see right now?". Keeping it as a tab pinned it to a single
+// hard-coded student (STUDENTS[0]) which read like a placeholder page.
 const TABS: { k: View; l: string }[] = [
   { k: 'overview',    l: 'Overview' },
   { k: 'assignments', l: 'Assignments' },
   { k: 'students',    l: 'Students' },
-  { k: 'self',        l: 'Student view' },
 ];
 
 const ClassPicker = ({
@@ -100,7 +104,9 @@ const ClassPicker = ({
 const isTabActive = (view: View, k: View): boolean => {
   if (view === k) return true;
   if (k === 'assignments' && view === 'assignment') return true;
-  if (k === 'students'    && view === 'student')    return true;
+  // `student` and `self` are both entered from the Students roster, so
+  // keep the Students tab highlighted when the teacher is in either view.
+  if (k === 'students'    && (view === 'student' || view === 'self')) return true;
   return false;
 };
 
@@ -112,6 +118,9 @@ export const TeacherApp = () => {
 
   const goAssignment = (a: Assignment) => { setDetailAssignment(a); setView('assignment'); };
   const goStudent    = (s: Student)    => { setDetailStudent(s);    setView('student'); };
+  // "View as student" from inside a student's detail page. Reuses the same
+  // detailStudent so StudentSelf renders THIS student, not a hard-coded one.
+  const goSelf       = (s: Student)    => { setDetailStudent(s);    setView('self'); };
 
   return (
     <div style={{ minHeight: '100vh' }}>
@@ -178,9 +187,15 @@ export const TeacherApp = () => {
         )}
         {view === 'students'    && <StudentsList onStudent={goStudent}/>}
         {view === 'student'     && detailStudent && (
-          <StudentDetail s={detailStudent} onBack={() => setView('overview')}/>
+          <StudentDetail
+            s={detailStudent}
+            onBack={() => setView('students')}
+            onViewAsStudent={goSelf}
+          />
         )}
-        {view === 'self'        && <StudentSelf onBack={() => setView('overview')}/>}
+        {view === 'self'        && detailStudent && (
+          <StudentSelf s={detailStudent} onBack={() => setView('student')}/>
+        )}
       </main>
     </div>
   );

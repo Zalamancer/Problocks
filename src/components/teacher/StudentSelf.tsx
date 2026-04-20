@@ -7,9 +7,10 @@ import React from 'react';
 import { Block, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { Donut, TopicBars } from './charts';
 import { backBtn } from './shared';
+import { StudentAvatar } from './StudentAvatar';
 import {
-  activityFor, STUDENTS,
-  type Topic,
+  activityFor,
+  type Student, type Topic,
 } from './sample-data';
 
 type IconName = React.ComponentProps<typeof Icon>['name'];
@@ -46,8 +47,11 @@ const SelfKpi = ({ icon, l, v }: { icon: IconName; l: string; v: React.ReactNode
   </div>
 );
 
-export const StudentSelf = ({ onBack }: { onBack: () => void }) => {
-  const me = STUDENTS[0]; // Ava Park
+export const StudentSelf = ({ s, onBack }: { s: Student; onBack: () => void }) => {
+  // Render whichever student the teacher chose to "view as", instead of
+  // hard-coding STUDENTS[0]. Local alias `me` so the rest of the body
+  // (ported from the original "I'm a student" view) reads naturally.
+  const me = s;
   const activity = activityFor(me);
   const played    = activity.filter((a) => a.kind === 'played');
   const asked     = activity.filter((a) => a.kind === 'asked');
@@ -71,18 +75,12 @@ export const StudentSelf = ({ onBack }: { onBack: () => void }) => {
 
   return (
     <div className="pbs-fade-in">
-      <button type="button" onClick={onBack} style={backBtn}>← Back to dashboard</button>
+      <button type="button" onClick={onBack} style={backBtn}>← Back to {me.name.split(' ')[0]}&apos;s detail</button>
 
       {/* Hero progress */}
       <Block tone="butter" style={{ padding: 24, marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-          <div style={{
-            fontSize: 56, lineHeight: 1,
-            width: 84, height: 84, borderRadius: 20,
-            background: 'var(--pbs-paper)', border: '1.5px solid currentColor',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 3px 0 currentColor',
-          }}>{me.emoji}</div>
+          <StudentAvatar s={me} px={104} spinning/>
           <div style={{ flex: 1, minWidth: 240 }}>
             <div className="pbs-mono" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.75 }}>YOUR PROGRESS</div>
             <h1 style={{ margin: '4px 0 2px', fontSize: 40, fontWeight: 700, letterSpacing: '-0.025em' }}>

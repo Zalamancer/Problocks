@@ -1,6 +1,10 @@
 // Mock data for the Teacher dashboard. Ported from
 // problocks/project/pb_teacher/data.jsx — only shape-preserving edits:
-// typed the tones, typed the risk/trend unions, added `Tone` re-export.
+// typed the tones, typed the risk/trend unions, added `Tone` re-export,
+// added `avatar` per student so the teacher view can render the same
+// cardboard RobloxAvatar that the student profile uses.
+
+import type { AvatarOutfit } from '@/components/student/RobloxAvatar';
 
 export type TeacherTone =
   | 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink';
@@ -23,6 +27,13 @@ export type Student = {
   mastery: Mastery;
   emoji: string;
   tone: TeacherTone;
+  // Cardboard-character outfit, used by `<StudentAvatar>` in the teacher
+  // dashboard wherever the old `s.emoji` square was rendered as a profile
+  // photo (StudentsList card, StudentDetail header, StudentSelf header).
+  // The 16–24px chip usages elsewhere (charts, Overview rows, Assignments
+  // submitter strip) keep the emoji because a Three.js avatar at 16px is
+  // both wasted detail and a real WebGL-context cost.
+  avatar: AvatarOutfit;
 };
 
 export type Assignment = {
@@ -86,19 +97,37 @@ export type RecentQuestion = {
   resolved: boolean;
 };
 
+// 12 hand-tuned avatar outfits — distinct silhouettes (gender, hair, hat,
+// shirt/pants colour) so a roster of squares reads as 12 different people
+// without needing a real per-account wardrobe wired up yet.
+const A: Record<string, AvatarOutfit> = {
+  s1:  { gender: 'girl', hair: 'long',  hairColor: '#5a3a22', shirt: '#f7c25b', pants: '#5b3a82', face: 'happy' },
+  s2:  { gender: 'boy',  hair: 'spike', hairColor: '#1a1a1a', shirt: '#e26a4d', pants: '#3a3c4a', face: 'cool'  },
+  s3:  { gender: 'girl', hair: 'long',  hairColor: '#222222', shirt: '#5fb4e6', pants: '#2c4a6a', face: 'smile' },
+  s4:  { gender: 'girl', hair: 'short', hairColor: '#2a1a10', shirt: '#6fbf73', pants: '#3a3c4a', face: 'happy' },
+  s5:  { gender: 'boy',  hair: 'short', hairColor: '#7a5a3a', shirt: '#7a4ea8', pants: '#1f1f24', hat: 'beanie', hatColor: '#2a2a30', face: 'neutral' },
+  s6:  { gender: 'girl', hair: 'long',  hairColor: '#1a1a1a', shirt: '#e88fb4', pants: '#3a3c4a', face: 'smile' },
+  s7:  { gender: 'boy',  hair: 'short', hairColor: '#3a2a1a', shirt: '#c4a05a', pants: '#3a3c4a', hat: 'cap',    hatColor: '#5b8b4a', face: 'cool'  },
+  s8:  { gender: 'girl', hair: 'long',  hairColor: '#0e0e10', shirt: '#e8657a', pants: '#1a1a20', face: 'wink'  },
+  s9:  { gender: 'boy',  hair: 'short', hairColor: '#3a2a1a', shirt: '#5fa0d4', pants: '#2c4a6a', face: 'neutral' },
+  s10: { gender: 'girl', hair: 'short', hairColor: '#3a1a08', shirt: '#6fbf73', pants: '#3a3c4a', face: 'smile' },
+  s11: { gender: 'boy',  hair: 'short', hairColor: '#2a1a10', shirt: '#7a4ea8', pants: '#3a3c4a', face: 'happy' },
+  s12: { gender: 'girl', hair: 'long',  hairColor: '#c8649a', shirt: '#e88fb4', pants: '#3a3c4a', face: 'wink'  },
+};
+
 export const STUDENTS: Student[] = [
-  { id: 's1',  name: 'Ava Park',       grade: 'A-', avg: 91, streak: 14, trend: 'up',   risk: 'none',   lastActive: '2h ago',    submitted: 24, mastery: { alg: 0.92, geo: 0.78, num: 0.88, prob: 0.72 }, emoji: '🐰', tone: 'butter' },
-  { id: 's2',  name: 'Mateo Diaz',     grade: 'B',  avg: 82, streak: 8,  trend: 'up',   risk: 'none',   lastActive: 'Today',     submitted: 22, mastery: { alg: 0.81, geo: 0.66, num: 0.79, prob: 0.58 }, emoji: '🦊', tone: 'coral'  },
-  { id: 's3',  name: 'Lin Wu',         grade: 'A',  avg: 95, streak: 21, trend: 'flat', risk: 'none',   lastActive: '30m ago',   submitted: 25, mastery: { alg: 0.96, geo: 0.94, num: 0.92, prob: 0.90 }, emoji: '🦋', tone: 'sky'    },
-  { id: 's4',  name: 'Zoe Okafor',     grade: 'B+', avg: 87, streak: 5,  trend: 'up',   risk: 'none',   lastActive: 'Today',     submitted: 24, mastery: { alg: 0.85, geo: 0.88, num: 0.90, prob: 0.74 }, emoji: '🐝', tone: 'mint'   },
-  { id: 's5',  name: 'Noah Bishop',    grade: 'C',  avg: 72, streak: 2,  trend: 'down', risk: 'medium', lastActive: '2d ago',    submitted: 19, mastery: { alg: 0.58, geo: 0.62, num: 0.72, prob: 0.45 }, emoji: '🦝', tone: 'grape'  },
-  { id: 's6',  name: 'Priya Rao',      grade: 'A-', avg: 90, streak: 12, trend: 'up',   risk: 'none',   lastActive: '4h ago',    submitted: 24, mastery: { alg: 0.90, geo: 0.84, num: 0.91, prob: 0.86 }, emoji: '🦉', tone: 'pink'   },
-  { id: 's7',  name: 'Jamal Green',    grade: 'B-', avg: 78, streak: 3,  trend: 'flat', risk: 'low',    lastActive: 'Yesterday', submitted: 21, mastery: { alg: 0.72, geo: 0.75, num: 0.82, prob: 0.61 }, emoji: '🐢', tone: 'butter' },
-  { id: 's8',  name: 'Hana Suzuki',    grade: 'A',  avg: 94, streak: 17, trend: 'up',   risk: 'none',   lastActive: '1h ago',    submitted: 25, mastery: { alg: 0.94, geo: 0.92, num: 0.90, prob: 0.88 }, emoji: '🐱', tone: 'coral'  },
-  { id: 's9',  name: 'Ethan Coleman',  grade: 'D+', avg: 64, streak: 0,  trend: 'down', risk: 'high',   lastActive: '5d ago',    submitted: 14, mastery: { alg: 0.42, geo: 0.48, num: 0.58, prob: 0.35 }, emoji: '🐙', tone: 'sky'    },
-  { id: 's10', name: 'Sofia Reyes',    grade: 'B+', avg: 88, streak: 10, trend: 'up',   risk: 'none',   lastActive: 'Today',     submitted: 23, mastery: { alg: 0.88, geo: 0.82, num: 0.84, prob: 0.78 }, emoji: '🐸', tone: 'mint'   },
-  { id: 's11', name: 'Isaac Patel',    grade: 'B',  avg: 83, streak: 7,  trend: 'flat', risk: 'none',   lastActive: '3h ago',    submitted: 22, mastery: { alg: 0.82, geo: 0.76, num: 0.85, prob: 0.68 }, emoji: '🐵', tone: 'grape'  },
-  { id: 's12', name: 'Maya Bello',     grade: 'C+', avg: 76, streak: 4,  trend: 'down', risk: 'low',    lastActive: 'Yesterday', submitted: 20, mastery: { alg: 0.70, geo: 0.68, num: 0.78, prob: 0.55 }, emoji: '🦄', tone: 'pink'   },
+  { id: 's1',  name: 'Ava Park',       grade: 'A-', avg: 91, streak: 14, trend: 'up',   risk: 'none',   lastActive: '2h ago',    submitted: 24, mastery: { alg: 0.92, geo: 0.78, num: 0.88, prob: 0.72 }, emoji: '🐰', tone: 'butter', avatar: A.s1  },
+  { id: 's2',  name: 'Mateo Diaz',     grade: 'B',  avg: 82, streak: 8,  trend: 'up',   risk: 'none',   lastActive: 'Today',     submitted: 22, mastery: { alg: 0.81, geo: 0.66, num: 0.79, prob: 0.58 }, emoji: '🦊', tone: 'coral',  avatar: A.s2  },
+  { id: 's3',  name: 'Lin Wu',         grade: 'A',  avg: 95, streak: 21, trend: 'flat', risk: 'none',   lastActive: '30m ago',   submitted: 25, mastery: { alg: 0.96, geo: 0.94, num: 0.92, prob: 0.90 }, emoji: '🦋', tone: 'sky',    avatar: A.s3  },
+  { id: 's4',  name: 'Zoe Okafor',     grade: 'B+', avg: 87, streak: 5,  trend: 'up',   risk: 'none',   lastActive: 'Today',     submitted: 24, mastery: { alg: 0.85, geo: 0.88, num: 0.90, prob: 0.74 }, emoji: '🐝', tone: 'mint',   avatar: A.s4  },
+  { id: 's5',  name: 'Noah Bishop',    grade: 'C',  avg: 72, streak: 2,  trend: 'down', risk: 'medium', lastActive: '2d ago',    submitted: 19, mastery: { alg: 0.58, geo: 0.62, num: 0.72, prob: 0.45 }, emoji: '🦝', tone: 'grape',  avatar: A.s5  },
+  { id: 's6',  name: 'Priya Rao',      grade: 'A-', avg: 90, streak: 12, trend: 'up',   risk: 'none',   lastActive: '4h ago',    submitted: 24, mastery: { alg: 0.90, geo: 0.84, num: 0.91, prob: 0.86 }, emoji: '🦉', tone: 'pink',   avatar: A.s6  },
+  { id: 's7',  name: 'Jamal Green',    grade: 'B-', avg: 78, streak: 3,  trend: 'flat', risk: 'low',    lastActive: 'Yesterday', submitted: 21, mastery: { alg: 0.72, geo: 0.75, num: 0.82, prob: 0.61 }, emoji: '🐢', tone: 'butter', avatar: A.s7  },
+  { id: 's8',  name: 'Hana Suzuki',    grade: 'A',  avg: 94, streak: 17, trend: 'up',   risk: 'none',   lastActive: '1h ago',    submitted: 25, mastery: { alg: 0.94, geo: 0.92, num: 0.90, prob: 0.88 }, emoji: '🐱', tone: 'coral',  avatar: A.s8  },
+  { id: 's9',  name: 'Ethan Coleman',  grade: 'D+', avg: 64, streak: 0,  trend: 'down', risk: 'high',   lastActive: '5d ago',    submitted: 14, mastery: { alg: 0.42, geo: 0.48, num: 0.58, prob: 0.35 }, emoji: '🐙', tone: 'sky',    avatar: A.s9  },
+  { id: 's10', name: 'Sofia Reyes',    grade: 'B+', avg: 88, streak: 10, trend: 'up',   risk: 'none',   lastActive: 'Today',     submitted: 23, mastery: { alg: 0.88, geo: 0.82, num: 0.84, prob: 0.78 }, emoji: '🐸', tone: 'mint',   avatar: A.s10 },
+  { id: 's11', name: 'Isaac Patel',    grade: 'B',  avg: 83, streak: 7,  trend: 'flat', risk: 'none',   lastActive: '3h ago',    submitted: 22, mastery: { alg: 0.82, geo: 0.76, num: 0.85, prob: 0.68 }, emoji: '🐵', tone: 'grape',  avatar: A.s11 },
+  { id: 's12', name: 'Maya Bello',     grade: 'C+', avg: 76, streak: 4,  trend: 'down', risk: 'low',    lastActive: 'Yesterday', submitted: 20, mastery: { alg: 0.70, geo: 0.68, num: 0.78, prob: 0.55 }, emoji: '🦄', tone: 'pink',   avatar: A.s12 },
 ];
 
 export const ASSIGNMENTS: Assignment[] = [

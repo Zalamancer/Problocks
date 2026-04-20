@@ -204,17 +204,24 @@ const HomeTab = ({
 
         <Block tone="ink" style={{ padding: 22, color: 'var(--pbs-cream)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
-            <RobloxAvatar
-              size={260}
-              outfit={{
-                // Omit `skin` → default kraft-cardboard look kicks in.
-                shirt: '#6fbf73',
-                pants: '#3a3c4a',
-                face: 'smile',
-                hair: 'short',
-                hairColor: '#3a2a1a',
-              }}
-            />
+            {/* Wrapper supplies the height that `size="fill"` reads from
+                (the parent flex column has no explicit height). Square
+                aspect = avatar fills full card width without the chunky
+                butter frame. */}
+            <div style={{ width: '100%', aspectRatio: '1 / 1' }}>
+              <RobloxAvatar
+                size="fill"
+                framed={false}
+                outfit={{
+                  // Omit `skin` → default kraft-cardboard look kicks in.
+                  shirt: '#6fbf73',
+                  pants: '#3a3c4a',
+                  face: 'smile',
+                  hair: 'short',
+                  hairColor: '#3a2a1a',
+                }}
+              />
+            </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 19, fontWeight: 700 }}>{user?.name || 'You'}</div>
               <div style={{ fontSize: 12, opacity: 0.7 }}>{user?.email || 'student@school.edu'}</div>

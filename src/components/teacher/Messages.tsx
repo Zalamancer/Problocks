@@ -141,10 +141,13 @@ export const Messages = ({
   };
 
   return (
-    <div className="pbs-fade-in">
+    <div className="pbs-fade-in" style={{
+      display: 'flex', flexDirection: 'column',
+      height: 'calc(100vh - 180px)', minHeight: 520, gap: 18,
+    }}>
       <div style={{
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        marginBottom: 18, gap: 12,
+        gap: 12, flexShrink: 0,
       }}>
         <div>
           <div className="pbs-mono" style={kickerSty}>MESSAGES</div>
@@ -179,7 +182,7 @@ export const Messages = ({
 
       <div style={{
         display: 'grid', gridTemplateColumns: '280px 1fr 300px', gap: 14,
-        minHeight: 620, alignItems: 'stretch',
+        flex: 1, minHeight: 0, alignItems: 'stretch', overflow: 'hidden',
       }}>
         {/* LEFT: sidebar */}
         <Block tone="paper" style={{ padding: 10, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -191,10 +194,11 @@ export const Messages = ({
               padding: '9px 12px', borderRadius: 10,
               border: '1.5px solid var(--pbs-line-2)', background: 'var(--pbs-cream)',
               fontSize: 12.5, outline: 'none', marginBottom: 8,
-              color: 'inherit', fontFamily: 'inherit',
+              color: 'inherit', fontFamily: 'inherit', flexShrink: 0,
             }}
           />
 
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {mode === 'group' ? (
             <>
               <SidebarSection label={cls.name} emoji={cls.emoji} tone={cls.tone}/>
@@ -243,7 +247,7 @@ export const Messages = ({
               </div>
 
               <SidebarSection label="Start new" mt/>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 180, overflow: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {STUDENTS
                   .filter((s) => !threadIds.includes(s.id))
                   .filter((s) => !query || s.name.toLowerCase().includes(query.toLowerCase()))
@@ -258,6 +262,7 @@ export const Messages = ({
               </div>
             </>
           )}
+          </div>
         </Block>
 
         {/* CENTER: thread */}
@@ -275,7 +280,7 @@ export const Messages = ({
         </Block>
 
         {/* RIGHT: details */}
-        <Block tone="cream" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+        <Block tone="cream" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, overflowY: 'auto' }}>
           {mode === 'group' && activeChannel ? (
             <ChannelDetails cls={cls} channel={activeChannel} messages={messages}/>
           ) : mode === 'dm' && activeStudent ? (

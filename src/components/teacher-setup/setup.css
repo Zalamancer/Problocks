@@ -1,0 +1,47 @@
+/* Classroom setup flow — tiny bit of extra CSS the Design bundle relies on:
+   * pop-in + fade-in keyframes for the "classroom block" assembly vibe
+   * dot texture behind the ink banner
+   * responsive grid that collapses the preview rail on narrow screens
+   All scoped to .pbs-root so they can't leak into the studio. */
+
+@keyframes pb-setup-pop {
+  0%   { transform: scale(0.92); opacity: 0.4; }
+  60%  { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.pbs-root .pb-pop-in { animation: pb-setup-pop 320ms cubic-bezier(.2,.8,.2,1) both; }
+
+@keyframes pb-setup-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pbs-root .pb-fade-in { animation: pb-setup-fade 300ms ease both; }
+
+.pbs-root .pb-setup-dots {
+  background-image: radial-gradient(rgba(253, 246, 230, 0.55) 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+}
+
+.pbs-root .pb-setup-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 300px;
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 1080px) {
+  .pbs-root .pb-setup-grid { grid-template-columns: 200px minmax(0, 1fr); }
+  .pbs-root .pb-setup-preview-rail { display: none; }
+}
+@media (max-width: 720px) {
+  .pbs-root .pb-setup-grid { grid-template-columns: 1fr; }
+}
+
+.pbs-root input:focus,
+.pbs-root textarea:focus,
+.pbs-root select:focus { outline: none; }
+.pbs-root input::placeholder,
+.pbs-root textarea::placeholder { color: var(--pbs-ink-muted); }
+.pbs-root label:focus-within > div {
+  border-color: var(--pbs-ink) !important;
+  box-shadow: 0 0 0 3px rgba(29, 26, 20, 0.08) !important;
+}

@@ -122,9 +122,11 @@ const HeroShowcase = () => (
 export const Hero = ({
   onMakeGame,
   onStartPlaying,
+  onSetupClassroom,
 }: {
   onMakeGame?: () => void;
   onStartPlaying?: () => void;
+  onSetupClassroom?: () => void;
 }) => {
   const [mode, setMode] = React.useState<Mode>('student');
 
@@ -209,7 +211,7 @@ export const Hero = ({
               tone="butter"
               icon="sparkle"
               trailing="arrow-right"
-              onClick={mode === 'student' ? onStartPlaying : onMakeGame}
+              onClick={mode === 'student' ? onStartPlaying : (onSetupClassroom ?? onMakeGame)}
             >
               {mode === 'student' ? 'Start playing' : 'Set up a classroom'}
             </Chunky>

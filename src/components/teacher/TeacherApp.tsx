@@ -15,6 +15,7 @@ import { StudentSelf } from './StudentSelf';
 import { StudentsList } from './StudentsList';
 import { CLASSES, type Assignment, type ClassRecord, type Student } from './sample-data';
 import { teacherWrap } from './shared';
+import { useDataSourceStore } from '@/store/data-source-store';
 
 type View = 'overview' | 'assignments' | 'assignment' | 'new-assignment' | 'students' | 'student' | 'self' | 'messages';
 
@@ -114,6 +115,7 @@ const isTabActive = (view: View, k: View): boolean => {
 };
 
 export const TeacherApp = () => {
+  const useRealData = useDataSourceStore((s) => s.useRealData);
   const [view, setView] = useState<View>('overview');
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
@@ -121,6 +123,37 @@ export const TeacherApp = () => {
   // Composer output — drafts AND published both get prepended to the
   // Assignments list; drafts are distinguished by a "Draft" pill.
   const [drafts, setDrafts] = useState<Assignment[]>([]);
+
+  // Real mode: Supabase schema for teacher dashboard (classes / students /
+  // assignments) isn't provisioned yet. Show an honest empty state instead of
+  // leaking mock data through the dashboard. Mock mode: full demo.
+  if (useRealData) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div style={{
+          maxWidth: 560, padding: 28, borderRadius: 16,
+          background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)',
+          boxShadow: '0 4px 0 var(--pbs-line-2)',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--pbs-ink-muted)' }}>
+            REAL DATA · SUPABASE
+          </div>
+          <h1 style={{ margin: '10px 0 0', fontSize: 22, fontWeight: 700 }}>
+            No teacher data yet.
+          </h1>
+          <p style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: 'var(--pbs-ink-soft)' }}>
+            The teacher dashboard reads classes, students, and assignments from Supabase
+            in real mode. Those tables haven&apos;t been provisioned yet, so there&apos;s
+            nothing to show.
+          </p>
+          <p style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: 'var(--pbs-ink-soft)' }}>
+            Flip the <strong>Data</strong> pill in the bottom-right back to{' '}
+            <strong>Mock · Demo</strong> to explore the seeded dashboard.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const goAssignment = (a: Assignment) => { setDetailAssignment(a); setView('assignment'); };
   const goStudent    = (s: Student)    => { setDetailStudent(s);    setView('student'); };

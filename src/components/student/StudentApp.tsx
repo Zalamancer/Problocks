@@ -13,6 +13,7 @@ import { Dashboard, type AnyGame } from './Dashboard';
 import { ClassDetail } from './ClassDetail';
 import { PlayModal, Toast, type ToastState } from './atoms';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { useDataSourceStore } from '@/store/data-source-store';
 import {
   EMOJI_CYCLE,
   SAMPLE_ASSIGNED,
@@ -68,8 +69,16 @@ export const StudentApp = () => {
   const [view, setView] = useState<View>(
     cachedSession !== undefined ? (initialUser ? 'dashboard' : 'auth') : 'auth',
   );
-  const [classes, setClasses] = useState<ClassRecord[]>(SAMPLE_CLASSES);
-  const [assigned, setAssigned] = useState<AssignedGame[]>(SAMPLE_ASSIGNED);
+  // Data-source toggle — "mock" seeds from sample-data.ts, "real" starts
+  // empty until Supabase-backed student schema (classes / assignments) ships.
+  const useRealData = useDataSourceStore((s) => s.useRealData);
+  const [classes, setClasses] = useState<ClassRecord[]>(useRealData ? [] : SAMPLE_CLASSES);
+  const [assigned, setAssigned] = useState<AssignedGame[]>(useRealData ? [] : SAMPLE_ASSIGNED);
+  // Re-hydrate when the toggle flips mid-session.
+  useEffect(() => {
+    setClasses(useRealData ? [] : SAMPLE_CLASSES);
+    setAssigned(useRealData ? [] : SAMPLE_ASSIGNED);
+  }, [useRealData]);
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [playing, setPlaying] = useState<AnyGame | null>(null);

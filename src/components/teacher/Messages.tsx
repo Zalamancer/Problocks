@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { Block, Icon } from '@/components/landing/pb-site/primitives';
+import { CardboardHead } from './CardboardHead';
 import { CHANNELS_BY_CLASS, SEED_DM, SEED_GROUP, type Channel, type ChatMessage } from './messages-data';
 import { ChannelDetails, DmThread, GroupThread, StudentDetails } from './MessagesThread';
 import { CLASSES, STUDENTS, type ClassRecord, type Student } from './sample-data';
@@ -170,10 +171,14 @@ const DmRow = ({
     textAlign: 'left', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit',
   }}>
     <span style={{
-      width: 32, height: 32, borderRadius: 10, fontSize: 16,
+      width: 36, height: 36, borderRadius: 10, flexShrink: 0,
       background: `var(--pbs-${s.tone})`, border: `1.5px solid var(--pbs-${s.tone}-ink)`,
+      boxShadow: `0 2px 0 var(--pbs-${s.tone}-ink)`,
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    }}>{s.emoji}</span>
+      overflow: 'hidden',
+    }}>
+      <CardboardHead outfit={s.avatar} px={32} framed={false}/>
+    </span>
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 12.5, fontWeight: 700 }}>{s.name}</div>
       <div style={{
@@ -329,7 +334,15 @@ export const Messages = ({
                   .slice(0, 8)
                   .map((s) => (
                     <button key={s.id} type="button" onClick={() => setDm(s.id)} style={newDmRow}>
-                      <span style={{ fontSize: 16 }}>{s.emoji}</span>
+                      <span style={{
+                        width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+                        background: `var(--pbs-${s.tone})`,
+                        border: `1.5px solid var(--pbs-${s.tone}-ink)`,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden',
+                      }}>
+                        <CardboardHead outfit={s.avatar} px={22} framed={false}/>
+                      </span>
                       <span style={{ flex: 1, textAlign: 'left', fontSize: 12, fontWeight: 600 }}>{s.name}</span>
                       <Icon name="plus" size={12} stroke={2.4}/>
                     </button>

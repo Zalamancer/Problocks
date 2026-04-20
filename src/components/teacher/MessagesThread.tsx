@@ -5,7 +5,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import type { AvatarOutfit } from '@/components/student/RobloxAvatar';
 import { Icon, Pill } from '@/components/landing/pb-site/primitives';
+import { CardboardHead } from './CardboardHead';
 import type { Channel, ChatMessage } from './messages-data';
 import { STUDENTS, type ClassRecord, type Student, type TeacherTone } from './sample-data';
 
@@ -44,7 +46,12 @@ const linkBtn: React.CSSProperties = {
 
 // --- Message list + bubble ---------------------------------------------------
 
-type Author = { name: string; emoji: string; tone: TeacherTone | 'cream' };
+type Author = {
+  name: string;
+  emoji: string;
+  tone: TeacherTone | 'cream';
+  avatar?: AvatarOutfit;
+};
 
 const resolveAuthor = (id: string, dmPartner?: Student): Author => {
   if (dmPartner && dmPartner.id === id) return dmPartner;
@@ -52,6 +59,22 @@ const resolveAuthor = (id: string, dmPartner?: Student): Author => {
   if (s) return s;
   return { name: id, emoji: '🙂', tone: 'cream' };
 };
+
+const AuthorAvatar = ({
+  author, px,
+}: { author: Author; px: number }) => (
+  <span style={{
+    width: px, height: px, borderRadius: Math.max(6, Math.round(px * 0.28)),
+    background: `var(--pbs-${author.tone})`,
+    border: `1.5px solid var(--pbs-${author.tone}-ink, var(--pbs-line-2))`,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', flexShrink: 0,
+  }}>
+    {author.avatar
+      ? <CardboardHead outfit={author.avatar} px={Math.round(px * 0.9)} framed={false}/>
+      : <span style={{ fontSize: Math.round(px * 0.55) }}>{author.emoji}</span>}
+  </span>
+);
 
 const MessageBubble = ({
   m, isMe, author, showAvatar,
@@ -66,14 +89,7 @@ const MessageBubble = ({
       flexDirection: isMe ? 'row-reverse' : 'row',
       alignItems: 'flex-end',
     }}>
-      {showAvatar && (
-        <span style={{
-          width: 28, height: 28, borderRadius: 8, fontSize: 14,
-          background: `var(--pbs-${author.tone})`,
-          border: `1.5px solid var(--pbs-${author.tone}-ink, var(--pbs-line-2))`,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>{author.emoji}</span>
-      )}
+      {showAvatar && <AuthorAvatar author={author} px={28}/>}
       <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', gap: 3, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
         {showAvatar && (
           <div style={{ fontSize: 10.5, display: 'flex', gap: 6, alignItems: 'baseline' }}>
@@ -262,13 +278,7 @@ export const DmThread = ({
 }) => (
   <>
     <ThreadHeader
-      avatar={(
-        <span style={{
-          width: 34, height: 34, borderRadius: 10, fontSize: 18,
-          background: `var(--pbs-${s.tone})`, border: `1.5px solid var(--pbs-${s.tone}-ink)`,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        }}>{s.emoji}</span>
-      )}
+      avatar={<AuthorAvatar author={s} px={38}/>}
       title={s.name}
       subtitle={<span>Direct message · last active {s.lastActive}</span>}
       rightChips={[
@@ -292,7 +302,9 @@ const Stat = ({ k, v }: { k: string; v: React.ReactNode }) => (
   </div>
 );
 
-const topContributors = (messages: ChatMessage[]) => {
+type Contributor = { id: string; student: Student; count: number };
+
+const topContributors = (messages: ChatMessage[]): Contributor[] => {
   const counts: Record<string, number> = {};
   messages.forEach((m) => {
     if (m.who === 'me') return;
@@ -300,11 +312,11 @@ const topContributors = (messages: ChatMessage[]) => {
   });
   return Object.entries(counts)
     .map(([id, count]) => {
-      const s = STUDENTS.find((x) => x.id === id);
-      if (!s) return null;
-      return { id, name: s.name, emoji: s.emoji, count };
+      const student = STUDENTS.find((x) => x.id === id);
+      if (!student) return null;
+      return { id, student, count };
     })
-    .filter((x): x is { id: string; name: string; emoji: string; count: number } => Boolean(x))
+    .filter((x): x is Contributor => Boolean(x))
     .sort((a, b) => b.count - a.count)
     .slice(0, 4);
 };
@@ -361,8 +373,8 @@ export const ChannelDetails = ({
                 padding: '6px 8px', borderRadius: 8,
                 background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line)',
               }}>
-                <span style={{ fontSize: 15 }}>{c.emoji}</span>
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.name}</span>
+                <AuthorAvatar author={c.student} px={24}/>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.student.name}</span>
                 <span className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)' }}>{c.count} post{c.count === 1 ? '' : 's'}</span>
               </div>
             ))}
@@ -379,10 +391,14 @@ export const StudentDetails = ({
   <>
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 0 0' }}>
       <span style={{
-        width: 64, height: 64, borderRadius: 16, fontSize: 34,
+        width: 72, height: 72, borderRadius: 18,
         background: `var(--pbs-${s.tone})`, border: `1.5px solid var(--pbs-${s.tone}-ink)`,
+        boxShadow: `0 3px 0 var(--pbs-${s.tone}-ink)`,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      }}>{s.emoji}</span>
+        overflow: 'hidden',
+      }}>
+        <CardboardHead outfit={s.avatar} px={64} framed={false}/>
+      </span>
       <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em' }}>{s.name}</div>
       <div className="pbs-mono" style={{ fontSize: 10.5, color: 'var(--pbs-ink-muted)' }}>active {s.lastActive}</div>
     </div>

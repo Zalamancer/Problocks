@@ -255,6 +255,9 @@ export const RobloxAvatar = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
 
+    // Forward-declared so applySize can call it once the character is built.
+    let fitCameraToCharacter: (() => void) | null = null;
+
     const applySize = () => {
       const w = Math.max(1, el.clientWidth);
       const h = Math.max(1, el.clientHeight);
@@ -263,6 +266,7 @@ export const RobloxAvatar = ({
       renderer.domElement.style.height = '100%';
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      if (fitCameraToCharacter) fitCameraToCharacter();
     };
     applySize();
     el.appendChild(renderer.domElement);
@@ -412,6 +416,28 @@ export const RobloxAvatar = ({
     // Start angled a touch so 3D reads immediately even without rotation.
     character.rotation.y = Math.PI * 0.12;
     scene.add(character);
+
+    // Fit the camera to the fully-assembled character (head + any hat/hair)
+    // with a small margin, so tall hats like the top-hat don't clip off the
+    // top of the frame. Uses vertical FOV at current aspect and picks the
+    // tighter of vertical/horizontal fits so narrow containers still work.
+    fitCameraToCharacter = () => {
+      const box = new THREE.Box3().setFromObject(character);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+      const margin = 1.15; // 15% padding
+      const vFov = (camera.fov * Math.PI) / 180;
+      const aspect = Math.max(0.0001, camera.aspect);
+      const distV = (size.y * margin) / (2 * Math.tan(vFov / 2));
+      const distH = (size.x * margin) / (2 * Math.tan(vFov / 2) * aspect);
+      const dist = Math.max(distV, distH) + size.z / 2 + 0.5;
+      camera.position.set(0, center.y, dist);
+      camera.lookAt(0, center.y, 0);
+      camera.updateProjectionMatrix();
+    };
+    fitCameraToCharacter();
 
     // Mouse drag to spin.
     const onPointerDown = (e: PointerEvent) => {

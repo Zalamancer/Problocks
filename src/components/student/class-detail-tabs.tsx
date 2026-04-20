@@ -4,11 +4,36 @@
 
 import React from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
-import { AvatarBlob } from './atoms';
+import { CardboardHead } from '@/components/teacher/CardboardHead';
+import type { AvatarOutfit } from './RobloxAvatar';
 import type { AssignedGame, ClassRecord, StudentUser, ToneTone } from './sample-data';
 
 type ClsTone = ToneTone;
 type IconName = React.ComponentProps<typeof Icon>['name'];
+
+// Classmate avatar pool — same cardboard outfits used in the teacher roster
+// (teacher/sample-data.ts `A`). Mapping a classmate name to one outfit
+// deterministically gives the People tab + leaderboard the same look as
+// the teacher's StudentsList without needing real per-account avatars yet.
+const CLASSMATE_OUTFITS: AvatarOutfit[] = [
+  { gender: 'girl', hair: 'long',  hairColor: '#5a3a22', shirt: '#f7c25b', pants: '#5b3a82', face: 'happy' },
+  { gender: 'boy',  hair: 'spike', hairColor: '#1a1a1a', shirt: '#e26a4d', pants: '#3a3c4a', face: 'cool'  },
+  { gender: 'girl', hair: 'long',  hairColor: '#222222', shirt: '#5fb4e6', pants: '#2c4a6a', face: 'smile' },
+  { gender: 'girl', hair: 'short', hairColor: '#2a1a10', shirt: '#6fbf73', pants: '#3a3c4a', face: 'happy' },
+  { gender: 'boy',  hair: 'short', hairColor: '#7a5a3a', shirt: '#7a4ea8', pants: '#1f1f24', hat: 'beanie', hatColor: '#2a2a30', face: 'neutral' },
+  { gender: 'girl', hair: 'long',  hairColor: '#1a1a1a', shirt: '#e88fb4', pants: '#3a3c4a', face: 'smile' },
+  { gender: 'boy',  hair: 'short', hairColor: '#3a2a1a', shirt: '#c4a05a', pants: '#3a3c4a', hat: 'cap',    hatColor: '#5b8b4a', face: 'cool'  },
+  { gender: 'girl', hair: 'long',  hairColor: '#0e0e10', shirt: '#e8657a', pants: '#1a1a20', face: 'wink'  },
+  { gender: 'boy',  hair: 'short', hairColor: '#3a2a1a', shirt: '#5fa0d4', pants: '#2c4a6a', face: 'neutral' },
+  { gender: 'girl', hair: 'short', hairColor: '#3a1a08', shirt: '#6fbf73', pants: '#3a3c4a', face: 'smile' },
+  { gender: 'boy',  hair: 'short', hairColor: '#2a1a10', shirt: '#7a4ea8', pants: '#3a3c4a', face: 'happy' },
+  { gender: 'girl', hair: 'long',  hairColor: '#c8649a', shirt: '#e88fb4', pants: '#3a3c4a', face: 'wink'  },
+];
+
+export const outfitForName = (name: string): AvatarOutfit => {
+  const sum = Array.from(name).reduce((s, c) => s + c.charCodeAt(0), 0);
+  return CLASSMATE_OUTFITS[sum % CLASSMATE_OUTFITS.length];
+};
 
 // ─── Library items — class-curated free-play games ───
 export type ClassLibraryItem = {
@@ -60,16 +85,19 @@ export const CLASS_FEED: Array<
   { id: 'f5', kind: 'assigned', title: 'Slope Sprint', when: '2 days ago' },
 ];
 
-export const SAMPLE_LEADERBOARD = (me: string) => [
-  { name: 'Maya P.',   xp: 3120, tone: 'pink'   as ClsTone, streak: 12 },
-  { name: 'Jordan K.', xp: 2980, tone: 'sky'    as ClsTone, streak: 9 },
-  { name: 'Priya S.',  xp: 2740, tone: 'mint'   as ClsTone, streak: 14 },
-  { name: me,          xp: 2480, tone: 'butter' as ClsTone, streak: 7,  me: true },
-  { name: 'Leo R.',    xp: 2210, tone: 'coral'  as ClsTone, streak: 4 },
-  { name: 'Sofia M.',  xp: 2090, tone: 'grape'  as ClsTone, streak: 6 },
-  { name: 'Noah W.',   xp: 1980, tone: 'sky'    as ClsTone, streak: 3 },
-  { name: 'Ivy C.',    xp: 1820, tone: 'pink'   as ClsTone, streak: 5 },
-];
+export const SAMPLE_LEADERBOARD = (me: string, meOutfit?: AvatarOutfit) => {
+  const rows: Array<{ name: string; xp: number; tone: ClsTone; streak: number; me?: boolean; avatar: AvatarOutfit }> = [
+    { name: 'Maya P.',   xp: 3120, tone: 'pink',   streak: 12, avatar: outfitForName('Maya P.')   },
+    { name: 'Jordan K.', xp: 2980, tone: 'sky',    streak: 9,  avatar: outfitForName('Jordan K.') },
+    { name: 'Priya S.',  xp: 2740, tone: 'mint',   streak: 14, avatar: outfitForName('Priya S.')  },
+    { name: me,          xp: 2480, tone: 'butter', streak: 7,  me: true, avatar: meOutfit ?? outfitForName(me) },
+    { name: 'Leo R.',    xp: 2210, tone: 'coral',  streak: 4,  avatar: outfitForName('Leo R.')    },
+    { name: 'Sofia M.',  xp: 2090, tone: 'grape',  streak: 6,  avatar: outfitForName('Sofia M.')  },
+    { name: 'Noah W.',   xp: 1980, tone: 'sky',    streak: 3,  avatar: outfitForName('Noah W.')   },
+    { name: 'Ivy C.',    xp: 1820, tone: 'pink',   streak: 5,  avatar: outfitForName('Ivy C.')    },
+  ];
+  return rows;
+};
 
 export const kickerStyCd: React.CSSProperties = {
   fontSize: 11, color: 'var(--pbs-ink-muted)',
@@ -167,7 +195,6 @@ export const WorkTab = ({
 // ─── People tab ───
 export const PeopleTab = ({ cls }: { cls: ClassRecord; user: StudentUser }) => {
   const names = [...CLASSMATE_NAMES].slice(0, cls.members);
-  const tones: ClsTone[] = ['butter','mint','coral','sky','grape','pink'];
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -180,11 +207,10 @@ export const PeopleTab = ({ cls }: { cls: ClassRecord; user: StudentUser }) => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
         {names.map((n, i) => {
-          const tone = tones[i % tones.length];
           const xp = 3200 - i * 90 - (i % 3) * 40;
           return (
             <Block key={n} tone="paper" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <AvatarBlob tone={tone} size={40}/>
+              <CardboardHead outfit={outfitForName(n)} px={40}/>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</div>
                 <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)' }}>{xp.toLocaleString()} XP</div>
@@ -310,7 +336,7 @@ export const FeedItem = ({
 export const LeaderRow = ({
   row, rank,
 }: {
-  row: { name: string; xp: number; tone: ClsTone; me?: boolean };
+  row: { name: string; xp: number; tone: ClsTone; me?: boolean; avatar: AvatarOutfit };
   rank: number;
 }) => {
   const rankBg = rank === 1 ? 'var(--pbs-butter)' : rank === 2 ? 'var(--pbs-cream-2)' : rank === 3 ? 'var(--pbs-coral)' : 'transparent';
@@ -328,7 +354,7 @@ export const LeaderRow = ({
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 11, fontWeight: 700,
       }}>{rank}</div>
-      <AvatarBlob tone={row.tone} size={28}/>
+      <CardboardHead outfit={row.avatar} px={28}/>
       <div style={{ fontSize: 12.5, fontWeight: row.me ? 700 : 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {row.me ? `${row.name}  (you)` : row.name}
       </div>

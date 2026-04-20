@@ -202,21 +202,10 @@ const HomeTab = ({
 
       <aside style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-        <Block
-          tone="ink"
-          style={{
-            padding: 22,
-            color: 'var(--pbs-cream)',
-            border: '4px solid var(--pbs-butter)',
-            outline: '2px solid var(--pbs-butter-ink)',
-            outlineOffset: 0,
-            boxShadow: '0 6px 0 var(--pbs-butter-ink), 0 14px 28px -10px rgba(107,79,0,0.5)',
-          }}
-        >
+        <Block tone="ink" style={{ padding: 22, color: 'var(--pbs-cream)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 14 }}>
             <RobloxAvatar
               size="fill"
-              framed={false}
               outfit={{
                 // Omit `skin` → default kraft-cardboard look kicks in.
                 shirt: '#6fbf73',
@@ -230,6 +219,16 @@ const HomeTab = ({
               <div style={{ fontSize: 19, fontWeight: 700 }}>{user?.name || 'You'}</div>
               <div style={{ fontSize: 12, opacity: 0.7 }}>{user?.email || 'student@school.edu'}</div>
             </div>
+            <Chunky
+              as="a"
+              href="/student/wardrobe"
+              tone="butter"
+              icon="sparkle"
+              trailing="arrow-right"
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              Wardrobe
+            </Chunky>
           </div>
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>

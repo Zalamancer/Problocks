@@ -26,6 +26,10 @@ export type AssignedGame = {
   kind: 'Live' | 'Homework';
   status: 'new' | 'inprogress';
   progress?: number;
+  // When set, clicking the card navigates to this route instead of opening
+  // the generic PlayModal. Used for bespoke homework surfaces like the AP
+  // Probe at /homework/physics-1/cart-on-incline.
+  href?: string;
 };
 
 export type RecentGame = {
@@ -69,12 +73,14 @@ export const SAMPLE_CLASSES: ClassRecord[] = [
   { id: 'c1', name: 'Ms. Rivera — Period 3', subject: 'Algebra 1', teacher: 'Ms. Rivera', tone: 'butter', emoji: '📐', members: 28 },
   { id: 'c2', name: 'Mr. Chen — AP Bio', subject: 'Biology', teacher: 'Mr. Chen', tone: 'mint', emoji: '🧬', members: 22 },
   { id: 'c3', name: 'Ms. Park — World History', subject: 'Social Studies', teacher: 'Ms. Park', tone: 'coral', emoji: '🌍', members: 31 },
+  { id: 'c4', name: 'Dr. Okafor — AP Physics 1', subject: 'AP Physics 1', teacher: 'Dr. Okafor', tone: 'sky', emoji: '🧲', members: 24 },
 ];
 
 export const SAMPLE_ASSIGNED: AssignedGame[] = [
   { id: 'g1', title: 'Linear Equations Relay', classId: 'c1', subject: 'Algebra 1', tone: 'butter', icon: 'bolt', due: 'Due today · 9:40 PM', minutes: 15, questions: 12, kind: 'Live', status: 'new' },
   { id: 'g2', title: 'Cell Organelle Showdown', classId: 'c2', subject: 'Biology', tone: 'mint', icon: 'spark', due: 'Due Fri', minutes: 12, questions: 10, kind: 'Homework', status: 'new' },
   { id: 'g3', title: 'Silk Road Scavenger', classId: 'c3', subject: 'World History', tone: 'coral', icon: 'compass', due: 'In progress · 4/10', minutes: 20, questions: 10, kind: 'Homework', status: 'inprogress', progress: 0.4 },
+  { id: 'g4', title: 'Cart on an Incline (AP FRQ)', classId: 'c4', subject: 'AP Physics 1', tone: 'sky', icon: 'bolt', due: 'Due Mon · 11:59 PM', minutes: 25, questions: 12, kind: 'Homework', status: 'new', href: '/homework/physics-1/cart-on-incline' },
 ];
 
 export const SAMPLE_RECENT: RecentGame[] = [

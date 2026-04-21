@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { AuthScreen } from './AuthScreen';
 import { JoinScreen } from './JoinScreen';
@@ -61,6 +62,7 @@ const sessionToUser = (session: Session | null): StudentUser | null => {
 };
 
 export const StudentApp = () => {
+  const router = useRouter();
   // Hydrate from the module-scoped cache on every mount. If we've already
   // resolved a session in this page lifetime, we skip the loading flash.
   const initialUser = cachedSession !== undefined ? sessionToUser(cachedSession) : null;
@@ -258,7 +260,11 @@ export const StudentApp = () => {
           user={user}
           classes={classes}
           assigned={assigned}
-          onPlay={(g) => setPlaying(g)}
+          onPlay={(g) => {
+            const href = (g as { href?: string }).href;
+            if (href) { router.push(href); return; }
+            setPlaying(g);
+          }}
           onJoinClass={() => setView('join')}
           onOpenClass={(c) => { setOpenClassId(c.id); setView('class'); }}
           onLogout={handleLogout}
@@ -272,7 +278,11 @@ export const StudentApp = () => {
             cls={cls}
             user={user}
             assigned={assigned}
-            onPlay={(g) => setPlaying(g)}
+            onPlay={(g) => {
+            const href = (g as { href?: string }).href;
+            if (href) { router.push(href); return; }
+            setPlaying(g);
+          }}
             onBack={() => { setOpenClassId(null); setView('dashboard'); }}
           />
         );

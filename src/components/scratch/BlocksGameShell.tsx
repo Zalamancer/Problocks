@@ -87,11 +87,12 @@ export function BlocksGameShell({
 
   // Shared coordinate space for the single scratch-blocks iframe. The
   // iframe is mounted once (so the VM state persists across section
-  // swaps) and absolute-positioned over the left-panel scratch slot
-  // when Scratch is the active section. In Parts mode the overlay is
-  // hidden (visibility:hidden + pointer-events:none) but stays mounted.
-  const shellRootRef   = useRef<HTMLDivElement>(null);
-  const scratchSlotRef = useRef<HTMLDivElement>(null);
+  // swaps) and absolute-positioned over the mid-section left half when
+  // Scratch is the active section. In Parts mode the overlay is hidden
+  // (visibility:hidden + pointer-events:none) but stays mounted so the
+  // Scratch VM workspace isn't blown away on tab toggles.
+  const shellRootRef      = useRef<HTMLDivElement>(null);
+  const midScratchSlotRef = useRef<HTMLDivElement>(null);
   const [blocksRect, setBlocksRect] = useState<
     { left: number; top: number; width: number; height: number } | null
   >(null);
@@ -233,7 +234,7 @@ export function BlocksGameShell({
     return () => { cancelled = true; clearTimeout(id); };
   }, [send]);
 
-  // Keep the scratch iframe's absolute rect in sync with the left-panel
+  // Keep the scratch iframe's absolute rect in sync with the mid-section
   // scratch slot whenever it's mounted. The slot only exists in the DOM
   // while section === 'scratch'; in Parts mode we leave the last-known
   // rect in place and rely on visibility:hidden to take the iframe out
@@ -241,7 +242,7 @@ export function BlocksGameShell({
   useLayoutEffect(() => {
     if (leftSection !== 'scratch') return;
     const shell  = shellRootRef.current;
-    const target = scratchSlotRef.current;
+    const target = midScratchSlotRef.current;
     if (!shell || !target) return;
     const measure = () => {
       const s = shell.getBoundingClientRect();
@@ -284,26 +285,39 @@ export function BlocksGameShell({
               requestThumb={requestThumb}
               section={leftSection}
               onSectionChange={setLeftSection}
-              scratchSlotRef={scratchSlotRef}
             />
 
-            {/* Center — Game iframe fills the whole column. Scratch never
-                lives here; it's always hosted inside the left panel's
-                Scratch slot via the overlay below. */}
+            {/* Center — In Scratch mode the mid section splits 50/50:
+                left half is a white canvas hosting the Scratch blocks
+                iframe (overlaid via midScratchSlotRef), right half is the
+                game. In Parts mode the game fills the full center. */}
             <div
-              className="flex-1 relative rounded-xl overflow-hidden min-w-0"
+              className="flex-1 relative flex rounded-xl overflow-hidden min-w-0"
               style={{
                 background: 'var(--pb-paper)',
                 border: '1.5px solid var(--pb-line-2)',
               }}
             >
-              <iframe
-                ref={gameRef}
-                src={embeddedGameSrc}
-                title={title}
-                style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-                allow="autoplay; clipboard-read; clipboard-write"
-              />
+              {leftSection === 'scratch' && (
+                <div
+                  ref={midScratchSlotRef}
+                  style={{
+                    flex: '1 1 50%',
+                    minWidth: 0,
+                    background: '#ffffff',
+                    borderRight: '1.5px solid var(--pb-line-2)',
+                  }}
+                />
+              )}
+              <div style={{ flex: '1 1 50%', minWidth: 0, position: 'relative' }}>
+                <iframe
+                  ref={gameRef}
+                  src={embeddedGameSrc}
+                  title={title}
+                  style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+                  allow="autoplay; clipboard-read; clipboard-write"
+                />
+              </div>
             </div>
 
             {/* Bricks Tools — Tool / Rotation / Scheme / Quality / Color.
@@ -313,11 +327,11 @@ export function BlocksGameShell({
           </div>
 
           {/* Single scratch-blocks iframe, absolute-positioned over the
-              left-panel Scratch slot. Stays mounted even in Parts mode so
-              the Scratch VM preserves its workspace; hidden via
+              mid-section Scratch slot. Stays mounted even in Parts mode
+              so the Scratch VM preserves its workspace; hidden via
               visibility + pointer-events when Parts is active. Background
-              is transparent so the aside's paper/border chrome shows
-              through where the iframe contents don't paint. */}
+              is white so the slot looks like a clean canvas where the
+              Scratch GUI renders. */}
           <div
             aria-hidden={leftSection !== 'scratch'}
             style={{
@@ -328,13 +342,13 @@ export function BlocksGameShell({
               top:    blocksRect?.top    ?? 0,
               width:  blocksRect?.width  ?? 0,
               height: blocksRect?.height ?? 0,
-              background: 'transparent',
+              background: '#ffffff',
               overflow: 'hidden',
-              // Match the aside's rounded-xl so the overlay doesn't
-              // square off the panel's bottom corners. Top corners stay
-              // sharp because the dropdown header sits flush above.
+              // Only round the edges that touch the center container's
+              // outer rounded-xl corners (left side). The right edge
+              // meets the game via a flat 1.5px divider.
+              borderTopLeftRadius: 12,
               borderBottomLeftRadius: 12,
-              borderBottomRightRadius: 12,
             }}
           >
             <iframe
@@ -343,7 +357,7 @@ export function BlocksGameShell({
               title="Scratch Blocks"
               style={{
                 width: '100%', height: '100%', border: 0, display: 'block',
-                background: 'transparent',
+                background: '#ffffff',
               }}
               allow="camera; microphone; autoplay; clipboard-read; clipboard-write"
             />

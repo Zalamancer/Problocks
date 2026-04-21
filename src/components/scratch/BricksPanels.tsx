@@ -93,7 +93,7 @@ export function BricksLeftPanel({
     <aside className="w-[300px] flex-shrink-0 h-full flex flex-col rounded-xl overflow-hidden"
       style={{ background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)' }}
     >
-      <div style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}>
+      <div className="shrink-0" style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}>
         <DropdownSectionHeader
           sections={LEFT_SECTIONS}
           activeIndex={sectionIdx}
@@ -110,7 +110,7 @@ export function BricksLeftPanel({
         </div>
       ) : (
       <>
-      <div style={{ padding: '10px 12px', borderBottom: '1.5px solid var(--pb-line-2)' }}>
+      <div className="shrink-0" style={{ padding: '10px 12px', borderBottom: '1.5px solid var(--pb-line-2)' }}>
         <input
           type="search"
           value={query}
@@ -127,6 +127,7 @@ export function BricksLeftPanel({
       {/* Category tabs — hidden when searching since the list spans all cats */}
       {!query && (
         <div
+          className="shrink-0"
           style={{
             display: 'flex', flexWrap: 'wrap', gap: 4, padding: '8px 10px',
             borderBottom: '1.5px solid var(--pb-line-2)',

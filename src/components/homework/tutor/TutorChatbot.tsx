@@ -411,9 +411,13 @@ function SettingsPanel({
   onReset: () => void;
   onClose: () => void;
 }) {
-  // Pick a fun label for extreme FOVs so the comedy is legible.
+  // Pick a fun label for extreme FOVs so the comedy is legible. Negative
+  // FOV flips the projection vertically, so the character renders
+  // upside-down — a dedicated "Upside-down" label makes that obvious.
   const label =
-    fov < 22
+    fov < 0
+      ? 'Upside-down'
+      : fov < 22
       ? 'Telephoto'
       : fov < 45
       ? 'Portrait'
@@ -456,7 +460,7 @@ function SettingsPanel({
       </div>
       <input
         type="range"
-        min={15}
+        min={-60}
         max={170}
         step={1}
         value={fov}
@@ -464,7 +468,7 @@ function SettingsPanel({
         style={{ width: '100%', accentColor: 'var(--pb-ink, #1d1a14)' }}
       />
       <div style={{ display: 'flex', gap: 6 }}>
-        {[20, 50, 90, 130, 165].map((v) => (
+        {[-50, 90, 130].map((v) => (
           <button
             key={v}
             type="button"

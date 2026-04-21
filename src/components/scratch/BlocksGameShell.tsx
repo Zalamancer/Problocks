@@ -14,11 +14,34 @@
 // show a small dev toolbar that fires test commands directly at the game
 // iframe — useful for proving the pipe before Scratch-side blocks exist.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DesktopOnly } from '@/components/DesktopOnly';
-import { LeftPanel, LeftPanelToggle } from '@/components/studio/LeftPanel';
-import { RightPanel } from '@/components/studio/RightPanel';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
+import {
+  BricksLeftPanel,
+  BricksRightPanel,
+  type BricksCatalog,
+  type BricksColor,
+  type BricksPart,
+  type BricksState,
+} from './BricksPanels';
+
+const EMPTY_CATALOG: BricksCatalog = {
+  parts: [],
+  categories: [],
+  colors: [],
+  schemes: ['vibrant', 'classic'],
+  qualities: ['high', 'medium', 'low'],
+};
+
+const INITIAL_STATE: BricksState = {
+  tool: 'build',
+  color: null,
+  rot: 0,
+  scheme: 'classic',
+  quality: 'high',
+  selectedPart: null,
+};
 
 type BlocksGameShellProps = {
   title: string;
@@ -47,6 +70,24 @@ export function BlocksGameShell({
   const [devMode, setDevMode] = useState(false);
   const [lastGameEvent, setLastGameEvent] = useState<string>('');
 
+  // Parts/colors catalog + current tool/color/rot/scheme/quality state
+  // pushed from the game on 'ready' and kept live via ack messages.
+  const [catalog, setCatalog] = useState<BricksCatalog>(EMPTY_CATALOG);
+  const [bricksState, setBricksState] = useState<BricksState>(INITIAL_STATE);
+
+  // Add ?embed=1 to the game URL so it hides its in-iframe Parts/Scheme
+  // docks — the outer Problocks panels own that chrome now.
+  const embeddedGameSrc = useMemo(() => {
+    try {
+      const u = new URL(gameSrc, window.location.href);
+      u.searchParams.set('embed', '1');
+      // Return path-relative so we don't fight origin rewriting in dev.
+      return u.pathname + u.search + u.hash;
+    } catch {
+      return gameSrc + (gameSrc.includes('?') ? '&' : '?') + 'embed=1';
+    }
+  }, [gameSrc]);
+
   useEffect(() => {
     try { setDevMode(new URLSearchParams(window.location.search).get('dev') === '1'); }
     catch { /* noop */ }
@@ -63,12 +104,58 @@ export function BlocksGameShell({
         return;
       }
 
-      // game → blocks (+ dev log)
+      // game → blocks (+ dev log) — and also mirror catalog/state into
+      // the outer React panels so Parts / Scheme / Quality / Color stay
+      // in sync without duplicating the data model.
       if (data.source === 'game') {
         if (blocksRef.current?.contentWindow) {
           blocksRef.current.contentWindow.postMessage(data, '*');
         }
         if (devMode) setLastGameEvent(JSON.stringify(data));
+
+        if (data.type === 'ready') {
+          const parts     = Array.isArray(data.parts)      ? (data.parts      as BricksPart[])  : [];
+          const cats      = Array.isArray(data.categories) ? (data.categories as string[])      : [];
+          const colors    = Array.isArray(data.colors)     ? (data.colors     as BricksColor[]) : [];
+          const schemes   = Array.isArray(data.schemes)    ? (data.schemes    as string[])      : EMPTY_CATALOG.schemes;
+          const qualities = Array.isArray(data.qualities)  ? (data.qualities  as string[])      : EMPTY_CATALOG.qualities;
+          setCatalog({ parts, categories: cats, colors, schemes, qualities });
+          const s = (data.state ?? {}) as Partial<BricksState>;
+          setBricksState((prev) => ({
+            ...prev,
+            tool:    s.tool    ?? prev.tool,
+            color:   s.color   ?? prev.color,
+            rot:     s.rot     ?? prev.rot,
+            scheme:  s.scheme  ?? prev.scheme,
+            quality: s.quality ?? prev.quality,
+          }));
+        } else if (data.type === 'ack') {
+          const action = data.action as string | undefined;
+          if (action === 'setTool' && typeof data.tool === 'string') {
+            setBricksState((p) => ({ ...p, tool: data.tool === 'delete' ? 'delete' : 'build' }));
+          } else if (action === 'setColor' && typeof data.hex === 'string') {
+            setBricksState((p) => ({ ...p, color: data.hex as string }));
+          } else if (action === 'setRotation' && typeof data.rot === 'number') {
+            setBricksState((p) => ({ ...p, rot: data.rot as number }));
+          } else if (action === 'selectPart' && data.partNum != null) {
+            setBricksState((p) => ({ ...p, selectedPart: Number(data.partNum) }));
+          } else if (action === 'setScheme' && typeof data.theme === 'string') {
+            setBricksState((p) => ({ ...p, scheme: data.theme as string }));
+            if (Array.isArray(data.colors)) {
+              const hexes = data.colors as string[];
+              setCatalog((c) => ({
+                ...c,
+                // Preserve names when count matches; otherwise derive placeholder names.
+                colors: hexes.map((hex, i) => ({
+                  name: c.colors[i]?.name ?? hex,
+                  hex,
+                })),
+              }));
+            }
+          } else if (action === 'setQuality' && typeof data.quality === 'string') {
+            setBricksState((p) => ({ ...p, quality: data.quality as string }));
+          }
+        }
       }
     };
 
@@ -76,11 +163,11 @@ export function BlocksGameShell({
     return () => window.removeEventListener('message', onMessage);
   }, [devMode]);
 
-  const send = (payload: Record<string, unknown>) => {
+  const send = useCallback((payload: Record<string, unknown>) => {
     const win = gameRef.current?.contentWindow;
     if (!win) return;
     win.postMessage({ source: 'scratch-blocks', ...payload }, '*');
-  };
+  }, []);
 
   return (
     <DesktopOnly title={`${title} is desktop-only`} description={description}>
@@ -90,8 +177,9 @@ export function BlocksGameShell({
       >
         <div className="flex-1 relative min-h-0">
           <div className="h-full flex overflow-hidden gap-1.5">
-            {/* Studio-shared left panel (Scene / Assets / Connectors) */}
-            <LeftPanel />
+            {/* Bricks Parts catalog — replaces studio's generic LeftPanel
+                so the game's in-iframe Parts dock lives here instead. */}
+            <BricksLeftPanel catalog={catalog} state={bricksState} send={send} />
 
             {/* Center — Scratch blocks (left) + Game iframe (right) */}
             <div
@@ -120,7 +208,7 @@ export function BlocksGameShell({
               <div style={{ flex: 1, minWidth: 0, background: '#1e1e1e' }}>
                 <iframe
                   ref={gameRef}
-                  src={gameSrc}
+                  src={embeddedGameSrc}
                   title={title}
                   style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
                   allow="autoplay; clipboard-read; clipboard-write"
@@ -128,11 +216,11 @@ export function BlocksGameShell({
               </div>
             </div>
 
-            {/* Studio-shared right panel (Properties / Workspace / Chat / Parts) */}
-            <RightPanel propertiesContent={null} />
+            {/* Bricks Tools — Tool / Rotation / Scheme / Quality / Color.
+                Replaces studio's generic RightPanel so the game's right
+                dock moves out of the iframe into the outer shell. */}
+            <BricksRightPanel catalog={catalog} state={bricksState} send={send} />
           </div>
-
-          <LeftPanelToggle />
         </div>
 
         {devMode && (

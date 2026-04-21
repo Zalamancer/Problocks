@@ -74,6 +74,10 @@ export function BlocksGameShell({
   // pushed from the game on 'ready' and kept live via ack messages.
   const [catalog, setCatalog] = useState<BricksCatalog>(EMPTY_CATALOG);
   const [bricksState, setBricksState] = useState<BricksState>(INITIAL_STATE);
+  // Part-number → PNG dataURL, filled as the React grid scrolls and asks
+  // the game for each thumbnail. Keyed by string so numeric vs string
+  // partNum payloads from ack messages collide cleanly.
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
   // Add ?embed=1 to the game URL so it hides its in-iframe Parts/Scheme
   // docks — the outer Problocks panels own that chrome now. Purely
@@ -157,6 +161,10 @@ export function BlocksGameShell({
             }
           } else if (action === 'setQuality' && typeof data.quality === 'string') {
             setBricksState((p) => ({ ...p, quality: data.quality as string }));
+          } else if (action === 'getThumb' && typeof data.dataUrl === 'string' && data.partNum != null) {
+            const key = String(data.partNum);
+            const url = data.dataUrl as string;
+            setThumbs((t) => (t[key] ? t : { ...t, [key]: url }));
           }
         }
       }
@@ -171,6 +179,17 @@ export function BlocksGameShell({
     if (!win) return;
     win.postMessage({ source: 'scratch-blocks', ...payload }, '*');
   }, []);
+
+  // Ask the game to render and return a PNG dataURL for `partNum`. We
+  // guard duplicate requests here (in addition to the per-card askedRef)
+  // so a re-render of the grid doesn't re-trigger renders already in flight.
+  const pendingThumbRef = useRef<Set<string>>(new Set());
+  const requestThumb = useCallback((partNum: string | number) => {
+    const key = String(partNum);
+    if (pendingThumbRef.current.has(key)) return;
+    pendingThumbRef.current.add(key);
+    send({ action: 'getThumb', partNum });
+  }, [send]);
 
   // Pull-based catalog sync: the game's one-shot 'ready' broadcast often
   // races ahead of React's mount, and iframe `onLoad` fires inconsistently
@@ -207,7 +226,13 @@ export function BlocksGameShell({
           <div className="h-full flex overflow-hidden gap-1.5">
             {/* Bricks Parts catalog — replaces studio's generic LeftPanel
                 so the game's in-iframe Parts dock lives here instead. */}
-            <BricksLeftPanel catalog={catalog} state={bricksState} send={send} />
+            <BricksLeftPanel
+              catalog={catalog}
+              state={bricksState}
+              send={send}
+              thumbs={thumbs}
+              requestThumb={requestThumb}
+            />
 
             {/* Center — Scratch blocks (left) + Game iframe (right) */}
             <div

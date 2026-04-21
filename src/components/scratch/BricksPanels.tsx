@@ -14,8 +14,9 @@
 //                     surface (setTool / selectPart / setColor / setScheme /
 //                     setQuality / setRotation).
 
-import { useMemo, useState } from 'react';
-import { RotateCw, Hammer, Eraser } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { RotateCw, Hammer, Eraser, Blocks, Puzzle } from 'lucide-react';
+import { DropdownSectionHeader, type SectionDef } from '@/components/studio/panels/DropdownSectionHeader';
 
 export type BricksPart = { cat: string; num: string | number; name: string };
 export type BricksColor = { name: string; hex: string };
@@ -42,17 +43,30 @@ type SendFn = (payload: Record<string, unknown>) => void;
 // ============================ LEFT PANEL ============================
 // Parts catalog: search → category tabs → part grid. First tab defaults
 // to the first non-empty category in the payload.
+// Left-panel sections wired to the DropdownSectionHeader. "Scratch" is a
+// placeholder for a future blocks-in-panel mode; currently hosts a stub
+// message so the dropdown+arrows UX is already present.
+const LEFT_SECTIONS: readonly SectionDef[] = [
+  { id: 'parts',   icon: Blocks, label: 'Parts'   },
+  { id: 'scratch', icon: Puzzle, label: 'Scratch' },
+] as const;
+
 export function BricksLeftPanel({
   catalog,
   state,
   send,
+  thumbs,
+  requestThumb,
 }: {
   catalog: BricksCatalog;
   state: BricksState;
   send: SendFn;
+  thumbs: Record<string, string>;
+  requestThumb: (partNum: string | number) => void;
 }) {
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [sectionIdx, setSectionIdx] = useState(0);
 
   // Categories that actually have parts in the payload (preserves source order).
   const liveCats = useMemo(() => {
@@ -79,8 +93,23 @@ export function BricksLeftPanel({
     <aside className="w-[300px] flex-shrink-0 h-full flex flex-col rounded-xl overflow-hidden"
       style={{ background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)' }}
     >
-      <StaticHeader title="Parts" sub={`${catalog.parts.length} available`} />
+      <div style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}>
+        <DropdownSectionHeader
+          sections={LEFT_SECTIONS}
+          activeIndex={sectionIdx}
+          onSelect={setSectionIdx}
+        />
+      </div>
 
+      {LEFT_SECTIONS[sectionIdx].id === 'scratch' ? (
+        <div
+          className="flex-1 min-h-0 flex items-center justify-center"
+          style={{ padding: 16, fontSize: 12, color: 'var(--pb-ink-muted)', textAlign: 'center' }}
+        >
+          Scratch blocks will live here.
+        </div>
+      ) : (
+      <>
       <div style={{ padding: '10px 12px', borderBottom: '1.5px solid var(--pb-line-2)' }}>
         <input
           type="search"
@@ -136,39 +165,106 @@ export function BricksLeftPanel({
             {filtered.map((p) => {
               const selected = state.selectedPart != null && String(state.selectedPart) === String(p.num);
               return (
-                <button
+                <PartCard
                   key={`${p.cat}-${p.num}`}
-                  type="button"
-                  title={`#${p.num} — ${p.name}`}
-                  onClick={() => send({ action: 'selectPart', partNum: p.num })}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                    gap: 2, padding: '7px 8px', borderRadius: 8, textAlign: 'left',
-                    background: selected ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
-                    border: `1.5px solid ${selected ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-                    boxShadow: selected ? '0 2px 0 var(--pb-ink)' : 'none',
-                    color: 'var(--pb-ink)', cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <span style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
-                    #{p.num}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11.5, fontWeight: 600, lineHeight: 1.2,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      width: '100%',
-                    }}
-                  >
-                    {p.name}
-                  </span>
-                </button>
+                  part={p}
+                  selected={selected}
+                  thumb={thumbs[String(p.num)]}
+                  requestThumb={requestThumb}
+                  onSelect={() => send({ action: 'selectPart', partNum: p.num })}
+                />
               );
             })}
           </div>
         )}
       </div>
+      </>
+      )}
     </aside>
+  );
+}
+
+// Individual part tile. Uses an IntersectionObserver to lazy-request the
+// 3D thumbnail from the game iframe once the card scrolls into view, then
+// swaps the placeholder for the rendered PNG dataURL.
+function PartCard({
+  part, selected, thumb, requestThumb, onSelect,
+}: {
+  part: BricksPart;
+  selected: boolean;
+  thumb: string | undefined;
+  requestThumb: (partNum: string | number) => void;
+  onSelect: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const askedRef = useRef(false);
+
+  useEffect(() => {
+    if (thumb || askedRef.current) return;
+    const node = ref.current;
+    if (!node) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && !askedRef.current) {
+          askedRef.current = true;
+          requestThumb(part.num);
+          io.disconnect();
+          break;
+        }
+      }
+    }, { root: null, rootMargin: '120px' });
+    io.observe(node);
+    return () => io.disconnect();
+  }, [thumb, part.num, requestThumb]);
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      title={`#${part.num} — ${part.name}`}
+      onClick={onSelect}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+        gap: 4, padding: '7px 8px', borderRadius: 8, textAlign: 'left',
+        background: selected ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+        border: `1.5px solid ${selected ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+        boxShadow: selected ? '0 2px 0 var(--pb-ink)' : 'none',
+        color: 'var(--pb-ink)', cursor: 'pointer', fontFamily: 'inherit',
+      }}
+    >
+      <div
+        style={{
+          width: '100%', aspectRatio: '1 / 1', borderRadius: 6,
+          background: thumb
+            ? 'transparent'
+            : 'linear-gradient(160deg, var(--pb-paper), var(--pb-cream-2))',
+          border: '1px solid var(--pb-line-2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        {thumb && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumb}
+            alt={part.name}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        )}
+      </div>
+      <span style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+        #{part.num}
+      </span>
+      <span
+        style={{
+          fontSize: 11.5, fontWeight: 600, lineHeight: 1.2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          width: '100%',
+        }}
+      >
+        {part.name}
+      </span>
+    </button>
   );
 }
 

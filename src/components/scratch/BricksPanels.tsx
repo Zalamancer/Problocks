@@ -45,11 +45,13 @@ type SendFn = (payload: Record<string, unknown>) => void;
 // to the first non-empty category in the payload.
 // The left panel has two sections via DropdownSectionHeader:
 //   Parts   — the legacy parts catalog (search + tabs + thumb grid)
-//   Scratch — toggle only: when active, the mid section splits 50/50 so
-//             the Scratch blocks iframe can live beside the game. The
-//             iframe itself is owned by BlocksGameShell (see
-//             midScratchSlotRef there). This panel just shows a stub
-//             label since the real UI lives in the center.
+//   Scratch — hosts the Scratch blocks iframe. The iframe itself is
+//             mounted once in BlocksGameShell so its VM state persists
+//             across tab swaps; this panel just exposes an empty slot
+//             div (scratchSlotRef) that the shell measures and overlays
+//             the iframe onto. When Scratch is active the mid section
+//             also splits top/bottom so a white canvas sits above the
+//             3D game.
 export type LeftSection = 'parts' | 'scratch';
 export const LEFT_SECTIONS: readonly SectionDef[] = [
   { id: 'parts',   icon: Blocks, label: 'Parts'   },
@@ -64,6 +66,7 @@ export function BricksLeftPanel({
   requestThumb,
   section,
   onSectionChange,
+  scratchSlotRef,
 }: {
   catalog: BricksCatalog;
   state: BricksState;
@@ -72,6 +75,7 @@ export function BricksLeftPanel({
   requestThumb: (partNum: string | number) => void;
   section: LeftSection;
   onSectionChange: (section: LeftSection) => void;
+  scratchSlotRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -111,14 +115,10 @@ export function BricksLeftPanel({
       </div>
 
       {section === 'scratch' ? (
-        // Scratch lives in the mid-section split; nothing to render in
-        // the left panel except a short hint so the switch is obvious.
-        <div
-          className="flex-1 min-h-0 flex items-center justify-center"
-          style={{ padding: 16, fontSize: 12, color: 'var(--pb-ink-muted)', textAlign: 'center' }}
-        >
-          Scratch blocks are open in the center.
-        </div>
+        // Empty slot; the shell measures this rect and overlays the
+        // scratch blocks iframe on top (single-instance, preserves VM
+        // state when toggling back to Parts).
+        <div ref={scratchSlotRef} className="flex-1 min-h-0" />
       ) : (
       <>
       <div className="shrink-0" style={{ padding: '10px 12px', borderBottom: '1.5px solid var(--pb-line-2)' }}>

@@ -1,0 +1,5 @@
+# Local dev-only symlink to an external project checkout.
+# The target is outside the repo, so git already ignores it, but the Vercel
+# CLI follows symlinks during its tarball step and errors with
+# "Cannot copy X to a subdirectory of itself" when X is a git repo.
+public/games/lego-game

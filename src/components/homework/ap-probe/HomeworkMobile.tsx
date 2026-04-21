@@ -41,13 +41,13 @@ export function HomeworkMobile({ frq, onExit }: HomeworkMobileProps) {
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        height: '100%',
         background: 'var(--pb-cream, #fdf6e6)',
       }}
     >
       <header
         style={{
-          padding: '18px 16px 12px',
+          padding: '46px 16px 12px',
           background: 'var(--pb-paper)',
           borderBottom: '1.5px solid var(--pb-line)',
         }}
@@ -393,7 +393,7 @@ export function HomeworkMobile({ frq, onExit }: HomeworkMobileProps) {
 
       <div
         style={{
-          position: 'fixed',
+          position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,

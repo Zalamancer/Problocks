@@ -14,7 +14,7 @@
 // show a small dev toolbar that fires test commands directly at the game
 // iframe — useful for proving the pipe before Scratch-side blocks exist.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DesktopOnly } from '@/components/DesktopOnly';
 import { useThemeEffect } from '@/hooks/useThemeEffect';
 import {
@@ -24,6 +24,7 @@ import {
   type BricksColor,
   type BricksPart,
   type BricksState,
+  type LeftSection,
 } from './BricksPanels';
 
 const EMPTY_CATALOG: BricksCatalog = {
@@ -78,6 +79,23 @@ export function BlocksGameShell({
   // the game for each thumbnail. Keyed by string so numeric vs string
   // partNum payloads from ack messages collide cleanly.
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+
+  // Which left-panel section is active. Drives both the dropdown header
+  // in BricksLeftPanel and the overlay positioning of the Scratch blocks
+  // iframe (see scratchOverlayRect below).
+  const [leftSection, setLeftSection] = useState<LeftSection>('parts');
+
+  // Shared coordinate space for the single scratch-blocks iframe. The
+  // iframe is mounted once (so the VM state persists across section
+  // swaps) and absolute-positioned over whichever slot is active:
+  //   leftSection === 'parts'   → partsSlotRef   (center-left column)
+  //   leftSection === 'scratch' → scratchSlotRef (inside the left panel)
+  const shellRootRef   = useRef<HTMLDivElement>(null);
+  const partsSlotRef   = useRef<HTMLDivElement>(null);
+  const scratchSlotRef = useRef<HTMLDivElement>(null);
+  const [blocksRect, setBlocksRect] = useState<
+    { left: number; top: number; width: number; height: number } | null
+  >(null);
 
   // Add ?embed=1 to the game URL so it hides its in-iframe Parts/Scheme
   // docks — the outer Problocks panels own that chrome now. Purely
@@ -216,25 +234,65 @@ export function BlocksGameShell({
     return () => { cancelled = true; clearTimeout(id); };
   }, [send]);
 
+  // Keep the scratch iframe's absolute rect in sync with whichever slot
+  // is currently active. Re-measures on section swap, window resize, and
+  // whenever either slot changes size (e.g. left-panel Scratch tab opening
+  // after a narrow-viewport layout shift). All coords are relative to
+  // shellRootRef so the overlay iframe can live at that level of the tree.
+  useLayoutEffect(() => {
+    const shell = shellRootRef.current;
+    const target = leftSection === 'scratch' ? scratchSlotRef.current : partsSlotRef.current;
+    if (!shell || !target) {
+      setBlocksRect(null);
+      return;
+    }
+    const measure = () => {
+      const s = shell.getBoundingClientRect();
+      const t = target.getBoundingClientRect();
+      setBlocksRect({
+        left: t.left - s.left,
+        top: t.top - s.top,
+        width: t.width,
+        height: t.height,
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(shell);
+    ro.observe(target);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [leftSection]);
+
   return (
     <DesktopOnly title={`${title} is desktop-only`} description={description}>
       <div
         className="h-screen w-screen flex flex-col overflow-hidden font-sans p-1.5 gap-1.5"
         style={{ background: 'var(--panel-bg)', color: 'var(--pb-ink)' }}
       >
-        <div className="flex-1 relative min-h-0">
+        <div ref={shellRootRef} className="flex-1 relative min-h-0">
           <div className="h-full flex overflow-hidden gap-1.5">
-            {/* Bricks Parts catalog — replaces studio's generic LeftPanel
-                so the game's in-iframe Parts dock lives here instead. */}
+            {/* Bricks Parts catalog / Scratch slot — replaces studio's
+                generic LeftPanel. When section=='scratch' the panel
+                exposes scratchSlotRef and the shell overlays the blocks
+                iframe there; otherwise the center-left partsSlot hosts it. */}
             <BricksLeftPanel
               catalog={catalog}
               state={bricksState}
               send={send}
               thumbs={thumbs}
               requestThumb={requestThumb}
+              section={leftSection}
+              onSectionChange={setLeftSection}
+              scratchSlotRef={scratchSlotRef}
             />
 
-            {/* Center — Scratch blocks (left) + Game iframe (right) */}
+            {/* Center — Scratch blocks slot (left) + Game iframe (right).
+                The slot div collapses when the Scratch section is active
+                so the game can expand to full width. */}
             <div
               className="flex-1 relative flex rounded-xl overflow-hidden min-w-0"
               style={{
@@ -243,21 +301,17 @@ export function BlocksGameShell({
               }}
             >
               <div
+                ref={partsSlotRef}
                 style={{
-                  flex: '0 0 42%',
-                  minWidth: 360,
-                  borderRight: '1.5px solid var(--pb-line-2)',
+                  flex: leftSection === 'scratch' ? '0 0 0px' : '0 0 42%',
+                  minWidth: leftSection === 'scratch' ? 0 : 360,
+                  width: leftSection === 'scratch' ? 0 : undefined,
+                  borderRight: leftSection === 'scratch' ? 'none' : '1.5px solid var(--pb-line-2)',
                   background: '#1e1e1e',
+                  overflow: 'hidden',
+                  transition: 'flex-basis 180ms ease, min-width 180ms ease',
                 }}
-              >
-                <iframe
-                  ref={blocksRef}
-                  src={blocksSrc}
-                  title="Scratch Blocks"
-                  style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-                  allow="camera; microphone; autoplay; clipboard-read; clipboard-write"
-                />
-              </div>
+              />
               <div style={{ flex: 1, minWidth: 0, background: '#1e1e1e' }}>
                 <iframe
                   ref={gameRef}
@@ -273,6 +327,32 @@ export function BlocksGameShell({
                 Replaces studio's generic RightPanel so the game's right
                 dock moves out of the iframe into the outer shell. */}
             <BricksRightPanel catalog={catalog} state={bricksState} send={send} />
+          </div>
+
+          {/* Single scratch-blocks iframe, absolute-positioned over the
+              currently active slot. Mounted once so the VM persists when
+              the user toggles between Parts and Scratch sections. */}
+          <div
+            aria-hidden={blocksRect == null}
+            style={{
+              position: 'absolute',
+              pointerEvents: blocksRect ? 'auto' : 'none',
+              left:   blocksRect?.left   ?? 0,
+              top:    blocksRect?.top    ?? 0,
+              width:  blocksRect?.width  ?? 0,
+              height: blocksRect?.height ?? 0,
+              background: '#1e1e1e',
+              overflow: 'hidden',
+              transition: 'left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease',
+            }}
+          >
+            <iframe
+              ref={blocksRef}
+              src={blocksSrc}
+              title="Scratch Blocks"
+              style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+              allow="camera; microphone; autoplay; clipboard-read; clipboard-write"
+            />
           </div>
         </div>
 

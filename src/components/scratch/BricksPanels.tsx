@@ -43,10 +43,14 @@ type SendFn = (payload: Record<string, unknown>) => void;
 // ============================ LEFT PANEL ============================
 // Parts catalog: search → category tabs → part grid. First tab defaults
 // to the first non-empty category in the payload.
-// Left-panel sections wired to the DropdownSectionHeader. "Scratch" is a
-// placeholder for a future blocks-in-panel mode; currently hosts a stub
-// message so the dropdown+arrows UX is already present.
-const LEFT_SECTIONS: readonly SectionDef[] = [
+// The left panel has two sections via DropdownSectionHeader:
+//   Parts   — the legacy parts catalog (search + tabs + thumb grid)
+//   Scratch — hosts the Scratch blocks iframe. The iframe itself lives
+//             in BlocksGameShell to preserve its VM across section swaps;
+//             this panel just provides an empty slot div (scratchSlotRef)
+//             that the shell measures and overlays the iframe onto.
+export type LeftSection = 'parts' | 'scratch';
+export const LEFT_SECTIONS: readonly SectionDef[] = [
   { id: 'parts',   icon: Blocks, label: 'Parts'   },
   { id: 'scratch', icon: Puzzle, label: 'Scratch' },
 ] as const;
@@ -57,16 +61,22 @@ export function BricksLeftPanel({
   send,
   thumbs,
   requestThumb,
+  section,
+  onSectionChange,
+  scratchSlotRef,
 }: {
   catalog: BricksCatalog;
   state: BricksState;
   send: SendFn;
   thumbs: Record<string, string>;
   requestThumb: (partNum: string | number) => void;
+  section: LeftSection;
+  onSectionChange: (section: LeftSection) => void;
+  scratchSlotRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [sectionIdx, setSectionIdx] = useState(0);
+  const sectionIdx = LEFT_SECTIONS.findIndex((s) => s.id === section);
 
   // Categories that actually have parts in the payload (preserves source order).
   const liveCats = useMemo(() => {
@@ -96,18 +106,16 @@ export function BricksLeftPanel({
       <div className="shrink-0" style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}>
         <DropdownSectionHeader
           sections={LEFT_SECTIONS}
-          activeIndex={sectionIdx}
-          onSelect={setSectionIdx}
+          activeIndex={Math.max(sectionIdx, 0)}
+          onSelect={(i) => onSectionChange(LEFT_SECTIONS[i].id as LeftSection)}
         />
       </div>
 
-      {LEFT_SECTIONS[sectionIdx].id === 'scratch' ? (
-        <div
-          className="flex-1 min-h-0 flex items-center justify-center"
-          style={{ padding: 16, fontSize: 12, color: 'var(--pb-ink-muted)', textAlign: 'center' }}
-        >
-          Scratch blocks will live here.
-        </div>
+      {section === 'scratch' ? (
+        // Empty slot; the shell measures this rect and overlays the
+        // scratch blocks iframe on top (single-instance, preserves state
+        // when toggling back to Parts).
+        <div ref={scratchSlotRef} className="flex-1 min-h-0" />
       ) : (
       <>
       <div className="shrink-0" style={{ padding: '10px 12px', borderBottom: '1.5px solid var(--pb-line-2)' }}>
@@ -162,7 +170,7 @@ export function BricksLeftPanel({
             No parts match.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
             {filtered.map((p) => {
               const selected = state.selectedPart != null && String(state.selectedPart) === String(p.num);
               return (
@@ -226,6 +234,10 @@ function PartCard({
       onClick={onSelect}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+        // minWidth: 0 + overflow: hidden + width: '100%' clamps the card to
+        // its 1fr grid track — without this the nowrap+ellipsis text label
+        // stretches the grid column past the left panel width.
+        width: '100%', minWidth: 0, overflow: 'hidden',
         gap: 4, padding: '7px 8px', borderRadius: 8, textAlign: 'left',
         background: selected ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
         border: `1.5px solid ${selected ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,

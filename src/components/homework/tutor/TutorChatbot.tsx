@@ -12,12 +12,24 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TutorAvatar } from './TutorAvatar';
+import { RobloxAvatar, type AvatarOutfit } from '@/components/student/RobloxAvatar';
 import { useTutorSpeech } from './useTutorSpeech';
-import type { CharacterRig, TutorMessage } from './tutor-types';
+import type { TutorMessage } from './tutor-types';
+
+// Default outfit mirrors the one hardcoded on the student dashboard so the
+// tutor looks like the same cardboard character the student sees on their
+// home screen until a real outfit store ships.
+const DEFAULT_OUTFIT: AvatarOutfit = {
+  shirt: '#6fbf73',
+  pants: '#3a3c4a',
+  face: 'happy',
+  hair: 'short',
+  hairColor: '#3a2a1a',
+};
 
 type TutorChatbotProps = {
-  rig?: CharacterRig;
+  // Student's cardboard-character outfit. Falls back to the dashboard default.
+  outfit?: AvatarOutfit;
   // Optional greeting. Defaults to a canned hint; pass empty string to skip.
   greeting?: string;
   // Stub reply generator. Return a string (sync or async). Defaults to a
@@ -31,7 +43,11 @@ const DEFAULT_GREETING =
 const DEFAULT_REPLY = (q: string) =>
   `Good question. Let\'s break \"${q.trim().slice(0, 40)}…\" into smaller steps — start by identifying which forces act along the incline.`;
 
-export function TutorChatbot({ rig, greeting = DEFAULT_GREETING, onAsk }: TutorChatbotProps) {
+export function TutorChatbot({
+  outfit,
+  greeting = DEFAULT_GREETING,
+  onAsk,
+}: TutorChatbotProps) {
   const [open, setOpen] = useState(true);
   const [messages, setMessages] = useState<TutorMessage[]>(() =>
     greeting
@@ -40,7 +56,8 @@ export function TutorChatbot({ rig, greeting = DEFAULT_GREETING, onAsk }: TutorC
   );
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
-  const { viseme, speaking, speak, stop } = useTutorSpeech();
+  const { speaking, speak, stop } = useTutorSpeech();
+  const avatarOutfit = outfit ?? DEFAULT_OUTFIT;
   const logRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-speak the greeting on first mount.
@@ -99,11 +116,20 @@ export function TutorChatbot({ rig, greeting = DEFAULT_GREETING, onAsk }: TutorC
           border: '2px solid var(--pb-ink, #1d1a14)',
           boxShadow: '0 4px 0 var(--pb-ink, #1d1a14)',
           cursor: 'pointer',
-          padding: 6,
+          padding: 0,
           zIndex: 40,
+          overflow: 'hidden',
         }}
       >
-        <TutorAvatar rig={rig} viseme={viseme} idle={false} speaking={false} />
+        <div style={{ width: '100%', aspectRatio: '1 / 1' }}>
+          <RobloxAvatar
+            size="fill"
+            framed={false}
+            outfit={avatarOutfit}
+            autoRotate={false}
+            showControls={false}
+          />
+        </div>
       </button>
     );
   }
@@ -182,8 +208,22 @@ export function TutorChatbot({ rig, greeting = DEFAULT_GREETING, onAsk }: TutorC
           borderBottom: '1.5px solid var(--pb-line-2, #d6c896)',
         }}
       >
-        <div style={{ margin: '0 auto', width: 180 }}>
-          <TutorAvatar rig={rig} viseme={viseme} idle speaking={speaking} />
+        <div
+          style={{
+            margin: '0 auto',
+            width: 200,
+            aspectRatio: '1 / 1',
+            filter: speaking ? 'drop-shadow(0 0 14px rgba(255,216,77,0.55))' : undefined,
+            transition: 'filter 0.2s',
+          }}
+        >
+          <RobloxAvatar
+            size="fill"
+            framed={false}
+            outfit={avatarOutfit}
+            autoRotate
+            showControls={false}
+          />
         </div>
       </div>
 

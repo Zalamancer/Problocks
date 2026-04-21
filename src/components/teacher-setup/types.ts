@@ -29,6 +29,11 @@ export type SetupData = {
   rosterMethod: RosterMethod;
   pastedNames: string;
   joinCode: string;
+  // When the teacher picks a Google Classroom course we store the course id
+  // (same value as Classroom's `id` / API userId namespace) so downstream
+  // grade/assignment sync can key off it.
+  classroomCourseId?: string;
+  classroomCourseName?: string;
 
   unit: UnitKey;
 };

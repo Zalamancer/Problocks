@@ -10,7 +10,6 @@ import type { SetupData, RosterMethod } from './types';
 import { classroomFetch } from '@/lib/classroom-api';
 import type {
   ListCoursesResponse,
-  ListStudentsResponse,
   ClassroomCourse,
 } from '@/lib/classroom-api';
 
@@ -306,10 +305,10 @@ function GoogleClassroomConnect({
   const [courses, setCourses] = useState<ClassroomCourse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [importingId, setImportingId] = useState<string | null>(null);
-  const [importedCourseId, setImportedCourseId] = useState<string | null>(null);
 
-  // Fetch courses once authenticated.
+  // Fetch courses once authenticated. Filter to courses the teacher TEACHES
+  // (teacherId=me) so empty/student-only accounts don't get confusing results,
+  // and only pull ACTIVE+PROVISIONED courses — no archived clutter.
   useEffect(() => {
     if (status !== 'authenticated') return;
     let cancelled = false;
@@ -317,7 +316,12 @@ function GoogleClassroomConnect({
       setLoading(true);
       setError(null);
       try {
-        const res = await classroomFetch<ListCoursesResponse>('/courses');
+        const qs = new URLSearchParams({
+          teacherId: 'me',
+          courseStates: 'ACTIVE',
+          pageSize: '50',
+        });
+        const res = await classroomFetch<ListCoursesResponse>(`/courses?${qs}`);
         if (cancelled) return;
         setCourses(res.courses ?? []);
       } catch (e: unknown) {
@@ -331,22 +335,13 @@ function GoogleClassroomConnect({
     return () => { cancelled = true; };
   }, [status]);
 
-  const importRoster = async (course: ClassroomCourse) => {
-    setImportingId(course.id);
-    setError(null);
-    try {
-      const res = await classroomFetch<ListStudentsResponse>(`/courses/${course.id}/people`);
-      const names = (res.students ?? [])
-        .map((s) => s.profile?.name?.fullName)
-        .filter((n): n is string => Boolean(n));
-      set('pastedNames', names.join('\n'));
-      if (course.name) set('className', course.name);
-      setImportedCourseId(course.id);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to import roster');
-    } finally {
-      setImportingId(null);
-    }
+  // Pick a course: link it to the ProBlocks class being set up. We do NOT
+  // import a roster — that needs the restricted classroom.rosters scope. Students
+  // enrol themselves at /join/:classId (see GoogleClassroomConnect instructions).
+  const pickCourse = (course: ClassroomCourse) => {
+    if (course.name) set('className', course.name);
+    set('classroomCourseId', course.id);
+    set('classroomCourseName', course.name);
   };
 
   // ── Not signed in: the original marketing card with a real Connect CTA ───
@@ -463,25 +458,23 @@ function GoogleClassroomConnect({
       {courses.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Pick a course to import
+            Pick a course to link
           </div>
           {courses.map((c) => {
-            const done = importedCourseId === c.id;
-            const busy = importingId === c.id;
+            const picked = data.classroomCourseId === c.id;
             return (
               <button
                 key={c.id}
                 type="button"
-                onClick={() => importRoster(c)}
-                disabled={busy}
+                onClick={() => pickCourse(c)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '12px 14px', textAlign: 'left',
-                  background: done ? 'var(--pbs-mint)' : 'var(--pbs-paper)',
-                  color: done ? 'var(--pbs-mint-ink)' : 'var(--pbs-ink)',
-                  border: `1.5px solid ${done ? 'var(--pbs-mint-ink)' : 'var(--pbs-line-2)'}`,
+                  background: picked ? 'var(--pbs-mint)' : 'var(--pbs-paper)',
+                  color: picked ? 'var(--pbs-mint-ink)' : 'var(--pbs-ink)',
+                  border: `1.5px solid ${picked ? 'var(--pbs-mint-ink)' : 'var(--pbs-line-2)'}`,
                   borderRadius: 12,
-                  cursor: busy ? 'progress' : 'pointer',
+                  cursor: 'pointer',
                   fontFamily: 'inherit',
                   transition: 'all 120ms',
                 }}
@@ -491,13 +484,13 @@ function GoogleClassroomConnect({
                     {c.name}
                   </div>
                   {(c.section || c.room) && (
-                    <div style={{ fontSize: 12, color: done ? 'inherit' : 'var(--pbs-ink-muted)', opacity: done ? 0.85 : 1 }}>
+                    <div style={{ fontSize: 12, color: picked ? 'inherit' : 'var(--pbs-ink-muted)', opacity: picked ? 0.85 : 1 }}>
                       {[c.section, c.room].filter(Boolean).join(' · ')}
                     </div>
                   )}
                 </div>
                 <span className="pbs-mono" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  {busy ? 'Importing…' : done ? 'Imported ✓' : 'Import →'}
+                  {picked ? 'Linked ✓' : 'Use this →'}
                 </span>
               </button>
             );
@@ -505,9 +498,19 @@ function GoogleClassroomConnect({
         </div>
       )}
 
-      {data.pastedNames && importedCourseId && (
-        <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--pbs-ink-soft)' }}>
-          Imported <strong style={{ color: 'var(--pbs-ink)' }}>{data.pastedNames.split(/\n/).filter(Boolean).length}</strong> students. You can tweak the list in <em>Paste a list</em> if needed.
+      {data.classroomCourseId && (
+        <div style={{
+          marginTop: 14,
+          padding: '12px 14px',
+          background: 'var(--pbs-cream-2)',
+          border: '1.5px dashed var(--pbs-line-2)',
+          borderRadius: 12,
+          fontSize: 13, lineHeight: 1.5, color: 'var(--pbs-ink-soft)',
+        }}>
+          <strong style={{ color: 'var(--pbs-ink)' }}>Linked to &ldquo;{data.classroomCourseName}&rdquo;.</strong>
+          {' '}Classroom assignments &amp; grades will sync to the teacher dashboard. Students join
+          ProBlocks by signing in themselves — we&apos;ll generate a share link on the final step so
+          you can post it as a Classroom announcement.
         </div>
       )}
     </StepCard>

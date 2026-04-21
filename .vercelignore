@@ -3,3 +3,7 @@
 # CLI follows symlinks during its tarball step and errors with
 # "Cannot copy X to a subdirectory of itself" when X is a git repo.
 public/games/lego-game
+
+# Local dev-only symlink to the external scratch-gui build. Deployed copy
+# (if any) is produced by a separate pipeline — see scripts/build-scratch.mjs.
+public/scratch

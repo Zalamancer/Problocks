@@ -85,6 +85,7 @@ export const SAMPLE_RECENT: RecentGame[] = [
 
 export const EXPLORE: ExploreGame[] = [
   { id: 'lego-game', title: 'Brick Builder', subject: 'Sandbox · Creative', plays: 'NEW', tone: 'sky', icon: 'cube', href: '/games/lego-game/index.html' },
+  { id: 'scratch-studio', title: 'Scratch Studio', subject: 'Blocks · Code-your-own', plays: 'NEW', tone: 'coral', icon: 'book', href: '/studio/scratch' },
   { id: 'e1', title: 'Fraction Kingdom', subject: 'Math · Grade 5', plays: '1.2M', tone: 'butter', icon: 'coin' },
   { id: 'e2', title: 'Periodic Table Tycoon', subject: 'Chemistry', plays: '640K', tone: 'mint', icon: 'cube' },
   { id: 'e3', title: 'Grammar Heist', subject: 'ELA', plays: '380K', tone: 'pink', icon: 'book' },

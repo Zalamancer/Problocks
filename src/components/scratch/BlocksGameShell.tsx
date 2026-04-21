@@ -16,6 +16,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { DesktopOnly } from '@/components/DesktopOnly';
+import { LeftPanel, LeftPanelToggle } from '@/components/studio/LeftPanel';
+import { RightPanel } from '@/components/studio/RightPanel';
+import { useThemeEffect } from '@/hooks/useThemeEffect';
 
 type BlocksGameShellProps = {
   title: string;
@@ -35,6 +38,7 @@ export function BlocksGameShell({
   blocksSrc = '/scratch/blocks-only.html',
   description = 'The block editor and game stage need a wider screen. Open on a laptop or desktop.',
 }: BlocksGameShellProps) {
+  useThemeEffect();
   const blocksRef = useRef<HTMLIFrameElement>(null);
   const gameRef = useRef<HTMLIFrameElement>(null);
   // Read ?dev=1 from window.location on mount. Avoids pulling in
@@ -81,28 +85,55 @@ export function BlocksGameShell({
   return (
     <DesktopOnly title={`${title} is desktop-only`} description={description}>
       <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          display: 'grid',
-          gridTemplateColumns: 'minmax(360px, 40%) 1fr',
-          background: '#1e1e1e',
-        }}
+        className="h-screen w-screen flex flex-col overflow-hidden font-sans p-1.5 gap-1.5"
+        style={{ background: 'var(--panel-bg)', color: 'var(--pb-ink)' }}
       >
-        <iframe
-          ref={blocksRef}
-          src={blocksSrc}
-          title="Scratch Blocks"
-          style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-          allow="camera; microphone; autoplay; clipboard-read; clipboard-write"
-        />
-        <iframe
-          ref={gameRef}
-          src={gameSrc}
-          title={title}
-          style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-          allow="autoplay; clipboard-read; clipboard-write"
-        />
+        <div className="flex-1 relative min-h-0">
+          <div className="h-full flex overflow-hidden gap-1.5">
+            {/* Studio-shared left panel (Scene / Assets / Connectors) */}
+            <LeftPanel />
+
+            {/* Center — Scratch blocks (left) + Game iframe (right) */}
+            <div
+              className="flex-1 relative flex rounded-xl overflow-hidden min-w-0"
+              style={{
+                background: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-line-2)',
+              }}
+            >
+              <div
+                style={{
+                  flex: '0 0 42%',
+                  minWidth: 360,
+                  borderRight: '1.5px solid var(--pb-line-2)',
+                  background: '#1e1e1e',
+                }}
+              >
+                <iframe
+                  ref={blocksRef}
+                  src={blocksSrc}
+                  title="Scratch Blocks"
+                  style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+                  allow="camera; microphone; autoplay; clipboard-read; clipboard-write"
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, background: '#1e1e1e' }}>
+                <iframe
+                  ref={gameRef}
+                  src={gameSrc}
+                  title={title}
+                  style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+                  allow="autoplay; clipboard-read; clipboard-write"
+                />
+              </div>
+            </div>
+
+            {/* Studio-shared right panel (Properties / Workspace / Chat / Parts) */}
+            <RightPanel propertiesContent={null} />
+          </div>
+
+          <LeftPanelToggle />
+        </div>
 
         {devMode && (
           <div

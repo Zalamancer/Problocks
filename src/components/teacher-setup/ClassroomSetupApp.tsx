@@ -72,6 +72,8 @@ export const ClassroomSetupApp = () => {
   const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState<number[]>([]);
   const [data, setData] = useState<SetupData>(INITIAL_DATA);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   const set = <K extends keyof SetupData>(k: K, v: SetupData[K]) =>
     setData((d) => ({ ...d, [k]: v }));
@@ -98,9 +100,34 @@ export const ClassroomSetupApp = () => {
     }
   };
 
-  const openRoom = () => {
-    // Demo: just route to the real Teacher app.
-    router.push('/teacher');
+  const openRoom = async () => {
+    if (opening) return;
+    setOpening(true);
+    setOpenError(null);
+    try {
+      const res = await fetch('/api/classes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.className,
+          subject: data.classSubject,
+          grade: data.grade,
+          color: data.color,
+          classroomCourseId: data.classroomCourseId ?? null,
+          joinCode: data.joinCode,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.error || `Failed (${res.status})`);
+      }
+      const classId: string | undefined = payload?.class?.id;
+      if (!classId) throw new Error('No class id returned');
+      router.push(`/teacher/setup/share?classId=${classId}`);
+    } catch (e: unknown) {
+      setOpenError(e instanceof Error ? e.message : 'Could not create classroom');
+      setOpening(false);
+    }
   };
 
   const renderStep = () => {
@@ -200,9 +227,16 @@ export const ClassroomSetupApp = () => {
                   {step === STEPS.length - 2 ? 'Review room' : 'Continue'}
                 </Chunky>
               ) : (
-                <Chunky tone="ink" trailing="sparkle" onClick={openRoom}>
-                  Open the classroom
-                </Chunky>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <Chunky tone="ink" trailing="sparkle" onClick={openRoom} disabled={opening}>
+                    {opening ? 'Creating…' : 'Open the classroom'}
+                  </Chunky>
+                  {openError && (
+                    <div style={{ fontSize: 12, color: 'var(--pbs-coral-ink)' }}>
+                      {openError}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </section>

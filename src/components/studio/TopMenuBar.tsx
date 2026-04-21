@@ -23,7 +23,7 @@ import { useSceneStore } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { PBButton, PBLogo, AvatarStack } from '@/components/ui';
 
-// ProBlocks Studio top bar — ported from the design bundle's topbar.jsx.
+// Playdemy Studio top bar — ported from the design bundle's topbar.jsx.
 // Layout: logo mark + breadcrumb (classroom > project) on the left,
 // centered chunky pill-tab view switcher, collab avatar stack + Share + Play
 // on the right. File/Marketplace/Classroom/Account rolled into the kebab
@@ -200,7 +200,7 @@ export function TopMenuBar() {
             minWidth: 0,
           }}
         >
-          <span className="hidden sm:inline">ProBlocks</span>
+          <span className="hidden sm:inline">Playdemy</span>
           <ChevronRight size={12} style={{ color: 'var(--pb-ink-muted)' }} className="hidden sm:inline" />
           <span style={{ color: 'var(--pb-ink-soft)', fontWeight: 600 }} className="hidden md:inline">
             Ms. Alvarez · Period 4

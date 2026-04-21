@@ -120,7 +120,7 @@ export const AuthScreen = ({
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 18 }}>
           <Icon name="logo-block" size={30}/>
-          <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>ProBlocks</span>
+          <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>Playdemy</span>
         </div>
 
         {pendingInvite && (

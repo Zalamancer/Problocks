@@ -260,7 +260,7 @@ export const soloIndie: Template = {
           id: 'si-publish',
           milestoneId: 'launch',
           title: 'Publish to marketplace',
-          description: 'Upload and publish to the Problocks marketplace. Share the link.',
+          description: 'Upload and publish to the Playdemy marketplace. Share the link.',
           role: 'producer',
           aiTools: [],
           deliverable: 'Live game URL shared publicly',

@@ -8,7 +8,7 @@ export const How = () => {
     {
       n: '01', tone: 'butter' as const, icon: 'wand' as const,
       title: 'Describe',
-      body: 'Tell ProBlocks what you want to make. A ninja cat climbing a cake? Done.',
+      body: 'Tell Playdemy what you want to make. A ninja cat climbing a cake? Done.',
       extra: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div className="pbs-mono" style={{ fontSize: 11, opacity: 0.7 }}>you</div>

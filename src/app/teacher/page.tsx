@@ -9,7 +9,7 @@ import '@/components/landing/pb-site/styles.css';
 import '@/components/teacher/teacher.css';
 
 export const metadata = {
-  title: 'ProBlocks — Teacher',
+  title: 'Playdemy — Teacher',
   description: 'Class overview, assignments, student progress, and the per-student view.',
 };
 

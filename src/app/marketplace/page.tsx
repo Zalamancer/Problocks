@@ -50,7 +50,7 @@ export default function MarketplacePage() {
         <div className="mb-8">
           <h2 className="text-2xl font-semibold">Play games from the community</h2>
           <p className="text-sm text-zinc-400 mt-1">
-            Every game here was built in Problocks Studio. Pick one and play instantly — no install.
+            Every game here was built in Playdemy Studio. Pick one and play instantly — no install.
           </p>
         </div>
 

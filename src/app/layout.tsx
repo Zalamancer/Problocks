@@ -34,7 +34,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Problocks",
+  title: "Playdemy",
   description: "AI-powered game creation platform",
 };
 

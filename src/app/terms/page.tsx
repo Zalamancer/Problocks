@@ -5,8 +5,8 @@ import Link from 'next/link';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Terms of Service',
-  description: 'The rules for using ProBlocks as a teacher, student, or creator.',
+  title: 'Playdemy — Terms of Service',
+  description: 'The rules for using Playdemy as a teacher, student, or creator.',
 };
 
 const UPDATED = 'April 20, 2026';
@@ -18,7 +18,7 @@ export default function TermsPage() {
       <div className="pbs-page-noise" aria-hidden />
       <div className="pbs-content">
         <main style={{ maxWidth: 760, margin: '0 auto', padding: '72px 24px 120px', lineHeight: 1.6 }}>
-          <Link href="/" style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>← Back to ProBlocks</Link>
+          <Link href="/" style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>← Back to Playdemy</Link>
 
           <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 20 }}>
             Terms of <span className="pbs-serif" style={{ fontStyle: 'italic' }}>Service</span>
@@ -29,13 +29,13 @@ export default function TermsPage() {
 
           <Section title="Acceptance">
             <p>
-              By signing in to ProBlocks you agree to these Terms and our{' '}
-              <Link href="/privacy">Privacy Policy</Link>. If you&rsquo;re using ProBlocks on behalf
+              By signing in to Playdemy you agree to these Terms and our{' '}
+              <Link href="/privacy">Privacy Policy</Link>. If you&rsquo;re using Playdemy on behalf
               of a school or district, you represent that you&rsquo;re authorised to do so.
             </p>
           </Section>
 
-          <Section title="Who can use ProBlocks">
+          <Section title="Who can use Playdemy">
             <ul>
               <li>Teachers, administrators, and students whose teacher has set up a class.</li>
               <li>Independent creators publishing games to the marketplace.</li>
@@ -54,12 +54,12 @@ export default function TermsPage() {
           <Section title="Student content & classroom use">
             <p>
               Games, quizzes, and other content you create belong to you. You grant
-              ProBlocks a limited licence to host, display, and distribute that content
+              Playdemy a limited licence to host, display, and distribute that content
               on the platform so other users in your class or the marketplace can play
               it. You can remove your content at any time.
             </p>
             <p>
-              Teachers control what content students can see in their class. ProBlocks
+              Teachers control what content students can see in their class. Playdemy
               moderates marketplace uploads for safety and educational fit.
             </p>
           </Section>
@@ -75,7 +75,7 @@ export default function TermsPage() {
 
           <Section title="AI outputs">
             <p>
-              ProBlocks uses AI models to help you generate games, assets, and lessons.
+              Playdemy uses AI models to help you generate games, assets, and lessons.
               AI output may be inaccurate, offensive, or derivative — review before
               sharing with students. You&rsquo;re responsible for how AI-generated content
               is used in your classroom.
@@ -102,7 +102,7 @@ export default function TermsPage() {
 
           <Section title="Disclaimers">
             <p>
-              ProBlocks is provided &ldquo;as is&rdquo; without warranties. We don&rsquo;t promise the
+              Playdemy is provided &ldquo;as is&rdquo; without warranties. We don&rsquo;t promise the
               service will be error-free or meet every educational requirement. To the
               maximum extent permitted by law, our liability is limited to the fees
               paid in the 12 months before a claim arose.
@@ -119,7 +119,7 @@ export default function TermsPage() {
 
           <Section title="Contact">
             <p>
-              ProBlocks · <a href="mailto:tryproblocks@gmail.com">tryproblocks@gmail.com</a>
+              Playdemy · <a href="mailto:tryproblocks@gmail.com">tryproblocks@gmail.com</a>
             </p>
           </Section>
         </main>

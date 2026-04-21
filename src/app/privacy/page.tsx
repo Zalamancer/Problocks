@@ -6,8 +6,8 @@ import Link from 'next/link';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Privacy Policy',
-  description: 'How ProBlocks collects, uses, and protects the data of teachers and students.',
+  title: 'Playdemy — Privacy Policy',
+  description: 'How Playdemy collects, uses, and protects the data of teachers and students.',
 };
 
 const UPDATED = 'April 20, 2026';
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <div className="pbs-page-noise" aria-hidden />
       <div className="pbs-content">
         <main style={{ maxWidth: 760, margin: '0 auto', padding: '72px 24px 120px', lineHeight: 1.6 }}>
-          <Link href="/" style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>← Back to ProBlocks</Link>
+          <Link href="/" style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>← Back to Playdemy</Link>
 
           <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 20 }}>
             Privacy <span className="pbs-serif" style={{ fontStyle: 'italic' }}>Policy</span>
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
 
           <Section title="Who we are">
             <p>
-              ProBlocks (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is an AI-powered game-creation platform
+              Playdemy (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is an AI-powered game-creation platform
               for classrooms. This policy describes what we collect, why we collect it,
               and what rights you have. Questions go to{' '}
               <a href="mailto:tryproblocks@gmail.com">tryproblocks@gmail.com</a>.
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
           <Section title="What we collect">
             <ul>
               <li><strong>Account info:</strong> name, email address, profile photo, and a stable Google user ID (<code>sub</code>) when you sign in with Google.</li>
-              <li><strong>Classroom data:</strong> when a teacher connects Google Classroom, we read course names, assignments, announcements, topics, and student submissions / grades that the teacher already has access to. We do <em>not</em> request the Classroom roster scope; students enrol into ProBlocks by signing in themselves.</li>
+              <li><strong>Classroom data:</strong> when a teacher connects Google Classroom, we read course names, assignments, announcements, topics, and student submissions / grades that the teacher already has access to. We do <em>not</em> request the Classroom roster scope; students enrol into Playdemy by signing in themselves.</li>
               <li><strong>Student-generated content:</strong> games, quizzes, and prompts students create on the platform, plus play history.</li>
               <li><strong>Basic analytics:</strong> page views and performance metrics; no advertising or third-party ad trackers.</li>
             </ul>
@@ -58,14 +58,14 @@ export default function PrivacyPage() {
 
           <Section title="Google API data — limited use">
             <p>
-              ProBlocks&rsquo; use and transfer of information received from Google APIs adheres
+              Playdemy&rsquo; use and transfer of information received from Google APIs adheres
               to the{' '}
               <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">
                 Google API Services User Data Policy
               </a>, including the Limited Use requirements. Specifically:
             </p>
             <ul>
-              <li>We only use Google user data to provide user-facing features of ProBlocks.</li>
+              <li>We only use Google user data to provide user-facing features of Playdemy.</li>
               <li>We do not transfer data except as needed to operate the service, comply with law, or if the user expressly authorises it.</li>
               <li>We do not use the data for advertising.</li>
               <li>We do not allow humans to read the data, except (a) with the user&rsquo;s consent, (b) for security or abuse investigation, or (c) to comply with applicable law.</li>
@@ -74,7 +74,7 @@ export default function PrivacyPage() {
 
           <Section title="Children & students (FERPA / COPPA)">
             <p>
-              ProBlocks is designed for classroom use. When a teacher invites a class,
+              Playdemy is designed for classroom use. When a teacher invites a class,
               the teacher (or school) acts as the educational agent and consents to
               the collection of student data on behalf of parents, consistent with
               FERPA&rsquo;s &ldquo;school official&rdquo; exception and COPPA&rsquo;s school-authorised
@@ -124,7 +124,7 @@ export default function PrivacyPage() {
 
           <Section title="Contact">
             <p>
-              ProBlocks · <a href="mailto:tryproblocks@gmail.com">tryproblocks@gmail.com</a>
+              Playdemy · <a href="mailto:tryproblocks@gmail.com">tryproblocks@gmail.com</a>
             </p>
           </Section>
         </main>

@@ -740,7 +740,7 @@ export function ResultsScreen({
         Source: {frq.source.exam} · {frq.source.year} · {frq.source.frq} — &ldquo;
         {frq.source.title}&rdquo;
         <br />
-        Adapted for ProBlocks · content original
+        Adapted for Playdemy · content original
       </div>
     </div>
   );

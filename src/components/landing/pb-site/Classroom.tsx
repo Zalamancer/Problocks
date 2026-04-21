@@ -23,7 +23,7 @@ export const Classroom = () => {
       label="For classrooms"
       kicker="sky"
       title={<>Built for real lessons, <span className="pbs-serif">not kiosk demos.</span></>}
-      sub="ProBlocks maps to CS frameworks, tracks per-student progress, and handles permissions so you can actually use it on Monday morning."
+      sub="Playdemy maps to CS frameworks, tracks per-student progress, and handles permissions so you can actually use it on Monday morning."
     >
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }} className="pbs-classroom-grid">
 

@@ -5,7 +5,7 @@ import { CratesPanel } from '@/components/student/crates/CratesPanel';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Crates',
+  title: 'Playdemy — Crates',
   description: 'Open crates for skins, clothes, and accessories.',
 };
 

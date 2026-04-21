@@ -227,7 +227,7 @@ Available piece ids (use EXACTLY these strings for "asset"):
 ${catalogByKind()}
 `;
 
-  return `You are the Problocks Studio Agent. You edit a 3D scene directly —
+  return `You are the Playdemy Studio Agent. You edit a 3D scene directly —
 you do NOT write HTML or build a standalone game. Your output is a sequence
 of ACTION lines that mutate the live scene.
 

@@ -1,5 +1,5 @@
 /**
- * Problocks Game Bundler
+ * Playdemy Game Bundler
  * Takes framework source + game module files → single HTML string for iframe.
  *
  * This runs at build/preview time in the Next.js app, NOT in the browser game.
@@ -55,7 +55,7 @@ export function bundleGame(files: GameFiles, options: BundleOptions = {}): strin
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Problocks Game</title>
+<title>Playdemy Game</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
@@ -69,7 +69,7 @@ ${cdnScripts.map(url => `<script src="${url}"></script>`).join('\n')}
 'use strict';
 
 // ═══════════════════════════════════════════
-// Problocks Runtime Framework
+// Playdemy Runtime Framework
 // ═══════════════════════════════════════════
 ${framework}
 
@@ -143,9 +143,9 @@ ${entityFiles.map(f => `// ── ${f.name} ──\n${f.src}`).join('\n\n')}
 
     // Start the game
     game.start(config.startScene || 'title');
-    console.log('[Problocks] Game started with', game.entities.types().length, 'entity types');
+    console.log('[Playdemy] Game started with', game.entities.types().length, 'entity types');
   } catch(err) {
-    console.error('[Problocks] Bootstrap failed:', err);
+    console.error('[Playdemy] Bootstrap failed:', err);
     // Show error on canvas
     const c = document.getElementById('game');
     const ctx = c.getContext('2d');

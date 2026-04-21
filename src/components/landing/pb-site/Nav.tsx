@@ -38,7 +38,7 @@ export const Nav = ({ onStart }: { onStart?: () => void }) => {
         }}>
           <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0', flexShrink: 0 }}>
             <Icon name="logo-block" size={28}/>
-            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>ProBlocks</span>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>Playdemy</span>
           </a>
 
           <div style={{

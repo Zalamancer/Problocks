@@ -109,7 +109,7 @@ export const Hero = ({ onStart }: { onStart?: () => void }) => {
             margin: '28px auto 0', maxWidth: 560,
             fontSize: 18, lineHeight: 1.5, color: 'var(--pbs-ink-soft)',
           }}>
-            ProBlocks turns a sentence into a playable game — <span className="pbs-serif" style={{ fontSize: '1.1em' }}>art</span>,
+            Playdemy turns a sentence into a playable game — <span className="pbs-serif" style={{ fontSize: '1.1em' }}>art</span>,
             <span className="pbs-serif" style={{ fontSize: '1.1em' }}> code</span>, and
             <span className="pbs-serif" style={{ fontSize: '1.1em' }}> sound</span> generated, edited, and published by your students.
           </p>

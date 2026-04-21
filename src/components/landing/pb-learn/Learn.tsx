@@ -10,7 +10,7 @@ export const Learn = () => {
     {
       n: '01', tone: 'butter', icon: 'wand',
       title: 'Describe a world',
-      body: 'You (or your teacher) type a sentence about what you want to learn. ProBlocks turns it into a playable world.',
+      body: 'You (or your teacher) type a sentence about what you want to learn. Playdemy turns it into a playable world.',
       extra: (
         <div style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.06)', borderRadius: 12, fontSize: 13, fontStyle: 'italic' }}>
           &quot;a castle where you unlock doors by solving equations&quot;
@@ -61,7 +61,7 @@ export const Learn = () => {
       label="How it works"
       kicker="mint"
       title={<>Learning that <span className="pbs-serif">plays you back.</span></>}
-      sub="Most ed-tech is a worksheet with skin. ProBlocks is the opposite: you build the world, then wander around inside it."
+      sub="Most ed-tech is a worksheet with skin. Playdemy is the opposite: you build the world, then wander around inside it."
     >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
         {steps.map((s) => (

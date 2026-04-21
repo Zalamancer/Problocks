@@ -11,7 +11,7 @@ const FAQS: Array<{ q: string; a: string }> = [
   { q: "How do you keep chat safe?",
     a: "Class chat is teacher-moderated. No DMs outside the class, a kindness filter softens mean messages, and Claude flags anything suspicious. You approve the full member list." },
   { q: "Do students need to read well?",
-    a: "ProBlocks reads everything aloud if you want. Prompts can be spoken, hints are voiced, and Claude shows rather than tells whenever it can." },
+    a: "Playdemy reads everything aloud if you want. Prompts can be spoken, hints are voiced, and Claude shows rather than tells whenever it can." },
   { q: "Is it aligned to a curriculum?",
     a: "Yes — lessons map to CSTA, NGSS, Common Core and UK Computing. Every game produces an artifact you can hand to a rubric." },
   { q: "What ages is it for?",

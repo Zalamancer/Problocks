@@ -130,7 +130,7 @@ export const shipMilestone: MilestoneTemplate = {
       id: 'cs-publish',
       milestoneId: 'ship',
       title: 'Publish to marketplace',
-      description: 'Upload the final build and publish to the Problocks marketplace.',
+      description: 'Upload the final build and publish to the Playdemy marketplace.',
       role: 'producer',
       aiTools: [],
       deliverable: 'Live published game URL',

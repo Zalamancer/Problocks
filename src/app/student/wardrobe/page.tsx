@@ -6,7 +6,7 @@ import { Wardrobe } from '@/components/student/wardrobe/Wardrobe';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Wardrobe',
+  title: 'Playdemy — Wardrobe',
   description: 'Customize your avatar — face, hair, hat, and outfit.',
 };
 

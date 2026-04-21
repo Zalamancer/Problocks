@@ -8,7 +8,7 @@ import '@/components/landing/pb-site/styles.css';
 import '@/components/teacher/teacher.css';
 
 export const metadata = {
-  title: 'ProBlocks — Profile',
+  title: 'Playdemy — Profile',
   description: 'Your progress — quizzes, mastery, badges, and where you got stuck.',
 };
 

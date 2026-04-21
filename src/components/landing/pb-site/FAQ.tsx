@@ -7,7 +7,7 @@ const FAQS = [
   { q: 'Do students need to know how to code?',
     a: "Not at all. They describe what they want in plain English, and Claude generates the game. As they get curious, they can peek at the source code — it's real, readable JavaScript." },
   { q: 'Is the AI safe for kids?',
-    a: 'Yes. ProBlocks uses age-gated generators, content filters, and teacher-approved publishing. You review everything before it leaves your classroom.' },
+    a: 'Yes. Playdemy uses age-gated generators, content filters, and teacher-approved publishing. You review everything before it leaves your classroom.' },
   { q: 'How does the revenue share work?',
     a: 'Every play of a published game puts credit into the class pool. 70% of gross revenue goes back to the class; they can spend it on more generator credits or cash it out at the end of term.' },
   { q: 'What devices does it work on?',

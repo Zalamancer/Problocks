@@ -5,7 +5,7 @@ import { StudentApp } from '@/components/student/StudentApp';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Student',
+  title: 'Playdemy — Student',
   description: 'Sign in, join a class, and play games assigned by your teacher.',
 };
 

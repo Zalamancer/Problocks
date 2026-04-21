@@ -8,7 +8,7 @@ import { JoinClient } from './JoinClient';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Join your class',
+  title: 'Playdemy — Join your class',
 };
 
 export default async function JoinClassPage({

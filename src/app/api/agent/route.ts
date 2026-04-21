@@ -168,7 +168,7 @@ const GAME_PROMPT = (
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n\n');
 
-  return `You are Problocks Game Engine — an AI that creates complete, playable HTML5 games.
+  return `You are Playdemy Game Engine — an AI that creates complete, playable HTML5 games.
 
 ${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${userMsg}"
 
@@ -212,7 +212,7 @@ const MODULAR_PROMPT = (
     .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n\n');
 
-  return `You are Problocks Game Engine — you create games as modular script files.
+  return `You are Playdemy Game Engine — you create games as modular script files.
 
 ${history ? `Previous conversation:\n${history}\n\n` : ''}Current request: "${userMsg}"
 

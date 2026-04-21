@@ -59,7 +59,7 @@ export const Footer = ({ onMakeGame }: { onMakeGame?: () => void }) => (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <Icon name="logo-block" size={30}/>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>ProBlocks</span>
+            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>Playdemy</span>
           </div>
           <p style={{ margin: 0, fontSize: 13.5, color: 'var(--pbs-ink-soft)', lineHeight: 1.55, maxWidth: 280 }}>
             Students learn by building playable worlds. Teachers watch what they build and see what they know.
@@ -94,7 +94,7 @@ export const Footer = ({ onMakeGame }: { onMakeGame?: () => void }) => (
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
         fontSize: 12.5, color: 'var(--pbs-ink-muted)',
       }}>
-        <div>© 2026 ProBlocks · Made with <span className="pbs-serif" style={{ fontSize: 14 }}>care</span> for classrooms.</div>
+        <div>© 2026 Playdemy · Made with <span className="pbs-serif" style={{ fontSize: 14 }}>care</span> for classrooms.</div>
         <div style={{ display: 'flex', gap: 18 }}>
           <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a>
           <a href="/terms" style={{ color: 'inherit' }}>Terms</a>

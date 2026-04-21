@@ -1,7 +1,7 @@
 import { DesktopOnly } from '@/components/DesktopOnly';
 
 export const metadata = {
-  title: 'Scratch Studio · Problocks',
+  title: 'Scratch Studio · Playdemy',
 };
 
 export default function ScratchStudioPage() {

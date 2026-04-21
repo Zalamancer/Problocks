@@ -28,7 +28,7 @@ export function StudioTerminal({
   activeGameName?: string | null;
 }) {
   const [lines, setLines] = useState<TerminalLine[]>([
-    { type: 'system', text: '  Problocks Game Engine' },
+    { type: 'system', text: '  Playdemy Game Engine' },
     { type: 'system', text: '  Describe a game and I\'ll build it instantly.' },
     { type: 'system', text: '  Example: "make a space shooter with power-ups"' },
     { type: 'system', text: '' },
@@ -52,7 +52,7 @@ export function StudioTerminal({
     if (activeGameName && !hasShownResume.current) {
       hasShownResume.current = true;
       setLines([
-        { type: 'system', text: '  Problocks Game Engine' },
+        { type: 'system', text: '  Playdemy Game Engine' },
         { type: 'status', text: `  🎮 Continue working on: ${activeGameName}` },
         { type: 'system', text: '  Describe changes to update your game.' },
         { type: 'system', text: '' },
@@ -61,7 +61,7 @@ export function StudioTerminal({
       // Active game cleared (new game) — reset terminal
       hasShownResume.current = false;
       setLines([
-        { type: 'system', text: '  Problocks Game Engine' },
+        { type: 'system', text: '  Playdemy Game Engine' },
         { type: 'system', text: '  Describe a game and I\'ll build it instantly.' },
         { type: 'system', text: '  Example: "make a space shooter with power-ups"' },
         { type: 'system', text: '' },

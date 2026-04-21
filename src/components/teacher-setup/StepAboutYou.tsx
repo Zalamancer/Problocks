@@ -111,7 +111,7 @@ export const StepAboutYou = ({
       fontSize: 13, color: 'var(--pbs-ink-soft)', lineHeight: 1.5,
     }}>
       <Icon name="lock" size={16} stroke={2.2} style={{ color: 'var(--pbs-ink)', flexShrink: 0 }}/>
-      <span>FERPA &amp; COPPA compliant. Your school admin can pre-approve ProBlocks so you never hit a wall. <a href="#admin" style={{ color: 'var(--pbs-ink)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Admin info →</a></span>
+      <span>FERPA &amp; COPPA compliant. Your school admin can pre-approve Playdemy so you never hit a wall. <a href="#admin" style={{ color: 'var(--pbs-ink)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Admin info →</a></span>
     </div>
   </div>
 );

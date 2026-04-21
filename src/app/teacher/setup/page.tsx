@@ -7,7 +7,7 @@ import { ClassroomProviders } from '@/app/classroom/Providers';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Set up your classroom',
+  title: 'Playdemy — Set up your classroom',
   description: 'Teacher onboarding: name your classroom, add students, pick a starter unit, and open the doors.',
 };
 

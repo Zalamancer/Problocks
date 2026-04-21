@@ -141,7 +141,7 @@ export const betaMilestone: MilestoneTemplate = {
       blockedBy: ['st-content-lock'],
       estimatedHours: 16,
       tip: 'Test on the worst hardware your players will use, not the best hardware you have. A game that runs at 60fps on a developer machine may drop to 15fps on a student Chromebook.',
-      exampleFromIndustry: 'Problocks targets Celeron N4000 Chromebooks (4GB RAM). Profile on that hardware specifically — not on developer machines.',
+      exampleFromIndustry: 'Playdemy targets Celeron N4000 Chromebooks (4GB RAM). Profile on that hardware specifically — not on developer machines.',
     },
     {
       id: 'st-accessibility',

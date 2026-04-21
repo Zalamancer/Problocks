@@ -13,7 +13,7 @@ async function handleWithAPI(messages: { role: string; content: string }[]) {
   const stream = await anthropic.messages.stream({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
-    system: 'You are a helpful AI assistant embedded in Problocks, an AI-powered game creation studio. Help the user with their game development questions, code, and creative ideas. Be concise and direct.',
+    system: 'You are a helpful AI assistant embedded in Playdemy, an AI-powered game creation studio. Help the user with their game development questions, code, and creative ideas. Be concise and direct.',
     messages: messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
   });
 

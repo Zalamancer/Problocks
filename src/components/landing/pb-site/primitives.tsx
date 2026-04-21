@@ -1,4 +1,4 @@
-// Primitive components and small atoms for the ProBlocks landing page.
+// Primitive components and small atoms for the Playdemy landing page.
 // Ported verbatim from the Claude Design bundle (pb_site/primitives.jsx) —
 // only converted to TSX and replaced window-global registration with ES exports.
 'use client';

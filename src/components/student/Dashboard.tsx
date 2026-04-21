@@ -48,7 +48,7 @@ export const Dashboard = ({
         <div className="pbs-wrap pbs-student-header-row" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="logo-block" size={26}/>
-            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>ProBlocks</span>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>Playdemy</span>
           </div>
           <nav className="pbs-student-nav" style={{ display: 'flex', gap: 4, marginLeft: 24 }}>
             {([

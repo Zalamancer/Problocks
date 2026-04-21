@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode, MouseEvent } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
- * Problocks Studio design-bundle atoms — ported 1:1 from:
+ * Playdemy Studio design-bundle atoms — ported 1:1 from:
  *   /tmp/design_bundle/problocks/project/studio/atoms.jsx    (Pill, SectionLabel)
  *   /tmp/design_bundle/problocks/project/kit/primitives.jsx  (PBButton, IconBtn, PBBadge)
  *
@@ -219,7 +219,7 @@ export function SectionLabel({
 // The 4-colored-squares mark from atoms.jsx → Icon case 'logo'.
 export function PBLogo({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-label="Problocks">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-label="Playdemy">
       <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="var(--pb-ink)" />
       <rect x="5.5"  y="5.5"  width="6" height="6" rx="1.5" fill="var(--pb-butter)" />
       <rect x="12.5" y="5.5"  width="6" height="6" rx="1.5" fill="var(--pb-pink)" />

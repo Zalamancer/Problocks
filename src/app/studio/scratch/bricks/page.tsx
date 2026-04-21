@@ -1,7 +1,7 @@
 import { BlocksGameShell } from '@/components/scratch/BlocksGameShell';
 
 export const metadata = {
-  title: 'Scratch · Bricks Game · Problocks',
+  title: 'Scratch · Bricks Game · Playdemy',
 };
 
 // Two-pane experience: Scratch blocks on the left, the 3D bricks (LDraw)

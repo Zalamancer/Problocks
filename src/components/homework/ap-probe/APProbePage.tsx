@@ -1,5 +1,5 @@
 // Full AP Probe preview page — cream backdrop with soft radial gradients,
-// ProBlocks header pill (Phone/Desktop + Drill/Homework toggles + Reset),
+// Playdemy header pill (Phone/Desktop + Drill/Homework toggles + Reset),
 // ChromeWindow wrapping the desktop homework or PhoneFrame with the mobile
 // homework, and a footnote below. Ported from the design's app.jsx.
 
@@ -160,7 +160,7 @@ function Header({
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Logo size={22} />
         <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '-0.01em' }}>
-          ProBlocks
+          Playdemy
         </div>
         <span
           style={{
@@ -299,7 +299,7 @@ function Footnote() {
         lineHeight: 1.5,
       }}
     >
-      Game surface built in a ProBlocks graph · Question content adapted from a real AP
+      Game surface built in a Playdemy graph · Question content adapted from a real AP
       Physics 1 FRQ (original wording, physics-accurate) · Swap FRQs from the teacher
       dashboard
     </div>

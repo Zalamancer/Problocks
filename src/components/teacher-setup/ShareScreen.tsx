@@ -50,7 +50,7 @@ export const ShareScreen = () => {
   const joinUrl = classId ? `${origin}/join/${classId}` : '';
 
   const announcement = cls
-    ? `Hi class! 👋 We're using ProBlocks for ${cls.name}.\n\nTap this link and sign in with your school Google account to join:\n${joinUrl}\n\nOnce you're in, all our assignments and grades will sync back here.`
+    ? `Hi class! 👋 We're using Playdemy for ${cls.name}.\n\nTap this link and sign in with your school Google account to join:\n${joinUrl}\n\nOnce you're in, all our assignments and grades will sync back here.`
     : '';
 
   const copy = async (text: string, key: 'link' | 'announcement') => {

@@ -280,7 +280,7 @@ export function CodeView({
                 </div>
 
                 <InspectorCard label="LANGUAGE" value={activeMeta.language + (activeMeta.language === 'JavaScript' ? ' + JSON' : '')} />
-                <InspectorCard label="ENGINE" value="ProBlocks Engine 1.4" />
+                <InspectorCard label="ENGINE" value="Playdemy Engine 1.4" />
                 <InspectorCard label="FILES" value={String(fileEntries.length)} />
                 <InspectorCard label="LAST BUILD" value="Just now · 182 ms" />
               </div>

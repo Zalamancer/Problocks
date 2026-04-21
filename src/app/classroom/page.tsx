@@ -1,6 +1,6 @@
 import { ClassroomLayout } from '@/components/classroom/ClassroomLayout';
 
-export const metadata = { title: 'Classroom — Problocks' };
+export const metadata = { title: 'Classroom — Playdemy' };
 
 export default function ClassroomPage() {
   return (

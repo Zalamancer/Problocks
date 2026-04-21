@@ -201,7 +201,7 @@ export const Hero = ({
             fontSize: 18, lineHeight: 1.5, color: 'var(--pbs-ink-soft)',
           }}>
             {mode === 'student'
-              ? <>ProBlocks turns <span className="pbs-serif" style={{ fontSize: '1.1em' }}>fractions</span>, <span className="pbs-serif" style={{ fontSize: '1.1em' }}>French verbs</span> and <span className="pbs-serif" style={{ fontSize: '1.1em' }}>photosynthesis</span> into playable worlds. Build them with a sentence, play them with friends, and chat about what you&apos;re stuck on.</>
+              ? <>Playdemy turns <span className="pbs-serif" style={{ fontSize: '1.1em' }}>fractions</span>, <span className="pbs-serif" style={{ fontSize: '1.1em' }}>French verbs</span> and <span className="pbs-serif" style={{ fontSize: '1.1em' }}>photosynthesis</span> into playable worlds. Build them with a sentence, play them with friends, and chat about what you&apos;re stuck on.</>
               : <>Students describe a game, Claude builds it, and the lesson plays itself. Every level they design shows you exactly what they understand — and what they don&apos;t.</>
             }
           </p>

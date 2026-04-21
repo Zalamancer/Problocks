@@ -7,8 +7,8 @@ import { ShareScreen } from '@/components/teacher-setup/ShareScreen';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
-  title: 'ProBlocks — Invite your students',
-  description: 'Share your ProBlocks classroom join link so students can sign in.',
+  title: 'Playdemy — Invite your students',
+  description: 'Share your Playdemy classroom join link so students can sign in.',
 };
 
 export default function TeacherSetupSharePage() {

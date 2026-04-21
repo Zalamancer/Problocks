@@ -335,7 +335,7 @@ function GoogleClassroomConnect({
     return () => { cancelled = true; };
   }, [status]);
 
-  // Pick a course: link it to the ProBlocks class being set up. We do NOT
+  // Pick a course: link it to the Playdemy class being set up. We do NOT
   // import a roster — that needs the restricted classroom.rosters scope. Students
   // enrol themselves at /join/:classId (see GoogleClassroomConnect instructions).
   const pickCourse = (course: ClassroomCourse) => {
@@ -509,7 +509,7 @@ function GoogleClassroomConnect({
         }}>
           <strong style={{ color: 'var(--pbs-ink)' }}>Linked to &ldquo;{data.classroomCourseName}&rdquo;.</strong>
           {' '}Classroom assignments &amp; grades will sync to the teacher dashboard. Students join
-          ProBlocks by signing in themselves — we&apos;ll generate a share link on the final step so
+          Playdemy by signing in themselves — we&apos;ll generate a share link on the final step so
           you can post it as a Classroom announcement.
         </div>
       )}

@@ -13,7 +13,7 @@ export default function ClassroomAuthPage() {
         <div>
           <h1 className="text-zinc-100 text-2xl font-bold">Sign in to Classroom</h1>
           <p className="text-zinc-400 text-sm mt-2 leading-relaxed">
-            Connect your Google account to access your courses, assignments, and class resources in Problocks.
+            Connect your Google account to access your courses, assignments, and class resources in Playdemy.
           </p>
         </div>
         <PanelActionButton

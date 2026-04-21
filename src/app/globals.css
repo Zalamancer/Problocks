@@ -639,9 +639,7 @@ html.quality-medium *[class*="backdrop-blur-lg"] {
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .pbs-input-wrap:focus-within {
-  border-color: var(--pbs-ink) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 0 0 3px rgba(29, 26, 20, 0.08) !important;
+  border-color: var(--pbs-line-2) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
 }
 

@@ -76,16 +76,15 @@ export function BlocksGameShell({
   const [bricksState, setBricksState] = useState<BricksState>(INITIAL_STATE);
 
   // Add ?embed=1 to the game URL so it hides its in-iframe Parts/Scheme
-  // docks — the outer Problocks panels own that chrome now.
+  // docks — the outer Problocks panels own that chrome now. Purely
+  // string-based so it's SSR-safe (no window reference).
   const embeddedGameSrc = useMemo(() => {
-    try {
-      const u = new URL(gameSrc, window.location.href);
-      u.searchParams.set('embed', '1');
-      // Return path-relative so we don't fight origin rewriting in dev.
-      return u.pathname + u.search + u.hash;
-    } catch {
-      return gameSrc + (gameSrc.includes('?') ? '&' : '?') + 'embed=1';
-    }
+    const [pathAndQuery, hash = ''] = gameSrc.split('#');
+    const [path, query = ''] = pathAndQuery.split('?');
+    const params = new URLSearchParams(query);
+    params.set('embed', '1');
+    const qs = params.toString();
+    return path + (qs ? `?${qs}` : '') + (hash ? `#${hash}` : '');
   }, [gameSrc]);
 
   useEffect(() => {
@@ -113,7 +112,11 @@ export function BlocksGameShell({
         }
         if (devMode) setLastGameEvent(JSON.stringify(data));
 
-        if (data.type === 'ready') {
+        const isFullCatalog =
+          data.type === 'ready' ||
+          (data.type === 'ack' && data.action === 'getCatalog');
+
+        if (isFullCatalog) {
           const parts     = Array.isArray(data.parts)      ? (data.parts      as BricksPart[])  : [];
           const cats      = Array.isArray(data.categories) ? (data.categories as string[])      : [];
           const colors    = Array.isArray(data.colors)     ? (data.colors     as BricksColor[]) : [];
@@ -168,6 +171,31 @@ export function BlocksGameShell({
     if (!win) return;
     win.postMessage({ source: 'scratch-blocks', ...payload }, '*');
   }, []);
+
+  // Pull-based catalog sync: the game's one-shot 'ready' broadcast often
+  // races ahead of React's mount, and iframe `onLoad` fires inconsistently
+  // under HMR. Poll `getCatalog` on mount until the React state reports
+  // a non-empty parts list, then stop. 30 tries × 300ms ≈ 9 seconds.
+  const gotCatalogRef = useRef(false);
+  useEffect(() => {
+    gotCatalogRef.current = catalog.parts.length > 0;
+  }, [catalog.parts.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let tries = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (gotCatalogRef.current) return;
+      if (tries++ > 30) return;
+      send({ action: 'getCatalog' });
+      setTimeout(tick, 300);
+    };
+    // Kick off after a small delay so the iframe has a chance to register
+    // its own message listener first on slow starts.
+    const id = setTimeout(tick, 250);
+    return () => { cancelled = true; clearTimeout(id); };
+  }, [send]);
 
   return (
     <DesktopOnly title={`${title} is desktop-only`} description={description}>

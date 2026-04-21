@@ -511,25 +511,11 @@ export const RobloxAvatar = ({
       // space). This gives a tight bound on the actual body silhouette.
       // 'bust' focus restricts the bbox to head + torso (+ hair/hat) so the
       // camera zooms in past the legs. Hair/hat are included so a top hat
-      // or long hair doesn't get clipped at the top of the frame.
-      //
-      // At high FOV we also drop the torso from the bbox and keep only the
-      // head group. Because the fit keeps the bbox filling the frame, this
-      // shrinks the target object so the face gets bigger on screen as the
-      // fisheye distortion ramps up — otherwise increasing FOV alone would
-      // warp the face without actually zooming into it. The transition is
-      // continuous (controlled by `faceCloseup` below), not a hard snap.
-      // Read the live camera.fov (the external FOV effect mutates it
-      // before calling refit) so this threshold respects slider updates
-      // instead of the stale value captured when the scene was built.
-      const liveFov = camera.fov;
-      const faceCloseup = focus === 'bust' && liveFov >= 55;
+      // or long hair doesn't get clipped at the top of the frame. Torso
+      // stays in the bbox at every FOV so the chest never drops out of
+      // frame as the student cranks the slider up into fisheye territory.
       const allowedParts =
-        focus === 'bust'
-          ? faceCloseup
-            ? new Set(['head', 'hair', 'hat'])
-            : new Set(['head', 'torso', 'hair', 'hat'])
-          : null;
+        focus === 'bust' ? new Set(['head', 'torso', 'hair', 'hat']) : null;
       const box = new THREE.Box3();
       let hasAny = false;
       character.traverse((obj) => {
@@ -549,21 +535,11 @@ export const RobloxAvatar = ({
       box.getSize(size);
       box.getCenter(center);
       // Margin policy:
-      // - focus 'full'                  → 1.2  (20% padding, current behavior)
-      // - focus 'bust',  normal FOV     → 1.03 (3% padding, head+chest tight)
-      // - focus 'bust',  face closeup   → lerp 1.05 (at fov 55) → 0.78 (at
-      //   fov 170). Below 1.0 the camera actually crops INTO hair/hat,
-      //   pushing the face bigger — which is exactly what you want when
-      //   the student has cranked the slider to 'Fisheye / Nightmare'.
-      const margin =
-        focus === 'bust'
-          ? faceCloseup
-            ? (() => {
-                const t = Math.max(0, Math.min(1, (liveFov - 55) / (170 - 55)));
-                return 1.05 + (0.78 - 1.05) * t;
-              })()
-            : 1.03
-          : 1.2;
+      // - focus 'full' → 1.2  (20% padding)
+      // - focus 'bust' → 1.03 (3% padding, head+chest tight; torso stays
+      //   in frame at every FOV so the fisheye comedy warps the whole
+      //   bust instead of cropping the body out past 55°).
+      const margin = focus === 'bust' ? 1.03 : 1.2;
       const vFov = (camera.fov * Math.PI) / 180;
       const aspect = Math.max(0.0001, camera.aspect);
       const distV = (size.y * margin) / (2 * Math.tan(vFov / 2));

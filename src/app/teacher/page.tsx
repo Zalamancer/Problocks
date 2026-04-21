@@ -4,6 +4,7 @@
 import { Suspense } from 'react';
 import { TeacherApp } from '@/components/teacher/TeacherApp';
 import { NewClassBanner } from '@/components/teacher/NewClassBanner';
+import { TeacherDataProvider } from '@/components/teacher/teacher-data-context';
 import '@/components/landing/pb-site/styles.css';
 import '@/components/teacher/teacher.css';
 
@@ -19,9 +20,11 @@ export default function TeacherPage() {
       <div className="pbs-page-noise" aria-hidden />
       <div className="pbs-content">
         <Suspense fallback={null}>
-          <NewClassBanner />
+          <TeacherDataProvider>
+            <NewClassBanner />
+            <TeacherApp />
+          </TeacherDataProvider>
         </Suspense>
-        <TeacherApp />
       </div>
     </div>
   );

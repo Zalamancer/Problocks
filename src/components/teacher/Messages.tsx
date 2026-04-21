@@ -10,8 +10,9 @@ import { CardboardHead } from './CardboardHead';
 import { ClassIcon, DirectMessagesIcon } from './ClassIcon';
 import { CHANNELS_BY_CLASS, SEED_DM, SEED_GROUP, type Channel, type ChatMessage } from './messages-data';
 import { ChannelDetails, DmThread, GroupThread, StudentDetails } from './MessagesThread';
-import { CLASSES, STUDENTS, type ClassRecord, type Student } from './sample-data';
+import { type ClassRecord, type Student } from './sample-data';
 import { kickerSty } from './shared';
+import { useTeacherData } from './teacher-data-context';
 
 type Mode = 'group' | 'dm';
 
@@ -209,6 +210,7 @@ export const Messages = ({
   onCls?: (c: ClassRecord) => void;
   onStudent?: (s: Student) => void;
 }) => {
+  const { students, classes } = useTeacherData();
   const [mode, setMode]         = useState<Mode>('group');
   const [channelId, setChannel] = useState('general');
   const [dmStudentId, setDm]    = useState('s5');
@@ -220,7 +222,7 @@ export const Messages = ({
 
   const key = mode === 'group' ? `${cls.id}:${channelId}` : `dm:${dmStudentId}`;
   const activeChannel = channels.find((c) => c.id === channelId) || channels[0];
-  const activeStudent = STUDENTS.find((s) => s.id === dmStudentId);
+  const activeStudent = students.find((s) => s.id === dmStudentId);
   const messages = threadsState[key] || [];
 
   const handleSend = (text: string) => {
@@ -271,7 +273,7 @@ export const Messages = ({
         }}>
           <DmRailButton active={mode === 'dm'} onClick={pickDm}/>
           <RailDivider/>
-          {CLASSES.map((c) => (
+          {classes.map((c) => (
             <ClassRailButton
               key={c.id}
               c={c}
@@ -313,7 +315,7 @@ export const Messages = ({
               <SidebarSection label="Recent"/>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {threadIds
-                  .map((id) => STUDENTS.find((s) => s.id === id))
+                  .map((id) => students.find((s) => s.id === id))
                   .filter((s): s is Student => Boolean(s))
                   .filter((s) => !query || s.name.toLowerCase().includes(query.toLowerCase()))
                   .map((s) => (
@@ -329,7 +331,7 @@ export const Messages = ({
 
               <SidebarSection label="Start new" mt/>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {STUDENTS
+                {students
                   .filter((s) => !threadIds.includes(s.id))
                   .filter((s) => !query || s.name.toLowerCase().includes(query.toLowerCase()))
                   .slice(0, 8)

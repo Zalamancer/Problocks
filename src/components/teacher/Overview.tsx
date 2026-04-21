@@ -9,16 +9,15 @@ import { CardboardHead } from './CardboardHead';
 import { BarRow, MasteryHeatmap, TopicBars } from './charts';
 import { Kpi, kickerSty, LegendDot } from './shared';
 import {
-  ASSIGNMENTS,
   ENGAGEMENT_14D,
   RECENT_QUESTIONS,
-  STUDENTS,
   TOPICS,
   TRICKY_QUESTIONS,
   type Assignment,
   type ClassRecord,
   type Student,
 } from './sample-data';
+import { useTeacherData } from './teacher-data-context';
 
 const reteachBtn: React.CSSProperties = {
   padding: '6px 12px', borderRadius: 999,
@@ -43,9 +42,50 @@ export const Overview = ({
   onStudent: (s: Student) => void;
   onAssignment: (a: Assignment) => void;
 }) => {
+  const { students, assignments, isReal, classId } = useTeacherData();
   const at = cls.avg;
-  const highRisk = STUDENTS.filter((s) => s.risk === 'high' || s.risk === 'medium');
-  const live = ASSIGNMENTS[0];
+  const highRisk = students.filter((s) => s.risk === 'high' || s.risk === 'medium');
+  const live = assignments[0];
+
+  // Real mode, empty class → replace the whole busy dashboard with a calm
+  // "invite students to see real data" card. Rendering the demo charts with
+  // zero students looks broken; rendering them with fake numbers is worse.
+  if (isReal && students.length === 0) {
+    const joinUrl = classId && typeof window !== 'undefined'
+      ? `${window.location.origin}/join/${classId}`
+      : null;
+    return (
+      <div className="pbs-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        <div>
+          <div className="pbs-mono" style={kickerSty}>OVERVIEW</div>
+          <h1 style={{ margin: '6px 0 0', fontSize: 'clamp(28px, 3.4vw, 42px)', fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.05 }}>
+            {cls.name || 'Your classroom'} is <span className="pbs-serif">waiting for students.</span>
+          </h1>
+          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--pbs-ink-soft)', maxWidth: 540 }}>
+            The full overview — KPIs, engagement, mastery heatmap, live question feed — populates as students join and play. Right now the roster is empty.
+          </p>
+        </div>
+
+        <Block tone="paper" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Invite your class</div>
+          <div style={{ fontSize: 12.5, color: 'var(--pbs-ink-muted)', marginBottom: 12 }}>
+            Share this link. Each student signs in once with their school Google account.
+          </div>
+          {joinUrl && (
+            <div
+              className="pbs-mono"
+              style={{
+                padding: '12px 14px', borderRadius: 10,
+                background: 'var(--pbs-cream-2)',
+                border: '1.5px solid var(--pbs-line-2)',
+                fontSize: 13, wordBreak: 'break-all',
+              }}
+            >{joinUrl}</div>
+          )}
+        </Block>
+      </div>
+    );
+  }
 
   return (
     <div className="pbs-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -62,21 +102,23 @@ export const Overview = ({
             Your class is <span className="pbs-serif">doing well.</span>
           </h1>
           <p style={{ margin: 0, fontSize: 14.5, color: 'var(--pbs-ink-soft)', maxWidth: 520 }}>
-            {cls.members} students, {ASSIGNMENTS.length} assignments this week. Probability is the softest spot — 3 students need a nudge.
+            {cls.members} students, {assignments.length} assignments this week. Probability is the softest spot — 3 students need a nudge.
           </p>
 
-          <Block tone="ink" style={{ marginTop: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 14, color: 'var(--pbs-cream)' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 999, background: '#55e08e', boxShadow: '0 0 0 4px rgba(85,224,142,0.25)' }}/>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Live now · {live.title}</div>
-              <div style={{ fontSize: 11.5, opacity: 0.75 }}>18 students playing · {live.submitted}/{live.total} submitted · avg {live.avg}%</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onAssignment(live)}
-              style={{ padding: '8px 14px', borderRadius: 999, background: 'var(--pbs-butter)', color: 'var(--pbs-butter-ink)', fontSize: 12, fontWeight: 700, border: 0, cursor: 'pointer', fontFamily: 'inherit' }}
-            >Watch live →</button>
-          </Block>
+          {live && (
+            <Block tone="ink" style={{ marginTop: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 14, color: 'var(--pbs-cream)' }}>
+              <div style={{ width: 10, height: 10, borderRadius: 999, background: '#55e08e', boxShadow: '0 0 0 4px rgba(85,224,142,0.25)' }}/>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>Live now · {live.title}</div>
+                <div style={{ fontSize: 11.5, opacity: 0.75 }}>18 students playing · {live.submitted}/{live.total} submitted · avg {live.avg}%</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onAssignment(live)}
+                style={{ padding: '8px 14px', borderRadius: 999, background: 'var(--pbs-butter)', color: 'var(--pbs-butter-ink)', fontSize: 12, fontWeight: 700, border: 0, cursor: 'pointer', fontFamily: 'inherit' }}
+              >Watch live →</button>
+            </Block>
+          )}
         </div>
 
         <div className="pb-teacher-kpis" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -121,7 +163,7 @@ export const Overview = ({
             <LegendDot c="#ff9280" raw l="<55"/>
           </div>
         </div>
-        <MasteryHeatmap students={STUDENTS} topics={TOPICS} onPick={onStudent}/>
+        <MasteryHeatmap students={students} topics={TOPICS} onPick={onStudent}/>
       </Block>
 
       {/* Hotspots + Questions feed */}
@@ -165,7 +207,7 @@ export const Overview = ({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto' }}>
             {RECENT_QUESTIONS.map((q, i) => {
-              const s = STUDENTS.find((x) => x.id === q.sid);
+              const s = students.find((x) => x.id === q.sid);
               return (
                 <div key={i} style={{
                   display: 'flex', gap: 10, padding: 10, borderRadius: 10,

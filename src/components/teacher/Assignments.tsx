@@ -5,8 +5,9 @@
 import React from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { CardboardHead } from './CardboardHead';
-import { ASSIGNMENTS, STUDENTS, type Assignment, type Student } from './sample-data';
+import { type Assignment, type Student } from './sample-data';
 import { backBtn, kickerSty, MiniKpi } from './shared';
+import { useTeacherData } from './teacher-data-context';
 
 export const AssignmentsList = ({
   onAssignment, onNew, drafts = [],
@@ -17,7 +18,26 @@ export const AssignmentsList = ({
   // so newly-created cards appear at the top. Drafts render a "Draft" pill.
   drafts?: Assignment[];
 }) => {
-  const all = [...drafts, ...ASSIGNMENTS];
+  const { assignments, isReal } = useTeacherData();
+  const all = [...drafts, ...assignments];
+  if (isReal && all.length === 0) {
+    return (
+      <div className="pbs-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <div className="pbs-mono" style={kickerSty}>ASSIGNMENTS</div>
+          <h1 style={{ margin: '6px 0 0', fontSize: 'clamp(28px, 3.4vw, 42px)', fontWeight: 700, letterSpacing: '-0.025em' }}>
+            No assignments yet.
+          </h1>
+          <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--pbs-ink-soft)', maxWidth: 540 }}>
+            Assignments you create from here will sync to Google Classroom.
+          </p>
+        </div>
+        <div>
+          <Chunky tone="butter" icon="plus" onClick={onNew}>New assignment</Chunky>
+        </div>
+      </div>
+    );
+  }
   return (
   <div className="pbs-fade-in">
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
@@ -86,7 +106,8 @@ export const AssignmentDetail = ({
   onBack: () => void;
   onStudent: (s: Student) => void;
 }) => {
-  const rows = STUDENTS.map((s) => {
+  const { students } = useTeacherData();
+  const rows = students.map((s) => {
     const base = Math.round((s.mastery.alg + s.mastery.num) / 2 * 100);
     const score = Math.max(0, Math.min(100, base + jitterFor(s)));
     return { s, score, submitted: submittedFor(s), timeMin: timeFor(s) };

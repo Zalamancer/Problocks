@@ -4,7 +4,7 @@
 // Ported from problocks/project/pb_teacher/app.jsx.
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { AssignmentDetail, AssignmentsList } from './Assignments';
 import { Messages } from './Messages';
@@ -13,9 +13,10 @@ import { Overview } from './Overview';
 import { StudentDetail } from './StudentDetail';
 import { StudentSelf } from './StudentSelf';
 import { StudentsList } from './StudentsList';
-import { CLASSES, type Assignment, type ClassRecord, type Student } from './sample-data';
+import { type Assignment, type ClassRecord, type Student } from './sample-data';
 import { teacherWrap } from './shared';
 import { useDataSourceStore } from '@/store/data-source-store';
+import { useTeacherData } from './teacher-data-context';
 
 type View = 'overview' | 'assignments' | 'assignment' | 'new-assignment' | 'students' | 'student' | 'self' | 'messages';
 
@@ -32,10 +33,11 @@ const TABS: { k: View; l: string }[] = [
 ];
 
 const ClassPicker = ({
-  cls, setCls,
+  cls, setCls, classes,
 }: {
   cls: ClassRecord;
   setCls: (c: ClassRecord) => void;
+  classes: ClassRecord[];
 }) => {
   const [open, setOpen] = useState(false);
   return (
@@ -74,7 +76,7 @@ const ClassPicker = ({
             boxShadow: '0 6px 0 var(--pbs-line-2), 0 20px 40px -12px rgba(0,0,0,0.2)',
           }}
         >
-          {CLASSES.map((c) => (
+          {classes.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -116,18 +118,26 @@ const isTabActive = (view: View, k: View): boolean => {
 
 export const TeacherApp = () => {
   const useRealData = useDataSourceStore((s) => s.useRealData);
+  const { classRecord, classes, isReal } = useTeacherData();
   const [view, setView] = useState<View>('overview');
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
-  const [cls, setCls] = useState<ClassRecord>(CLASSES[0]);
+  const [cls, setCls] = useState<ClassRecord>(classRecord);
   // Composer output — drafts AND published both get prepended to the
   // Assignments list; drafts are distinguished by a "Draft" pill.
   const [drafts, setDrafts] = useState<Assignment[]>([]);
 
-  // Real mode: Supabase schema for teacher dashboard (classes / students /
-  // assignments) isn't provisioned yet. Show an honest empty state instead of
-  // leaking mock data through the dashboard. Mock mode: full demo.
-  if (useRealData) {
+  // When the context swaps between demo/real (or real data loads async from
+  // /api/classes), bring the picker selection along instead of leaving it
+  // pinned to the stale initial CLASSES[0].
+  useEffect(() => {
+    setCls(classRecord);
+  }, [classRecord]);
+
+  // Legacy "Real data" pill in the bottom-right: only show the "no schema"
+  // empty state when the pill is toggled AND we aren't in URL-driven real
+  // mode (?classId=... already loads real data via the context).
+  if (useRealData && !isReal) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
         <div style={{
@@ -185,7 +195,7 @@ export const TeacherApp = () => {
             }}>TEACHER</span>
           </div>
 
-          <ClassPicker cls={cls} setCls={setCls}/>
+          <ClassPicker cls={cls} setCls={setCls} classes={classes}/>
 
           <nav style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
             {TABS.map(({ k, l }) => {

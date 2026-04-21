@@ -9,7 +9,8 @@ import type { AvatarOutfit } from '@/components/student/RobloxAvatar';
 import { Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { CardboardHead } from './CardboardHead';
 import type { Channel, ChatMessage } from './messages-data';
-import { STUDENTS, type ClassRecord, type Student, type TeacherTone } from './sample-data';
+import { type ClassRecord, type Student, type TeacherTone } from './sample-data';
+import { useTeacherData } from './teacher-data-context';
 
 // --- Thread header -----------------------------------------------------------
 
@@ -53,9 +54,9 @@ type Author = {
   avatar?: AvatarOutfit;
 };
 
-const resolveAuthor = (id: string, dmPartner?: Student): Author => {
+const resolveAuthor = (id: string, students: Student[], dmPartner?: Student): Author => {
   if (dmPartner && dmPartner.id === id) return dmPartner;
-  const s = STUDENTS.find((x) => x.id === id);
+  const s = students.find((x) => x.id === id);
   if (s) return s;
   return { name: id, emoji: '🙂', tone: 'cream' };
 };
@@ -146,6 +147,7 @@ const MessageBubble = ({
 const MessageList = ({
   messages, showAvatars, dmPartner,
 }: { messages: ChatMessage[]; showAvatars?: boolean; dmPartner?: Student }) => {
+  const { students } = useTeacherData();
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -161,7 +163,7 @@ const MessageList = ({
         const isMe = m.who === 'me';
         const author: Author = isMe
           ? { name: 'Ms. Rivera', emoji: '👩🏽‍🏫', tone: 'grape' }
-          : resolveAuthor(m.who, dmPartner);
+          : resolveAuthor(m.who, students, dmPartner);
         return <MessageBubble key={i} m={m} isMe={isMe} author={author} showAvatar={showAvatars}/>;
       })}
       <div style={{
@@ -304,7 +306,7 @@ const Stat = ({ k, v }: { k: string; v: React.ReactNode }) => (
 
 type Contributor = { id: string; student: Student; count: number };
 
-const topContributors = (messages: ChatMessage[]): Contributor[] => {
+const topContributors = (messages: ChatMessage[], students: Student[]): Contributor[] => {
   const counts: Record<string, number> = {};
   messages.forEach((m) => {
     if (m.who === 'me') return;
@@ -312,7 +314,7 @@ const topContributors = (messages: ChatMessage[]): Contributor[] => {
   });
   return Object.entries(counts)
     .map(([id, count]) => {
-      const student = STUDENTS.find((x) => x.id === id);
+      const student = students.find((x) => x.id === id);
       if (!student) return null;
       return { id, student, count };
     })
@@ -324,10 +326,11 @@ const topContributors = (messages: ChatMessage[]): Contributor[] => {
 export const ChannelDetails = ({
   cls, channel, messages,
 }: { cls: ClassRecord; channel: Channel; messages: ChatMessage[] }) => {
+  const { students } = useTeacherData();
   const me     = messages.filter((m) => m.who === 'me').length;
   const them   = messages.length - me;
   const pinned = messages.filter((m) => m.pinned);
-  const top    = topContributors(messages);
+  const top    = topContributors(messages, students);
 
   return (
     <>

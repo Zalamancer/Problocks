@@ -4,9 +4,10 @@
 
 import React, { useState } from 'react';
 import { Block, Pill } from '@/components/landing/pb-site/primitives';
-import { STUDENTS, type Student } from './sample-data';
+import { type Student } from './sample-data';
 import { kickerSty } from './shared';
 import { StudentAvatar } from './StudentAvatar';
+import { useTeacherData } from './teacher-data-context';
 
 type SortKey = 'avg' | 'risk' | 'name';
 const riskRank = { none: 0, low: 1, medium: 2, high: 3 } as const;
@@ -16,10 +17,11 @@ export const StudentsList = ({
 }: {
   onStudent: (s: Student) => void;
 }) => {
+  const { students, isReal, classId } = useTeacherData();
   const [sort, setSort] = useState<SortKey>('avg');
   const [q, setQ] = useState('');
 
-  const filtered = STUDENTS
+  const filtered = students
     .filter((s) => s.name.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => {
       if (sort === 'avg')  return b.avg - a.avg;
@@ -27,13 +29,18 @@ export const StudentsList = ({
       return a.name.localeCompare(b.name);
     });
 
+  const joinUrl =
+    isReal && classId && typeof window !== 'undefined'
+      ? `${window.location.origin}/join/${classId}`
+      : null;
+
   return (
     <div className="pbs-fade-in">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div className="pbs-mono" style={kickerSty}>STUDENTS</div>
           <h1 style={{ margin: '6px 0 0', fontSize: 'clamp(28px, 3.4vw, 42px)', fontWeight: 700, letterSpacing: '-0.025em' }}>
-            {STUDENTS.length} students
+            {students.length} student{students.length === 1 ? '' : 's'}
           </h1>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -67,6 +74,31 @@ export const StudentsList = ({
           </div>
         </div>
       </div>
+
+      {isReal && students.length === 0 && (
+        <Block tone="paper" style={{ padding: 28, textAlign: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>
+            No students have joined yet.
+          </div>
+          <p style={{ margin: '6px auto 0', fontSize: 13.5, color: 'var(--pbs-ink-soft)', lineHeight: 1.55, maxWidth: 440 }}>
+            Share the link below and ask each student to sign in with their
+            school Google account. Their name and photo will appear here within
+            seconds of signing in.
+          </p>
+          {joinUrl && (
+            <div
+              className="pbs-mono"
+              style={{
+                marginTop: 14, display: 'inline-block',
+                padding: '10px 14px', borderRadius: 10,
+                background: 'var(--pbs-cream-2)',
+                border: '1.5px solid var(--pbs-line-2)',
+                fontSize: 13,
+              }}
+            >{joinUrl}</div>
+          )}
+        </Block>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
         {filtered.map((s) => (

@@ -51,21 +51,43 @@ export const LegendDot = ({
 
 export type KpiTone = 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink';
 
+// Stamped on top of cards whose underlying numbers are hardcoded demo values
+// (engagement bars, trickiest-questions list, topic mastery, etc). In real
+// mode the teacher needs an unambiguous signal that "no, your class really
+// didn't score 74% on probability — this block hasn't started reporting yet".
+// Parent block must be position: 'relative'.
+export const DemoBadge = ({ label = 'DEMO DATA' }: { label?: string }) => (
+  <span
+    className="pbs-mono"
+    style={{
+      position: 'absolute', top: 10, right: 10, zIndex: 2,
+      padding: '3px 8px', borderRadius: 999,
+      background: 'var(--pbs-coral)', color: 'var(--pbs-coral-ink)',
+      border: '1.5px solid var(--pbs-coral-ink)',
+      boxShadow: '0 2px 0 var(--pbs-coral-ink)',
+      fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em',
+      pointerEvents: 'none',
+    }}
+  >{label}</span>
+);
+
 export const Kpi = ({
-  tone, icon, label, value, sub,
+  tone, icon, label, value, sub, demo,
 }: {
   tone: KpiTone;
   icon: React.ComponentProps<typeof Icon>['name'];
   label: string;
   value: React.ReactNode;
   sub: string;
+  demo?: boolean;
 }) => (
-  <Block tone={tone} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+  <Block tone={tone} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
+    {demo && <DemoBadge label="DEMO"/>}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: demo ? 0.55 : 1 }}>
       <Icon name={icon} size={15} stroke={2.2}/>
       <div style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.85 }}>{label}</div>
     </div>
-    <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1 }}>{value}</div>
-    <div style={{ fontSize: 11, opacity: 0.75 }}>{sub}</div>
+    <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1, opacity: demo ? 0.55 : 1 }}>{value}</div>
+    <div style={{ fontSize: 11, opacity: demo ? 0.5 : 0.75 }}>{sub}</div>
   </Block>
 );

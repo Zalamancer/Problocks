@@ -7,7 +7,7 @@ import React from 'react';
 import { Block, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { CardboardHead } from './CardboardHead';
 import { BarRow, MasteryHeatmap, TopicBars } from './charts';
-import { Kpi, kickerSty, LegendDot } from './shared';
+import { DemoBadge, Kpi, kickerSty, LegendDot } from './shared';
 import {
   ENGAGEMENT_14D,
   RECENT_QUESTIONS,
@@ -93,19 +93,23 @@ export const Overview = ({
       {/* Headline + KPIs */}
       <div className="pb-teacher-hero" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18 }}>
         <div>
-          <div className="pbs-mono" style={kickerSty}>OVERVIEW · THIS WEEK</div>
+          <div className="pbs-mono" style={kickerSty}>OVERVIEW{isReal ? '' : ' · THIS WEEK'}</div>
           <h1 style={{
             margin: '6px 0 8px',
             fontSize: 'clamp(32px, 3.6vw, 46px)',
             fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.04,
           }}>
-            Your class is <span className="pbs-serif">doing well.</span>
+            {isReal
+              ? <>Your class is <span className="pbs-serif">all set up.</span></>
+              : <>Your class is <span className="pbs-serif">doing well.</span></>}
           </h1>
           <p style={{ margin: 0, fontSize: 14.5, color: 'var(--pbs-ink-soft)', maxWidth: 520 }}>
-            {cls.members} students, {assignments.length} assignments this week. Probability is the softest spot — 3 students need a nudge.
+            {isReal
+              ? `${students.length} student${students.length === 1 ? '' : 's'} joined. Metrics below are demo placeholders — real engagement + mastery will appear once students start playing.`
+              : `${cls.members} students, ${assignments.length} assignments this week. Probability is the softest spot — 3 students need a nudge.`}
           </p>
 
-          {live && (
+          {live && !isReal && (
             <Block tone="ink" style={{ marginTop: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 14, color: 'var(--pbs-cream)' }}>
               <div style={{ width: 10, height: 10, borderRadius: 999, background: '#55e08e', boxShadow: '0 0 0 4px rgba(85,224,142,0.25)' }}/>
               <div style={{ flex: 1 }}>
@@ -122,39 +126,48 @@ export const Overview = ({
         </div>
 
         <div className="pb-teacher-kpis" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Kpi tone="butter" icon="spark" label="Class average" value={`${at}%`}      sub="+4 vs last week"/>
-          <Kpi tone="mint"   icon="check" label="Submitted"     value="92%"             sub="26 of 28"/>
-          <Kpi tone="coral"  icon="heart" label="Time on tool"  value="3.2h"            sub="per student · wk"/>
-          <Kpi tone="sky"    icon="users" label="At risk"       value={highRisk.length} sub="needs attention"/>
+          <Kpi tone="butter" icon="spark" label="Class average" value={isReal ? '—'  : `${at}%`} sub={isReal ? 'no plays yet' : '+4 vs last week'} demo={isReal}/>
+          <Kpi tone="mint"   icon="check" label="Submitted"     value={isReal ? '—'  : '92%'}    sub={isReal ? 'no assignments' : '26 of 28'} demo={isReal}/>
+          <Kpi tone="coral"  icon="heart" label="Time on tool"  value={isReal ? '—'  : '3.2h'}   sub={isReal ? 'no plays yet' : 'per student · wk'} demo={isReal}/>
+          <Kpi tone="sky"    icon="users" label="At risk"       value={highRisk.length}           sub={highRisk.length === 0 ? 'all good' : 'needs attention'}/>
         </div>
       </div>
 
       {/* Engagement + Topic mastery */}
       <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18 }}>
-        <Block tone="paper" style={{ padding: 20 }}>
+        <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
+          {isReal && <DemoBadge/>}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Engagement · last 14 days</div>
               <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>% of class active per day</div>
             </div>
-            <Pill tone="butter" icon="sparkle">Up 18%</Pill>
+            {!isReal && <Pill tone="butter" icon="sparkle">Up 18%</Pill>}
           </div>
-          <BarRow data={ENGAGEMENT_14D} height={130}/>
+          <div style={{ opacity: isReal ? 0.45 : 1 }}>
+            <BarRow data={ENGAGEMENT_14D} height={130}/>
+          </div>
         </Block>
 
-        <Block tone="paper" style={{ padding: 20 }}>
+        <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
+          {isReal && <DemoBadge/>}
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Topic mastery</div>
           <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginBottom: 14 }}>Across all assignments</div>
-          <TopicBars topics={TOPICS}/>
+          <div style={{ opacity: isReal ? 0.45 : 1 }}>
+            <TopicBars topics={TOPICS}/>
+          </div>
         </Block>
       </div>
 
       {/* Heatmap */}
-      <Block tone="paper" style={{ padding: 20 }}>
+      <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
+        {isReal && <DemoBadge label="DEMO MASTERY"/>}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Mastery by student</div>
-            <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>Click a row to see their timeline</div>
+            <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>
+              {isReal ? 'Placeholder values — real mastery appears after students play' : 'Click a row to see their timeline'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'center' }}>
             <LegendDot c="mint"   l="85+"/>
@@ -168,14 +181,15 @@ export const Overview = ({
 
       {/* Hotspots + Questions feed */}
       <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18 }}>
-        <Block tone="paper" style={{ padding: 20 }}>
+        <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
+          {isReal && <DemoBadge/>}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Trickiest questions this week</div>
               <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>Low correct %, high ask rate</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: isReal ? 0.45 : 1 }}>
             {TRICKY_QUESTIONS.map((q) => (
               <div key={q.id} style={{ display: 'flex', gap: 12, padding: '10px 12px', border: '1.5px solid var(--pbs-line-2)', borderRadius: 12, background: 'var(--pbs-cream)' }}>
                 <div style={{
@@ -197,15 +211,16 @@ export const Overview = ({
           </div>
         </Block>
 
-        <Block tone="paper" style={{ padding: 20 }}>
+        <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
+          {isReal && <DemoBadge/>}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Questions students asked</div>
               <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>In the in-game tutor</div>
             </div>
-            <Pill tone="sky">{RECENT_QUESTIONS.length} today</Pill>
+            {!isReal && <Pill tone="sky">{RECENT_QUESTIONS.length} today</Pill>}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto', opacity: isReal ? 0.45 : 1 }}>
             {RECENT_QUESTIONS.map((q, i) => {
               const s = students.find((x) => x.id === q.sid);
               return (
@@ -233,7 +248,8 @@ export const Overview = ({
         </Block>
       </div>
 
-      {/* Needs attention */}
+      {/* Needs attention — hidden in real mode while no risk data exists */}
+      {!(isReal && highRisk.length === 0) && (
       <Block tone="coral" style={{ padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <Icon name="heart" size={18} stroke={2.2}/>
@@ -252,6 +268,7 @@ export const Overview = ({
           ))}
         </div>
       </Block>
+      )}
     </div>
   );
 };

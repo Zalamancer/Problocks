@@ -222,7 +222,6 @@ export const RobloxAvatar = ({
   yaw,
   zoom = 1.0,
   focus = 'full',
-  fov = 28,
 }: {
   /** `'fill'` = match container (width/height). Pass a number for fixed px. */
   size?: number | 'fill';
@@ -244,9 +243,6 @@ export const RobloxAvatar = ({
    *   tall hair/hats aren't clipped. Intended for chat/tutor framings
    *   where legs are noise. */
   focus?: 'full' | 'bust';
-  /** Camera vertical field of view in degrees. Default 28 is a flattering
-   * portrait lens; 90+ reads as wide-angle; 120+ is fisheye-comedic. */
-  fov?: number;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; yaw: number; dragging: boolean }>({ x: 0, yaw: 0, dragging: false });
@@ -255,9 +251,6 @@ export const RobloxAvatar = ({
   const zoomRef = useRef<number>(zoom);
   // Handle back into the effect so the +/- buttons can trigger a re-fit.
   const refitRef = useRef<(() => void) | null>(null);
-  // Handle to the live camera so external FOV changes refit without having
-  // to tear down and rebuild the entire scene on every slider tick.
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   // Bumped whenever the WebGL context was lost (Chrome bfcache restore on
   // history.back(), tab-discard, GPU process crash). The scene effect reads
   // this in its dep array so it tears down and rebuilds cleanly — otherwise
@@ -294,10 +287,9 @@ export const RobloxAvatar = ({
     fill.position.set(-3, 2, 3);
     scene.add(fill);
 
-    const camera = new THREE.PerspectiveCamera(fov, 1, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
     camera.position.set(0, 0.4, 15);
     camera.lookAt(0, 0.2, 0);
-    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -610,16 +602,6 @@ export const RobloxAvatar = ({
   // `glEpoch` forces a full rebuild after bfcache restore / WebGL ctx loss.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRotate, JSON.stringify(outfit), glEpoch]);
-
-  // Live FOV updates — change the camera's fov + refit without tearing down
-  // the whole scene. Enables smooth slider-driven FOV without GPU churn.
-  useEffect(() => {
-    const cam = cameraRef.current;
-    if (!cam) return;
-    cam.fov = fov;
-    cam.updateProjectionMatrix();
-    refitRef.current?.();
-  }, [fov]);
 
   // Fill mode takes the full width AND height of the parent (which the caller
   // is expected to be — e.g. the black "preview card" in the wardrobe). No

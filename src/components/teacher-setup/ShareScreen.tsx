@@ -45,7 +45,7 @@ export const ShareScreen = () => {
   }, [classId]);
 
   // Build the join URL relative to the current origin so it works on localhost
-  // dev and problocks.app alike.
+  // dev and playdemy.app alike.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const joinUrl = classId ? `${origin}/join/${classId}` : '';
 

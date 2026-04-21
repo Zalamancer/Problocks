@@ -120,7 +120,7 @@ function DesktopSurface({ frq }: { frq: FRQ }) {
       <ChromeWindow
         tabs={[{ title: 'AP Physics · Homework' }, { title: 'Classroom dashboard' }]}
         activeIndex={0}
-        url="problocks.app/homework/physics-1/cart-on-incline"
+        url="playdemy.app/homework/physics-1/cart-on-incline"
         width="100%"
         height={720}
       >

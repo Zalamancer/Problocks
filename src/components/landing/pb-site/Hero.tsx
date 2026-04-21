@@ -127,7 +127,7 @@ export const Hero = ({ onStart }: { onStart?: () => void }) => {
                   <span style={{ width: 10, height: 10, borderRadius: 999, background: '#7fd796', border: '1px solid #347e45' }}/>
                 </div>
                 <span className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginLeft: 6 }}>
-                  problocks.app / new-game
+                  playdemy.app / new-game
                 </span>
                 <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: '#2aaa5a' }}/>

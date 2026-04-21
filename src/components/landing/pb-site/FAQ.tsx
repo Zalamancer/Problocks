@@ -26,7 +26,7 @@ export const FAQ = () => {
       label="Questions"
       kicker="mint"
       title={<>We&apos;ve heard these <span className="pbs-serif">a lot.</span></>}
-      sub="If something's missing, email hello@problocks.app — we answer every message."
+      sub="If something's missing, email hello@playdemy.app — we answer every message."
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 820 }}>
         {FAQS.map((item, i) => {

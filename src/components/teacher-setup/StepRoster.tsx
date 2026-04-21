@@ -210,7 +210,7 @@ export const StepRoster = ({
                 {data.joinCode}
               </div>
               <p style={{ margin: 0, fontSize: 13.5, color: 'var(--pbs-ink-soft)', lineHeight: 1.5, maxWidth: 380 }}>
-                Kids go to <span className="pbs-mono" style={{ color: 'var(--pbs-ink)', fontWeight: 600 }}>problocks.app/join</span> and type this code.
+                Kids go to <span className="pbs-mono" style={{ color: 'var(--pbs-ink)', fontWeight: 600 }}>playdemy.app/join</span> and type this code.
                 Rotates at the end of each term.
               </p>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -260,7 +260,7 @@ export const StepRoster = ({
                 <div style={{ position: 'absolute', bottom: 8, left: 8, width: 24, height: 24, border: '4px solid var(--pbs-ink)', background: 'var(--pbs-paper)' }}/>
               </div>
               <div className="pbs-mono" style={{ fontSize: 10, color: 'var(--pbs-ink-muted)', marginTop: 8 }}>
-                problocks.app/join
+                playdemy.app/join
               </div>
             </div>
           </div>

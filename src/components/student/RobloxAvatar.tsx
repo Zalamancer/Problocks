@@ -219,6 +219,8 @@ export const RobloxAvatar = ({
   framed = true,
   autoRotate = true,
   showControls = true,
+  yaw,
+  zoom = 1.0,
 }: {
   /** `'fill'` = match container (width/height). Pass a number for fixed px. */
   size?: number | 'fill';
@@ -227,12 +229,19 @@ export const RobloxAvatar = ({
   autoRotate?: boolean;
   /** Hide zoom +/- controls (they nest <button> and break HTML inside tiles). */
   showControls?: boolean;
+  /** Initial body yaw in radians. Undefined = the default slight 3-quarter
+   * angle; 0 = facing straight at the viewer; negative values turn the body
+   * to the viewer's left (useful when the avatar sits on a right-side rail
+   * and should look toward content on its left). */
+  yaw?: number;
+  /** Camera distance multiplier. <1 is closer, >1 is farther. */
+  zoom?: number;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; yaw: number; dragging: boolean }>({ x: 0, yaw: 0, dragging: false });
   // Persistent zoom factor applied on top of the auto-fit distance. Lower
   // values = closer, higher = farther. Clamped in the button handlers.
-  const zoomRef = useRef<number>(1.0);
+  const zoomRef = useRef<number>(zoom);
   // Handle back into the effect so the +/- buttons can trigger a re-fit.
   const refitRef = useRef<(() => void) | null>(null);
   // Bumped whenever the WebGL context was lost (Chrome bfcache restore on
@@ -452,7 +461,9 @@ export const RobloxAvatar = ({
     // Slight overall lift so the mid-torso sits at y≈0 in the viewport.
     character.position.y = 0.5;
     // Start angled a touch so 3D reads immediately even without rotation.
-    character.rotation.y = Math.PI * 0.12;
+    // Callers can pass an explicit `yaw` to override (e.g. the homework
+    // tutor faces toward the question on its left, not a default 3/4 pose).
+    character.rotation.y = yaw !== undefined ? yaw : Math.PI * 0.12;
     scene.add(character);
 
     // Fit the camera to the fully-assembled character (head + any hat/hair)

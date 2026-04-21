@@ -56,13 +56,20 @@ export function TutorChatbot({
   );
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
-  const { speaking, speak, stop } = useTutorSpeech();
+  // Id of the tutor message currently being "spoken" — its body is rendered
+  // as `revealedText` so letters appear in sync with the viseme-driven
+  // mouth movements instead of the whole reply dropping at once.
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const { speaking, revealedText, speak, stop } = useTutorSpeech();
   const avatarOutfit = outfit ?? DEFAULT_OUTFIT;
   const logRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-speak the greeting on first mount.
   useEffect(() => {
-    if (greeting) speak(greeting);
+    if (greeting) {
+      setSpeakingId('greet');
+      speak(greeting, { onDone: () => setSpeakingId(null) });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -70,7 +77,7 @@ export function TutorChatbot({
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, open]);
+  }, [messages, open, revealedText]);
 
   const send = useCallback(async () => {
     const q = draft.trim();
@@ -93,7 +100,8 @@ export function TutorChatbot({
         ts: Date.now(),
       };
       setMessages((m) => [...m, tutorMsg]);
-      speak(reply);
+      setSpeakingId(tutorMsg.id);
+      speak(reply, { onDone: () => setSpeakingId(null) });
     } finally {
       setPending(false);
     }
@@ -211,18 +219,24 @@ export function TutorChatbot({
         <div
           style={{
             margin: '0 auto',
-            width: 200,
+            width: 220,
             aspectRatio: '1 / 1',
             filter: speaking ? 'drop-shadow(0 0 14px rgba(255,216,77,0.55))' : undefined,
             transition: 'filter 0.2s',
           }}
         >
+          {/* No auto-rotate — the tutor is a person, not a product on a
+              turntable. Yaw slightly negative so the body angles toward the
+              homework on the left, and zoom < 1 for a closer, bust-like
+              framing (head + shoulders dominate, legs cut off). */}
           <RobloxAvatar
             size="fill"
             framed={false}
             outfit={avatarOutfit}
-            autoRotate
+            autoRotate={false}
             showControls={false}
+            yaw={-0.42}
+            zoom={0.72}
           />
         </div>
       </div>
@@ -239,9 +253,20 @@ export function TutorChatbot({
           background: 'var(--pb-cream, #fdf6e6)',
         }}
       >
-        {messages.map((m) => (
-          <Bubble key={m.id} msg={m} />
-        ))}
+        {messages.map((m) => {
+          const isSpeaking = speakingId === m.id && m.role === 'tutor';
+          return (
+            <Bubble
+              key={m.id}
+              msg={m}
+              // While this message is being spoken, show only the portion
+              // that's been "voiced" so far. Letters appear synced with
+              // the viseme-driven mouth animation instead of all at once.
+              shownText={isSpeaking ? revealedText : m.text}
+              speaking={isSpeaking}
+            />
+          );
+        })}
         {pending && <Typing />}
       </div>
 
@@ -297,8 +322,17 @@ export function TutorChatbot({
   );
 }
 
-function Bubble({ msg }: { msg: TutorMessage }) {
+function Bubble({
+  msg,
+  shownText,
+  speaking = false,
+}: {
+  msg: TutorMessage;
+  shownText?: string;
+  speaking?: boolean;
+}) {
   const isTutor = msg.role === 'tutor';
+  const text = shownText ?? msg.text;
   return (
     <div
       style={{
@@ -314,8 +348,33 @@ function Bubble({ msg }: { msg: TutorMessage }) {
         color: isTutor ? 'var(--pb-ink, #1d1a14)' : 'var(--pb-butter-ink, #6b4f00)',
       }}
     >
-      {msg.text}
+      {text}
+      {speaking && <BlinkingCaret />}
     </div>
+  );
+}
+
+function BlinkingCaret() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-block',
+        width: 2,
+        height: '1em',
+        verticalAlign: '-0.15em',
+        marginLeft: 2,
+        background: 'currentColor',
+        animation: 'tutor-caret 0.9s steps(1, end) infinite',
+      }}
+    >
+      <style>{`
+        @keyframes tutor-caret {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
+      `}</style>
+    </span>
   );
 }
 

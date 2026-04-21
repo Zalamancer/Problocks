@@ -38,9 +38,14 @@ type SpeakOpts = {
 export function useTutorSpeech() {
   const [viseme, setViseme] = useState<VisemeKey>('rest');
   const [speaking, setSpeaking] = useState(false);
+  // Text already "spoken" so far. The caller drives a progressive reveal
+  // of the tutor's message by reading this instead of the final string.
+  const [revealedText, setRevealedText] = useState('');
   const timerRef = useRef<number | null>(null);
   const idxRef = useRef(0);
   const seqRef = useRef<VisemeKey[]>([]);
+  const textRef = useRef('');
+  const charsPerFrameRef = useRef(1);
 
   const stop = useCallback(() => {
     if (timerRef.current) {
@@ -70,16 +75,29 @@ export function useTutorSpeech() {
       }
       seqRef.current = seq;
       idxRef.current = 0;
+      textRef.current = text;
+      // How many characters of the source text to reveal per frame so the
+      // reveal finishes in sync with the last viseme.
+      charsPerFrameRef.current = Math.max(1, text.length / frames);
+      setRevealedText('');
       setSpeaking(true);
 
       timerRef.current = window.setInterval(() => {
         const i = idxRef.current;
         if (i >= seqRef.current.length) {
+          setRevealedText(textRef.current);
           stop();
           opts.onDone?.();
           return;
         }
         setViseme(seqRef.current[i]);
+        // Reveal the matching slice of the source text. We use Math.ceil
+        // so short bursts still advance by at least one character per frame.
+        const chars = Math.min(
+          textRef.current.length,
+          Math.ceil((i + 1) * charsPerFrameRef.current),
+        );
+        setRevealedText(textRef.current.slice(0, chars));
         idxRef.current = i + 1;
       }, frameMs);
     },
@@ -88,5 +106,5 @@ export function useTutorSpeech() {
 
   useEffect(() => () => stop(), [stop]);
 
-  return { viseme, speaking, speak, stop };
+  return { viseme, speaking, revealedText, speak, stop };
 }

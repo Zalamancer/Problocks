@@ -130,12 +130,17 @@ export function TutorChatbot({
         }}
       >
         <div style={{ width: '100%', aspectRatio: '1 / 1' }}>
+          {/* Collapsed button also uses bust framing so the button face
+              is clearly a head-and-shoulders portrait, not a tiny
+              full-body figure lost inside a 64px circle. */}
           <RobloxAvatar
             size="fill"
             framed={false}
             outfit={avatarOutfit}
             autoRotate={false}
             showControls={false}
+            yaw={-0.3}
+            focus="bust"
           />
         </div>
       </button>
@@ -227,8 +232,8 @@ export function TutorChatbot({
         >
           {/* No auto-rotate — the tutor is a person, not a product on a
               turntable. Yaw slightly negative so the body angles toward the
-              homework on the left, and zoom < 1 for a closer, bust-like
-              framing (head + shoulders dominate, legs cut off). */}
+              homework on the left. `focus="bust"` frames chest + head only
+              (legs excluded) with extra top margin so hair/hat never clip. */}
           <RobloxAvatar
             size="fill"
             framed={false}
@@ -236,7 +241,7 @@ export function TutorChatbot({
             autoRotate={false}
             showControls={false}
             yaw={-0.42}
-            zoom={0.72}
+            focus="bust"
           />
         </div>
       </div>

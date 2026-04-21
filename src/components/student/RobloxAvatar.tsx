@@ -221,6 +221,7 @@ export const RobloxAvatar = ({
   showControls = true,
   yaw,
   zoom = 1.0,
+  focus = 'full',
 }: {
   /** `'fill'` = match container (width/height). Pass a number for fixed px. */
   size?: number | 'fill';
@@ -236,6 +237,12 @@ export const RobloxAvatar = ({
   yaw?: number;
   /** Camera distance multiplier. <1 is closer, >1 is farther. */
   zoom?: number;
+  /** Which body parts the camera fits around.
+   * - `'full'` (default) = whole character (head + torso + arms + legs + hair/hat)
+   * - `'bust'` = head + torso + hair + hat only, with extra top margin so
+   *   tall hair/hats aren't clipped. Intended for chat/tutor framings
+   *   where legs are noise. */
+  focus?: 'full' | 'bust';
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; yaw: number; dragging: boolean }>({ x: 0, yaw: 0, dragging: false });
@@ -349,6 +356,7 @@ export const RobloxAvatar = ({
     // Torso: width = boy 2.0 / girl 1.7, height 2, depth 1.
     const torso = new THREE.Mesh(new THREE.BoxGeometry(prop.torsoW, 2, 1), shirtMat);
     torso.position.set(0, 0, 0);
+    torso.userData.part = 'torso';
     character.add(withEdges(torso));
 
     // Head: 1.6 cube sitting on top of torso (same size for both genders so
@@ -356,23 +364,28 @@ export const RobloxAvatar = ({
     const headGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
     const head = new THREE.Mesh(headGeo, makeHeadMaterials(skinMat, faceMat));
     head.position.set(0, 1 + 0.8 + 0.05, 0); // torso half + head half + gap
+    head.userData.part = 'head';
     character.add(withEdges(head));
 
     // Arms: 1 x 2 x 1; shoulders shift in for the slimmer girl silhouette.
     const armGeoL = new THREE.BoxGeometry(1, 2, 1);
     const armL = new THREE.Mesh(armGeoL, skinMat);
     armL.position.set(-prop.armX, 0, 0);
+    armL.userData.part = 'arm';
     character.add(withEdges(armL));
     const armR = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), skinMat);
     armR.position.set(prop.armX, 0, 0);
+    armR.userData.part = 'arm';
     character.add(withEdges(armR));
 
     // Legs: 1 x 2 x 1
     const legL = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), pantsMat);
     legL.position.set(-0.5, -2, 0);
+    legL.userData.part = 'leg';
     character.add(withEdges(legL));
     const legR = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), pantsMat);
     legR.position.set(0.5, -2, 0);
+    legR.userData.part = 'leg';
     character.add(withEdges(legR));
 
     // Hair
@@ -410,6 +423,11 @@ export const RobloxAvatar = ({
         hairGroup.add(withEdges(sideR));
       }
       hairGroup.position.copy(head.position);
+      // Tag every hair mesh so 'bust' focus keeps the hair silhouette in
+      // the bbox (otherwise a tall hair style clips off the top).
+      hairGroup.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).userData.part = 'hair';
+      });
       character.add(hairGroup);
     }
 
@@ -442,6 +460,11 @@ export const RobloxAvatar = ({
         hatGroup.add(withEdges(crown));
       }
       hatGroup.position.copy(head.position);
+      // Tag every hat mesh so 'bust' focus keeps tall hats (top hat / pom)
+      // inside the framing.
+      hatGroup.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).userData.part = 'hat';
+      });
       character.add(hatGroup);
     }
 
@@ -478,11 +501,17 @@ export const RobloxAvatar = ({
       // Manual bbox that skips the shadow disc and the edge-outline
       // LineSegments (edges extend slightly past the box geometry in world
       // space). This gives a tight bound on the actual body silhouette.
+      // 'bust' focus restricts the bbox to head + torso (+ hair/hat) so the
+      // camera zooms in past the legs. Hair/hat are included so a top hat
+      // or long hair doesn't get clipped at the top of the frame.
+      const allowedParts =
+        focus === 'bust' ? new Set(['head', 'torso', 'hair', 'hat']) : null;
       const box = new THREE.Box3();
       let hasAny = false;
       character.traverse((obj) => {
         if (!(obj as THREE.Mesh).isMesh) return;
         if (obj.userData && obj.userData.isShadow) return;
+        if (allowedParts && !allowedParts.has(obj.userData?.part)) return;
         const mesh = obj as THREE.Mesh;
         const geom = mesh.geometry as THREE.BufferGeometry;
         if (!geom.boundingBox) geom.computeBoundingBox();
@@ -495,7 +524,9 @@ export const RobloxAvatar = ({
       const center = new THREE.Vector3();
       box.getSize(size);
       box.getCenter(center);
-      const margin = 1.2; // 20% padding — keeps arms/legs off the edge
+      // Bust framing needs extra padding so tall hats/hair don't touch the
+      // top edge; full framing keeps the tighter 20% padding.
+      const margin = focus === 'bust' ? 1.45 : 1.2;
       const vFov = (camera.fov * Math.PI) / 180;
       const aspect = Math.max(0.0001, camera.aspect);
       const distV = (size.y * margin) / (2 * Math.tan(vFov / 2));

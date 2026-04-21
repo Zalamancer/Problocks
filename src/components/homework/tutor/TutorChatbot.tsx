@@ -63,6 +63,10 @@ export function TutorChatbot({
   const { speaking, revealedText, speak, stop } = useTutorSpeech();
   const avatarOutfit = outfit ?? DEFAULT_OUTFIT;
   const logRef = useRef<HTMLDivElement | null>(null);
+  // FOV slider state. 28° is the flattering portrait default; dragging up
+  // past 100° warps the cardboard face into a hilarious fisheye.
+  const [fov, setFov] = useState(28);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Auto-speak the greeting on first mount.
   useEffect(() => {
@@ -192,6 +196,25 @@ export function TutorChatbot({
         <div style={{ flex: 1 }} />
         <button
           type="button"
+          onClick={() => setSettingsOpen((v) => !v)}
+          aria-label="Tutor settings"
+          title="Camera settings"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            border: '1.5px solid var(--pb-line-2, #d6c896)',
+            background: settingsOpen ? 'var(--pb-butter, #ffd84d)' : 'var(--pb-paper, #fffaf0)',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            color: 'var(--pb-ink, #1d1a14)',
+          }}
+        >
+          <GearIcon />
+        </button>
+        <button
+          type="button"
           onClick={() => {
             stop();
             setOpen(false);
@@ -242,8 +265,17 @@ export function TutorChatbot({
             showControls={false}
             yaw={-0.42}
             focus="bust"
+            fov={fov}
           />
         </div>
+        {settingsOpen && (
+          <SettingsPanel
+            fov={fov}
+            onFov={setFov}
+            onReset={() => setFov(28)}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
       </div>
 
       <div
@@ -355,6 +387,141 @@ function Bubble({
     >
       {text}
       {speaking && <BlinkingCaret />}
+    </div>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx={12} cy={12} r={3} />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function SettingsPanel({
+  fov,
+  onFov,
+  onReset,
+  onClose,
+}: {
+  fov: number;
+  onFov: (v: number) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  // Pick a fun label for extreme FOVs so the comedy is legible.
+  const label =
+    fov < 22
+      ? 'Telephoto'
+      : fov < 45
+      ? 'Portrait'
+      : fov < 75
+      ? 'Standard'
+      : fov < 110
+      ? 'Wide'
+      : fov < 140
+      ? 'Fisheye'
+      : 'Nightmare';
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        padding: 10,
+        borderRadius: 12,
+        background: 'var(--pb-paper, #fffaf0)',
+        border: '1.5px solid var(--pb-ink, #1d1a14)',
+        boxShadow: '0 2px 0 var(--pb-ink, #1d1a14)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: 11,
+          fontWeight: 800,
+          color: 'var(--pb-ink, #1d1a14)',
+          letterSpacing: '0.04em',
+        }}
+      >
+        <span>Camera FOV</span>
+        <span style={{ fontFamily: 'var(--font-dm-mono), monospace', fontSize: 12 }}>
+          {Math.round(fov)}° · {label}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={15}
+        max={170}
+        step={1}
+        value={fov}
+        onChange={(e) => onFov(+e.target.value)}
+        style={{ width: '100%', accentColor: 'var(--pb-ink, #1d1a14)' }}
+      />
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[20, 50, 90, 130, 165].map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onFov(v)}
+            style={{
+              flex: 1,
+              padding: '4px 0',
+              fontSize: 10,
+              fontWeight: 800,
+              borderRadius: 6,
+              border: '1.5px solid var(--pb-line-2, #d6c896)',
+              background:
+                Math.abs(fov - v) < 3 ? 'var(--pb-butter, #ffd84d)' : 'var(--pb-cream, #fdf6e6)',
+              color: 'var(--pb-ink, #1d1a14)',
+              cursor: 'pointer',
+            }}
+          >
+            {v}°
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          type="button"
+          onClick={onReset}
+          style={{
+            flex: 1,
+            padding: '6px 0',
+            fontSize: 11,
+            fontWeight: 800,
+            borderRadius: 8,
+            border: '1.5px solid var(--pb-line-2, #d6c896)',
+            background: 'var(--pb-cream-2, #f7edd4)',
+            color: 'var(--pb-ink, #1d1a14)',
+            cursor: 'pointer',
+          }}
+        >
+          Reset
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            flex: 1,
+            padding: '6px 0',
+            fontSize: 11,
+            fontWeight: 800,
+            borderRadius: 8,
+            border: '1.5px solid var(--pb-ink, #1d1a14)',
+            background: 'var(--pb-ink, #1d1a14)',
+            color: 'var(--pb-paper, #fffaf0)',
+            cursor: 'pointer',
+          }}
+        >
+          Done
+        </button>
+      </div>
     </div>
   );
 }

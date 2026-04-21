@@ -96,8 +96,8 @@ export const Footer = ({ onMakeGame }: { onMakeGame?: () => void }) => (
       }}>
         <div>© 2026 ProBlocks · Made with <span className="pbs-serif" style={{ fontSize: 14 }}>care</span> for classrooms.</div>
         <div style={{ display: 'flex', gap: 18 }}>
-          <a href="#" style={{ color: 'inherit' }}>Privacy</a>
-          <a href="#" style={{ color: 'inherit' }}>Terms</a>
+          <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a>
+          <a href="/terms" style={{ color: 'inherit' }}>Terms</a>
           <a href="#" style={{ color: 'inherit' }}>COPPA</a>
           <a href="#" style={{ color: 'inherit' }}>Status</a>
         </div>

@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HomeworkDesktop } from './HomeworkDesktop';
 import { HomeworkMobile } from './HomeworkMobile';
+import { TutorChatbot } from '../tutor/TutorChatbot';
 import type { FRQ } from './types';
 
 type HomeworkPageProps = {
@@ -73,7 +74,19 @@ export function HomeworkPage({ frq, backHref = '/student' }: HomeworkPageProps) 
       {isMobile ? (
         <HomeworkMobile frq={frq} onExit={handleExit} />
       ) : (
-        <HomeworkDesktop frq={frq} onExit={handleExit} />
+        // Reserve 376px on the right (tutor width 340 + 18 offset + 18 gap)
+        // so the right column doesn\'t slide under the chatbot.
+        <div style={{ paddingRight: 376, height: '100%' }}>
+          <HomeworkDesktop frq={frq} onExit={handleExit} />
+        </div>
+      )}
+      {/* Right-rail tutor chatbot — renders on top of the homework. Hidden
+          on mobile where it would overlap the sticky grade button. Once a
+          real PNG rig + viseme pack lands, pass it via the `rig` prop. */}
+      {!isMobile && (
+        <TutorChatbot
+          greeting={`Hey, I\'m your tutor for ${frq.source.title}. Ask me anything about the setup — I\'ll keep it short.`}
+        />
       )}
     </div>
   );

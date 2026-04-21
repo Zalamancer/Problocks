@@ -32,6 +32,7 @@ export type PlayableGame = {
   tone?: string;
   questions?: number;
   minutes?: number;
+  href?: string;
 };
 
 export const PlayModal = ({ game, onClose }: { game: PlayableGame; onClose: () => void }) => (
@@ -73,11 +74,25 @@ export const PlayModal = ({ game, onClose }: { game: PlayableGame; onClose: () =
         )}
         <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'center' }}>
           <Chunky tone="ghost" onClick={onClose}>Later</Chunky>
-          <Chunky tone="ink" trailing="arrow-right" onClick={onClose}>Start game</Chunky>
+          <Chunky
+            tone="ink"
+            trailing="arrow-right"
+            onClick={() => {
+              if (game.href) {
+                window.location.href = game.href;
+              } else {
+                onClose();
+              }
+            }}
+          >
+            Start game
+          </Chunky>
         </div>
-        <div style={{ marginTop: 14, fontSize: 11, color: 'var(--pbs-ink-muted)' }}>
-          (Demo — real game would launch here)
-        </div>
+        {!game.href && (
+          <div style={{ marginTop: 14, fontSize: 11, color: 'var(--pbs-ink-muted)' }}>
+            (Demo — real game would launch here)
+          </div>
+        )}
       </Block>
     </div>
   </div>

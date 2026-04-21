@@ -5,6 +5,7 @@
 import React from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { Field, TextInput, Select, ChipGroup, StepCard, StepHeader } from './form';
+import { SchoolAutocomplete } from './SchoolAutocomplete';
 import type { SetupData } from './types';
 
 type Set<K extends keyof SetupData> = (k: K, v: SetupData[K]) => void;
@@ -43,12 +44,12 @@ export const StepAboutYou = ({
           />
         </Field>
 
-        <Field label="School" style={{ gridColumn: '1 / -1' }}>
-          <TextInput
+        <Field label="School" hint="Start typing — we'll look up matches in your region." style={{ gridColumn: '1 / -1' }}>
+          <SchoolAutocomplete
             value={data.school}
-            onChange={(e) => set('school', e.target.value)}
+            onChange={(name) => set('school', name)}
+            region={data.region}
             placeholder="Start typing your school name…"
-            icon="book"
           />
         </Field>
 

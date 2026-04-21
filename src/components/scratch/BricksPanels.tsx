@@ -184,6 +184,7 @@ export function BricksLeftPanel({
                   thumb={thumbs[String(p.num)]}
                   requestThumb={requestThumb}
                   onSelect={() => send({ action: 'selectPart', partNum: p.num })}
+                  dragColor={state.color ?? catalog.colors[0]?.hex ?? '#8aa0ff'}
                 />
               );
             })}
@@ -199,14 +200,18 @@ export function BricksLeftPanel({
 // Individual part tile. Uses an IntersectionObserver to lazy-request the
 // 3D thumbnail from the game iframe once the card scrolls into view, then
 // swaps the placeholder for the rendered PNG dataURL.
+// Also draggable: onDragStart stamps the part num + current palette color
+// onto dataTransfer so BricksBoard (or any other drop target) can place a
+// brick without reaching back into the store.
 function PartCard({
-  part, selected, thumb, requestThumb, onSelect,
+  part, selected, thumb, requestThumb, onSelect, dragColor,
 }: {
   part: BricksPart;
   selected: boolean;
   thumb: string | undefined;
   requestThumb: (partNum: string | number) => void;
   onSelect: () => void;
+  dragColor: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const askedRef = useRef(false);
@@ -235,6 +240,13 @@ function PartCard({
       type="button"
       title={`#${part.num} — ${part.name}`}
       onClick={onSelect}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('application/x-problocks-part',  String(part.num));
+        e.dataTransfer.setData('application/x-problocks-color', dragColor);
+        e.dataTransfer.setData('text/plain', `#${part.num} ${part.name}`);
+      }}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'stretch',
         // minWidth: 0 + overflow: hidden + width: '100%' clamps the card to
@@ -245,7 +257,7 @@ function PartCard({
         background: selected ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
         border: `1.5px solid ${selected ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
         boxShadow: selected ? '0 2px 0 var(--pb-ink)' : 'none',
-        color: 'var(--pb-ink)', cursor: 'pointer', fontFamily: 'inherit',
+        color: 'var(--pb-ink)', cursor: 'grab', fontFamily: 'inherit',
       }}
     >
       <div

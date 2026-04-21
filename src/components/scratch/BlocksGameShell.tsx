@@ -26,6 +26,7 @@ import {
   type BricksState,
   type LeftSection,
 } from './BricksPanels';
+import { BricksBoard } from './BricksBoard';
 
 const EMPTY_CATALOG: BricksCatalog = {
   parts: [],
@@ -288,10 +289,12 @@ export function BlocksGameShell({
               scratchSlotRef={scratchSlotRef}
             />
 
-            {/* Center — In Scratch mode the mid section splits top/bottom
-                (two horizontal strips): top half is a white canvas where
-                Scratch blocks will output to, bottom half is the 3D game.
-                In Parts mode the game fills the full center. */}
+            {/* Center — mid section is always split top/bottom:
+                  top half — BricksBoard: a 3D white-canvas drop target;
+                              drag bricks from the Parts panel into it
+                  bottom half — the original 3D bricks game iframe
+                The split is the same in Parts and Scratch modes so the
+                board is reachable whichever tab is active on the left. */}
             <div
               className="flex-1 relative flex flex-col rounded-xl overflow-hidden min-w-0"
               style={{
@@ -299,16 +302,17 @@ export function BlocksGameShell({
                 border: '1.5px solid var(--pb-line-2)',
               }}
             >
-              {leftSection === 'scratch' && (
-                <div
-                  style={{
-                    flex: '1 1 50%',
-                    minHeight: 0,
-                    background: '#ffffff',
-                    borderBottom: '1.5px solid var(--pb-line-2)',
-                  }}
-                />
-              )}
+              <div
+                style={{
+                  flex: '1 1 50%',
+                  minHeight: 0,
+                  background: '#ffffff',
+                  borderBottom: '1.5px solid var(--pb-line-2)',
+                  position: 'relative',
+                }}
+              >
+                <BricksBoard />
+              </div>
               <div style={{ flex: '1 1 50%', minHeight: 0, position: 'relative' }}>
                 <iframe
                   ref={gameRef}

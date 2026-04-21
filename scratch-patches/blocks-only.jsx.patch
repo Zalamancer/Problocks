@@ -1,0 +1,41 @@
+diff --git a/src/playground/blocks-only.jsx b/src/playground/blocks-only.jsx
+index d08e733..38ab212 100644
+--- a/src/playground/blocks-only.jsx
++++ b/src/playground/blocks-only.jsx
+@@ -15,6 +15,28 @@ const mapStateToProps = state => ({vm: state.scratchGui.vm});
+ const VMBlocks = connect(mapStateToProps)(Blocks);
+ const VMControls = connect(mapStateToProps)(Controls);
+ 
++// Problocks — auto-load the custom Bricks extension as soon as the VM is
++// ready, and expose the VM on window so parent shells can introspect it.
++// Pure side-effect container; renders nothing.
++const VMBootstrap = connect(mapStateToProps)(class extends React.Component {
++    componentDidMount () { this._load(this.props.vm); }
++    componentDidUpdate (prev) { if (prev.vm !== this.props.vm) this._load(this.props.vm); }
++    _load (vm) {
++        if (!vm || vm.__bricksLoaded) return;
++        vm.__bricksLoaded = true;
++        try { window.__scratchVM = vm; } catch (e) { /* noop */ }
++        try {
++            if (vm.extensionManager && typeof vm.extensionManager.loadExtensionIdSync === 'function') {
++                vm.extensionManager.loadExtensionIdSync('bricks');
++            }
++        } catch (e) {
++            // eslint-disable-next-line no-console
++            console.warn('[bricks] failed to auto-load extension', e);
++        }
++    }
++    render () { return null; }
++});
++
+ const BlocksOnly = props => (
+     <GUI {...props}>
+         <VMBlocks
+@@ -24,6 +46,7 @@ const BlocksOnly = props => (
+             }}
+         />
+         <VMControls className={styles.controls} />
++        <VMBootstrap />
+     </GUI>
+ );
+ 

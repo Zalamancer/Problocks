@@ -5,6 +5,7 @@
 
 'use client';
 
+import type { CSSProperties } from 'react';
 import { useState } from 'react';
 import { ChromeWindow } from './ChromeWindow';
 import { HomeworkDesktop } from './HomeworkDesktop';
@@ -37,8 +38,35 @@ export function APProbePage({ frq, initialSurface = 'desktop' }: APProbePageProp
       '#fdf6e6',
   };
 
+  // Pin the cream palette locally. The global --pb-* tokens flip to dark
+  // values when the app is in dark/light (non-cream) theme, but the AP
+  // Probe design is always cream — so override the vars on this page
+  // regardless of whatever theme the rest of the app is in.
+  const creamPalette = {
+    '--pb-cream': '#fdf6e6',
+    '--pb-paper': '#fffaf0',
+    '--pb-cream-2': '#f7edd4',
+    '--pb-line': '#e8dcbc',
+    '--pb-line-2': '#d6c896',
+    '--pb-ink': '#1d1a14',
+    '--pb-ink-soft': '#57524a',
+    '--pb-ink-muted': '#8a8478',
+    '--pb-butter': '#ffd84d',
+    '--pb-butter-ink': '#6b4f00',
+    '--pb-mint': '#b6f0c6',
+    '--pb-mint-ink': '#0f5b2e',
+    '--pb-coral': '#ffb4a2',
+    '--pb-coral-ink': '#7a2a18',
+    '--pb-sky': '#b9d9ff',
+    '--pb-sky-ink': '#1b4a8a',
+    '--pb-grape': '#dcc7ff',
+    '--pb-grape-ink': '#4d2a8a',
+    '--pb-pink': '#ffc8e0',
+    '--pb-pink-ink': '#8a1e5c',
+  } as CSSProperties;
+
   return (
-    <div style={{ position: 'relative', minHeight: '100vh' }}>
+    <div style={{ position: 'relative', minHeight: '100vh', ...creamPalette }}>
       <div style={bgStyle} />
 
       <div

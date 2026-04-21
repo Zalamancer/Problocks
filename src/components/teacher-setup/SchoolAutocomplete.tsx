@@ -1,6 +1,7 @@
-// Typeahead school search — hits OpenStreetMap Nominatim (free, no API key)
-// and biases results by the teacher's region. Shows a dropdown as the teacher
-// types so they can pick their school without typing the full name.
+// Typeahead school search — calls /api/schools/search which prefers NCES
+// (US public schools directory via Urban Institute) and falls back to OSM
+// Nominatim for other regions or when NCES returns nothing. Shows a rich
+// detail line per row so teachers can disambiguate same-named schools.
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -10,52 +11,22 @@ import type { RegionKey } from './types';
 type Suggestion = {
   id: string;
   name: string;
-  detail: string;
+  city: string;
+  state: string;
+  zip: string;
+  county: string;
+  district: string;
+  country: string;
+  source: 'nces' | 'osm';
 };
 
-type NominatimItem = {
-  place_id: number;
-  display_name: string;
-  type?: string;
-  class?: string;
-  name?: string;
-  namedetails?: { name?: string } | null;
-  address?: {
-    amenity?: string;
-    school?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    suburb?: string;
-    state?: string;
-    county?: string;
-    country?: string;
-    postcode?: string;
-  };
-};
-
-const REGION_TO_COUNTRY: Record<RegionKey, string | undefined> = {
-  us: 'us',
-  uk: 'gb',
-  ca: 'ca',
-  au: 'au',
-  nz: 'nz',
-  other: undefined,
-};
-
-function toSuggestion(item: NominatimItem): Suggestion | null {
-  const a = item.address || {};
-  const name =
-    a.school ||
-    a.amenity ||
-    item.namedetails?.name ||
-    item.name ||
-    item.display_name.split(',')[0];
-  if (!name) return null;
-  const locality = a.city || a.town || a.village || a.suburb || a.county || '';
-  const region = a.state || a.country || '';
-  const detail = [locality, region].filter(Boolean).join(', ');
-  return { id: String(item.place_id), name: name.trim(), detail };
+function detailLine(s: Suggestion): string {
+  // Show city/state/zip as the primary locator; include county/country only
+  // when locality is missing. District ids from the NCES feed are numeric-only
+  // and not useful to humans, so we skip them.
+  const locality = [s.city, s.state].filter(Boolean).join(', ');
+  const tail = [locality, s.zip].filter(Boolean).join(' ').trim();
+  return tail || s.county || s.country || '';
 }
 
 export const SchoolAutocomplete = ({
@@ -74,10 +45,8 @@ export const SchoolAutocomplete = ({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // keep local query in sync when parent resets (e.g., navigating back to step)
   useEffect(() => { setQuery(value); }, [value]);
 
-  // close on outside click
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (!wrapRef.current) return;
@@ -87,9 +56,8 @@ export const SchoolAutocomplete = ({
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const countryCode = useMemo(() => REGION_TO_COUNTRY[region], [region]);
+  const searchRegion = useMemo(() => region, [region]);
 
-  // debounced fetch
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
@@ -103,35 +71,15 @@ export const SchoolAutocomplete = ({
       abortRef.current = ctrl;
       setLoading(true);
       try {
-        const url = new URL('https://nominatim.openstreetmap.org/search');
-        // Append the word "school" to bias results unless the user already typed it.
-        const biased = /school|academy|college|high|elementary|primary|secondary/i.test(q)
-          ? q
-          : `${q} school`;
-        url.searchParams.set('q', biased);
-        url.searchParams.set('format', 'jsonv2');
-        url.searchParams.set('addressdetails', '1');
-        url.searchParams.set('namedetails', '1');
-        url.searchParams.set('limit', '8');
-        if (countryCode) url.searchParams.set('countrycodes', countryCode);
-
+        const url = new URL('/api/schools/search', window.location.origin);
+        url.searchParams.set('q', q);
+        url.searchParams.set('region', searchRegion);
         const res = await fetch(url.toString(), {
           signal: ctrl.signal,
           headers: { Accept: 'application/json' },
         });
-        const json: NominatimItem[] = await res.json();
-        const mapped = json
-          .map(toSuggestion)
-          .filter((x): x is Suggestion => !!x);
-        // de-dupe by name + detail
-        const seen = new Set<string>();
-        const deduped = mapped.filter((s) => {
-          const k = `${s.name}|${s.detail}`.toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-        setResults(deduped);
+        const json = (await res.json()) as { results: Suggestion[] };
+        setResults(json.results || []);
         setActiveIdx(-1);
       } catch (err) {
         if ((err as { name?: string })?.name !== 'AbortError') {
@@ -142,7 +90,7 @@ export const SchoolAutocomplete = ({
       }
     }, 280);
     return () => clearTimeout(t);
-  }, [query, countryCode]);
+  }, [query, searchRegion]);
 
   const pick = (s: Suggestion) => {
     onChange(s.name);
@@ -214,7 +162,7 @@ export const SchoolAutocomplete = ({
             borderRadius: 12,
             boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 3px 0 var(--pbs-line-2)',
             overflow: 'hidden',
-            maxHeight: 320,
+            maxHeight: 360,
             overflowY: 'auto',
           }}
         >
@@ -225,6 +173,7 @@ export const SchoolAutocomplete = ({
           ) : (
             results.map((s, i) => {
               const active = i === activeIdx;
+              const detail = detailLine(s);
               return (
                 <button
                   key={s.id}
@@ -234,7 +183,7 @@ export const SchoolAutocomplete = ({
                   onMouseDown={(e) => { e.preventDefault(); pick(s); }}
                   onMouseEnter={() => setActiveIdx(i)}
                   style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                    display: 'flex', flexDirection: 'column', alignItems: 'stretch',
                     gap: 2,
                     width: '100%', textAlign: 'left',
                     padding: '10px 14px',
@@ -245,9 +194,27 @@ export const SchoolAutocomplete = ({
                     borderBottom: i < results.length - 1 ? '1px solid var(--pbs-line)' : 'none',
                   }}
                 >
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--pbs-ink)' }}>{s.name}</span>
-                  {s.detail && (
-                    <span style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>{s.detail}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--pbs-ink)' }}>{s.name}</span>
+                    <span
+                      className="pbs-mono"
+                      style={{
+                        fontSize: 9.5,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        padding: '2px 6px',
+                        borderRadius: 999,
+                        background: s.source === 'nces' ? 'var(--pbs-mint)' : 'var(--pbs-cream-2)',
+                        color: s.source === 'nces' ? 'var(--pbs-mint-ink)' : 'var(--pbs-ink-muted)',
+                        border: `1px solid ${s.source === 'nces' ? 'var(--pbs-mint-ink)' : 'var(--pbs-line-2)'}`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {s.source === 'nces' ? 'NCES' : 'OSM'}
+                    </span>
+                  </div>
+                  {detail && (
+                    <span style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>{detail}</span>
                   )}
                 </button>
               );

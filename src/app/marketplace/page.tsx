@@ -15,7 +15,18 @@ interface MarketplaceGame {
 // Tile Builder is now a built-in studio tool for placing map geometry —
 // not a standalone game. Marketplace will populate from published
 // student games once publishing is wired up.
-const GAMES: MarketplaceGame[] = [];
+const GAMES: MarketplaceGame[] = [
+  {
+    id: 'lego-game',
+    title: 'Brick Builder',
+    tagline: 'Place, stack, and snap LEGO-style bricks on an open baseplate.',
+    author: 'ihsan',
+    plays: 0,
+    href: '/games/lego-game/index.html',
+    accent: 'from-sky-400 via-amber-200 to-pink-300',
+    badge: 'NEW',
+  },
+];
 
 export default function MarketplacePage() {
   return (

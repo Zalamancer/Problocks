@@ -34,8 +34,45 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Playdemy",
-  description: "AI-powered game creation platform",
+  metadataBase: new URL("https://playdemy.app"),
+  title: {
+    default: "Playdemy — AI-powered game creation for classrooms",
+    template: "%s · Playdemy",
+  },
+  description:
+    "Playdemy lets students describe a game and watch AI turn it into a playable HTML5 game, publish to a classroom marketplace, and earn from plays.",
+  applicationName: "Playdemy",
+  keywords: [
+    "AI game maker",
+    "classroom games",
+    "educational games",
+    "HTML5 games",
+    "game creation for students",
+    "Scratch alternative",
+  ],
+  authors: [{ name: "Playdemy" }],
+  openGraph: {
+    type: "website",
+    url: "https://playdemy.app",
+    siteName: "Playdemy",
+    title: "Playdemy — AI-powered game creation for classrooms",
+    description:
+      "Students describe a game, AI builds it, classmates play it. Publish to the marketplace and earn from plays.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Playdemy — AI-powered game creation for classrooms",
+    description:
+      "Students describe a game, AI builds it, classmates play it.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
 };
 
 export default function RootLayout({

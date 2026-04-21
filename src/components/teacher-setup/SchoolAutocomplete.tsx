@@ -170,17 +170,17 @@ export const SchoolAutocomplete = ({
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
-      <div style={{
+      <div className="pbs-input-wrap" style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '11px 14px',
         background: 'var(--pbs-paper)',
         border: '1.5px solid var(--pbs-line-2)',
         borderRadius: 12,
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-        transition: 'border-color 120ms, box-shadow 120ms',
       }}>
         <Icon name="book" size={15} stroke={2} style={{ color: 'var(--pbs-ink-muted)' }}/>
         <input
+          className="pbs-input-el"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -192,7 +192,7 @@ export const SchoolAutocomplete = ({
           placeholder={placeholder || 'Start typing your school name…'}
           style={{
             flex: 1, minWidth: 0,
-            border: 0, background: 'transparent', outline: 'none',
+            border: 0, background: 'transparent',
             fontSize: 14.5, color: 'var(--pbs-ink)', fontFamily: 'inherit',
           }}
         />

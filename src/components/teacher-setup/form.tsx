@@ -37,26 +37,26 @@ export const TextInput = React.forwardRef<HTMLInputElement, {
   icon?: React.ComponentProps<typeof Icon>['name'];
   style?: React.CSSProperties;
 }>(({ value, onChange, placeholder, prefix, icon, style, ...rest }, ref) => (
-  <div style={{
+  <div className="pbs-input-wrap" style={{
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '11px 14px',
     background: 'var(--pbs-paper)',
     border: '1.5px solid var(--pbs-line-2)',
     borderRadius: 12,
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
-    transition: 'border-color 120ms, box-shadow 120ms',
     ...style,
   }}>
     {icon && <Icon name={icon} size={15} stroke={2} style={{ color: 'var(--pbs-ink-muted)' }}/>}
     {prefix && <span className="pbs-mono" style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>{prefix}</span>}
     <input
       ref={ref}
+      className="pbs-input-el"
       value={value}
       onChange={onChange}
       placeholder={placeholder}
       style={{
         flex: 1, minWidth: 0,
-        border: 0, background: 'transparent', outline: 'none',
+        border: 0, background: 'transparent',
         fontSize: 14.5, color: 'var(--pbs-ink)', fontFamily: 'inherit',
       }}
       {...rest}
@@ -73,7 +73,7 @@ export const Select = ({
   options: Array<{ value: string; label: string }>;
   style?: React.CSSProperties;
 }) => (
-  <div style={{
+  <div className="pbs-input-wrap" style={{
     position: 'relative',
     padding: '11px 38px 11px 14px',
     background: 'var(--pbs-paper)',
@@ -82,11 +82,12 @@ export const Select = ({
     ...style,
   }}>
     <select
+      className="pbs-input-el"
       value={value}
       onChange={onChange}
       style={{
         width: '100%', appearance: 'none', WebkitAppearance: 'none',
-        border: 0, background: 'transparent', outline: 'none',
+        border: 0, background: 'transparent',
         fontSize: 14.5, color: 'var(--pbs-ink)', fontFamily: 'inherit',
         cursor: 'pointer',
       }}

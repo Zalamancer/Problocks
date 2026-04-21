@@ -612,3 +612,36 @@ html.quality-medium *[class*="backdrop-blur-lg"] {
   -webkit-backdrop-filter: blur(10px) !important;
 }
 
+/* ── Cream-paper input look (teacher setup, classroom forms) ──
+   Kills Chrome's yellow autofill fill + the default focus ring, and
+   paints a calm ink-colored focus-within treatment on the wrapper. */
+.pbs-input-el {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.pbs-input-el:focus,
+.pbs-input-el:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.pbs-input-el:-webkit-autofill,
+.pbs-input-el:-webkit-autofill:hover,
+.pbs-input-el:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--pbs-paper) inset !important;
+  -webkit-text-fill-color: var(--pbs-ink) !important;
+  caret-color: var(--pbs-ink);
+  transition: background-color 9999s ease-out 0s;
+  border-radius: inherit;
+}
+.pbs-input-wrap {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.pbs-input-wrap:focus-within {
+  border-color: var(--pbs-ink) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 3px rgba(29, 26, 20, 0.08) !important;
+}
+

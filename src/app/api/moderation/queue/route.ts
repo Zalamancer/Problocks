@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminSupabase } from '@/lib/supabase-admin';
 import { isSignedInTeacher } from '@/lib/teacher-auth';
 
 // GET /api/moderation/queue
@@ -41,12 +42,18 @@ export async function GET() {
     return NextResponse.json({ error: 'Teacher sign-in required' }, { status: 401 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
+  // Prefer the service-role admin client so RLS doesn't get in the way of
+  // reading pending games / open reports. Falls back to the anon client for
+  // local dev environments that don't have SUPABASE_SERVICE_ROLE_KEY set —
+  // the downside there is that RLS has to allow anon reads (see migration
+  // 012 for that compromise).
+  const client = getAdminSupabase() ?? (isSupabaseConfigured() ? supabase : null);
+  if (!client) {
     return NextResponse.json({ pendingGames: [], openReports: [] });
   }
 
   const [pendingRes, reportsRes] = await Promise.all([
-    supabase
+    client
       .from('games')
       .select('id, user_id, name, prompt, cover_url, plays_count, is_published, moderation_status, updated_at, created_at')
       .eq('is_published', true)
@@ -54,7 +61,7 @@ export async function GET() {
       .order('updated_at', { ascending: false })
       .limit(100)
       .returns<PendingGameRow[]>(),
-    supabase
+    client
       .from('game_reports')
       .select('id, game_id, reason, details, reporter_id, status, created_at, game:games!inner(id, name, cover_url, is_published)')
       .eq('status', 'open')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminSupabase } from '@/lib/supabase-admin';
 import { isSignedInTeacher } from '@/lib/teacher-auth';
 
 // PATCH /api/moderation/reports/:id
@@ -23,11 +24,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid action — expected 'reviewed' or 'dismissed'" }, { status: 400 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getAdminSupabase() ?? (isSupabaseConfigured() ? supabase : null);
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('game_reports')
     .update({
       status: body.action,

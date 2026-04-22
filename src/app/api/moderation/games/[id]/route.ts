@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminSupabase } from '@/lib/supabase-admin';
 import { isSignedInTeacher } from '@/lib/teacher-auth';
 
 // PATCH /api/moderation/games/:id
@@ -25,7 +26,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid action — expected 'approve' or 'reject'" }, { status: 400 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getAdminSupabase() ?? (isSupabaseConfigured() ? supabase : null);
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
@@ -37,7 +39,7 @@ export async function PATCH(
     updates.is_published = false;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('games')
     .update(updates)
     .eq('id', id)
@@ -52,7 +54,7 @@ export async function PATCH(
   // When we reject a game, also auto-dismiss any open reports against it so
   // the queue doesn't keep re-surfacing the same decision.
   if (body.action === 'reject') {
-    await supabase
+    await client
       .from('game_reports')
       .update({ status: 'dismissed', reviewed_at: new Date().toISOString() })
       .eq('game_id', id)

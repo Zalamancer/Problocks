@@ -10,6 +10,17 @@ import type { SetupData, ClassroomColor } from './types';
 
 const DEFAULT_DURATION = 55; // minutes — used on first start edit and as fallback
 const MIN_DURATION = 5;      // end must always be at least 5 min after start
+const SCHEDULE_HINT_DEFAULT = 'When does this class meet? Used for due-date defaults.';
+
+// Pluralizes and shows hours + minutes; falls back to "0 minutes" for safety.
+function formatDuration(totalMin: number): string {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h} ${h === 1 ? 'hour' : 'hours'}`);
+  if (m > 0) parts.push(`${m} ${m === 1 ? 'minute' : 'minutes'}`);
+  return parts.length ? parts.join(' ') : '0 minutes';
+}
 
 const COLORS: ClassroomColor[] = ['butter', 'mint', 'coral', 'sky', 'grape', 'pink'];
 
@@ -25,8 +36,13 @@ export const StepClassBasics = ({
   const currentDuration = endMin - startMin;
   const duration = currentDuration >= MIN_DURATION ? currentDuration : DEFAULT_DURATION;
 
+  // Swap the Schedule hint from the friendly prompt to the live class
+  // length only after the teacher has actually touched a time picker.
+  const [timeTouched, setTimeTouched] = React.useState(false);
+
   const onStartChange = (v: string) => {
     const newStart = toMinutes(v);
+    setTimeTouched(true);
     set('startTime', v);
     // Shift end so the existing duration is preserved; if it was invalid, use 55.
     set('endTime', fromMinutes(newStart + duration));
@@ -34,6 +50,7 @@ export const StepClassBasics = ({
 
   const onEndChange = (v: string) => {
     const newEnd = toMinutes(v);
+    setTimeTouched(true);
     // Clamp: end must always be after start.
     if (newEnd <= startMin) {
       set('endTime', fromMinutes(startMin + MIN_DURATION));
@@ -41,6 +58,8 @@ export const StepClassBasics = ({
       set('endTime', v);
     }
   };
+
+  const scheduleHint = timeTouched ? formatDuration(duration) : SCHEDULE_HINT_DEFAULT;
 
   return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -139,7 +158,7 @@ export const StepClassBasics = ({
       </div>
 
       <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px dashed var(--pbs-line-2)' }}>
-        <Field label="Schedule" hint={`${duration} minutes`}>
+        <Field label="Schedule" hint={scheduleHint}>
           <div style={{ height: 6 }}/>
           <ChipGroup
             multi

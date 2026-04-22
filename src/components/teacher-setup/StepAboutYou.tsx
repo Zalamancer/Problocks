@@ -96,7 +96,13 @@ export const StepAboutYou = ({
               { value: 'science', label: 'Science',           icon: 'spark',   tone: 'mint' },
               { value: 'cs',      label: 'Computer science',  icon: 'code',    tone: 'sky' },
               { value: 'social',  label: 'Social studies',    icon: 'compass', tone: 'grape' },
-              { value: 'art',     label: 'Art & music',       icon: 'music',   tone: 'pink' },
+              { value: 'art',     label: 'Art',               icon: 'image',   tone: 'pink' },
+              { value: 'music',   label: 'Music',             icon: 'music',   tone: 'coral' },
+              { value: 'lang',    label: 'World languages',   icon: 'users',   tone: 'grape' },
+              { value: 'pe',      label: 'PE & Health',       icon: 'heart',   tone: 'coral' },
+              { value: 'stem',    label: 'STEM / STEAM',      icon: 'bolt',    tone: 'sky' },
+              { value: 'sped',    label: 'SPED / Resource',   icon: 'smile',   tone: 'mint' },
+              { value: 'other',   label: 'Other',             icon: 'star',    tone: 'butter' },
             ]}
           />
         </Field>

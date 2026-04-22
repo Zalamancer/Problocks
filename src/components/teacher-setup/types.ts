@@ -2,7 +2,10 @@
 'use client';
 
 export type ClassroomColor = 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink';
-export type SubjectKey = 'math' | 'ela' | 'science' | 'cs' | 'social' | 'art' | 'mixed';
+export type SubjectKey =
+  | 'math' | 'ela' | 'science' | 'cs' | 'social'
+  | 'art' | 'music' | 'lang' | 'pe' | 'stem' | 'sped'
+  | 'other' | 'mixed';
 export type GradeKey = 'k2' | '3' | '4' | '5' | '6' | '7' | '8' | 'hs' | 'mix';
 export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
 export type RosterMethod = 'paste' | 'google' | 'clever' | 'teams' | 'code' | 'later';

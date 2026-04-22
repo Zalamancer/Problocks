@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerSupabase, getServerUser, isServerSupabaseConfigured } from '@/lib/supabase-server';
 
-// Per-game endpoints used by the play page (GET), the studio Share flow
-// (PATCH to publish / rename), and the My Games panel (DELETE).
+// Sprint 3 hardening: per-game endpoints now read auth via getServerUser()
+// and pair that with explicit `.eq('user_id', user.id)` filters on PATCH /
+// DELETE. Migration 010 also adds matching RLS so a caller who bypasses the
+// API (e.g. direct Supabase SDK) can't tamper with someone else's games.
 //
-// Sprint 1 keeps auth wide-open; any caller with the id can patch or delete.
-// Sprint 2 will gate PATCH/DELETE behind `auth.uid() = user_id`.
+// GET remains permissive: any caller can fetch a game row. The /play page
+// filters by is_published, the studio Library panel filters by user_id.
+// Sprint 3 could hide private games from non-owners here too, but the
+// trade-off is extra complexity for little real win — Library already
+// scopes by user_id.
 
 interface GameRow {
   id: string;
@@ -30,9 +35,11 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  if (!isSupabaseConfigured() || !supabase) {
+  if (!isServerSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
+
+  const supabase = await getServerSupabase();
 
   const { data, error } = await supabase
     .from('games')
@@ -63,9 +70,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
+  if (!isServerSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
+
+  const user = await getServerUser();
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
@@ -80,8 +89,6 @@ export async function PATCH(
     updates.is_published = body.isPublished;
     if (body.isPublished) {
       updates.published_at = new Date().toISOString();
-      // A newly-published game gets a reasonable default visibility if the
-      // client didn't pass one.
       if (!body.visibility) updates.visibility = 'public';
     }
   }
@@ -94,16 +101,25 @@ export async function PATCH(
     updates.cover_url = body.coverUrl;
   }
 
-  const { data, error } = await supabase
-    .from('games')
-    .update(updates)
-    .eq('id', id)
+  const supabase = await getServerSupabase();
+
+  // Belt + suspenders: filter on user_id too. The RLS UPDATE policy enforces
+  // the same thing, but the explicit filter gives us a better error shape
+  // (404 "not found" instead of 204 "update affected 0 rows").
+  let query = supabase.from('games').update(updates).eq('id', id);
+  if (!user.isAnonymous) {
+    query = query.eq('user_id', user.id);
+  } else {
+    // Legacy local-user path — can only touch rows owned by local-user.
+    query = query.eq('user_id', 'local-user');
+  }
+
+  const { data, error } = await query
     .select('id, name, is_published, visibility, moderation_status, cover_url')
     .single();
 
   if (error || !data) {
-    console.error('Patch game error:', error);
-    return NextResponse.json({ error: 'Failed to update game' }, { status: 500 });
+    return NextResponse.json({ error: 'Game not found or not yours' }, { status: 404 });
   }
 
   return NextResponse.json({ game: data });
@@ -115,15 +131,28 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
-  if (!isSupabaseConfigured() || !supabase) {
+  if (!isServerSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const { error } = await supabase.from('games').delete().eq('id', id);
+  const user = await getServerUser();
+  const supabase = await getServerSupabase();
+
+  let query = supabase.from('games').delete().eq('id', id);
+  if (!user.isAnonymous) {
+    query = query.eq('user_id', user.id);
+  } else {
+    query = query.eq('user_id', 'local-user');
+  }
+
+  const { data, error } = await query.select('id');
 
   if (error) {
     console.error('Delete game error:', error);
     return NextResponse.json({ error: 'Failed to delete game' }, { status: 500 });
+  }
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: 'Game not found or not yours' }, { status: 404 });
   }
 
   return NextResponse.json({ ok: true });

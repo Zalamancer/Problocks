@@ -16,6 +16,7 @@
     "@dagrejs/dagre": "^3.0.0",
     "@mantine/core": "^8.3.18",
     "@mantine/hooks": "^8.3.18",
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
     "@types/three": "^0.183.1",
     "@xyflow/react": "^12.10.2",

@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerSupabase, getServerUser, isServerSupabaseConfigured } from '@/lib/supabase-server';
 
-// Sprint 1 `save` route.
+// Sprint 3 save route.
 //
-// Unlike the v1 route this no longer round-trips through Supabase Storage for
-// typical single-file games — the HTML lands directly in `games.html_content`.
-// Storage is still wired for Sprint 2 when we start accepting larger
-// multi-asset bundles, but the happy path is now inline + one round trip.
-//
-// Uses an upsert on `id` so the client can reuse its local UUID across
-// generate → save → edit → save-again without juggling two ids.
-//
-// NOTE: auth is still wide-open in Sprint 1 — the studio doesn't yet know who
-// the user is. Sprint 2 swaps the client-supplied `userId` for an authenticated
-// `auth.uid()` and tightens the RLS policies in migration 006.
+// Sprint 1 stored games keyed on a client-supplied `userId` (defaulting to
+// 'local-user'). Sprint 3 switches to the real authenticated user id via
+// getServerUser(); the RLS policies in migration 010 enforce ownership at
+// the database level so even a compromised client can't write rows it
+// doesn't own. The body still accepts `userId` for dev-only unauthenticated
+// flows (local-user), but anything that runs through the authed path wins.
 
-const MAX_HTML_BYTES = 2 * 1024 * 1024; // 2 MB is plenty for inline HTML+CSS+JS
+const MAX_HTML_BYTES = 2 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { id, name, prompt, html, userId, coverUrl } = body;
+    const { id, name, prompt, html, coverUrl } = body;
 
     if (!name || !prompt || !html) {
       return NextResponse.json(
@@ -48,8 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isSupabaseConfigured() || !supabase) {
-      // Studio still works offline — it just falls back to localStorage-only.
+    if (!isServerSupabaseConfigured()) {
       return NextResponse.json({
         id: id ?? crypto.randomUUID(),
         playUrl: null,
@@ -57,14 +51,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const resolvedUserId = userId || 'local-user';
+    // Real authenticated user wins; falls back to the body userId (or
+    // 'local-user') ONLY when there's no session. This tolerates the
+    // ongoing studio-without-login dev path during the Sprint 3 rollout.
+    const user = await getServerUser();
+    const resolvedUserId = user.isAnonymous ? (body.userId || 'local-user') : user.id;
     const resolvedId = id ?? crypto.randomUUID();
     const now = new Date().toISOString();
 
-    // Upsert on id. On first save this inserts; on subsequent saves this
-    // updates the html_content / name / prompt. We deliberately don't touch
-    // is_published / visibility / plays_count here — those are owned by the
-    // separate PATCH endpoint.
+    const supabase = await getServerSupabase();
+
+    // Upsert on id. When a row already exists with a DIFFERENT user_id the
+    // RLS UPDATE policy (user_id = auth.uid()) will refuse and the row
+    // stays untouched — save_game.ts is the happy path for new id, update
+    // for owned id, and the RLS gate handles the IDOR attempt.
     const { data, error } = await supabase
       .from('games')
       .upsert(

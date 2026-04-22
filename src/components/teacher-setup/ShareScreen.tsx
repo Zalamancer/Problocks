@@ -14,6 +14,7 @@ type PublicClass = {
   subject?: string | null;
   grade?: string | null;
   classroom_course_id?: string | null;
+  join_code?: string | null;
 };
 
 type PostState = 'idle' | 'posting' | 'posted' | 'error';
@@ -59,7 +60,13 @@ export const ShareScreen = () => {
   // Build the join URL relative to the current origin so it works on localhost
   // dev and playdemy.app alike.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const joinUrl = classId ? `${origin}/join/${classId}` : '';
+  // Prefer the short 6-char `join_code` over the raw UUID — it's what the
+  // teacher reads out loud and what students type. Falls back to the UUID
+  // route only if the backend didn't mint a code for some reason.
+  const shortCode = cls?.join_code ? cls.join_code.replace(/-/g, '') : '';
+  const joinUrl = shortCode
+    ? `${origin}/join?code=${shortCode}`
+    : classId ? `${origin}/join/${classId}` : '';
 
   const announcement = cls
     ? `Hi class! 👋 We're using Playdemy for ${cls.name}.\n\nTap this link and sign in with your school Google account to join:\n${joinUrl}\n\nOnce you're in, all our assignments and grades will sync back here.`

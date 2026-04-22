@@ -26,7 +26,7 @@ export const StepClassBasics = ({
     />
 
     <StepCard>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 16 }}>
         <Field label="Classroom name" hint="Students see this. Have fun.">
           <TextInput
             value={data.className}
@@ -55,10 +55,7 @@ export const StepClassBasics = ({
             ]}
           />
         </Field>
-      </div>
-
-      <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <Field label="Grade level">
+        <Field label="Grade">
           <Select
             value={data.grade}
             onChange={(e) => set('grade', e.target.value as SetupData['grade'])}

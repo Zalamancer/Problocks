@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isPlatformAdmin, logAdminAction } from '@/lib/teacher-auth';
 import { getAdminSupabase } from '@/lib/supabase-admin';
+import { sendEmail, dataRequestEmail } from '@/lib/email';
 
 // PATCH /api/admin/data-requests/:id
 // Body: { status: 'in_progress' | 'fulfilled' | 'denied' | 'open' }
@@ -29,11 +30,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 503 });
   }
 
+  // Load the existing row too so we can compose the auto-ack email with
+  // the requester info. Select * is fine here — this is service-role and
+  // the row is small.
   const { data, error } = await admin
     .from('data_requests')
     .update({ status: body.status, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select('id, status')
+    .select('id, status, kind, requester_email, requester_name, student_name')
     .single();
 
   if (error || !data) {
@@ -47,6 +51,25 @@ export async function PATCH(
     targetId: id,
     metadata: { newStatus: body.status },
   });
+
+  // Auto-ack the requester for the three terminal-ish transitions.
+  // Reopen (→'open') stays silent; we don't want to spam on corrections.
+  if (body.status === 'in_progress' || body.status === 'fulfilled' || body.status === 'denied') {
+    try {
+      const email = dataRequestEmail(
+        data as Parameters<typeof dataRequestEmail>[0],
+        body.status
+      );
+      const res = await sendEmail(email);
+      if (!res.ok && !res.skipped) {
+        console.error('[data_request] email send failed:', res.error);
+      }
+    } catch (err) {
+      // Never fail the route over an email error — the state change is
+      // already persisted.
+      console.error('[data_request] email composition failed:', err);
+    }
+  }
 
   return NextResponse.json({ request: data });
 }

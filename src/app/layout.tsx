@@ -3,7 +3,8 @@ import { Geist, Geist_Mono, Bricolage_Grotesque, DM_Mono, Instrument_Serif } fro
 import "./globals.css";
 import { QualityProvider } from "@/components/QualityProvider";
 import { DataSourceToggle } from "@/components/dev/DataSourceToggle";
-import { ToastContainer, ConfirmDialog } from "@/components/ui";
+import { ToastContainer } from "@/components/ui/ToastContainer";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

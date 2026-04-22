@@ -1,3 +1,4 @@
+'use client'
 import { useToastStore, type ToastType } from '@/store/toast-store'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'

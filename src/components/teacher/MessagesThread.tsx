@@ -5,6 +5,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import type { AvatarOutfit } from '@/components/student/RobloxAvatar';
 import { Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { CardboardHead } from './CardboardHead';
@@ -148,6 +149,11 @@ const MessageList = ({
   messages, showAvatars, dmPartner,
 }: { messages: ChatMessage[]; showAvatars?: boolean; dmPartner?: Student }) => {
   const { students } = useTeacherData();
+  // Use the signed-in teacher's display name for "me" messages so the thread
+  // reflects who's actually talking, not the demo persona. Falls back to the
+  // neutral literal "Teacher" (never "Ms. Rivera") for unauthenticated demos.
+  const { data: session } = useSession();
+  const teacherName = session?.user?.name ?? 'Teacher';
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -162,7 +168,7 @@ const MessageList = ({
       {messages.map((m, i) => {
         const isMe = m.who === 'me';
         const author: Author = isMe
-          ? { name: 'Ms. Rivera', emoji: '👩🏽‍🏫', tone: 'grape' }
+          ? { name: teacherName, emoji: '👩🏽‍🏫', tone: 'grape' }
           : resolveAuthor(m.who, students, dmPartner);
         return <MessageBubble key={i} m={m} isMe={isMe} author={author} showAvatar={showAvatars}/>;
       })}
@@ -232,29 +238,36 @@ export const GroupThread = ({
   channel: Channel;
   messages: ChatMessage[];
   onSend: (text: string) => void;
-}) => (
-  <>
-    <ThreadHeader
-      titleLeft={<span style={{ fontFamily: "'DM Mono', monospace", opacity: 0.5 }}>#</span>}
-      title={channel.name}
-      subtitle={(
-        <span>
-          <span style={{ color: `var(--pbs-${cls.tone}-ink)` }}>●</span> {cls.name} · {cls.members} members · {channel.desc}
-        </span>
-      )}
-      rightChips={[
-        channel.readOnly && <Pill key="r" tone="coral">Teachers only</Pill>,
-        channel.pinned && <Pill key="p" tone="butter" icon="star">Pinned</Pill>,
-      ].filter(Boolean) as React.ReactNode[]}
-    />
-    <MessageList messages={messages} showAvatars/>
-    <Composer
-      placeholder={channel.readOnly ? `Only teachers can post in #${channel.name}…  (post as Ms. Rivera)` : `Message #${channel.name}`}
-      onSend={onSend}
-      mode="group"
-    />
-  </>
-);
+}) => {
+  // Resolve the teacher's own display name for the composer placeholder on
+  // read-only channels, instead of the old hardcoded "Ms. Rivera". Matches
+  // the same pattern in MessageList above and the header chip in TeacherApp.
+  const { data: session } = useSession();
+  const teacherName = session?.user?.name ?? 'Teacher';
+  return (
+    <>
+      <ThreadHeader
+        titleLeft={<span style={{ fontFamily: "'DM Mono', monospace", opacity: 0.5 }}>#</span>}
+        title={channel.name}
+        subtitle={(
+          <span>
+            <span style={{ color: `var(--pbs-${cls.tone}-ink)` }}>●</span> {cls.name} · {cls.members} members · {channel.desc}
+          </span>
+        )}
+        rightChips={[
+          channel.readOnly && <Pill key="r" tone="coral">Teachers only</Pill>,
+          channel.pinned && <Pill key="p" tone="butter" icon="star">Pinned</Pill>,
+        ].filter(Boolean) as React.ReactNode[]}
+      />
+      <MessageList messages={messages} showAvatars/>
+      <Composer
+        placeholder={channel.readOnly ? `Only teachers can post in #${channel.name}…  (post as ${teacherName})` : `Message #${channel.name}`}
+        onSend={onSend}
+        mode="group"
+      />
+    </>
+  );
+};
 
 export const DmThread = ({
   s, messages, onSend, onProfile,

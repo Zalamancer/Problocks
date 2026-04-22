@@ -121,11 +121,11 @@ export const TeacherApp = () => {
   const useRealData = useDataSourceStore((s) => s.useRealData);
   const { classRecord, classes, isReal } = useTeacherData();
   const { data: session } = useSession();
-  // Prefer the signed-in Google account when available; fall back to the demo
-  // persona ("Ms. Rivera") only when there's no session, so logged-in teachers
-  // always see their own name + email in the header chip.
-  const teacherName  = session?.user?.name  ?? 'Ms. Rivera';
-  const teacherEmail = session?.user?.email ?? 'rivera@ridgewood.k12';
+  // Prefer the signed-in Google account when available; fall back to a
+  // neutral literal ("Teacher") when there's no session so the header chip
+  // never leaks the "Ms. Rivera" demo persona into real classrooms.
+  const teacherName  = session?.user?.name  ?? 'Teacher';
+  const teacherEmail = session?.user?.email ?? '';
   const teacherImage = session?.user?.image ?? null;
   const [view, setView] = useState<View>('overview');
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
@@ -272,7 +272,7 @@ export const TeacherApp = () => {
           />
         )}
         {view === 'self'        && detailStudent && (
-          <StudentSelf s={detailStudent} onBack={() => setView('student')}/>
+          <StudentSelf s={detailStudent} isReal={isReal} onBack={() => setView('student')}/>
         )}
       </main>
     </div>

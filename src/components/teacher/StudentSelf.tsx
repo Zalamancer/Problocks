@@ -48,9 +48,14 @@ const SelfKpi = ({ icon, l, v }: { icon: IconName; l: string; v: React.ReactNode
 );
 
 export const StudentSelf = ({
-  s, onBack, backLabel,
+  s, isReal, onBack, backLabel,
 }: {
   s: Student;
+  /** When true, the dashboard is bound to a real class (?classId=…). Hides
+   *  sample-data-driven sections (badges, topic mastery, suggested next,
+   *  hardcoded "Best rank" KPI) so the demo seed doesn't leak into real
+   *  classrooms. Mirrors the same gate in StudentDetail.tsx. */
+  isReal?: boolean;
   onBack: () => void;
   /** Override for the back-button copy. Defaults to the teacher-flow wording. */
   backLabel?: string;
@@ -59,7 +64,7 @@ export const StudentSelf = ({
   // hard-coding STUDENTS[0]. Local alias `me` so the rest of the body
   // (ported from the original "I'm a student" view) reads naturally.
   const me = s;
-  const activity = activityFor(me);
+  const activity = isReal ? [] : activityFor(me);
   const played    = activity.filter((a) => a.kind === 'played');
   const asked     = activity.filter((a) => a.kind === 'asked');
   const reviewed  = activity.filter((a) => a.kind === 'review');
@@ -73,6 +78,8 @@ export const StudentSelf = ({
   ];
   const weakest = [...topics].sort((a, b) => a.mastery - b.mastery)[0];
 
+  // Badge catalog is purely demo content — no real badge schema yet. Only
+  // rendered in demo mode so real classrooms don't see "Speed demon" etc.
   const badges: { id: string; tone: 'butter' | 'mint' | 'coral' | 'sky'; icon: IconName; name: string; sub: string }[] = [
     { id: 'b1', tone: 'butter', icon: 'bolt',    name: 'Speed demon',       sub: '10 correct in 60s' },
     { id: 'b2', tone: 'mint',   icon: 'check',   name: 'Perfect run',       sub: '100% on 3 quizzes' },
@@ -100,11 +107,11 @@ export const StudentSelf = ({
           <Donut value={me.avg / 100} size={110} stroke={12} color="var(--pbs-butter-ink)" track="var(--pbs-cream-2)" label="overall"/>
         </div>
 
-        <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: isReal ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
           <SelfKpi icon="gamepad" l="Quizzes played"  v={played.length}/>
           <SelfKpi icon="sparkle" l="Questions asked" v={asked.length}/>
           <SelfKpi icon="book"    l="Topics reviewed" v={reviewed.length}/>
-          <SelfKpi icon="star"    l="Best rank"       v="1st"/>
+          {!isReal && <SelfKpi icon="star" l="Best rank" v="1st"/>}
         </div>
       </Block>
 
@@ -115,7 +122,7 @@ export const StudentSelf = ({
           <Pill tone="mint">{played.length} done</Pill>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {played.map((p, i) => {
+          {played.length ? played.map((p, i) => {
             const score = p.score ?? 0;
             const c = gradeTone(score);
             return (
@@ -138,46 +145,50 @@ export const StudentSelf = ({
                 </div>
               </div>
             );
-          })}
+          }) : <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No quizzes yet.</div>}
         </div>
       </Block>
 
-      {/* Mastery + Badges */}
-      <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18, marginTop: 18 }}>
-        <Block tone="paper" style={{ padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>What you&apos;ve mastered</div>
-          <TopicBars topics={topics}/>
-          <div style={{ marginTop: 16, padding: 12, borderRadius: 12, background: 'var(--pbs-cream-2)', border: '1.5px dashed var(--pbs-line-2)' }}>
-            <div style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Suggested next</div>
-            <div style={{ fontSize: 13.5, marginTop: 3 }}>Brush up on <b>{weakest.name}</b> — you&apos;re at {Math.round(weakest.mastery * 100)}%. Try a 10-min refresher.</div>
-          </div>
-        </Block>
+      {/* Mastery + Badges — topic mastery, suggested-next, and the badge
+          catalogue are all backed by sample data only. In real mode there's
+          no mastery or badge schema yet, so skip the whole row. */}
+      {!isReal && (
+        <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18, marginTop: 18 }}>
+          <Block tone="paper" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>What you&apos;ve mastered</div>
+            <TopicBars topics={topics}/>
+            <div style={{ marginTop: 16, padding: 12, borderRadius: 12, background: 'var(--pbs-cream-2)', border: '1.5px dashed var(--pbs-line-2)' }}>
+              <div style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Suggested next</div>
+              <div style={{ fontSize: 13.5, marginTop: 3 }}>Brush up on <b>{weakest.name}</b> — you&apos;re at {Math.round(weakest.mastery * 100)}%. Try a 10-min refresher.</div>
+            </div>
+          </Block>
 
-        <Block tone="paper" style={{ padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Badges</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-            {badges.map((b) => (
-              <div key={b.id} style={{
-                padding: 14, borderRadius: 14,
-                background: `var(--pbs-${b.tone})`,
-                color: `var(--pbs-${b.tone}-ink)`,
-                border: `1.5px solid var(--pbs-${b.tone}-ink)`,
-                boxShadow: `0 2px 0 var(--pbs-${b.tone}-ink)`,
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 10,
-                  background: 'var(--pbs-paper)', border: '1.5px solid currentColor',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+          <Block tone="paper" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Badges</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {badges.map((b) => (
+                <div key={b.id} style={{
+                  padding: 14, borderRadius: 14,
+                  background: `var(--pbs-${b.tone})`,
+                  color: `var(--pbs-${b.tone}-ink)`,
+                  border: `1.5px solid var(--pbs-${b.tone}-ink)`,
+                  boxShadow: `0 2px 0 var(--pbs-${b.tone}-ink)`,
                 }}>
-                  <Icon name={b.icon} size={18} stroke={2.2}/>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: 'var(--pbs-paper)', border: '1.5px solid currentColor',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+                  }}>
+                    <Icon name={b.icon} size={18} stroke={2.2}/>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{b.name}</div>
+                  <div style={{ fontSize: 10.5, opacity: 0.8, marginTop: 2 }}>{b.sub}</div>
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{b.name}</div>
-                <div style={{ fontSize: 10.5, opacity: 0.8, marginTop: 2 }}>{b.sub}</div>
-              </div>
-            ))}
-          </div>
-        </Block>
-      </div>
+              ))}
+            </div>
+          </Block>
+        </div>
+      )}
 
       {/* Q / struggles / review */}
       <div className="pb-teacher-tri" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginTop: 18 }}>

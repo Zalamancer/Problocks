@@ -1,39 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { enforceRateLimit, ipFromRequest } from '@/lib/rate-limit';
 
 // POST /api/coppa/data-request
 // Logs a COPPA / FERPA data-subject request (delete, export, opt-out,
-// correction). A human reviews via /teacher/moderation in Sprint 3. For
-// Sprint 2 we just want durable evidence that we received the request, the
-// timestamp, and enough metadata to route it to the right student record.
-//
-// Deliberately no email verification here — verifying requesters takes a
-// separate human-touched flow that's out of scope for Sprint 2. We still
-// rate-limit so the form can't be mass-filled.
-
-const RATE_LIMIT_WINDOW_MS = 10 * 60_000; // 10 minutes
-const RATE_LIMIT_MAX = 3;
-const ipRequests = new Map<string, { count: number; resetAt: number }>();
+// correction). An admin reviews via /admin/data-requests. Deliberately no
+// email verification here — verifying requesters takes a separate
+// human-touched flow. We rate-limit so the form can't be mass-filled
+// (Sprint 8 moved this onto the durable Supabase counter).
 
 const MAX_FIELD = 200;
 const MAX_DETAILS = 2000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function rateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = ipRequests.get(ip);
-  if (!entry || entry.resetAt < now) {
-    ipRequests.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count += 1;
-  return true;
-}
-
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (!rateLimit(ip)) {
+  const ok = await enforceRateLimit({
+    bucket: 'coppa.data-request',
+    actor: ipFromRequest(request),
+    max: 3,
+    windowSeconds: 600,
+  });
+  if (!ok) {
     return NextResponse.json(
       { error: 'Too many requests from this address. Try again later or email the team directly.' },
       { status: 429 }
@@ -88,7 +75,7 @@ export async function POST(request: NextRequest) {
     student_email: clamp(body.studentEmail, MAX_FIELD),
     student_user_id: clamp(body.studentUserId, MAX_FIELD),
     details: clamp(body.details, MAX_DETAILS),
-    ip,
+    ip: ipFromRequest(request),
   });
 
   if (error) {

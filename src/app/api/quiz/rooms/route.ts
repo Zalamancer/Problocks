@@ -3,34 +3,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { createRoom, getRoomByPin } from '@/lib/quiz/room-store';
 import { toPublic } from '@/lib/quiz/room-types';
+import { enforceRateLimit, ipFromRequest } from '@/lib/rate-limit';
 
 // POST /api/quiz/rooms — host creates a new room.
 // GET  /api/quiz/rooms?pin=XXXXXX — student looks up a room by PIN.
 //
-// Host auth is best-effort: if there's a Google session we bind the
-// room to that email and /advance will gate on it. Rooms created
-// without a session stay open (Phase-3 permissive fallback).
-//
-// Pre-prod audit flagged quiz PINs as weak (6-char alphabet from
-// {2..9}, ~262k combinations) and brute-forceable. Sprint 7.4 adds a
-// per-IP rate limit on the pin lookup so a scraper can't walk the
-// space. Matches the pattern used in /api/classes/lookup.
-
-const WINDOW_MS = 60_000;
-const MAX_PER_WINDOW = 15;
-const pinHits = new Map<string, number[]>();
-
-function rateLimit(ip: string): boolean {
-  const now = Date.now();
-  const arr = (pinHits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
-  if (arr.length >= MAX_PER_WINDOW) {
-    pinHits.set(ip, arr);
-    return false;
-  }
-  arr.push(now);
-  pinHits.set(ip, arr);
-  return true;
-}
+// Quiz PINs are short (6-char alphabet from {2..9}, ~262k combinations)
+// and brute-forceable. The pin-lookup rate limit was added in Sprint 7.4
+// and moved onto the durable Supabase counter in Sprint 8.1 so it holds
+// across serverless instances.
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,10 +36,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    || req.headers.get('x-real-ip')
-    || 'anon';
-  if (!rateLimit(ip)) {
+  const ok = await enforceRateLimit({
+    bucket: 'quiz.pin-lookup',
+    actor: ipFromRequest(req),
+    max: 15,
+    windowSeconds: 60,
+  });
+  if (!ok) {
     return NextResponse.json({ error: 'too-many-requests' }, { status: 429 });
   }
 

@@ -18,22 +18,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getServerReadClient } from '@/lib/supabase-admin';
-
-const WINDOW_MS = 60_000;
-const MAX_PER_WINDOW = 20;
-const hits = new Map<string, number[]>();
-
-function rateLimit(ip: string): boolean {
-  const now = Date.now();
-  const arr = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
-  if (arr.length >= MAX_PER_WINDOW) {
-    hits.set(ip, arr);
-    return false;
-  }
-  arr.push(now);
-  hits.set(ip, arr);
-  return true;
-}
+import { enforceRateLimit, ipFromRequest } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   const client = getServerReadClient();
@@ -41,10 +26,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    || req.headers.get('x-real-ip')
-    || 'anon';
-  if (!rateLimit(ip)) {
+  const ok = await enforceRateLimit({
+    bucket: 'classes.lookup',
+    actor: ipFromRequest(req),
+    max: 20,
+    windowSeconds: 60,
+  });
+  if (!ok) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 

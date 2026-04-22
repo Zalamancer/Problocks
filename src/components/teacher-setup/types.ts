@@ -41,15 +41,29 @@ export type SetupData = {
   unit: UnitKey;
 };
 
-export const INITIAL_DATA: SetupData = {
-  teacherName: 'Lia Nguyen',
-  teacherHandle: 'MsN',
-  school: 'Maple Ridge Middle School',
-  region: 'us',
-  standards: 'common-core',
-  subjects: ['math', 'cs'],
+// Generate a fresh join code per session so two teachers don't collide on
+// the same demo code. Format matches the old static "PB-7K4" style.
+function randomJoinCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
+  let out = 'PB-';
+  for (let i = 0; i < 4; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return out;
+}
 
-  className: 'Period 4 · Fraction Friends',
+// Blank-slate defaults — every teacher starts with empty identity + class
+// fields so nothing feels pre-filled by the example bundle ("Lia Nguyen",
+// "Period 4 · Fraction Friends", etc.). Enum-backed fields still need a
+// valid value so the preview/pickers render, so we keep a minimal
+// structural default (region: us, color: butter, M/W/F schedule).
+export const INITIAL_DATA: SetupData = {
+  teacherName: '',
+  teacherHandle: '',
+  school: '',
+  region: 'us',
+  standards: 'none',
+  subjects: [],
+
+  className: '',
   classSubject: 'math',
   grade: '5',
   color: 'butter',
@@ -58,8 +72,8 @@ export const INITIAL_DATA: SetupData = {
   endTime: '11:05 AM',
 
   rosterMethod: 'paste',
-  pastedNames: 'Ava Patel\nKai Tanaka\nMira Lopez\nDev Shah\nJuno Reyes\nTheo Marconi\nNoor Khan\nEmi Watanabe\nSam Brooks\nZoe Abara',
-  joinCode: 'PB-7K4',
+  pastedNames: '',
+  joinCode: randomJoinCode(),
 
   unit: 'frac',
 };

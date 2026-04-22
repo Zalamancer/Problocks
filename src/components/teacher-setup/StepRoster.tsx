@@ -53,6 +53,32 @@ export const StepRoster = ({
   const selectedMethod = ROSTER_METHODS.find((m) => m.id === method)!;
   const [copied, setCopied] = useState(false);
   const joinLink = `https://playdemy.app/join?code=${data.joinCode.replace(/-/g, '')}`;
+
+  // Reserve the class row in Supabase as soon as the teacher lands on the
+  // "share a join code" tile (or whenever the code rotates). Without this
+  // the share link resolves to a 404 until the wizard is fully submitted.
+  // The /api/classes endpoint is now idempotent on (teacher, join_code),
+  // so firing this on every joinCode change is safe.
+  useEffect(() => {
+    if (method !== 'code') return;
+    if (!data.joinCode) return;
+    const name = data.className.trim() || 'Untitled classroom';
+    const controller = new AbortController();
+    fetch('/api/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        subject: data.classSubject,
+        grade: data.grade,
+        color: data.color,
+        classroomCourseId: data.classroomCourseId ?? null,
+        joinCode: data.joinCode,
+      }),
+      signal: controller.signal,
+    }).catch(() => { /* unauthenticated / offline → final save still runs at step 5 */ });
+    return () => controller.abort();
+  }, [method, data.joinCode, data.className, data.classSubject, data.grade, data.color, data.classroomCourseId]);
   const copyJoinLink = async () => {
     try {
       await navigator.clipboard.writeText(joinLink);

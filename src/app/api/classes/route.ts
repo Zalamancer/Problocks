@@ -45,22 +45,53 @@ export async function POST(req: NextRequest) {
 
   const joinCode = body.joinCode?.trim() || randomJoinCode();
 
-  const insert = await supabase
+  // Upsert-on-(teacher, join_code): if this teacher has already reserved a
+  // row with this join code (e.g. during step 3 of the setup wizard so the
+  // share link resolves immediately), update the existing row with the
+  // latest fields instead of creating a duplicate. This makes /api/classes
+  // safely idempotent for the "reserve early, finalise later" flow.
+  const existing = await supabase
     .from('classes')
-    .insert({
-      teacher_google_sub: session.googleSub,
-      name: body.name.trim(),
-      subject: body.subject ?? null,
-      grade: body.grade ?? null,
-      color: body.color ?? null,
-      classroom_course_id: body.classroomCourseId ?? null,
-      join_code: joinCode,
-    })
-    .select()
-    .single();
+    .select('id, classroom_course_id')
+    .eq('teacher_google_sub', session.googleSub)
+    .eq('join_code', joinCode)
+    .maybeSingle();
 
-  if (insert.error) {
-    return NextResponse.json({ error: insert.error.message }, { status: 500 });
+  let row: { id: string; [k: string]: unknown };
+  let isInsert = true;
+
+  if (existing.data) {
+    isInsert = false;
+    const upd = await supabase
+      .from('classes')
+      .update({
+        name: body.name.trim(),
+        subject: body.subject ?? null,
+        grade: body.grade ?? null,
+        color: body.color ?? null,
+        classroom_course_id: body.classroomCourseId ?? existing.data.classroom_course_id ?? null,
+      })
+      .eq('id', existing.data.id)
+      .select()
+      .single();
+    if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 500 });
+    row = upd.data;
+  } else {
+    const insert = await supabase
+      .from('classes')
+      .insert({
+        teacher_google_sub: session.googleSub,
+        name: body.name.trim(),
+        subject: body.subject ?? null,
+        grade: body.grade ?? null,
+        color: body.color ?? null,
+        classroom_course_id: body.classroomCourseId ?? null,
+        join_code: joinCode,
+      })
+      .select()
+      .single();
+    if (insert.error) return NextResponse.json({ error: insert.error.message }, { status: 500 });
+    row = insert.data;
   }
 
   // If linked to a Google Classroom course, pre-seed the student roster.
@@ -70,10 +101,10 @@ export async function POST(req: NextRequest) {
   // scope is required; without it the students.list endpoint 403s.
   let importedStudents = 0;
   let importError: string | null = null;
-  if (body.classroomCourseId && session.accessToken) {
+  if (isInsert && body.classroomCourseId && session.accessToken) {
     try {
       importedStudents = await importClassroomRoster(
-        insert.data.id,
+        row.id,
         body.classroomCourseId,
         session.accessToken,
       );
@@ -83,7 +114,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({
-    class: insert.data,
+    class: row,
     importedStudents,
     importError,
   });

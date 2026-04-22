@@ -12,11 +12,17 @@ import { authOptions } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 function randomJoinCode() {
-  // Avoid visually-confusing chars (0/O, 1/I/L).
+  // 8-char alphanumeric code ≈ 40 bits of entropy (~1.1T space). The code is
+  // effectively a bearer token — anyone who has it can join the class — so we
+  // want it unguessable even under light rate limiting. Uses crypto.getRandomValues
+  // (available in both Node 18+ and the Edge runtime) instead of Math.random
+  // so codes aren't predictable. Skips visually-confusing chars (0/O, 1/I/L).
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const buf = new Uint32Array(8);
+  crypto.getRandomValues(buf);
   let s = '';
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s.slice(0, 3) + '-' + s.slice(3);
+  for (let i = 0; i < 8; i++) s += chars[buf[i] % chars.length];
+  return `${s.slice(0, 4)}-${s.slice(4)}`;
 }
 
 type Body = {

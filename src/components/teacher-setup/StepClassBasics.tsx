@@ -26,7 +26,7 @@ export const StepClassBasics = ({
     />
 
     <StepCard>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.1fr 0.7fr', gap: 16 }}>
         <Field label="Classroom name" hint="Students see this. Have fun.">
           <TextInput
             value={data.className}

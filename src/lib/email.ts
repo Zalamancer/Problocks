@@ -65,7 +65,10 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   }
 }
 
-/** Compose the auto-ack email for a data_request transition. */
+/** Compose the auto-ack email for a data_request transition. Pass
+ *  `downloadUrl` when the fulfilled export is ready so the parent can
+ *  retrieve it without a second email. URL is expected to expire within
+ *  a few days; we mention that in the body. */
 export function dataRequestEmail(
   request: {
     id: string;
@@ -74,7 +77,8 @@ export function dataRequestEmail(
     requester_name: string | null;
     student_name: string | null;
   },
-  status: 'in_progress' | 'fulfilled' | 'denied'
+  status: 'in_progress' | 'fulfilled' | 'denied',
+  downloadUrl?: string
 ): SendEmailInput {
   const who = request.requester_name ? `Hi ${request.requester_name},` : 'Hello,';
   const studentPart = request.student_name ? ` for ${request.student_name}` : '';
@@ -91,10 +95,15 @@ export function dataRequestEmail(
         ? `Your ${kindLabel} request${studentPart} has been completed.`
         : `We're unable to act on your ${kindLabel} request${studentPart} as filed. Please reply to this email with more details and we'll take another look.`;
 
+  // For fulfilled export requests we embed a signed download URL in the
+  // email body. The link expires in 7 days — mention that so the
+  // recipient doesn't sit on it.
   const followup =
-    request.kind === 'export' && status === 'fulfilled'
-      ? `\n\nWe'll send the export data in a separate email shortly.`
-      : '';
+    request.kind === 'export' && status === 'fulfilled' && downloadUrl
+      ? `\n\nDownload your data here (link expires in 7 days):\n${downloadUrl}`
+      : request.kind === 'export' && status === 'fulfilled'
+        ? `\n\nWe'll send the export data in a separate email shortly.`
+        : '';
 
   const text = `${who}
 

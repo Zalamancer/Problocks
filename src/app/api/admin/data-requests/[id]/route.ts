@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isPlatformAdmin, logAdminAction } from '@/lib/teacher-auth';
 import { getAdminSupabase } from '@/lib/supabase-admin';
 import { sendEmail, dataRequestEmail } from '@/lib/email';
+import { buildExportBundle, uploadExportBundle } from '@/lib/export-bundle';
 
 // PATCH /api/admin/data-requests/:id
 // Body: { status: 'in_progress' | 'fulfilled' | 'denied' | 'open' }
@@ -56,17 +57,46 @@ export async function PATCH(
   // Reopen (→'open') stays silent; we don't want to spam on corrections.
   if (body.status === 'in_progress' || body.status === 'fulfilled' || body.status === 'denied') {
     try {
+      // Fulfilled export requests get a signed download URL baked into
+      // the email. Everything else sends the plain auto-ack.
+      let downloadUrl: string | undefined;
+      if (body.status === 'fulfilled' && data.kind === 'export') {
+        try {
+          const bundle = await buildExportBundle(id);
+          if (bundle) {
+            const uploaded = await uploadExportBundle(id, bundle);
+            if (uploaded) {
+              downloadUrl = uploaded.signedUrl;
+              // Log the upload to the audit trail so admins can find it.
+              await logAdminAction({
+                action: 'data_request.export_generated',
+                targetType: 'data_request',
+                targetId: id,
+                metadata: {
+                  storagePath: uploaded.path,
+                  expiresAt: uploaded.expiresAt,
+                },
+              });
+            }
+          }
+        } catch (err) {
+          // Never fail the transition over an export blip. The fulfilled
+          // status is already persisted; admin can manually re-run via
+          // /api/admin/data-requests/[id]/export + email the bundle out.
+          console.error('[data_request] export packaging failed:', err);
+        }
+      }
+
       const email = dataRequestEmail(
         data as Parameters<typeof dataRequestEmail>[0],
-        body.status
+        body.status,
+        downloadUrl
       );
       const res = await sendEmail(email);
       if (!res.ok && !res.skipped) {
         console.error('[data_request] email send failed:', res.error);
       }
     } catch (err) {
-      // Never fail the route over an email error — the state change is
-      // already persisted.
       console.error('[data_request] email composition failed:', err);
     }
   }

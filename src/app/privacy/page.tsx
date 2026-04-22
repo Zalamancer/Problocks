@@ -110,7 +110,11 @@ export default function PrivacyPage() {
               <li>Revoke Google access at{' '}
                 <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">myaccount.google.com/permissions</a>.
               </li>
-              <li>Request a copy or deletion of your data via email.</li>
+              <li>
+                Request deletion, export, opt-out, or correction of data using our{' '}
+                <a href="/privacy/data-request">data request form</a>. Required under COPPA and FERPA;
+                we reply within 10 business days.
+              </li>
               <li>Opt out of non-essential analytics from Settings.</li>
             </ul>
           </Section>

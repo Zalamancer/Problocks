@@ -188,14 +188,18 @@ export const Overview = ({
       {/* Hotspots + Questions feed */}
       <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18 }}>
         <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
-          {isReal && <DemoBadge/>}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Trickiest questions this week</div>
               <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginTop: 2 }}>Low correct %, high ask rate</div>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: isReal ? 0.45 : 1 }}>
+          {isReal ? (
+            <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>
+              No questions yet — data appears once students start playing.
+            </div>
+          ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {TRICKY_QUESTIONS.map((q) => (
               <div key={q.id} style={{ display: 'flex', gap: 12, padding: '10px 12px', border: '1.5px solid var(--pbs-line-2)', borderRadius: 12, background: 'var(--pbs-cream)' }}>
                 <div style={{
@@ -215,10 +219,10 @@ export const Overview = ({
               </div>
             ))}
           </div>
+          )}
         </Block>
 
         <Block tone="paper" style={{ padding: 20, position: 'relative' }}>
-          {isReal && <DemoBadge/>}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Questions students asked</div>
@@ -226,7 +230,12 @@ export const Overview = ({
             </div>
             {!isReal && <Pill tone="sky">{RECENT_QUESTIONS.length} today</Pill>}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto', opacity: isReal ? 0.45 : 1 }}>
+          {isReal ? (
+            <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>
+              No in-game questions yet.
+            </div>
+          ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto' }}>
             {RECENT_QUESTIONS.map((q, i) => {
               const s = students.find((x) => x.id === q.sid);
               return (
@@ -251,6 +260,7 @@ export const Overview = ({
               );
             })}
           </div>
+          )}
         </Block>
       </div>
 

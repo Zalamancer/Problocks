@@ -51,3 +51,4 @@ next-env.d.ts
 # external upstream clones (scratch-gui etc.) — built output is symlinked into /public
 /external/
 /public/scratch/
+.claude/

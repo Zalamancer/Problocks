@@ -1,11 +1,19 @@
+import { redirect } from 'next/navigation';
 import { ModerationQueue } from './ModerationQueue';
+import { getTeacherSession } from '@/lib/teacher-auth';
 
 export const metadata = {
   title: 'Moderation queue',
   description: 'Review pending games and flagged content.',
 };
 
-export default function ModerationPage() {
+export default async function ModerationPage() {
+  const session = await getTeacherSession();
+  if (!session?.user) {
+    // NextAuth's signin page lives at /classroom/auth (see authOptions).
+    // Bounce back here after a successful Google login.
+    redirect('/classroom/auth?callbackUrl=/teacher/moderation');
+  }
   return (
     <main
       style={{

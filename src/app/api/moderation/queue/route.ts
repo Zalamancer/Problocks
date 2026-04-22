@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isSignedInTeacher } from '@/lib/teacher-auth';
 
 // GET /api/moderation/queue
 // Returns two parallel lists the /teacher/moderation surface renders:
@@ -36,6 +37,10 @@ interface OpenReportRow {
 }
 
 export async function GET() {
+  if (!(await isSignedInTeacher())) {
+    return NextResponse.json({ error: 'Teacher sign-in required' }, { status: 401 });
+  }
+
   if (!isSupabaseConfigured() || !supabase) {
     return NextResponse.json({ pendingGames: [], openReports: [] });
   }

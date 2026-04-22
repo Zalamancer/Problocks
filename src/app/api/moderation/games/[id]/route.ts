@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { isSignedInTeacher } from '@/lib/teacher-auth';
 
 // PATCH /api/moderation/games/:id
 // Body: { action: 'approve' | 'reject' }
@@ -13,6 +14,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!(await isSignedInTeacher())) {
+    return NextResponse.json({ error: 'Teacher sign-in required' }, { status: 401 });
+  }
+
   const { id } = await params;
   const body = await request.json().catch(() => null) as { action?: 'approve' | 'reject' } | null;
 

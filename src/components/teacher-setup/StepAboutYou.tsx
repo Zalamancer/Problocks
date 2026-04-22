@@ -38,7 +38,7 @@ export const StepAboutYou = ({
               set('teacherName', v);
               if (!handleTouchedRef.current) set('teacherHandle', v);
             }}
-            placeholder="Ms. Nguyen"
+            placeholder="Your full name"
           />
         </Field>
         <Field label="Display name" hint="How students see you in chat.">
@@ -48,7 +48,7 @@ export const StepAboutYou = ({
               handleTouchedRef.current = true;
               set('teacherHandle', e.target.value);
             }}
-            placeholder="Ms. N"
+            placeholder="handle"
             prefix="@"
           />
         </Field>

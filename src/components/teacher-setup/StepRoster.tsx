@@ -76,9 +76,15 @@ export const StepRoster = ({
         joinCode: data.joinCode,
       }),
       signal: controller.signal,
-    }).catch(() => { /* unauthenticated / offline → final save still runs at step 5 */ });
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const id: string | undefined = j?.class?.id;
+        if (id && id !== data.reservedClassId) set('reservedClassId', id);
+      })
+      .catch(() => { /* unauthenticated / offline → final save still runs at step 5 */ });
     return () => controller.abort();
-  }, [method, data.joinCode, data.className, data.classSubject, data.grade, data.color, data.classroomCourseId]);
+  }, [method, data.joinCode, data.className, data.classSubject, data.grade, data.color, data.classroomCourseId, data.reservedClassId, set]);
   const copyJoinLink = async () => {
     try {
       await navigator.clipboard.writeText(joinLink);
@@ -155,7 +161,7 @@ export const StepRoster = ({
             <textarea
               value={data.pastedNames}
               onChange={(e) => set('pastedNames', e.target.value)}
-              placeholder={'Ava Patel\nKai Tanaka\nMira L.\nDev Shah\n…'}
+              placeholder={'First Last\nFirst L.\nFirst Last\n…'}
               rows={7}
               style={{
                 width: '100%',

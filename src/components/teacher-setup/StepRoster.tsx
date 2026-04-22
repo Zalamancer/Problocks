@@ -374,8 +374,51 @@ function GoogleClassroomConnect({
   };
 
   // ── Not signed in: the original marketing card with a real Connect CTA ───
+  // Exception: if we already have a linked course from a prior session, show a
+  // "linked — reconnect to sync" state instead of the generic Connect prompt
+  // (client-side useSession can be stale while the server cookie still works).
   if (status !== 'authenticated') {
     const isLoading = status === 'loading';
+    if (data.classroomCourseId) {
+      return (
+        <StepCard>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: `var(--pbs-${selectedMethod.tone})`,
+              border: `1.5px solid var(--pbs-${selectedMethod.tone}-ink)`,
+              color: `var(--pbs-${selectedMethod.tone}-ink)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Icon name="book" size={18} stroke={2.2}/>
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                Linked to &ldquo;{data.classroomCourseName ?? 'your course'}&rdquo;
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--pbs-ink-soft)', lineHeight: 1.5 }}>
+                Roster will import when you open the classroom. Reconnect if you want to pick a different course or refresh sync.
+              </p>
+            </div>
+            <span style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              padding: '4px 10px', borderRadius: 999,
+              background: 'var(--pbs-mint)', color: 'var(--pbs-mint-ink)',
+              border: '1.5px solid var(--pbs-mint-ink)',
+            }}>Linked</span>
+            <Chunky
+              tone="ink"
+              trailing="arrow-up-right"
+              onClick={() => signIn('google', { callbackUrl: '/teacher/setup' })}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Loading…' : 'Reconnect'}
+            </Chunky>
+          </div>
+        </StepCard>
+      );
+    }
     return (
       <StepCard>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

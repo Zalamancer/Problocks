@@ -10,6 +10,26 @@ type Parsed = { hour: number; minute: number; period: 'AM' | 'PM' };
 
 // Parse any reasonable variant: "10:15 AM", "1015am", "10:5 p", "8" -> best guess.
 // Falls back to 8:00 AM so the picker always has a valid starting point.
+export function parseTime(str: string): Parsed { return parse(str); }
+export function formatTime(p: Parsed): string { return format(p); }
+
+// Minutes-since-midnight helpers for arithmetic (add duration, compare start/end).
+export function toMinutes(str: string): number {
+  const { hour, minute, period } = parse(str);
+  const h24 = period === 'AM' ? (hour === 12 ? 0 : hour) : (hour === 12 ? 12 : hour + 12);
+  return h24 * 60 + minute;
+}
+export function fromMinutes(total: number): string {
+  // Wrap into 0..1439 so rolling past midnight still yields a valid clock value.
+  const m = ((total % 1440) + 1440) % 1440;
+  const h24 = Math.floor(m / 60);
+  const minute = m % 60;
+  const period: 'AM' | 'PM' = h24 < 12 ? 'AM' : 'PM';
+  let hour = h24 % 12;
+  if (hour === 0) hour = 12;
+  return format({ hour, minute, period });
+}
+
 function parse(str: string): Parsed {
   const s = (str || '').trim().toUpperCase().replace(/\s+/g, '');
   const m = s.match(/^(\d{1,2}):?(\d{0,2})\s*(A|P|AM|PM)?M?$/);

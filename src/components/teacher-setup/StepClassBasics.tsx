@@ -5,8 +5,11 @@
 import React from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { Field, TextInput, Select, ChipGroup, StepCard, StepHeader } from './form';
-import { TimePicker } from './TimePicker';
+import { TimePicker, toMinutes, fromMinutes } from './TimePicker';
 import type { SetupData, ClassroomColor } from './types';
+
+const DEFAULT_DURATION = 55; // minutes — used on first start edit and as fallback
+const MIN_DURATION = 5;      // end must always be at least 5 min after start
 
 const COLORS: ClassroomColor[] = ['butter', 'mint', 'coral', 'sky', 'grape', 'pink'];
 
@@ -15,7 +18,31 @@ export const StepClassBasics = ({
 }: {
   data: SetupData;
   set: <K extends keyof SetupData>(k: K, v: SetupData[K]) => void;
-}) => (
+}) => {
+  const startMin = toMinutes(data.startTime);
+  const endMin = toMinutes(data.endTime);
+  // Preserve current duration when it's valid; otherwise fall back to 55 min.
+  const currentDuration = endMin - startMin;
+  const duration = currentDuration >= MIN_DURATION ? currentDuration : DEFAULT_DURATION;
+
+  const onStartChange = (v: string) => {
+    const newStart = toMinutes(v);
+    set('startTime', v);
+    // Shift end so the existing duration is preserved; if it was invalid, use 55.
+    set('endTime', fromMinutes(newStart + duration));
+  };
+
+  const onEndChange = (v: string) => {
+    const newEnd = toMinutes(v);
+    // Clamp: end must always be after start.
+    if (newEnd <= startMin) {
+      set('endTime', fromMinutes(startMin + MIN_DURATION));
+    } else {
+      set('endTime', v);
+    }
+  };
+
+  return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
     <StepHeader
       index={1}
@@ -126,17 +153,33 @@ export const StepClassBasics = ({
               { value: 'fri', label: 'Fri', tone: 'sky' },
             ]}
           />
-          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'flex-end' }}>
             <Field label="Starts" style={{ flex: 1 }}>
               <TimePicker
                 value={data.startTime}
-                onChange={(v) => set('startTime', v)}
+                onChange={onStartChange}
               />
             </Field>
+            <div
+              aria-label={`Class length ${duration} minutes`}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '9px 12px',
+                borderRadius: 999,
+                background: 'var(--pbs-cream-2)',
+                border: '1.5px solid var(--pbs-line-2)',
+                fontSize: 12, fontWeight: 700, letterSpacing: '-0.005em',
+                color: 'var(--pbs-ink-soft)',
+                whiteSpace: 'nowrap',
+                height: 44, boxSizing: 'border-box',
+              }}
+            >
+              {duration} min
+            </div>
             <Field label="Ends" style={{ flex: 1 }}>
               <TimePicker
                 value={data.endTime}
-                onChange={(v) => set('endTime', v)}
+                onChange={onEndChange}
               />
             </Field>
           </div>
@@ -144,4 +187,5 @@ export const StepClassBasics = ({
       </div>
     </StepCard>
   </div>
-);
+  );
+};

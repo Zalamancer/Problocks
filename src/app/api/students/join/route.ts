@@ -13,10 +13,17 @@ import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminSupabase } from '@/lib/supabase-admin';
 import { getServerUser } from '@/lib/supabase-server';
 
 export async function POST(req: NextRequest) {
-  if (!isSupabaseConfigured() || !supabase) {
+  // Prefer admin client so our UPSERT (which performs an UPDATE on the
+  // conflict path) bypasses the students_update_none RLS policy (migration
+  // 017). Falls back to anon for local dev — that path works for fresh
+  // enrolments (INSERT) but will fail on re-enrolments (UPDATE) until the
+  // service role key is configured.
+  const client = getAdminSupabase() ?? (isSupabaseConfigured() ? supabase : null);
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
@@ -32,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Confirm the class exists so we don't create orphan student rows.
-  const cls = await supabase
+  const cls = await client
     .from('classes')
     .select('id, name')
     .eq('id', classId)
@@ -53,7 +60,7 @@ export async function POST(req: NextRequest) {
   const supabaseUser = await getServerUser();
   const supabaseUserId = supabaseUser.isAnonymous ? null : supabaseUser.id;
 
-  const upsert = await supabase
+  const upsert = await client
     .from('students')
     .upsert(
       {

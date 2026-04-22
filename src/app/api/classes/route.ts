@@ -10,6 +10,7 @@ import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminSupabase } from '@/lib/supabase-admin';
 
 function randomJoinCode() {
   // 8-char alphanumeric code ≈ 40 bits of entropy (~1.1T space). The code is
@@ -35,7 +36,13 @@ type Body = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!isSupabaseConfigured() || !supabase) {
+  // Prefer the service-role admin client so we can bypass the
+  // classes_update_none RLS policy shipped in migration 017. Falls back to
+  // the anon client for local dev environments missing the service role
+  // key — in that case the UPDATE branch below will fail silently and the
+  // route returns an error, which is the correct signal to set the env.
+  const client = getAdminSupabase() ?? (isSupabaseConfigured() ? supabase : null);
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
@@ -56,7 +63,7 @@ export async function POST(req: NextRequest) {
   // share link resolves immediately), update the existing row with the
   // latest fields instead of creating a duplicate. This makes /api/classes
   // safely idempotent for the "reserve early, finalise later" flow.
-  const existing = await supabase
+  const existing = await client
     .from('classes')
     .select('id, classroom_course_id')
     .eq('teacher_google_sub', session.googleSub)
@@ -68,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   if (existing.data) {
     isInsert = false;
-    const upd = await supabase
+    const upd = await client
       .from('classes')
       .update({
         name: body.name.trim(),
@@ -83,7 +90,7 @@ export async function POST(req: NextRequest) {
     if (upd.error) return NextResponse.json({ error: upd.error.message }, { status: 500 });
     row = upd.data;
   } else {
-    const insert = await supabase
+    const insert = await client
       .from('classes')
       .insert({
         teacher_google_sub: session.googleSub,
@@ -113,6 +120,7 @@ export async function POST(req: NextRequest) {
         row.id,
         body.classroomCourseId,
         session.accessToken,
+        client,
       );
     } catch (e) {
       importError = e instanceof Error ? e.message : 'Roster import failed';
@@ -147,8 +155,8 @@ async function importClassroomRoster(
   classId: string,
   courseId: string,
   accessToken: string,
+  client: NonNullable<typeof supabase>,
 ): Promise<number> {
-  if (!supabase) return 0;
   let pageToken: string | undefined;
   let total = 0;
 
@@ -189,7 +197,7 @@ async function importClassroomRoster(
     }));
 
     if (rows.length > 0) {
-      const up = await supabase
+      const up = await client
         .from('students')
         .upsert(rows, { onConflict: 'class_id,google_sub', ignoreDuplicates: false });
       if (up.error) throw new Error(up.error.message);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, CheckCircle2, XCircle, Clock, Archive } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, Clock, Archive, Download } from 'lucide-react';
 
 interface DataRequest {
   id: string;
@@ -201,6 +201,22 @@ function RequestCard({ req, busy, onTransition }: { req: DataRequest; busy: bool
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <a
+          href={`/api/admin/data-requests/${req.id}/export`}
+          download
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 10px', borderRadius: 10,
+            background: 'var(--pb-cream-2, #fff5df)',
+            color: 'var(--pb-ink, #1d1a14)',
+            border: '1.5px solid var(--pb-line-2, #e5dfd2)',
+            fontSize: 12, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit',
+          }}
+          title="Download JSON export"
+        >
+          <Download size={13} strokeWidth={2.2} />
+          Export
+        </a>
         {req.status !== 'in_progress' && (
           <IconButton
             icon={Clock}

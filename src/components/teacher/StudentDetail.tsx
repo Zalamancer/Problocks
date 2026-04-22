@@ -107,11 +107,11 @@ export const StudentDetail = ({
             </div>
           </div>
 
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: isReal ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
             <MiniKpi l="Grade" v={s.grade}/>
             <MiniKpi l="Average" v={`${s.avg}%`}/>
-            <MiniKpi l="Best topic" v={strongest.name}/>
-            <MiniKpi l="Needs work" v={weakest.name}/>
+            {!isReal && <MiniKpi l="Best topic" v={strongest.name}/>}
+            {!isReal && <MiniKpi l="Needs work" v={weakest.name}/>}
           </div>
         </Block>
 
@@ -136,10 +136,12 @@ export const StudentDetail = ({
 
       {/* Topic mastery + Completion donut */}
       <div className="pb-teacher-split" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18, marginTop: 18 }}>
-        <Block tone="paper" style={{ padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Topic mastery</div>
-          <TopicBars topics={topics}/>
-        </Block>
+        {!isReal && (
+          <Block tone="paper" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Topic mastery</div>
+            <TopicBars topics={topics}/>
+          </Block>
+        )}
 
         <Block tone="paper" style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 18 }}>
           <Donut
@@ -200,13 +202,15 @@ export const StudentDetail = ({
             </div>
           </Block>
 
-          <Block tone="mint" style={{ padding: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Suggested next</div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.45 }}>
-              Assign <b>&quot;{weakest.name} Refresher&quot;</b> — 8 Qs, ~10 min. Targets the gap in {weakest.name.toLowerCase()}.
-            </div>
-            <Chunky tone="ink" trailing="arrow-right" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}>Assign refresher</Chunky>
-          </Block>
+          {!isReal && (
+            <Block tone="mint" style={{ padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Suggested next</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+                Assign <b>&quot;{weakest.name} Refresher&quot;</b> — 8 Qs, ~10 min. Targets the gap in {weakest.name.toLowerCase()}.
+              </div>
+              <Chunky tone="ink" trailing="arrow-right" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}>Assign refresher</Chunky>
+            </Block>
+          )}
         </div>
       </div>
     </div>

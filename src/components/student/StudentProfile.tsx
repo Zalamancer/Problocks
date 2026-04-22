@@ -15,6 +15,8 @@ import { StudentSelf } from '@/components/teacher/StudentSelf';
 import { STUDENTS, type Student } from '@/components/teacher/sample-data';
 import { teacherWrap } from '@/components/teacher/shared';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { useDataSourceStore } from '@/store/data-source-store';
+import { Block, Icon, Pill } from '@/components/landing/pb-site/primitives';
 
 const deriveName = (session: Session | null): string => {
   if (!session?.user) return 'Student';
@@ -36,8 +38,10 @@ const buildStudentFor = (name: string): Student => {
 
 export const StudentProfile = () => {
   const router = useRouter();
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const [sessionReady, setSessionReady] = useState(false);
   const [name, setName] = useState<string>('Student');
+  const [email, setEmail] = useState<string>('');
 
   useEffect(() => {
     if (!supabase) {
@@ -48,10 +52,12 @@ export const StudentProfile = () => {
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
       setName(deriveName(data.session));
+      setEmail(data.session?.user?.email || '');
       setSessionReady(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setName(deriveName(session));
+      setEmail(session?.user?.email || '');
     });
     return () => {
       cancelled = true;
@@ -82,6 +88,41 @@ export const StudentProfile = () => {
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
         <div className="pbs-mono" style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>Loading…</div>
       </div>
+    );
+  }
+
+  if (useReal) {
+    return (
+      <main style={{ ...teacherWrap, padding: '28px 28px 80px' }}>
+        <button
+          onClick={() => router.push('/student')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px', borderRadius: 999,
+            background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)',
+            fontSize: 12.5, fontWeight: 600, color: 'var(--pbs-ink-soft)',
+            cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14,
+          }}
+        >
+          <span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}>
+            <Icon name="arrow-right" size={13} stroke={2.2}/>
+          </span>
+          Back to dashboard
+        </button>
+        <Block tone="paper" style={{ padding: 28 }}>
+          <Pill tone="butter" icon="users">Your profile</Pill>
+          <h1 style={{ margin: '12px 0 4px', fontSize: 32, fontWeight: 700, letterSpacing: '-0.025em' }}>
+            {name}
+          </h1>
+          {email && (
+            <div style={{ fontSize: 13, color: 'var(--pbs-ink-soft)' }}>{email}</div>
+          )}
+          <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--pbs-ink-muted)', fontSize: 13 }}>
+            <Icon name="compass" size={14} stroke={2.2}/>
+            <span>No progress data yet. Play your first game to see stats here.</span>
+          </div>
+        </Block>
+      </main>
     );
   }
 

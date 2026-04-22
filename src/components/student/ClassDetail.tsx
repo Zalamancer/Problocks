@@ -9,6 +9,7 @@ import {
   PeopleTab, SAMPLE_LEADERBOARD, WorkTab, kickerStyCd,
   type ClassLibraryItem,
 } from './class-detail-tabs';
+import { useDataSourceStore } from '@/store/data-source-store';
 import type { AssignedGame, ClassRecord, StudentUser } from './sample-data';
 import type { AnyGame } from './Dashboard';
 
@@ -23,6 +24,7 @@ export const ClassDetail = ({
   onPlay: (g: AnyGame) => void;
   onBack: () => void;
 }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const [tab, setTab] = useState<'stream' | 'work' | 'people' | 'library'>('stream');
   // AssignedGame.status is 'new' | 'inprogress' — there's no 'done' state yet,
   // so every class-assigned game is "pending" until completion is modeled.
@@ -98,7 +100,7 @@ export const ClassDetail = ({
               <Pill tone="paper" icon="users">{cls.teacher}</Pill>
               <Pill tone="paper" icon="smile">{cls.members} classmates</Pill>
               <Pill tone="paper" icon="bolt">{pending.length} to do</Pill>
-              <Pill tone="paper" icon="star">Rank 4 in class</Pill>
+              {!useReal && <Pill tone="paper" icon="star">Rank 4 in class</Pill>}
             </div>
           </div>
 
@@ -175,6 +177,7 @@ const StreamTab = ({
   onPlay: (g: AnyGame) => void;
   user: StudentUser;
 }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const leaderboard = SAMPLE_LEADERBOARD(user?.name || 'You');
   const myRow = leaderboard.find((l) => l.me);
   const next = pending[0];
@@ -218,19 +221,31 @@ const StreamTab = ({
 
         <section>
           <div className="pbs-mono" style={kickerStyCd}>CLASS STREAM</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-            {CLASS_FEED.map((f) => <FeedItem key={f.id} f={f} cls={cls}/>)}
-          </div>
+          {useReal ? (
+            <Block tone="paper" style={{ marginTop: 8, padding: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No activity yet.</div>
+            </Block>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              {CLASS_FEED.map((f) => <FeedItem key={f.id} f={f} cls={cls}/>)}
+            </div>
+          )}
         </section>
 
         <section>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8 }}>
             <div className="pbs-mono" style={kickerStyCd}>YOUR PAST PLAYS</div>
-            <a href="#" style={{ fontSize: 12, fontWeight: 600, color: 'var(--pbs-ink-soft)' }}>All history →</a>
+            {!useReal && <a href="#" style={{ fontSize: 12, fontWeight: 600, color: 'var(--pbs-ink-soft)' }}>All history →</a>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-            {CLASS_PAST.slice(0, 4).map((p) => <PastRow key={p.id} p={p}/>)}
-          </div>
+          {useReal ? (
+            <Block tone="paper" style={{ padding: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No completed games yet.</div>
+            </Block>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {CLASS_PAST.slice(0, 4).map((p) => <PastRow key={p.id} p={p}/>)}
+            </div>
+          )}
         </section>
       </div>
 
@@ -238,21 +253,27 @@ const StreamTab = ({
         <Block tone="paper" style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>This week&rsquo;s leaderboard</div>
-            <Pill tone={cls.tone}>Week 12</Pill>
+            {!useReal && <Pill tone={cls.tone}>Week 12</Pill>}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {leaderboard.slice(0, 8).map((row, i) => (
-              <LeaderRow key={i} row={row} rank={i + 1}/>
-            ))}
-          </div>
-          {myRow && (
-            <div style={{
-              marginTop: 10, padding: 10, borderRadius: 12,
-              background: 'var(--pbs-cream-2)', border: '1.5px dashed var(--pbs-line-2)',
-              fontSize: 11.5, color: 'var(--pbs-ink-soft)', textAlign: 'center',
-            }}>
-              You&rsquo;re <strong style={{ color: 'var(--pbs-ink)' }}>#4</strong> — 260 XP behind Priya.
-            </div>
+          {useReal ? (
+            <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No classmates yet.</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {leaderboard.slice(0, 8).map((row, i) => (
+                  <LeaderRow key={i} row={row} rank={i + 1}/>
+                ))}
+              </div>
+              {myRow && (
+                <div style={{
+                  marginTop: 10, padding: 10, borderRadius: 12,
+                  background: 'var(--pbs-cream-2)', border: '1.5px dashed var(--pbs-line-2)',
+                  fontSize: 11.5, color: 'var(--pbs-ink-soft)', textAlign: 'center',
+                }}>
+                  You&rsquo;re <strong style={{ color: 'var(--pbs-ink)' }}>#4</strong> — 260 XP behind Priya.
+                </div>
+              )}
+            </>
           )}
         </Block>
 

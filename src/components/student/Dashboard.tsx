@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { AvatarBlob } from './atoms';
 import { RobloxAvatar } from './RobloxAvatar';
+import { useDataSourceStore } from '@/store/data-source-store';
 import {
   EXPLORE,
   SAMPLE_RECENT,
@@ -32,6 +33,7 @@ export const Dashboard = ({
   onLogout: () => void;
 }) => {
   const [tab, setTab] = useState<Tab>('home');
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const streak = 7;
   const coins = 2480;
   const xp = 1840;
@@ -61,10 +63,12 @@ export const Dashboard = ({
             ))}
           </nav>
           <div style={{ flex: 1 }}/>
-          <div className="pbs-student-stats" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <StatChip icon="bolt" tone="butter" value={String(streak)} label="day streak"/>
-            <StatChip icon="coin" tone="mint" value={coins.toLocaleString()} label="blocks"/>
-          </div>
+          {!useReal && (
+            <div className="pbs-student-stats" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <StatChip icon="bolt" tone="butter" value={String(streak)} label="day streak"/>
+              <StatChip icon="coin" tone="mint" value={coins.toLocaleString()} label="blocks"/>
+            </div>
+          )}
           <AvatarMenu user={user} onLogout={onLogout}/>
         </div>
       </header>
@@ -114,6 +118,7 @@ const HomeTab = ({
   onJoinClass: () => void;
   onOpenClass: (c: ClassRecord) => void;
 }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const firstName = (user?.name || 'You').split(' ')[0];
   const next = assigned[0];
 
@@ -203,10 +208,14 @@ const HomeTab = ({
         </section>
 
         <section>
-          <SectionHead title="Recent plays" linkLabel="View all"/>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-            {SAMPLE_RECENT.map((r) => <RecentCard key={r.id} r={r}/>)}
-          </div>
+          <SectionHead title="Recent plays" linkLabel={useReal ? undefined : 'View all'}/>
+          {useReal ? (
+            <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No recent plays yet.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+              {SAMPLE_RECENT.map((r) => <RecentCard key={r.id} r={r}/>)}
+            </div>
+          )}
         </section>
       </div>
 
@@ -273,28 +282,32 @@ const HomeTab = ({
               Open crates
             </Chunky>
           </div>
-          <div style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-              <span style={{ opacity: 0.75 }}>Level 14</span>
-              <span className="pbs-mono" style={{ opacity: 0.9 }}>
-                {xp.toLocaleString()} / {xpNext.toLocaleString()} XP
-              </span>
-            </div>
-            <div style={{
-              height: 10, borderRadius: 999,
-              background: 'rgba(253,246,230,0.15)', overflow: 'hidden',
-            }}>
+          {!useReal && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                <span style={{ opacity: 0.75 }}>Level 14</span>
+                <span className="pbs-mono" style={{ opacity: 0.9 }}>
+                  {xp.toLocaleString()} / {xpNext.toLocaleString()} XP
+                </span>
+              </div>
               <div style={{
-                width: `${(xp / xpNext) * 100}%`, height: '100%',
-                background: 'linear-gradient(90deg, var(--pbs-butter), var(--pbs-coral))',
-                borderRadius: 999,
-              }}/>
+                height: 10, borderRadius: 999,
+                background: 'rgba(253,246,230,0.15)', overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${(xp / xpNext) * 100}%`, height: '100%',
+                  background: 'linear-gradient(90deg, var(--pbs-butter), var(--pbs-coral))',
+                  borderRadius: 999,
+                }}/>
+              </div>
             </div>
-          </div>
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <MiniStat label="Won" value="48"/>
-            <MiniStat label="Accuracy" value="86%"/>
-          </div>
+          )}
+          {!useReal && (
+            <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <MiniStat label="Won" value="48"/>
+              <MiniStat label="Accuracy" value="86%"/>
+            </div>
+          )}
         </Block>
 
         <Block tone="paper" style={{ padding: 18 }}>
@@ -416,52 +429,66 @@ const ClassesTab = ({
 
 // ─────────────── Explore tab ───────────────
 
-const ExploreTab = ({ onPlay }: { onPlay: (g: AnyGame) => void }) => (
-  <div>
-    <div className="pbs-mono" style={kickerSty}>EXPLORE</div>
-    <h1 style={{ margin: '6px 0 20px', fontSize: 44, fontWeight: 700, letterSpacing: '-0.025em' }}>
-      Free-play games <span className="pbs-serif">just for you.</span>
-    </h1>
+const ExploreTab = ({ onPlay }: { onPlay: (g: AnyGame) => void }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
+  return (
+    <div>
+      <div className="pbs-mono" style={kickerSty}>EXPLORE</div>
+      <h1 style={{ margin: '6px 0 20px', fontSize: 44, fontWeight: 700, letterSpacing: '-0.025em' }}>
+        Free-play games <span className="pbs-serif">just for you.</span>
+      </h1>
 
-    <div style={{
-      display: 'grid', gap: 14,
-      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-    }}>
-      {EXPLORE.map((g) => (
-        <Block key={g.id} tone={g.tone} style={{ padding: 18, cursor: 'pointer' }} onClick={() => onPlay(g)}>
-          <div style={{
-            aspectRatio: '4/3', borderRadius: 12,
-            background: 'var(--pbs-paper)', border: '1.5px solid currentColor',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-          }}>
-            <Icon name={g.icon as 'coin'} size={52} stroke={1.6}/>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>{g.title}</div>
-          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{g.subject}</div>
-          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
-            <Icon name="users" size={12} stroke={2.2}/> {g.plays} plays
-          </div>
-        </Block>
-      ))}
+      {useReal ? (
+        <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No games to explore yet.</div>
+      ) : (
+        <div style={{
+          display: 'grid', gap: 14,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+        }}>
+          {EXPLORE.map((g) => (
+            <Block key={g.id} tone={g.tone} style={{ padding: 18, cursor: 'pointer' }} onClick={() => onPlay(g)}>
+              <div style={{
+                aspectRatio: '4/3', borderRadius: 12,
+                background: 'var(--pbs-paper)', border: '1.5px solid currentColor',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+              }}>
+                <Icon name={g.icon as 'coin'} size={52} stroke={1.6}/>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>{g.title}</div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{g.subject}</div>
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
+                <Icon name="users" size={12} stroke={2.2}/> {g.plays} plays
+              </div>
+            </Block>
+          ))}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // ─────────────── Library tab ───────────────
 
-const LibraryTab = ({ onPlay: _onPlay }: { onPlay: (g: AnyGame) => void }) => (
-  <div>
-    <div className="pbs-mono" style={kickerSty}>YOUR LIBRARY</div>
-    <h1 style={{ margin: '6px 0 20px', fontSize: 44, fontWeight: 700, letterSpacing: '-0.025em' }}>
-      Games you&rsquo;ve <span className="pbs-serif">loved.</span>
-    </h1>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-      {[...SAMPLE_RECENT, ...EXPLORE.slice(0, 3).map((e) => ({
-        id: e.id, title: e.title, plays: e.plays, tone: e.tone, icon: e.icon,
-      } as RecentGame))].map((r, i) => <RecentCard key={r.id + i} r={r}/>)}
+const LibraryTab = ({ onPlay: _onPlay }: { onPlay: (g: AnyGame) => void }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
+  return (
+    <div>
+      <div className="pbs-mono" style={kickerSty}>YOUR LIBRARY</div>
+      <h1 style={{ margin: '6px 0 20px', fontSize: 44, fontWeight: 700, letterSpacing: '-0.025em' }}>
+        Games you&rsquo;ve <span className="pbs-serif">loved.</span>
+      </h1>
+      {useReal ? (
+        <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No games in your library yet.</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+          {[...SAMPLE_RECENT, ...EXPLORE.slice(0, 3).map((e) => ({
+            id: e.id, title: e.title, plays: e.plays, tone: e.tone, icon: e.icon,
+          } as RecentGame))].map((r, i) => <RecentCard key={r.id + i} r={r}/>)}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // ─────────────── Small pieces ───────────────
 

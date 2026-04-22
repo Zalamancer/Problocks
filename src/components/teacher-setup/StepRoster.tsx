@@ -14,6 +14,11 @@ import type {
   ClassroomCourse,
 } from '@/lib/classroom-api';
 
+// Note: Clever + Microsoft Teams are intentionally hidden until we finish their
+// partner/approval flows (Clever needs integrations@clever.com scope review,
+// MS needs an EDU tenant). The `RosterMethod` type still accepts them so
+// persisted data from earlier sessions doesn't break — the UI just won't offer
+// them as choices.
 export const ROSTER_METHODS: Array<{
   id: RosterMethod;
   icon: React.ComponentProps<typeof Icon>['name'];
@@ -23,8 +28,6 @@ export const ROSTER_METHODS: Array<{
 }> = [
   { id: 'paste',  icon: 'users',   tone: 'butter', label: 'Paste a list',        sub: 'CSV or one name per line.' },
   { id: 'google', icon: 'book',    tone: 'mint',   label: 'Google Classroom',    sub: 'Sync & stay in sync.' },
-  { id: 'clever', icon: 'bolt',    tone: 'sky',    label: 'Clever',              sub: "Your district's roster." },
-  { id: 'teams',  icon: 'cube',    tone: 'grape',  label: 'Microsoft Teams',     sub: 'EDU tenant required.' },
   { id: 'code',   icon: 'sparkle', tone: 'coral',  label: 'Share a join code',   sub: 'Kids type it on any device.' },
   { id: 'later',  icon: 'compass', tone: 'pink',   label: "I'll do this later",  sub: 'Open an empty room.' },
 ];
@@ -77,7 +80,7 @@ export const StepRoster = ({
         <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>
           Pick a way
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
           {ROSTER_METHODS.map((m) => {
             const sel = method === m.id;
             return (

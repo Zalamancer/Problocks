@@ -24,6 +24,15 @@ export async function isSignedInTeacher(): Promise<boolean> {
   return !!session?.user;
 }
 
+/** True when the caller has a valid session AND their teachers.role is
+ *  'admin'. Used to gate platform-wide admin surfaces (data_requests
+ *  queue, user deletion, etc.). Requires SUPABASE_SERVICE_ROLE_KEY so the
+ *  role lookup can bypass RLS. */
+export async function isPlatformAdmin(): Promise<boolean> {
+  const row = await getTeacherRow();
+  return row?.role === 'admin';
+}
+
 /** Upsert a teachers row from the NextAuth user profile + googleSub.
  *  Called from the NextAuth `events.signIn` callback so every sign-in
  *  refreshes the teacher's stored profile. Idempotent. */

@@ -4,7 +4,6 @@
 
 import React from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
-import { STARTER_UNITS } from './StepUnit';
 import type { SetupData, GradeKey, DayKey } from './types';
 
 function gradeLabel(g: GradeKey): string {
@@ -34,7 +33,7 @@ export const ClassroomPreview = ({
     : data.rosterMethod === 'code'  ? '?'
     : data.rosterMethod === 'later' ? 0
     : '~28';
-  const unit = STARTER_UNITS.find((u) => u.id === data.unit);
+  const unit = data.unit;
 
   const showCore = step >= 1;
   const showRoster = step >= 2;

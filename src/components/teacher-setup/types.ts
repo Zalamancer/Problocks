@@ -11,7 +11,29 @@ export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
 export type RosterMethod = 'paste' | 'google' | 'clever' | 'teams' | 'code' | 'later';
 export type RegionKey = 'us' | 'uk' | 'ca' | 'au' | 'nz' | 'other';
 export type StandardsKey = 'common-core' | 'ngss' | 'csta' | 'iste' | 'uk-nc' | 'none';
-export type UnitKey = 'frac' | 'story' | 'eco' | 'scratch';
+// Allowed palette for starter-unit cards. Kept in sync with the API
+// /api/starter-units/draft prompt and the StepUnit renderer.
+export type StarterUnitTone = 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink';
+export type StarterUnitIcon =
+  | 'coin' | 'book' | 'spark' | 'cube' | 'star' | 'heart' | 'bolt' | 'compass'
+  | 'music' | 'image' | 'mic' | 'gamepad' | 'code' | 'wand' | 'smile';
+
+// A picked starter unit held in setup state. `source` tells us where it came
+// from so we can attribute-back when the teacher hits "Open the classroom":
+//   - 'blank'     → built-in "Blank canvas" option (nothing to persist)
+//   - 'template'  → an existing row from the starter_units table (bump usage_count)
+//   - 'draft'     → a freshly-AI-drafted unit (insert a new row)
+export type StarterUnit = {
+  id: string;
+  source: 'blank' | 'template' | 'draft';
+  title: string;
+  weeks: string;
+  blurb: string;
+  bullets: string[];
+  tone: StarterUnitTone;
+  icon: StarterUnitIcon;
+  prompt?: string;    // original teacher description, only set when source==='draft'
+};
 
 export type SetupData = {
   teacherName: string;
@@ -38,7 +60,8 @@ export type SetupData = {
   classroomCourseId?: string;
   classroomCourseName?: string;
 
-  unit: UnitKey;
+  // null until the teacher picks one in step 4.
+  unit: StarterUnit | null;
 };
 
 // Generate a fresh join code per session so two teachers don't collide on
@@ -75,5 +98,5 @@ export const INITIAL_DATA: SetupData = {
   pastedNames: '',
   joinCode: randomJoinCode(),
 
-  unit: 'frac',
+  unit: null,
 };

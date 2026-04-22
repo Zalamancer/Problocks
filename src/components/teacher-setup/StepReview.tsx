@@ -5,7 +5,6 @@
 import React from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { StepCard, StepHeader } from './form';
-import { STARTER_UNITS } from './StepUnit';
 import type { SetupData } from './types';
 
 const Row = ({
@@ -29,7 +28,7 @@ const Row = ({
 );
 
 export const StepReview = ({ data }: { data: SetupData }) => {
-  const unit = STARTER_UNITS.find((u) => u.id === data.unit);
+  const unit = data.unit;
   const rosterCount = data.pastedNames
     ? data.pastedNames.split(/\n|,/).map((s) => s.trim()).filter(Boolean).length
     : 0;

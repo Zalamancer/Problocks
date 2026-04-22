@@ -165,6 +165,33 @@ export const ClassroomSetupApp = () => {
       }
       const classId: string | undefined = payload?.class?.id;
       if (!classId) throw new Error('No class id returned');
+
+      // Fire-and-forget: record the chosen unit in the starter_units table
+      // so the NEXT teacher with this (subject, grade) sees it as a template
+      // card in step 4. 'blank' picks don't need persisting.
+      if (data.unit && data.unit.source !== 'blank') {
+        const unitBody = data.unit.source === 'template'
+          ? { existingId: data.unit.id }
+          : {
+              unit: {
+                subject: data.classSubject,
+                grade: data.grade,
+                title: data.unit.title,
+                weeks: data.unit.weeks,
+                blurb: data.unit.blurb,
+                bullets: data.unit.bullets,
+                tone: data.unit.tone,
+                icon: data.unit.icon,
+                prompt: data.unit.prompt,
+              },
+            };
+        fetch('/api/starter-units', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(unitBody),
+        }).catch(() => { /* non-fatal — starter-units is a cache, not a source of truth */ });
+      }
+
       // Setup succeeded — drop the persisted draft so re-visits don't
       // reload a stale form.
       try { sessionStorage.removeItem(SETUP_STORAGE_KEY); } catch {}

@@ -57,12 +57,11 @@ export const StepClassBasics = ({
         </Field>
       </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Field label="Grade level">
-          <div style={{ height: 6 }}/>
-          <ChipGroup
+          <Select
             value={data.grade}
-            onChange={(v) => set('grade', v as SetupData['grade'])}
+            onChange={(e) => set('grade', e.target.value as SetupData['grade'])}
             options={[
               { value: 'k2',  label: 'K–2' },
               { value: '3',   label: '3rd' },
@@ -75,8 +74,8 @@ export const StepClassBasics = ({
               { value: '10',  label: '10th' },
               { value: '11',  label: '11th' },
               { value: '12',  label: '12th' },
-              { value: 'hs',  label: 'HS (mixed)' },
-              { value: 'mix', label: 'Mixed' },
+              { value: 'hs',  label: 'High school (mixed)' },
+              { value: 'mix', label: 'Mixed / multi-grade' },
             ]}
           />
         </Field>

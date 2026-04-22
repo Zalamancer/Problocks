@@ -48,6 +48,19 @@ export const StepRoster = ({
     .map((s) => s.trim())
     .filter(Boolean);
   const selectedMethod = ROSTER_METHODS.find((m) => m.id === method)!;
+  const [copied, setCopied] = useState(false);
+  const joinLink = `https://playdemy.app/join?code=${data.joinCode.replace(/-/g, '')}`;
+  const copyJoinLink = async () => {
+    try {
+      await navigator.clipboard.writeText(joinLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // clipboard blocked (http, permissions) — fall back to a prompt so teacher
+      // can still grab the URL manually
+      window.prompt('Copy this join link:', joinLink);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -215,7 +228,9 @@ export const StepRoster = ({
                 Rotates at the end of each term.
               </p>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                <Chunky tone="butter" icon="sparkle">Copy join link</Chunky>
+                <Chunky tone="butter" icon="sparkle" onClick={copyJoinLink}>
+                  {copied ? 'Copied ✓' : 'Copy join link'}
+                </Chunky>
                 <button
                   type="button"
                   onClick={() => set('joinCode', randomCode())}

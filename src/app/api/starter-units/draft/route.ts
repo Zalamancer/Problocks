@@ -45,43 +45,113 @@ function cliEnv(): NodeJS.ProcessEnv {
 function callClaude(prompt: string): Promise<string> {
   return new Promise((resolve, reject) => {
     let text = '';
+    let stderr = '';
+    // Line buffer — stream-json events can be split across chunks, so we
+    // have to wait for a newline before attempting JSON.parse. Without this,
+    // a truncated first chunk silently loses the whole assistant message
+    // and callers think the model returned nothing.
+    let buf = '';
     const child = spawn(
       'claude',
-      ['-p', prompt, '--output-format', 'stream-json', '--dangerously-skip-permissions'],
-      { env: cliEnv() },
+      [
+        '-p', prompt,
+        '--output-format', 'stream-json',
+        '--verbose', // required by the CLI when output-format=stream-json
+        '--dangerously-skip-permissions',
+      ],
+      { env: cliEnv(), stdio: ['ignore', 'pipe', 'pipe'] },
     );
     child.stdout.on('data', (chunk: Buffer) => {
-      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+      buf += chunk.toString();
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
         try {
           const p = JSON.parse(line);
           if (p.type === 'assistant' && p.message?.content) {
             for (const b of p.message.content) {
-              if (b.type === 'text') text += b.text;
+              if (b.type === 'text' && typeof b.text === 'string') text += b.text;
             }
           }
-          if (p.type === 'result' && p.result && !text) text = p.result;
-        } catch { /* skip */ }
+          if (p.type === 'result' && typeof p.result === 'string' && !text) {
+            text = p.result;
+          }
+        } catch {
+          /* partial or non-JSON line — skip */
+        }
       }
     });
-    child.on('close', () => resolve(text));
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.on('close', () => {
+      if (!text && stderr) console.error('[starter-units/draft] claude stderr:', stderr.slice(0, 500));
+      resolve(text);
+    });
     child.on('error', reject);
   });
 }
 
-// Strip ```json fences and recover the first top-level JSON array/object.
+// Scan `src` for a balanced JSON container (array or object) that starts at
+// the given opener and ends at its matching closer. Respects string literals
+// and backslash escapes so we don't count braces inside quoted text.
+function sliceBalanced(src: string, openIdx: number): string | null {
+  const open = src[openIdx];
+  const close = open === '[' ? ']' : '}';
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = openIdx; i < src.length; i++) {
+    const ch = src[i];
+    if (esc) { esc = false; continue; }
+    if (inStr) {
+      if (ch === '\\') { esc = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return src.slice(openIdx, i + 1);
+    }
+  }
+  return null;
+}
+
+// Recover a JSON value from the model's raw text. Handles:
+//   - raw JSON (happy path — what Claude returns when it follows the prompt)
+//   - ```json fences or stray prose before/after
+//   - Three separate top-level objects with no enclosing array
 function extractJSON(text: string): unknown {
-  const stripped = text.replace(/```(?:json)?/gi, '').trim();
-  // Find the first [ or { and the last matching ] or }
-  const arrStart = stripped.indexOf('[');
-  const arrEnd = stripped.lastIndexOf(']');
-  if (arrStart !== -1 && arrEnd > arrStart) {
-    try { return JSON.parse(stripped.slice(arrStart, arrEnd + 1)); } catch {}
+  const cleaned = text.replace(/```(?:json)?/gi, '').trim();
+
+  // 1. Try straight parse.
+  try { return JSON.parse(cleaned); } catch { /* fall through */ }
+
+  // 2. Try the first balanced [ … ] anywhere in the text.
+  const firstArr = cleaned.indexOf('[');
+  if (firstArr !== -1) {
+    const slice = sliceBalanced(cleaned, firstArr);
+    if (slice) {
+      try { return JSON.parse(slice); } catch { /* fall through */ }
+    }
   }
-  const objStart = stripped.indexOf('{');
-  const objEnd = stripped.lastIndexOf('}');
-  if (objStart !== -1 && objEnd > objStart) {
-    try { return JSON.parse(stripped.slice(objStart, objEnd + 1)); } catch {}
+
+  // 3. Collect every balanced { … } block and return them as an array —
+  //    covers the case where the model forgets the outer [].
+  const objects: unknown[] = [];
+  let scan = 0;
+  while (scan < cleaned.length) {
+    const next = cleaned.indexOf('{', scan);
+    if (next === -1) break;
+    const slice = sliceBalanced(cleaned, next);
+    if (!slice) break;
+    try { objects.push(JSON.parse(slice)); } catch { /* skip this block */ }
+    scan = next + slice.length;
   }
+  if (objects.length > 0) return objects;
+
   throw new Error('Could not parse JSON from model output');
 }
 
@@ -144,7 +214,28 @@ export async function POST(req: Request) {
     const description = (body.description ?? '').slice(0, 500);
 
     const text = await callClaude(PROMPT(body.subject, body.grade, description));
-    const parsed = extractJSON(text);
+    if (!text.trim()) {
+      console.error('[starter-units/draft] empty model response');
+      return NextResponse.json(
+        { error: 'Model returned no text — check that the Claude CLI is logged in' },
+        { status: 502 },
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = extractJSON(text);
+    } catch (parseErr) {
+      console.error('[starter-units/draft] JSON parse failed. Raw output:\n', text.slice(0, 2000));
+      return NextResponse.json(
+        {
+          error: parseErr instanceof Error ? parseErr.message : 'JSON parse failed',
+          raw: text.slice(0, 800),
+        },
+        { status: 502 },
+      );
+    }
+
     const arr = Array.isArray(parsed) ? parsed : [parsed];
     const units = arr
       .map(sanitizeDraft)
@@ -152,6 +243,7 @@ export async function POST(req: Request) {
       .slice(0, 3);
 
     if (!units.length) {
+      console.error('[starter-units/draft] no usable drafts. Raw:\n', text.slice(0, 1000));
       return NextResponse.json(
         { error: 'Model returned no usable drafts', raw: text.slice(0, 500) },
         { status: 502 },

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { PlayLogger } from './PlayLogger';
+import { ReportButton } from './ReportButton';
 import Link from 'next/link';
 
 // Public play page. Anyone with the link can load + play a game whose row has
@@ -78,8 +79,9 @@ export default async function PlayGamePage({
         <div style={{ fontSize: 14, fontWeight: 700, flex: 1, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {data.name}
         </div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', display: 'flex', gap: 10 }}>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span>{data.plays_count.toLocaleString()} plays</span>
+          <ReportButton gameId={gameId} />
         </div>
       </header>
 

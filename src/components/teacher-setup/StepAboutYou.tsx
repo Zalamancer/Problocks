@@ -15,7 +15,9 @@ export const StepAboutYou = ({
 }: {
   data: SetupData;
   set: <K extends keyof SetupData>(k: K, v: SetupData[K]) => void;
-}) => (
+}) => {
+  const handleTouchedRef = React.useRef(false);
+  return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
     <StepHeader
       index={0}
@@ -31,14 +33,21 @@ export const StepAboutYou = ({
         <Field label="Your name">
           <TextInput
             value={data.teacherName}
-            onChange={(e) => set('teacherName', e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              set('teacherName', v);
+              if (!handleTouchedRef.current) set('teacherHandle', v);
+            }}
             placeholder="Ms. Nguyen"
           />
         </Field>
         <Field label="Display name" hint="How students see you in chat.">
           <TextInput
             value={data.teacherHandle}
-            onChange={(e) => set('teacherHandle', e.target.value)}
+            onChange={(e) => {
+              handleTouchedRef.current = true;
+              set('teacherHandle', e.target.value);
+            }}
             placeholder="Ms. N"
             prefix="@"
           />
@@ -121,4 +130,5 @@ export const StepAboutYou = ({
       <span>FERPA &amp; COPPA compliant. Your school admin can pre-approve Playdemy so you never hit a wall. <a href="#admin" style={{ color: 'var(--pbs-ink)', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>Admin info →</a></span>
     </div>
   </div>
-);
+  );
+};

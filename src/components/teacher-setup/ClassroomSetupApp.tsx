@@ -2,7 +2,7 @@
 // Ported from Claude Design bundle (pb_classroom_setup/app.jsx).
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon, Chunky } from '@/components/landing/pb-site/primitives';
 import { SetupNav } from './SetupNav';
@@ -67,13 +67,55 @@ const HelpCard = () => (
   </div>
 );
 
+// Persist setup progress so external round-trips (Google Classroom OAuth
+// sign-in kicks the whole page out for the consent redirect) don't drop
+// the teacher back on step 1 with an empty form. sessionStorage scopes it
+// to the current tab so two teachers in different tabs don't stomp each
+// other, and it auto-clears when the tab closes.
+const SETUP_STORAGE_KEY = 'pb:teacher-setup:v1';
+
+type PersistedSetup = {
+  step: number;
+  completed: number[];
+  data: SetupData;
+};
+
 export const ClassroomSetupApp = () => {
   const router = useRouter();
+  const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState<number[]>([]);
   const [data, setData] = useState<SetupData>(INITIAL_DATA);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
+
+  // Rehydrate on mount (client-only).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SETUP_STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<PersistedSetup>;
+        if (saved.data) setData({ ...INITIAL_DATA, ...saved.data });
+        if (typeof saved.step === 'number') setStep(saved.step);
+        if (Array.isArray(saved.completed)) setCompleted(saved.completed);
+      }
+    } catch {
+      // ignore — bad/corrupt payload just falls back to INITIAL_DATA
+    }
+    setHydrated(true);
+  }, []);
+
+  // Persist whenever anything changes (after initial hydration so we don't
+  // overwrite saved state with INITIAL_DATA on first render).
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      const payload: PersistedSetup = { step, completed, data };
+      sessionStorage.setItem(SETUP_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // storage quota / disabled — non-fatal
+    }
+  }, [hydrated, step, completed, data]);
 
   const set = <K extends keyof SetupData>(k: K, v: SetupData[K]) =>
     setData((d) => ({ ...d, [k]: v }));
@@ -123,6 +165,9 @@ export const ClassroomSetupApp = () => {
       }
       const classId: string | undefined = payload?.class?.id;
       if (!classId) throw new Error('No class id returned');
+      // Setup succeeded — drop the persisted draft so re-visits don't
+      // reload a stale form.
+      try { sessionStorage.removeItem(SETUP_STORAGE_KEY); } catch {}
       router.push(`/teacher/setup/share?classId=${classId}`);
     } catch (e: unknown) {
       setOpenError(e instanceof Error ? e.message : 'Could not create classroom');

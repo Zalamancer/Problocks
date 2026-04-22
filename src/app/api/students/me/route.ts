@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getServerReadClient } from '@/lib/supabase-admin';
+import { getServerUser } from '@/lib/supabase-server';
 
 export async function GET() {
   const client = getServerReadClient();
@@ -20,10 +21,13 @@ export async function GET() {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
 
-  // Pull every enrollment for this student, joined to its class row.
+  // Pull every enrollment for this student, joined to its class row. We
+  // also need supabase_user_id so the client can decide whether to prompt
+  // for account linking (Sprint 6.2) — rows with a null link are why the
+  // moderation queue can't see this student's games.
   const rows = await client
     .from('students')
-    .select('id, full_name, given_name, family_name, picture_url, email, class:classes(id, name, subject, grade, color)')
+    .select('id, full_name, given_name, family_name, picture_url, email, supabase_user_id, class:classes(id, name, subject, grade, color)')
     .eq('google_sub', session.googleSub);
 
   if (rows.error) {
@@ -33,6 +37,20 @@ export async function GET() {
   const classes = (rows.data ?? [])
     .map((r) => (r as unknown as { class: { id: string; name: string; subject: string | null; grade: string | null; color: string | null } | null }).class)
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+  // Linking status: does this student have at least one enrollment with
+  // supabase_user_id already set? If not, and they currently carry a
+  // Supabase session too, we surface the "link your account" banner.
+  const supabaseUser = await getServerUser();
+  const hasLinkedRow = (rows.data ?? []).some((r) =>
+    typeof (r as { supabase_user_id?: string | null }).supabase_user_id === 'string'
+    && (r as { supabase_user_id?: string }).supabase_user_id !== null
+  );
+  const linking = {
+    hasSupabaseSession: !supabaseUser.isAnonymous,
+    hasLinkedRow,
+    needsLink: !supabaseUser.isAnonymous && !hasLinkedRow && (rows.data?.length ?? 0) > 0,
+  };
 
   const first = rows.data?.[0];
   const user = first
@@ -47,5 +65,5 @@ export async function GET() {
         picture: session.user?.image ?? null,
       };
 
-  return NextResponse.json({ user, classes });
+  return NextResponse.json({ user, classes, linking });
 }

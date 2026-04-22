@@ -98,6 +98,7 @@ export const StudentApp = () => {
         const j = (await res.json()) as {
           user: { name: string; email: string; picture: string | null };
           classes: Array<{ id: string; name: string; subject: string | null; grade: string | null; color: string | null }>;
+          linking?: { hasSupabaseSession: boolean; hasLinkedRow: boolean; needsLink: boolean };
         };
         if (cancelled || !j.classes?.length) return;
         const mapped: ClassRecord[] = j.classes.map((c, i) => ({
@@ -116,6 +117,25 @@ export const StudentApp = () => {
         // session from /join is enough to identify the student.
         setUser((prev) => prev ?? { name: j.user.name, email: j.user.email, avatar: 'butter' });
         setView((v) => (v === 'auth' ? 'dashboard' : v));
+
+        // If the student is carrying both identities (NextAuth Google for
+        // the class enrolment + Supabase auth for the studio) but their
+        // students.supabase_user_id is still null, silently link the two so
+        // their teacher's moderation queue can see their games. One quiet
+        // toast on success; failures stay silent (we'll retry on next load).
+        if (j.linking?.needsLink) {
+          try {
+            const linkRes = await fetch('/api/students/link', { method: 'POST' });
+            if (linkRes.ok) {
+              const linkJson = (await linkRes.json()) as { linked?: number };
+              if (!cancelled && (linkJson.linked ?? 0) > 0) {
+                showToast('Account linked — your teacher can now see your games.', 'mint');
+              }
+            }
+          } catch {
+            /* non-fatal */
+          }
+        }
       } catch {
         /* ignore — student without a NextAuth session just sees normal flow */
       }

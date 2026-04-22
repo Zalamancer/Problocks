@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { Block, Chunky, FloatBlock, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { QrGlyph } from './atoms';
+import { useDataSourceStore } from '@/store/data-source-store';
 import type { Invite, StudentUser } from './sample-data';
 
 export const JoinScreen = ({
@@ -19,6 +20,7 @@ export const JoinScreen = ({
   const [mode, setMode] = useState<'choose' | 'invite'>(pendingInvite ? 'invite' : initialMode);
   const [code, setCode] = useState('');
   const [scanning, setScanning] = useState(false);
+  const useReal = useDataSourceStore((s) => s.useRealData);
 
   useEffect(() => {
     if (pendingInvite) setMode('invite');
@@ -94,11 +96,19 @@ export const JoinScreen = ({
           <Chunky
             tone={code.length === 6 ? 'butter' : 'ghost'}
             trailing="arrow-right"
-            onClick={() => code.length === 6 && onJoined({
-              code: code.toUpperCase(),
-              className: 'Ms. Rivera — Period 3',
-              teacher: 'Ms. Rivera',
-            })}
+            onClick={() => code.length === 6 && onJoined(
+              useReal
+                ? {
+                    code: code.toUpperCase(),
+                    className: `Class ${code.toUpperCase()}`,
+                    teacher: '',
+                  }
+                : {
+                    code: code.toUpperCase(),
+                    className: 'Ms. Rivera — Period 3',
+                    teacher: 'Ms. Rivera',
+                  }
+            )}
             style={{
               width: '100%', justifyContent: 'center',
               marginTop: 16, opacity: code.length === 6 ? 1 : 0.55,

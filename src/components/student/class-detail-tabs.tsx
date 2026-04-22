@@ -5,6 +5,7 @@
 import React from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { CardboardHead } from '@/components/teacher/CardboardHead';
+import { useDataSourceStore } from '@/store/data-source-store';
 import type { AvatarOutfit } from './RobloxAvatar';
 import type { AssignedGame, ClassRecord, StudentUser, ToneTone } from './sample-data';
 
@@ -112,113 +113,129 @@ export const WorkTab = ({
   cls: ClassRecord;
   pending: AssignedGame[];
   onPlay: (a: AssignedGame) => void;
-}) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-    <div>
-      <div className="pbs-mono" style={kickerStyCd}>PENDING · {pending.length}</div>
-      <h2 style={{ margin: '6px 0 14px', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Get these done this week.</h2>
-      {pending.length === 0 ? (
-        <Block tone="paper" style={{ padding: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 36, marginBottom: 6 }}>🎉</div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>You&rsquo;re all caught up.</div>
-          <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>Nothing due right now.</div>
-        </Block>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-          {pending.map((a) => (
-            <Block key={a.id} tone={a.tone} style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 12, background: 'var(--pbs-paper)',
-                  border: '1.5px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center',
+}) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div>
+        <div className="pbs-mono" style={kickerStyCd}>PENDING · {pending.length}</div>
+        <h2 style={{ margin: '6px 0 14px', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Get these done this week.</h2>
+        {pending.length === 0 ? (
+          <Block tone="paper" style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 6 }}>🎉</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>You&rsquo;re all caught up.</div>
+            <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>Nothing due right now.</div>
+          </Block>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+            {pending.map((a) => (
+              <Block key={a.id} tone={a.tone} style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12, background: 'var(--pbs-paper)',
+                    border: '1.5px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Icon name={a.icon as IconName} size={22} stroke={2.2}/>
+                  </div>
+                  <Pill tone="paper">{a.kind}</Pill>
+                </div>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.2 }}>{a.title}</div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginTop: 3 }}>{a.questions} Qs · ~{a.minutes} min · {a.due}</div>
+                </div>
+                {a.status === 'inprogress' && (
+                  <div style={{ height: 6, borderRadius: 999, background: 'rgba(29,26,20,0.15)', overflow: 'hidden' }}>
+                    <div style={{ width: `${(a.progress || 0) * 100}%`, height: '100%', background: 'currentColor', borderRadius: 999, opacity: 0.85 }}/>
+                  </div>
+                )}
+                <button onClick={() => onPlay(a)} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '10px 14px', borderRadius: 12,
+                  background: 'var(--pbs-ink)', color: 'var(--pbs-cream)',
+                  fontSize: 13, fontWeight: 700, border: 0, cursor: 'pointer', fontFamily: 'inherit',
                 }}>
-                  <Icon name={a.icon as IconName} size={22} stroke={2.2}/>
-                </div>
-                <Pill tone="paper">{a.kind}</Pill>
-              </div>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.2 }}>{a.title}</div>
-                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 3 }}>{a.questions} Qs · ~{a.minutes} min · {a.due}</div>
-              </div>
-              {a.status === 'inprogress' && (
-                <div style={{ height: 6, borderRadius: 999, background: 'rgba(29,26,20,0.15)', overflow: 'hidden' }}>
-                  <div style={{ width: `${(a.progress || 0) * 100}%`, height: '100%', background: 'currentColor', borderRadius: 999, opacity: 0.85 }}/>
-                </div>
-              )}
-              <button onClick={() => onPlay(a)} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                padding: '10px 14px', borderRadius: 12,
-                background: 'var(--pbs-ink)', color: 'var(--pbs-cream)',
-                fontSize: 13, fontWeight: 700, border: 0, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                <Icon name="play" size={12}/> {a.status === 'inprogress' ? 'Resume' : 'Play'}
-              </button>
-            </Block>
-          ))}
-        </div>
-      )}
-    </div>
-
-    <div>
-      <div className="pbs-mono" style={kickerStyCd}>COMPLETED · {CLASS_PAST.length}</div>
-      <h2 style={{ margin: '6px 0 14px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.015em' }}>Past results</h2>
-      <Block tone="paper" style={{ padding: 0, overflow: 'hidden' }}>
-        {CLASS_PAST.map((p, i) => (
-          <div key={p.id} style={{
-            display: 'grid', gridTemplateColumns: '44px 1fr auto auto auto', alignItems: 'center', gap: 14,
-            padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--pbs-line)',
-          }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: `var(--pbs-${p.tone})`, color: `var(--pbs-${p.tone}-ink)`,
-              border: `1.5px solid var(--pbs-${p.tone}-ink)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}><Icon name={p.icon} size={18} stroke={2.2}/></div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.005em' }}>{p.title}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)' }}>{p.when}</div>
-            </div>
-            <div className="pbs-mono" style={{ fontSize: 13, fontWeight: 700, minWidth: 52, textAlign: 'right' }}>{p.score}%</div>
-            <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-soft)', minWidth: 80, textAlign: 'right' }}>{p.rank}</div>
-            <button style={{
-              fontSize: 11.5, fontWeight: 700, color: 'var(--pbs-ink-soft)',
-              padding: '6px 10px', borderRadius: 8, border: '1.5px solid var(--pbs-line-2)',
-              background: 'var(--pbs-cream-2)', cursor: 'pointer', fontFamily: 'inherit',
-            }}>Review</button>
+                  <Icon name="play" size={12}/> {a.status === 'inprogress' ? 'Resume' : 'Play'}
+                </button>
+              </Block>
+            ))}
           </div>
-        ))}
-      </Block>
+        )}
+      </div>
+
+      <div>
+        <div className="pbs-mono" style={kickerStyCd}>COMPLETED · {useReal ? 0 : CLASS_PAST.length}</div>
+        <h2 style={{ margin: '6px 0 14px', fontSize: 20, fontWeight: 700, letterSpacing: '-0.015em' }}>Past results</h2>
+        {useReal ? (
+          <Block tone="paper" style={{ padding: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No completed games yet.</div>
+          </Block>
+        ) : (
+          <Block tone="paper" style={{ padding: 0, overflow: 'hidden' }}>
+            {CLASS_PAST.map((p, i) => (
+              <div key={p.id} style={{
+                display: 'grid', gridTemplateColumns: '44px 1fr auto auto auto', alignItems: 'center', gap: 14,
+                padding: '14px 18px', borderTop: i === 0 ? 'none' : '1px solid var(--pbs-line)',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: `var(--pbs-${p.tone})`, color: `var(--pbs-${p.tone}-ink)`,
+                  border: `1.5px solid var(--pbs-${p.tone}-ink)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}><Icon name={p.icon} size={18} stroke={2.2}/></div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.005em' }}>{p.title}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)' }}>{p.when}</div>
+                </div>
+                <div className="pbs-mono" style={{ fontSize: 13, fontWeight: 700, minWidth: 52, textAlign: 'right' }}>{p.score}%</div>
+                <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-soft)', minWidth: 80, textAlign: 'right' }}>{p.rank}</div>
+                <button style={{
+                  fontSize: 11.5, fontWeight: 700, color: 'var(--pbs-ink-soft)',
+                  padding: '6px 10px', borderRadius: 8, border: '1.5px solid var(--pbs-line-2)',
+                  background: 'var(--pbs-cream-2)', cursor: 'pointer', fontFamily: 'inherit',
+                }}>Review</button>
+              </div>
+            ))}
+          </Block>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── People tab ───
 export const PeopleTab = ({ cls }: { cls: ClassRecord; user: StudentUser }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const names = [...CLASSMATE_NAMES].slice(0, cls.members);
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
-          <div className="pbs-mono" style={kickerStyCd}>CLASSMATES · {cls.members}</div>
+          <div className="pbs-mono" style={kickerStyCd}>CLASSMATES · {useReal ? 0 : cls.members}</div>
           <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>The crew.</h2>
         </div>
-        <Pill tone={cls.tone} icon="users">{cls.teacher} · teacher</Pill>
+        {!useReal && <Pill tone={cls.tone} icon="users">{cls.teacher} · teacher</Pill>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-        {names.map((n, i) => {
-          const xp = 3200 - i * 90 - (i % 3) * 40;
-          return (
-            <Block key={n} tone="paper" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <CardboardHead outfit={outfitForName(n)} px={40}/>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</div>
-                <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)' }}>{xp.toLocaleString()} XP</div>
-              </div>
-            </Block>
-          );
-        })}
-      </div>
+      {useReal ? (
+        <Block tone="paper" style={{ padding: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No classmates yet.</div>
+        </Block>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+          {names.map((n, i) => {
+            const xp = 3200 - i * 90 - (i % 3) * 40;
+            return (
+              <Block key={n} tone="paper" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CardboardHead outfit={outfitForName(n)} px={40}/>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</div>
+                  <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)' }}>{xp.toLocaleString()} XP</div>
+                </div>
+              </Block>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -229,39 +246,50 @@ export const LibraryTabCls = ({
 }: {
   cls: ClassRecord;
   onPlay: (g: ClassLibraryItem) => void;
-}) => (
-  <div>
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
-      <div>
-        <div className="pbs-mono" style={kickerStyCd}>CLASS LIBRARY</div>
-        <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
-          Free-play — picked by {cls.teacher.split(' ').pop()}.
-        </h2>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--pbs-ink-soft)', maxWidth: 520 }}>
-          Warm-ups and review games. Play anytime; no score sent to your teacher.
-        </p>
+}) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div>
+          <div className="pbs-mono" style={kickerStyCd}>CLASS LIBRARY</div>
+          <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {useReal ? 'Class library' : <>Free-play — picked by {cls.teacher.split(' ').pop()}.</>}
+          </h2>
+          {!useReal && (
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--pbs-ink-soft)', maxWidth: 520 }}>
+              Warm-ups and review games. Play anytime; no score sent to your teacher.
+            </p>
+          )}
+        </div>
       </div>
-    </div>
 
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-      {CLASS_LIBRARY.map((g) => (
-        <Block key={g.id} tone={g.tone} style={{ padding: 18, cursor: 'pointer' }} onClick={() => onPlay(g)}>
-          <div style={{
-            aspectRatio: '4/3', borderRadius: 12, background: 'var(--pbs-paper)',
-            border: '1.5px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-          }}>
-            <Icon name={g.icon} size={52} stroke={1.6}/>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>{g.title}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11.5 }}>
-            <span style={{ opacity: 0.8 }}>{g.kind}</span>
-            <span className="pbs-mono" style={{ opacity: 0.8 }}>{g.plays}</span>
-          </div>
+      {useReal ? (
+        <Block tone="paper" style={{ padding: 16 }}>
+          <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No games assigned yet.</div>
         </Block>
-      ))}
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+          {CLASS_LIBRARY.map((g) => (
+            <Block key={g.id} tone={g.tone} style={{ padding: 18, cursor: 'pointer' }} onClick={() => onPlay(g)}>
+              <div style={{
+                aspectRatio: '4/3', borderRadius: 12, background: 'var(--pbs-paper)',
+                border: '1.5px solid currentColor', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+              }}>
+                <Icon name={g.icon} size={52} stroke={1.6}/>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>{g.title}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 11.5 }}>
+                <span style={{ opacity: 0.8 }}>{g.kind}</span>
+                <span className="pbs-mono" style={{ opacity: 0.8 }}>{g.plays}</span>
+              </div>
+            </Block>
+          ))}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Bits ───
 export const FeedItem = ({

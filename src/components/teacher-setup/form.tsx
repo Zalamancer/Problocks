@@ -66,12 +66,13 @@ export const TextInput = React.forwardRef<HTMLInputElement, {
 TextInput.displayName = 'TextInput';
 
 export const Select = ({
-  value, onChange, options, style,
+  value, onChange, options, style, dropUp = false,
 }: {
   value: string;
   onChange: (e: { target: { value: string } }) => void;
   options: Array<{ value: string; label: string; shortLabel?: string }>;
   style?: React.CSSProperties;
+  dropUp?: boolean;
 }) => {
   const [open, setOpen] = React.useState(false);
   const [activeIdx, setActiveIdx] = React.useState(-1);
@@ -156,7 +157,9 @@ export const Select = ({
           role="listbox"
           style={{
             position: 'absolute',
-            top: 'calc(100% + 6px)',
+            ...(dropUp
+              ? { bottom: 'calc(100% + 6px)' }
+              : { top: 'calc(100% + 6px)' }),
             left: 0, right: 0,
             width: 'auto',
             minWidth: 0,

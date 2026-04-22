@@ -70,16 +70,19 @@ export const TimePicker = ({
         value={String(parsed.hour)}
         onChange={(e) => emit({ hour: parseInt(e.target.value, 10) })}
         options={HOURS}
+        dropUp
       />
       <Select
         value={parsed.minute.toString().padStart(2, '0')}
         onChange={(e) => emit({ minute: parseInt(e.target.value, 10) })}
         options={MINUTES}
+        dropUp
       />
       <Select
         value={parsed.period}
         onChange={(e) => emit({ period: e.target.value as 'AM' | 'PM' })}
         options={PERIODS}
+        dropUp
       />
     </div>
   );

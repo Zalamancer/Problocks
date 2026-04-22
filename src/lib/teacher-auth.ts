@@ -93,9 +93,25 @@ export async function isGameInTeacherRoster(
   return (match?.length ?? 0) > 0;
 }
 
+/** Comma-separated list of emails that get auto-promoted to role='admin'
+ *  on first sign-in. Solves the chicken-and-egg bootstrap: without this,
+ *  the first ever admin has to be created via `UPDATE public.teachers SET
+ *  role='admin' WHERE google_sub='…'` in the Supabase dashboard.
+ *
+ *  Format in .env: ADMIN_BOOTSTRAP_EMAILS=founder@example.com,ops@example.com
+ *  Matching is case-insensitive on the stored Google email. */
+function adminBootstrapEmails(): Set<string> {
+  const raw = process.env.ADMIN_BOOTSTRAP_EMAILS ?? '';
+  return new Set(
+    raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+  );
+}
+
 /** Upsert a teachers row from the NextAuth user profile + googleSub.
  *  Called from the NextAuth `events.signIn` callback so every sign-in
- *  refreshes the teacher's stored profile. Idempotent. */
+ *  refreshes the teacher's stored profile. Idempotent. Promotes the row
+ *  to role='admin' when the email is listed in ADMIN_BOOTSTRAP_EMAILS;
+ *  never demotes. */
 export async function upsertTeacherRow(profile: {
   googleSub: string;
   email?: string | null;
@@ -111,22 +127,33 @@ export async function upsertTeacherRow(profile: {
   }
 
   const now = new Date().toISOString();
+  const normalizedEmail = profile.email?.trim().toLowerCase() ?? null;
+  const bootstrapSet = adminBootstrapEmails();
+  const isBootstrapAdmin = normalizedEmail !== null && bootstrapSet.has(normalizedEmail);
+
+  const base: Record<string, unknown> = {
+    google_sub: profile.googleSub,
+    email: profile.email ?? null,
+    full_name: profile.fullName ?? null,
+    given_name: profile.givenName ?? null,
+    family_name: profile.familyName ?? null,
+    picture_url: profile.pictureUrl ?? null,
+    last_seen_at: now,
+  };
+  // Only write `role` when the email is in the bootstrap list — otherwise
+  // an admin who later loses their bootstrap listing would get demoted on
+  // next sign-in. We only ever promote here, never demote.
+  if (isBootstrapAdmin) {
+    base.role = 'admin';
+  }
+
   const { error } = await admin
     .from('teachers')
-    .upsert(
-      {
-        google_sub: profile.googleSub,
-        email: profile.email ?? null,
-        full_name: profile.fullName ?? null,
-        given_name: profile.givenName ?? null,
-        family_name: profile.familyName ?? null,
-        picture_url: profile.pictureUrl ?? null,
-        last_seen_at: now,
-      },
-      { onConflict: 'google_sub' }
-    );
+    .upsert(base, { onConflict: 'google_sub' });
   if (error) {
     console.error('upsertTeacherRow error:', error);
+  } else if (isBootstrapAdmin) {
+    console.info(`[bootstrap] teacher ${normalizedEmail} promoted to admin via ADMIN_BOOTSTRAP_EMAILS`);
   }
 }
 

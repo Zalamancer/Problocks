@@ -5,6 +5,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { AssignmentDetail, AssignmentsList } from './Assignments';
 import { Messages } from './Messages';
@@ -119,6 +120,13 @@ const isTabActive = (view: View, k: View): boolean => {
 export const TeacherApp = () => {
   const useRealData = useDataSourceStore((s) => s.useRealData);
   const { classRecord, classes, isReal } = useTeacherData();
+  const { data: session } = useSession();
+  // Prefer the signed-in Google account when available; fall back to the demo
+  // persona ("Ms. Rivera") only when there's no session, so logged-in teachers
+  // always see their own name + email in the header chip.
+  const teacherName  = session?.user?.name  ?? 'Ms. Rivera';
+  const teacherEmail = session?.user?.email ?? 'rivera@ridgewood.k12';
+  const teacherImage = session?.user?.image ?? null;
   const [view, setView] = useState<View>('overview');
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
@@ -223,11 +231,20 @@ export const TeacherApp = () => {
               background: 'var(--pbs-grape)',
               border: '1.5px solid var(--pbs-grape-ink)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16,
-            }}>👩🏽‍🏫</div>
+              fontSize: 16, overflow: 'hidden',
+            }}>
+              {teacherImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={teacherImage}
+                  alt={teacherName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : '👩🏽‍🏫'}
+            </div>
             <div style={{ fontSize: 12, lineHeight: 1.25 }}>
-              <div style={{ fontWeight: 700 }}>Ms. Rivera</div>
-              <div style={{ color: 'var(--pbs-ink-muted)', fontSize: 10.5 }}>rivera@ridgewood.k12</div>
+              <div style={{ fontWeight: 700 }}>{teacherName}</div>
+              <div style={{ color: 'var(--pbs-ink-muted)', fontSize: 10.5 }}>{teacherEmail}</div>
             </div>
           </div>
         </div>

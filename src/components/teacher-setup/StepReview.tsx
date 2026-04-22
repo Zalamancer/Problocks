@@ -2,10 +2,17 @@
 // Ported from Claude Design bundle (pb_classroom_setup/steps_late.jsx).
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { StepCard, StepHeader } from './form';
 import type { SetupData } from './types';
+import { classroomFetch } from '@/lib/classroom-api';
+import type {
+  ClassroomCourseWork,
+  ClassroomAnnouncement,
+  ListCourseWorkResponse,
+  ListAnnouncementsResponse,
+} from '@/lib/classroom-api';
 
 const Row = ({
   label, value,
@@ -64,6 +71,10 @@ export const StepReview = ({ data }: { data: SetupData }) => {
         <Row label="Standards" value={data.standards}/>
       </StepCard>
 
+      {data.classroomCourseId && (
+        <ClassroomPreviewCard courseId={data.classroomCourseId} courseName={data.classroomCourseName}/>
+      )}
+
       <StepCard style={{ background: 'var(--pbs-ink)', color: 'var(--pbs-cream)', borderColor: 'var(--pbs-ink)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
@@ -87,3 +98,141 @@ export const StepReview = ({ data }: { data: SetupData }) => {
     </div>
   );
 };
+
+// Previews assignments + announcements from the linked Google Classroom
+// course so the teacher can see exactly what will carry over before they
+// click "Open the classroom". Same endpoints the teacher dashboard uses —
+// filtered to PUBLISHED so drafts/deleted items don't leak in.
+function ClassroomPreviewCard({
+  courseId, courseName,
+}: {
+  courseId: string;
+  courseName?: string;
+}) {
+  const [coursework, setCoursework] = useState<ClassroomCourseWork[]>([]);
+  const [announcements, setAnnouncements] = useState<ClassroomAnnouncement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      classroomFetch<ListCourseWorkResponse>(
+        `/courses/${courseId}/coursework?courseWorkStates=PUBLISHED&pageSize=100&orderBy=updateTime desc`,
+      ),
+      classroomFetch<ListAnnouncementsResponse>(
+        `/courses/${courseId}/announcements?announcementStates=PUBLISHED&pageSize=50`,
+      ),
+    ])
+      .then(([cw, an]) => {
+        if (cancelled) return;
+        setCoursework(cw.courseWork ?? []);
+        setAnnouncements(an.announcements ?? []);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load Classroom preview');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [courseId]);
+
+  return (
+    <StepCard>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: 'var(--pbs-mint)', color: 'var(--pbs-mint-ink)',
+          border: '1.5px solid var(--pbs-mint-ink)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon name="book" size={14} stroke={2.2}/>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
+            Imports from Google Classroom
+          </div>
+          <div className="pbs-mono" style={{
+            fontSize: 11.5, color: 'var(--pbs-ink-muted)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {courseName ?? courseId}
+          </div>
+        </div>
+      </div>
+
+      {loading && (
+        <div style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>
+          Checking the course…
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          padding: 10, borderRadius: 10,
+          background: 'var(--pbs-coral)', color: 'var(--pbs-coral-ink)',
+          border: '1.5px solid var(--pbs-coral-ink)',
+          fontSize: 13,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && coursework.length === 0 && announcements.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--pbs-ink-muted)' }}>
+          No published assignments or announcements found in this course — we&apos;ll just carry over the link.
+        </div>
+      )}
+
+      {!loading && !error && (coursework.length > 0 || announcements.length > 0) && (
+        <>
+          <div style={{
+            display: 'flex', gap: 8, flexWrap: 'wrap',
+            padding: '8px 10px', marginBottom: 10,
+            borderRadius: 10,
+            background: 'var(--pbs-cream-2)',
+            border: '1.5px solid var(--pbs-line-2)',
+            fontSize: 12.5, color: 'var(--pbs-ink-soft)',
+          }}>
+            <span><strong style={{ color: 'var(--pbs-ink)' }}>{coursework.length}</strong> assignment{coursework.length === 1 ? '' : 's'}</span>
+            <span>·</span>
+            <span><strong style={{ color: 'var(--pbs-ink)' }}>{announcements.length}</strong> announcement{announcements.length === 1 ? '' : 's'}</span>
+            <span style={{ marginLeft: 'auto' }}>will appear in your teacher dashboard</span>
+          </div>
+
+          {coursework.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {coursework.slice(0, 5).map((cw) => (
+                <div
+                  key={cw.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 10px', borderRadius: 8,
+                    background: 'var(--pbs-paper)',
+                    border: '1px solid var(--pbs-line-2)',
+                  }}
+                >
+                  <Icon name="bolt" size={12} stroke={2.4}/>
+                  <div style={{
+                    flex: 1, fontSize: 13,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {cw.title}
+                  </div>
+                </div>
+              ))}
+              {coursework.length > 5 && (
+                <div className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)' }}>
+                  + {coursework.length - 5} more
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </StepCard>
+  );
+}

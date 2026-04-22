@@ -18,6 +18,13 @@ type PublicClass = {
 export const ShareScreen = () => {
   const search = useSearchParams();
   const classId = search.get('classId') ?? '';
+  // Roster import result is passed through from openRoom() as query params so
+  // we can show "N students pre-loaded from Classroom" without needing a
+  // second API round-trip. Gracefully handles the non-Classroom flow by just
+  // being falsy.
+  const importedRaw = search.get('imported');
+  const importedStudents = importedRaw ? Number.parseInt(importedRaw, 10) : null;
+  const importError = search.get('importError');
   const [cls, setCls] = useState<PublicClass | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<'link' | 'announcement' | null>(null);
@@ -106,6 +113,54 @@ export const ShareScreen = () => {
           }}>
             {error}
           </div>
+        )}
+
+        {/* Roster-import status. Only renders when the class was linked to a
+            Google Classroom course during setup (openRoom passes through
+            `imported` and/or `importError` as query params). Shown above
+            the join-link card so the teacher sees it as the first result
+            after "Open the classroom". */}
+        {cls && importedStudents !== null && importedStudents > 0 && (
+          <section style={{
+            padding: '16px 18px',
+            background: 'var(--pbs-mint)',
+            border: '1.5px solid var(--pbs-mint-ink)',
+            boxShadow: '0 3px 0 var(--pbs-mint-ink)',
+            borderRadius: 18, marginBottom: 20,
+            display: 'flex', alignItems: 'center', gap: 14,
+            color: 'var(--pbs-mint-ink)',
+          }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 10,
+              background: 'var(--pbs-paper)', color: 'var(--pbs-mint-ink)',
+              border: '1.5px solid var(--pbs-mint-ink)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Icon name="users" size={16} stroke={2.4}/>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                {importedStudents} student{importedStudents === 1 ? '' : 's'} pre-loaded from Google Classroom.
+              </div>
+              <div style={{ fontSize: 12.5, marginTop: 2, opacity: 0.85 }}>
+                They&apos;ll still sign in once with their school Google to claim their seat — their name &amp; photo are already waiting.
+              </div>
+            </div>
+          </section>
+        )}
+        {cls && importError && (
+          <section style={{
+            padding: '14px 16px',
+            background: 'var(--pbs-coral)',
+            border: '1.5px solid var(--pbs-coral-ink)',
+            borderRadius: 16, marginBottom: 20,
+            color: 'var(--pbs-coral-ink)', fontSize: 13, lineHeight: 1.5,
+          }}>
+            <strong>Couldn&apos;t import the Classroom roster:</strong> {importError}
+            <br/>
+            Students can still join through the link below — this just means they weren&apos;t pre-loaded.
+          </section>
         )}
 
         {cls && (

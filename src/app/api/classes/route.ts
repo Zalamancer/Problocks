@@ -63,5 +63,104 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insert.error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ class: insert.data });
+  // If linked to a Google Classroom course, pre-seed the student roster.
+  // We ignore failures here — the class itself is already created, so we'd
+  // rather surface a "N students imported" = 0 (with a reason) than fail
+  // the whole openRoom flow. The restricted classroom.rosters.readonly
+  // scope is required; without it the students.list endpoint 403s.
+  let importedStudents = 0;
+  let importError: string | null = null;
+  if (body.classroomCourseId && session.accessToken) {
+    try {
+      importedStudents = await importClassroomRoster(
+        insert.data.id,
+        body.classroomCourseId,
+        session.accessToken,
+      );
+    } catch (e) {
+      importError = e instanceof Error ? e.message : 'Roster import failed';
+    }
+  }
+
+  return NextResponse.json({
+    class: insert.data,
+    importedStudents,
+    importError,
+  });
+}
+
+// ── Classroom roster import ────────────────────────────────────────────────
+// Lists all students on the linked course and upserts one row per student
+// into public.students. Paginated because Classroom caps students.list at
+// 100/page and some classes run big. Each row is keyed on (class_id,
+// google_sub) so re-running (e.g. via a future "refresh roster" button) is
+// idempotent — Supabase's ON CONFLICT clause keeps existing rows' avatar
+// outfits etc. intact.
+type ClassroomStudentListItem = {
+  userId: string;
+  profile: {
+    id: string;
+    name: { fullName?: string; givenName?: string; familyName?: string };
+    emailAddress?: string;
+    photoUrl?: string;
+  };
+};
+
+async function importClassroomRoster(
+  classId: string,
+  courseId: string,
+  accessToken: string,
+): Promise<number> {
+  if (!supabase) return 0;
+  let pageToken: string | undefined;
+  let total = 0;
+
+  do {
+    const url = new URL(`https://classroom.googleapis.com/v1/courses/${courseId}/students`);
+    url.searchParams.set('pageSize', '100');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error?.message ?? `Classroom students API ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      students?: ClassroomStudentListItem[];
+      nextPageToken?: string;
+    };
+
+    const rows = (data.students ?? []).map((s) => ({
+      class_id: classId,
+      google_sub: s.userId, // Classroom userId === Google sub
+      email: s.profile.emailAddress ?? null,
+      full_name:
+        s.profile.name.fullName?.trim() ||
+        [s.profile.name.givenName, s.profile.name.familyName].filter(Boolean).join(' ') ||
+        s.profile.emailAddress ||
+        'Student',
+      given_name: s.profile.name.givenName ?? null,
+      family_name: s.profile.name.familyName ?? null,
+      // Classroom returns photoUrl as a protocol-relative URL
+      // ("//lh3.googleusercontent.com/…"); some legacy accounts return a
+      // full "https://…". Normalise so browsers don't trip over bare "//".
+      picture_url: s.profile.photoUrl
+        ? (s.profile.photoUrl.startsWith('http') ? s.profile.photoUrl : `https:${s.profile.photoUrl}`)
+        : null,
+    }));
+
+    if (rows.length > 0) {
+      const up = await supabase
+        .from('students')
+        .upsert(rows, { onConflict: 'class_id,google_sub', ignoreDuplicates: false });
+      if (up.error) throw new Error(up.error.message);
+      total += rows.length;
+    }
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return total;
 }

@@ -195,7 +195,18 @@ export const ClassroomSetupApp = () => {
       // Setup succeeded — drop the persisted draft so re-visits don't
       // reload a stale form.
       try { sessionStorage.removeItem(SETUP_STORAGE_KEY); } catch {}
-      router.push(`/teacher/setup/share?classId=${classId}`);
+
+      // Pass the Classroom roster import result through to the share
+      // screen so it can show "N students pre-loaded from Classroom"
+      // (or surface an import error without blocking the redirect).
+      const shareParams = new URLSearchParams({ classId });
+      if (typeof payload?.importedStudents === 'number') {
+        shareParams.set('imported', String(payload.importedStudents));
+      }
+      if (payload?.importError) {
+        shareParams.set('importError', payload.importError);
+      }
+      router.push(`/teacher/setup/share?${shareParams}`);
     } catch (e: unknown) {
       setOpenError(e instanceof Error ? e.message : 'Could not create classroom');
       setOpening(false);

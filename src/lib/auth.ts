@@ -1,14 +1,35 @@
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
-// Google Classroom scopes — only "sensitive" tier (no CASA/audit required).
-// Restricted scopes removed deliberately:
-//   - classroom.rosters.readonly       → replaced by student self-sign-in via /join/:classId
-//   - classroom.profile.emails/.photos → we get these from each student's own OAuth grant
-//   - classroom.guardianlinks.*        → not needed
-// We match Classroom's `userId` against the student's Google `sub` after they sign in.
+// Google Classroom scopes.
+//
+// Sensitive tier (no CASA audit needed):
+//   - classroom.courses.readonly
+//   - classroom.coursework.(me|students).readonly
+//   - classroom.announcements.readonly
+//   - classroom.topics.readonly
+//   - classroom.student-submissions.(me|students).readonly
+//
+// Restricted tier (needs Google CASA verification before public launch):
+//   - classroom.rosters.readonly           — pre-seed student roster on class
+//                                            creation so teachers don't have
+//                                            to chase every kid with a join
+//                                            link. Works in test mode for
+//                                            users listed on the OAuth
+//                                            consent screen; production use
+//                                            requires full verification.
+//   - classroom.profile.emails/.photos     — still OUT. We get these from
+//                                            each student's own OAuth grant
+//                                            when they visit /join/:classId,
+//                                            which avoids a directory-wide
+//                                            read.
+//
+// We match Classroom's `userId` against the student's Google `sub` — same
+// value — so joining submissions back to the student row works regardless
+// of whether they were pre-seeded or self-joined.
 const CLASSROOM_SCOPES = [
   'https://www.googleapis.com/auth/classroom.courses.readonly',
+  'https://www.googleapis.com/auth/classroom.rosters.readonly',
   'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
   'https://www.googleapis.com/auth/classroom.coursework.students.readonly',
   'https://www.googleapis.com/auth/classroom.announcements.readonly',

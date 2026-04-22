@@ -17,7 +17,7 @@ export const Field = ({
   optional?: boolean;
   style?: React.CSSProperties;
 }) => (
-  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, ...style }}>
+  <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, ...style }}>
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
       <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.005em' }}>{label}</span>
       {optional && (
@@ -115,7 +115,7 @@ export const Select = ({
   };
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', ...style }}>
+    <div ref={wrapRef} style={{ position: 'relative', minWidth: 0, ...style }}>
       <button
         ref={btnRef}
         type="button"
@@ -128,6 +128,8 @@ export const Select = ({
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
           padding: '11px 14px',
           background: 'var(--pbs-paper)',
           border: '1.5px solid var(--pbs-line-2)',
@@ -156,6 +158,9 @@ export const Select = ({
             position: 'absolute',
             top: 'calc(100% + 6px)',
             left: 0, right: 0,
+            width: 'auto',
+            minWidth: 0,
+            boxSizing: 'border-box',
             zIndex: 50,
             background: 'var(--pbs-paper)',
             border: '1.5px solid var(--pbs-line-2)',
@@ -180,6 +185,8 @@ export const Select = ({
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
                   width: '100%', textAlign: 'left',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
                   padding: '10px 14px',
                   border: 0,
                   background: active ? 'var(--pbs-cream-2)' : 'transparent',
@@ -191,7 +198,10 @@ export const Select = ({
                   fontWeight: selected ? 700 : 500,
                 }}
               >
-                <span>{o.label}</span>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{o.label}</span>
                 {selected && <Icon name="check" size={13} stroke={2.4} style={{ color: 'var(--pbs-ink)' }}/>}
               </button>
             );

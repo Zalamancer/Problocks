@@ -176,16 +176,6 @@ const MessageList = ({
 
 // --- Composer ----------------------------------------------------------------
 
-const IconBtn = ({ name }: { name: React.ComponentProps<typeof Icon>['name'] }) => (
-  <button type="button" style={{
-    width: 30, height: 30, borderRadius: 8,
-    background: 'var(--pbs-cream-2)', border: '1.5px solid var(--pbs-line)',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    color: 'var(--pbs-ink-soft)',
-    cursor: 'pointer',
-  }}><Icon name={name} size={14} stroke={2}/></button>
-);
-
 const Composer = ({
   placeholder, onSend, mode,
 }: { placeholder: string; onSend: (text: string) => void; mode: 'group' | 'dm' }) => {
@@ -203,9 +193,6 @@ const Composer = ({
         background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)',
         boxShadow: '0 3px 0 var(--pbs-line-2)',
       }}>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <IconBtn name="image"/>
-        </div>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

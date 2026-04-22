@@ -10,7 +10,8 @@ import type { SetupData, GradeKey, DayKey } from './types';
 function gradeLabel(g: GradeKey): string {
   const map: Record<GradeKey, string> = {
     k2: 'K–2', '3': '3rd', '4': '4th', '5': '5th', '6': '6th',
-    '7': '7th', '8': '8th', hs: 'HS', mix: 'mixed',
+    '7': '7th', '8': '8th', '9': '9th', '10': '10th', '11': '11th',
+    '12': '12th', hs: 'HS', mix: 'mixed',
   };
   return map[g] ?? g;
 }

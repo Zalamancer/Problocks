@@ -71,7 +71,11 @@ export const StepClassBasics = ({
               { value: '6',   label: '6th' },
               { value: '7',   label: '7th' },
               { value: '8',   label: '8th' },
-              { value: 'hs',  label: 'High school' },
+              { value: '9',   label: '9th' },
+              { value: '10',  label: '10th' },
+              { value: '11',  label: '11th' },
+              { value: '12',  label: '12th' },
+              { value: 'hs',  label: 'HS (mixed)' },
               { value: 'mix', label: 'Mixed' },
             ]}
           />

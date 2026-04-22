@@ -6,7 +6,7 @@ export type SubjectKey =
   | 'math' | 'ela' | 'science' | 'cs' | 'social'
   | 'art' | 'music' | 'lang' | 'pe' | 'stem' | 'sped'
   | 'other' | 'mixed';
-export type GradeKey = 'k2' | '3' | '4' | '5' | '6' | '7' | '8' | 'hs' | 'mix';
+export type GradeKey = 'k2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | 'hs' | 'mix';
 export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
 export type RosterMethod = 'paste' | 'google' | 'clever' | 'teams' | 'code' | 'later';
 export type RegionKey = 'us' | 'uk' | 'ca' | 'au' | 'nz' | 'other';

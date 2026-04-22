@@ -16,6 +16,7 @@ import {
   Code2,
   Kanban,
   MoreVertical,
+  Undo2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useStudio, type ViewMode } from '@/store/studio-store';
@@ -121,6 +122,8 @@ export function TopMenuBar() {
     leftPanelActiveGroup,
     setLeftPanelGroup,
     openNewGameDialog,
+    gameHistory,
+    undoGame,
   } = useStudio();
   const isPlaying = useSceneStore((s) => s.isPlaying);
   const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
@@ -335,9 +338,34 @@ export function TopMenuBar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Right cluster: avatars + Share + Play + kebab */}
+      {/* Right cluster: avatars + Undo + Share + Play + kebab */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <AvatarStack names={['Ms Alvarez', 'Jules Tran', 'Rosa Shah']} size={26} />
+
+        {(() => {
+          const canUndo = !!activeGameId && (gameHistory[activeGameId]?.length ?? 0) > 0;
+          return (
+            <button
+              type="button"
+              onClick={() => { if (activeGameId && canUndo) undoGame(activeGameId); }}
+              disabled={!canUndo}
+              aria-label="Undo last generation"
+              title={canUndo ? 'Undo last generation (⌘Z)' : 'Nothing to undo'}
+              style={{
+                width: 34, height: 34,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 10,
+                background: 'var(--pb-paper)',
+                color: canUndo ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
+                border: '1.5px solid var(--pb-line-2)',
+                cursor: canUndo ? 'pointer' : 'not-allowed',
+                opacity: canUndo ? 1 : 0.5,
+              }}
+            >
+              <Undo2 size={15} strokeWidth={2.2} />
+            </button>
+          );
+        })()}
 
         <PBButton
           variant="secondary"

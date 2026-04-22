@@ -275,6 +275,17 @@ export function StudioLayout() {
   const games = useStudio((s) => s.games);
   const openFileName = useStudio((s) => s.openFileName);
   const setOpenFileName = useStudio((s) => s.setOpenFileName);
+  const undoGame = useStudio((s) => s.undoGame);
+
+  // Mod+Z undoes the last AI-regeneration of the active game. Registered as a
+  // second useHotkeys call so the map stays a stable object per render (we
+  // want the callback to close over the latest activeGameId).
+  useHotkeys({
+    'mod+z': () => {
+      if (!activeGameId) return;
+      undoGame(activeGameId);
+    },
+  });
 
   const setTaskOverride = useBoardStore((s) => s.setTaskOverride);
   const updateTaskDescriptionBlocks = useBoardStore((s) => s.updateTaskDescriptionBlocks);
@@ -293,9 +304,23 @@ export function StudioLayout() {
   }
 
   const updateGameFiles = useStudio((s) => s.updateGameFiles);
+  const pushGameSnapshot = useStudio((s) => s.pushGameSnapshot);
 
   /** When a game is generated from Terminal, save/update it in the store */
   function handleGameGenerated(html: string, files?: Record<string, string>) {
+    // Snapshot the active game BEFORE we overwrite it so the Undo button can
+    // roll back. Skipped when there's no active game (the addGame branch —
+    // nothing to undo yet) or when we're creating a fresh one from scratch.
+    if (activeGameId) {
+      const prev = games.find((g) => g.id === activeGameId);
+      if (prev) {
+        pushGameSnapshot(activeGameId, {
+          html: prev.html,
+          files: prev.files,
+        });
+      }
+    }
+
     if (files) {
       // Multi-file game — store files, generate HTML from bundler for preview
       const bundledHtml = getGameHtml({ files }, { quality: gameQuality });

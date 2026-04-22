@@ -46,6 +46,33 @@ export interface GeneratedGame {
   updatedAt: number;
 }
 
+/** A single point-in-time snapshot of a game's content, used by the undo
+ *  stack. Captured lazily — we only take a snapshot right before an
+ *  overwrite (AI regeneration, file edit) so the stack stays small and we
+ *  don't memory-bloat projects that never change. */
+export interface GameSnapshot {
+  html: string;
+  files: Record<string, string> | null;
+  takenAt: number;
+}
+
+const MAX_UNDO_STACK = 20;
+
+function filesEqual(
+  a: Record<string, string> | null,
+  b: Record<string, string> | null
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 export interface StudioStore {
   leftPanelCollapsed: boolean;
   leftPanelActiveGroup: LeftPanelGroup;
@@ -97,6 +124,18 @@ export interface StudioStore {
   updateGameFile: (gameId: string, fileName: string, content: string) => void;
   removeGame: (id: string) => void;
   setActiveGameId: (id: string | null) => void;
+
+  /** Per-game undo stack — keyed by game id. NOT persisted: undo history is
+   *  session-scoped so a refresh still gives you a clean slate (and doesn't
+   *  resurrect snapshots of games the user has since published). */
+  gameHistory: Record<string, GameSnapshot[]>;
+  /** Capture the current (html, files) for a game before you overwrite them.
+   *  Callers own the "before" read — the store just stores what you give it. */
+  pushGameSnapshot: (gameId: string, snapshot: Omit<GameSnapshot, 'takenAt'>) => void;
+  /** Pop the most recent snapshot for a game and apply it (sets html + files
+   *  + updatedAt). Returns the snapshot that was applied, or null if the
+   *  stack was empty. */
+  undoGame: (gameId: string) => GameSnapshot | null;
 
   /** Which virtual file is open in the center code viewer (null = game preview) */
   openFileName: string | null;
@@ -150,8 +189,8 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   setFlowDirection: (dir) => set({ flowDirection: dir }),
   toggleFlowDirection: () => set((s) => ({ flowDirection: s.flowDirection === 'LR' ? 'TB' : 'LR' })),
 
-  games: [],
-  activeGameId: null,
+  games: [] as GeneratedGame[],
+  activeGameId: null as string | null,
   addGame: (game) => {
     const id = crypto.randomUUID();
     const now = Date.now();
@@ -180,8 +219,41 @@ export const useStudio = create<StudioStore>()(persist((set) => ({
   })),
   setActiveGameId: (id) => set({ activeGameId: id }),
 
-  openFileName: null,
-  setOpenFileName: (name) => set({ openFileName: name }),
+  gameHistory: {} as Record<string, GameSnapshot[]>,
+  pushGameSnapshot: (gameId, snapshot) => set((s) => {
+    // Skip no-op snapshots so mashing Save doesn't flood the stack with
+    // identical entries.
+    const stack = s.gameHistory[gameId] ?? [];
+    const last = stack[stack.length - 1];
+    if (last && last.html === snapshot.html && filesEqual(last.files, snapshot.files)) {
+      return {};
+    }
+    const next = [...stack, { ...snapshot, takenAt: Date.now() }];
+    // Cap the stack so a long editing session doesn't eat memory. Oldest
+    // entries fall off first.
+    const trimmed = next.length > MAX_UNDO_STACK ? next.slice(next.length - MAX_UNDO_STACK) : next;
+    return { gameHistory: { ...s.gameHistory, [gameId]: trimmed } };
+  }),
+  undoGame: (gameId: string): GameSnapshot | null => {
+    // Read the latest state synchronously; can't use `set((s) => …)` here
+    // because we also need to return the applied snapshot to the caller.
+    const state = useStudio.getState();
+    const stack = state.gameHistory[gameId];
+    if (!stack || stack.length === 0) return null;
+    const snap: GameSnapshot = stack[stack.length - 1];
+    const remaining = stack.slice(0, -1);
+    set((s) => ({
+      gameHistory: { ...s.gameHistory, [gameId]: remaining },
+      games: s.games.map((g) => g.id === gameId
+        ? { ...g, html: snap.html, files: snap.files, updatedAt: Date.now() }
+        : g
+      ),
+    }));
+    return snap;
+  },
+
+  openFileName: null as string | null,
+  setOpenFileName: (name: string | null) => set({ openFileName: name }),
 }), {
   name: 'problocks-studio-v2',
   partialize: (state) => ({

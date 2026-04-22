@@ -68,7 +68,13 @@ export const NewClassBanner = () => {
             so students can sign themselves in.
           </div>
         </div>
-        <Chunky tone="ink" as="a" href={`/teacher/setup/share?classId=${classId}`} trailing="arrow-up-right">
+        <Chunky
+          tone="ink"
+          as="a"
+          href={`/teacher/setup/share?classId=${classId}`}
+          trailing="arrow-up-right"
+          style={{ color: 'var(--pbs-cream)' }}
+        >
           Share link
         </Chunky>
         <button

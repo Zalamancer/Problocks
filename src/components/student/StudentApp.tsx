@@ -74,6 +74,7 @@ export const StudentApp = () => {
   // Data-source toggle — "mock" seeds from sample-data.ts, "real" starts
   // empty until Supabase-backed student schema (classes / assignments) ships.
   const useRealData = useDataSourceStore((s) => s.useRealData);
+  const setUseRealData = useDataSourceStore((s) => s.setUseRealData);
   const [classes, setClasses] = useState<ClassRecord[]>(useRealData ? [] : SAMPLE_CLASSES);
   const [assigned, setAssigned] = useState<AssignedGame[]>(useRealData ? [] : SAMPLE_ASSIGNED);
   // Re-hydrate when the toggle flips mid-session.
@@ -81,6 +82,46 @@ export const StudentApp = () => {
     setClasses(useRealData ? [] : SAMPLE_CLASSES);
     setAssigned(useRealData ? [] : SAMPLE_ASSIGNED);
   }, [useRealData]);
+
+  // If the student signed in via /join/:classId (NextAuth), fetch their real
+  // enrolled classes and drop them into the dashboard. When any real class is
+  // found we auto-flip the data-source toggle to "real" so the dashboard
+  // reflects their actual roster instead of the mock seed, and we use the
+  // NextAuth profile as the `user` so the dashboard renders even without an
+  // active Supabase session.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/students/me');
+        if (!res.ok) return;
+        const j = (await res.json()) as {
+          user: { name: string; email: string; picture: string | null };
+          classes: Array<{ id: string; name: string; subject: string | null; grade: string | null; color: string | null }>;
+        };
+        if (cancelled || !j.classes?.length) return;
+        const mapped: ClassRecord[] = j.classes.map((c, i) => ({
+          id: c.id,
+          name: c.name,
+          subject: c.subject ?? c.name,
+          teacher: 'Your teacher',
+          tone: TONE_CYCLE[i % TONE_CYCLE.length],
+          emoji: EMOJI_CYCLE[i % EMOJI_CYCLE.length],
+          members: 0,
+        }));
+        setClasses(mapped);
+        setAssigned([]);
+        setUseRealData(true);
+        // Show dashboard even if there's no Supabase session — the NextAuth
+        // session from /join is enough to identify the student.
+        setUser((prev) => prev ?? { name: j.user.name, email: j.user.email, avatar: 'butter' });
+        setView((v) => (v === 'auth' ? 'dashboard' : v));
+      } catch {
+        /* ignore — student without a NextAuth session just sees normal flow */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [setUseRealData]);
   const [pendingInvite, setPendingInvite] = useState<Invite | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [playing, setPlaying] = useState<AnyGame | null>(null);

@@ -383,6 +383,29 @@ export function StudioLayout() {
     }
   }, [activeGameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // First-visit empty state: if the user arrives at /studio with no games
+  // and no active game, prompt them to pick a starter. We guard with a
+  // session-storage flag so dismissing the dialog doesn't trigger a reopen
+  // loop across re-renders, but a hard refresh still gets the picker back
+  // until they actually create something.
+  const newGameDialogOpen = useStudio((s) => s.newGameDialogOpen);
+  const openNewGameDialog = useStudio((s) => s.openNewGameDialog);
+  const autoPromptRef = useRef(false);
+  useEffect(() => {
+    if (autoPromptRef.current) return;
+    if (activeGameId) return;
+    if (games.length > 0) return;
+    if (newGameDialogOpen) return;
+    try {
+      if (sessionStorage.getItem('pb:studio:auto-prompt-seen')) return;
+      sessionStorage.setItem('pb:studio:auto-prompt-seen', '1');
+    } catch {
+      // sessionStorage unavailable — fall through and still prompt.
+    }
+    autoPromptRef.current = true;
+    openNewGameDialog();
+  }, [activeGameId, games.length, newGameDialogOpen, openNewGameDialog]);
+
   // Clicking the same task again deselects it — matches AutoAnimation's
   // implicit-selection pattern (no close button; you "close" by clicking
   // elsewhere or re-clicking the selected item).

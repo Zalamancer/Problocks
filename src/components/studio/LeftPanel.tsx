@@ -1,12 +1,13 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap } from 'lucide-react';
+import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap, Library } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
 import type { LucideIcon } from 'lucide-react';
 import { AssetsPanel }       from './panels/AssetsPanel';
 import { ScenePanel }        from './panels/ScenePanel';
 import { ConnectorsPanel }   from './panels/ConnectorsPanel';
+import { LibraryPanel }      from './panels/LibraryPanel';
 
 interface TabGroupDef {
   id: LeftPanelGroup;
@@ -17,6 +18,7 @@ interface TabGroupDef {
 // Chat + Part Studio now live on the right panel's dropdown (see
 // RightPanel.tsx). The left panel keeps the workspace-level navigators only.
 const TAB_GROUPS: TabGroupDef[] = [
+  { id: 'library',    label: 'My Games',    icon: Library },
   { id: 'scene',      label: 'Scene',       icon: Layers },
   { id: 'assets',     label: 'Assets',      icon: FolderOpen },
   { id: 'connectors', label: 'Connectors',  icon: Zap },
@@ -26,6 +28,7 @@ function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onScene
   // 'chat' and 'parts' were moved to the right panel — fall through to
   // Scene if a stale persisted value still points there.
   switch (group) {
+    case 'library':    return <LibraryPanel />;
     case 'scene':      return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
     case 'assets':     return <AssetsPanel />;
     case 'connectors': return <ConnectorsPanel />;

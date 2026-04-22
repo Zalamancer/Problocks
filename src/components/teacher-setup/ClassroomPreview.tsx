@@ -2,9 +2,38 @@
 // progress through the steps. Ported from pb_classroom_setup/preview.jsx.
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import type { SetupData, GradeKey, DayKey } from './types';
+
+type JoinedStudent = {
+  id: string;
+  full_name: string;
+  picture_url: string | null;
+};
+
+// Poll the students endpoint for the reserved class while the teacher
+// is still on the "share a join code" step. 3s cadence is quick enough
+// that new joiners pop in during the demo without hammering the API.
+function useJoinedStudents(classId: string | undefined, active: boolean) {
+  const [students, setStudents] = useState<JoinedStudent[]>([]);
+  useEffect(() => {
+    if (!active || !classId) { setStudents([]); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/classes/${classId}/students`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled && Array.isArray(j.students)) setStudents(j.students);
+      } catch { /* ignore */ }
+    };
+    load();
+    const id = setInterval(load, 3000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [classId, active]);
+  return students;
+}
 
 function gradeLabel(g: GradeKey): string {
   const map: Record<GradeKey, string> = {
@@ -28,11 +57,14 @@ export const ClassroomPreview = ({
   step: number;
 }) => {
   const tone = data.color;
+  const liveOn = step === 2 && data.rosterMethod === 'code';
+  const joined = useJoinedStudents(data.reservedClassId, liveOn);
   const rosterCount: number | string = data.pastedNames && data.rosterMethod === 'paste'
     ? data.pastedNames.split(/\n|,/).map((s) => s.trim()).filter(Boolean).length
-    : data.rosterMethod === 'code'  ? '?'
+    : data.rosterMethod === 'code'  ? (joined.length > 0 ? joined.length : '?')
     : data.rosterMethod === 'later' ? 0
     : '~28';
+  const tones = ['butter', 'mint', 'coral', 'sky', 'grape', 'pink', 'butter'] as const;
   const unit = data.unit;
 
   const showCore = step >= 1;
@@ -90,24 +122,57 @@ export const ClassroomPreview = ({
             Roster · {rosterCount === 0 ? 'empty' : rosterCount}
           </div>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            {(['butter', 'mint', 'coral', 'sky', 'grape', 'pink', 'butter'] as const).slice(0, showRoster ? 7 : 0).map((t, i) => (
-              <div key={i} style={{
-                width: 26, height: 26, borderRadius: 999,
-                background: `var(--pbs-${t})`, border: `1.5px solid var(--pbs-${t}-ink)`,
-                color: `var(--pbs-${t}-ink)`,
-                marginLeft: i === 0 ? 0 : -8,
-                fontSize: 10, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                zIndex: 10 - i,
-              }}>{String.fromCharCode(65 + i)}</div>
-            ))}
-            {showRoster && (
-              <span className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginLeft: 10 }}>
-                {typeof rosterCount === 'number' && rosterCount > 7 ? `+${rosterCount - 7} more` : ''}
-              </span>
-            )}
-            {!showRoster && (
-              <span style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>Add students in step 03</span>
+            {liveOn && joined.length > 0 ? (
+              <>
+                {joined.slice(0, 7).map((s, i) => {
+                  const t = tones[i % tones.length];
+                  const initials = s.full_name.trim().split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase() || '?';
+                  return (
+                    <div key={s.id} title={s.full_name} style={{
+                      width: 26, height: 26, borderRadius: 999,
+                      background: s.picture_url ? `url(${s.picture_url}) center/cover` : `var(--pbs-${t})`,
+                      border: `1.5px solid var(--pbs-${t}-ink)`,
+                      color: `var(--pbs-${t}-ink)`,
+                      marginLeft: i === 0 ? 0 : -8,
+                      fontSize: 10, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      zIndex: 10 - i,
+                      overflow: 'hidden',
+                    }}>{s.picture_url ? '' : initials}</div>
+                  );
+                })}
+                <span className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginLeft: 10 }}>
+                  {joined.length > 7 ? `+${joined.length - 7} more` : `${joined.length} joined`}
+                </span>
+              </>
+            ) : (
+              <>
+                {tones.slice(0, showRoster ? 7 : 0).map((t, i) => (
+                  <div key={i} style={{
+                    width: 26, height: 26, borderRadius: 999,
+                    background: `var(--pbs-${t})`, border: `1.5px solid var(--pbs-${t}-ink)`,
+                    color: `var(--pbs-${t}-ink)`,
+                    marginLeft: i === 0 ? 0 : -8,
+                    fontSize: 10, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 10 - i,
+                    opacity: liveOn ? 0.4 : 1,
+                  }}>{String.fromCharCode(65 + i)}</div>
+                ))}
+                {showRoster && liveOn && (
+                  <span className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginLeft: 10 }}>
+                    Waiting for students…
+                  </span>
+                )}
+                {showRoster && !liveOn && (
+                  <span className="pbs-mono" style={{ fontSize: 11, color: 'var(--pbs-ink-muted)', marginLeft: 10 }}>
+                    {typeof rosterCount === 'number' && rosterCount > 7 ? `+${rosterCount - 7} more` : ''}
+                  </span>
+                )}
+                {!showRoster && (
+                  <span style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>Add students in step 03</span>
+                )}
+              </>
             )}
           </div>
         </div>

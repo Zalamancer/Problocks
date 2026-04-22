@@ -60,6 +60,12 @@ export type SetupData = {
   classroomCourseId?: string;
   classroomCourseName?: string;
 
+  // Populated as soon as the wizard reserves a class row in Supabase
+  // (step 3, "share a join code"). Lets the right-rail preview poll
+  // students that have already joined, and lets openRoom know the row
+  // exists so it updates instead of inserting.
+  reservedClassId?: string;
+
   // null until the teacher picks one in step 4.
   unit: StarterUnit | null;
 };

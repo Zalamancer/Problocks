@@ -163,18 +163,53 @@ export const StepClassBasics = ({
             <div
               aria-label={`Class length ${duration} minutes`}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '9px 12px',
-                borderRadius: 999,
-                background: 'var(--pbs-cream-2)',
-                border: '1.5px solid var(--pbs-line-2)',
-                fontSize: 12, fontWeight: 700, letterSpacing: '-0.005em',
-                color: 'var(--pbs-ink-soft)',
-                whiteSpace: 'nowrap',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'flex-end',
                 height: 44, boxSizing: 'border-box',
+                padding: '0 2px',
+                color: 'var(--pbs-ink-muted)',
+                pointerEvents: 'none',
+                userSelect: 'none',
               }}
             >
-              {duration} min
+              <span
+                className="pbs-mono"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  lineHeight: 1,
+                  marginBottom: 2,
+                }}
+              >
+                {duration} min
+              </span>
+              <svg
+                width="54"
+                height="22"
+                viewBox="0 0 54 22"
+                fill="none"
+                aria-hidden="true"
+                style={{ display: 'block' }}
+              >
+                {/* Cartoon jump arc from left picker to right picker */}
+                <path
+                  d="M3 18 Q 27 -4 48 18"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                {/* Arrowhead */}
+                <path
+                  d="M44 14 L49 18 L44 20"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
+              </svg>
             </div>
             <Field label="Ends" style={{ flex: 1 }}>
               <TimePicker

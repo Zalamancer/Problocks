@@ -100,11 +100,15 @@ export const StudentSelf = ({
           <div style={{ flex: 1, minWidth: 240 }}>
             <div className="pbs-mono" style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.75 }}>YOUR PROGRESS</div>
             <h1 style={{ margin: '4px 0 2px', fontSize: 40, fontWeight: 700, letterSpacing: '-0.025em' }}>
-              You&apos;re doing <span className="pbs-serif">great</span>, {me.name.split(' ')[0]}.
+              {isReal
+                ? <>Welcome, <span className="pbs-serif">{me.name.split(' ')[0]}</span>.</>
+                : <>You&apos;re doing <span className="pbs-serif">great</span>, {me.name.split(' ')[0]}.</>}
             </h1>
-            <div style={{ fontSize: 13.5, opacity: 0.8 }}>Grade {me.grade} · {me.avg}% average · {me.streak} day streak</div>
+            {isReal
+              ? <div style={{ fontSize: 13.5, opacity: 0.8 }}>No quizzes played yet — your progress will show here once you start.</div>
+              : <div style={{ fontSize: 13.5, opacity: 0.8 }}>Grade {me.grade} · {me.avg}% average · {me.streak} day streak</div>}
           </div>
-          <Donut value={me.avg / 100} size={110} stroke={12} color="var(--pbs-butter-ink)" track="var(--pbs-cream-2)" label="overall"/>
+          {!isReal && <Donut value={me.avg / 100} size={110} stroke={12} color="var(--pbs-butter-ink)" track="var(--pbs-cream-2)" label="overall"/>}
         </div>
 
         <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: isReal ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>

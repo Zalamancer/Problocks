@@ -245,6 +245,7 @@ const Scanner = ({
   onClose: () => void;
   onRead: (i: Invite) => void;
 }) => {
+  const useReal = useDataSourceStore((s) => s.useRealData);
   const [progress, setProgress] = useState(0);
   useEffect(() => {
     let raf = 0;
@@ -255,7 +256,15 @@ const Scanner = ({
       if (p < 1) {
         raf = requestAnimationFrame(step);
       } else {
-        onRead({
+        onRead(useReal ? {
+          className: 'Class QR9X4K',
+          teacher: '',
+          code: 'QR9X4K',
+          game: '',
+          minutes: 0,
+          questions: 0,
+          auto: true,
+        } : {
           className: 'Mr. Chen — AP Bio',
           teacher: 'Mr. Chen',
           code: 'QR9X4K',
@@ -268,7 +277,7 @@ const Scanner = ({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [onRead]);
+  }, [onRead, useReal]);
 
   return (
     <div

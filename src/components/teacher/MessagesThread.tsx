@@ -389,7 +389,9 @@ export const ChannelDetails = ({
 
 export const StudentDetails = ({
   s, onProfile,
-}: { s: Student; onProfile: () => void }) => (
+}: { s: Student; onProfile: () => void }) => {
+  const { isReal } = useTeacherData();
+  return (
   <>
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 0 0' }}>
       <span style={{
@@ -405,21 +407,25 @@ export const StudentDetails = ({
       <div className="pbs-mono" style={{ fontSize: 10.5, color: 'var(--pbs-ink-muted)' }}>active {s.lastActive}</div>
     </div>
 
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-      <Stat k="Grade"   v={s.grade}/>
-      <Stat k="Average" v={`${s.avg}%`}/>
-      <Stat k="Streak"  v={`${s.streak}d`}/>
-      <Stat k="Done"    v={s.submitted}/>
-    </div>
-
-    <div>
-      <div className="pbs-mono" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--pbs-ink-muted)', marginBottom: 6 }}>QUICK REPLIES</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {['Want to review together?', 'Great work this week 🎉', 'Need help with anything?'].map((r) => (
-          <div key={r} style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line)', fontSize: 11.5, color: 'var(--pbs-ink-soft)' }}>{r}</div>
-        ))}
+    {!isReal && (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <Stat k="Grade"   v={s.grade}/>
+        <Stat k="Average" v={`${s.avg}%`}/>
+        <Stat k="Streak"  v={`${s.streak}d`}/>
+        <Stat k="Done"    v={s.submitted}/>
       </div>
-    </div>
+    )}
+
+    {!isReal && (
+      <div>
+        <div className="pbs-mono" style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--pbs-ink-muted)', marginBottom: 6 }}>QUICK REPLIES</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {['Want to review together?', 'Great work this week 🎉', 'Need help with anything?'].map((r) => (
+            <div key={r} style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line)', fontSize: 11.5, color: 'var(--pbs-ink-soft)' }}>{r}</div>
+          ))}
+        </div>
+      </div>
+    )}
 
     <button
       type="button"
@@ -428,4 +434,5 @@ export const StudentDetails = ({
       style={{ marginTop: 'auto' }}
     >Open full profile</button>
   </>
-);
+  );
+};

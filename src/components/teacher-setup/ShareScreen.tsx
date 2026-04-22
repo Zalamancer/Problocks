@@ -13,7 +13,10 @@ type PublicClass = {
   name: string;
   subject?: string | null;
   grade?: string | null;
+  classroom_course_id?: string | null;
 };
+
+type PostState = 'idle' | 'posting' | 'posted' | 'error';
 
 export const ShareScreen = () => {
   const search = useSearchParams();
@@ -28,6 +31,8 @@ export const ShareScreen = () => {
   const [cls, setCls] = useState<PublicClass | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<'link' | 'announcement' | null>(null);
+  const [postState, setPostState] = useState<PostState>('idle');
+  const [postError, setPostError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!classId) {
@@ -59,6 +64,32 @@ export const ShareScreen = () => {
   const announcement = cls
     ? `Hi class! 👋 We're using Playdemy for ${cls.name}.\n\nTap this link and sign in with your school Google account to join:\n${joinUrl}\n\nOnce you're in, all our assignments and grades will sync back here.`
     : '';
+
+  const postToClassroom = async () => {
+    if (!cls?.classroom_course_id || !announcement) return;
+    setPostState('posting');
+    setPostError(null);
+    try {
+      const res = await fetch(
+        `/api/classroom/courses/${cls.classroom_course_id}/announcements`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: announcement }),
+        },
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPostState('error');
+        setPostError(j?.error ?? `Posting failed (${res.status})`);
+        return;
+      }
+      setPostState('posted');
+    } catch (e) {
+      setPostState('error');
+      setPostError(e instanceof Error ? e.message : 'Posting failed');
+    }
+  };
 
   const copy = async (text: string, key: 'link' | 'announcement') => {
     try {
@@ -245,7 +276,19 @@ export const ShareScreen = () => {
               >
 {announcement}
               </pre>
-              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                {cls.classroom_course_id && (
+                  <Chunky
+                    tone="butter"
+                    icon={postState === 'posted' ? 'check' : 'arrow-up-right'}
+                    onClick={postToClassroom}
+                    disabled={postState === 'posting' || postState === 'posted'}
+                  >
+                    {postState === 'posting' ? 'Posting…'
+                      : postState === 'posted' ? 'Posted to Classroom'
+                      : 'Post to Classroom'}
+                  </Chunky>
+                )}
                 <Chunky
                   tone="ink"
                   icon={copied === 'announcement' ? 'check' : undefined}
@@ -254,6 +297,18 @@ export const ShareScreen = () => {
                   {copied === 'announcement' ? 'Copied!' : 'Copy announcement'}
                 </Chunky>
               </div>
+              {postState === 'error' && (
+                <div style={{
+                  marginTop: 10, padding: '10px 12px',
+                  background: 'var(--pbs-coral)',
+                  border: '1.5px solid var(--pbs-coral-ink)',
+                  color: 'var(--pbs-coral-ink)',
+                  borderRadius: 10, fontSize: 12.5, lineHeight: 1.5,
+                }}>
+                  Couldn&apos;t post: {postError}. You may need to sign out and
+                  back in to grant the new posting permission, then try again.
+                </div>
+              )}
             </section>
 
             {/* Next step */}

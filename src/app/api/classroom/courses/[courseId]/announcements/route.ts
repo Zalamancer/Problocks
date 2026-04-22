@@ -30,3 +30,42 @@ export async function GET(
 
   return NextResponse.json(data);
 }
+
+// POST an announcement to a linked Google Classroom course. Requires the
+// `classroom.announcements` (write) scope — teachers who signed in before we
+// upgraded the scope will need to re-consent.
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ courseId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.accessToken) {
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+  }
+
+  const { courseId } = await params;
+  const body = await req.json().catch(() => ({}));
+  const text = typeof body?.text === 'string' ? body.text.trim() : '';
+  if (!text) {
+    return NextResponse.json({ error: 'Missing text' }, { status: 400 });
+  }
+
+  const url = `${CLASSROOM_BASE}/courses/${courseId}/announcements`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ text, state: 'PUBLISHED' }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: data.error?.message ?? 'Classroom API error' },
+      { status: res.status },
+    );
+  }
+  return NextResponse.json(data);
+}

@@ -14,6 +14,12 @@ export const DataSourceToggle = () => {
   const useRealData = useDataSourceStore((s) => s.useRealData);
   const toggle = useDataSourceStore((s) => s.toggle);
 
+  // Dev-only affordance. In production we never render — letting real
+  // users toggle the demo store would both confuse them and expose that
+  // a mock branch exists. Gate is on NODE_ENV so `next build` strips the
+  // subtree at compile time.
+  if (process.env.NODE_ENV === 'production') return null;
+
   // Avoid SSR/CSR mismatch — persisted store hydrates on the client.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);

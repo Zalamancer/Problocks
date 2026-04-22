@@ -17,7 +17,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerReadClient } from '@/lib/supabase-admin';
 
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 20;
@@ -36,7 +36,8 @@ function rateLimit(ip: string): boolean {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getServerReadClient();
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
     stripped.length === 6 ? `${stripped.slice(0, 3)}-${stripped.slice(3)}` : raw,
   ]));
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('classes')
     .select('id')
     .in('join_code', candidates)

@@ -6,7 +6,7 @@
 // the owning teacher can read the roster.
 
 import { NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerReadClient } from '@/lib/supabase-admin';
 import { getTeacherSession } from '@/lib/teacher-auth';
 
 export async function GET(
@@ -20,12 +20,13 @@ export async function GET(
     return NextResponse.json({ error: 'Teacher sign-in required' }, { status: 401 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getServerReadClient();
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
   // Ownership gate: must own the class before reading the roster.
-  const classRow = await supabase
+  const classRow = await client
     .from('classes')
     .select('teacher_google_sub')
     .eq('id', classId)
@@ -38,7 +39,7 @@ export async function GET(
     return NextResponse.json({ error: 'Class not found or not yours' }, { status: 404 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('students')
     .select('id, google_sub, email, full_name, given_name, family_name, picture_url, joined_at')
     .eq('class_id', classId)

@@ -4,7 +4,7 @@
 // are stored as "ABC-DEF", so we try both with and without the dash.
 
 import { redirect } from 'next/navigation';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerReadClient } from '@/lib/supabase-admin';
 import '@/components/landing/pb-site/styles.css';
 
 export const metadata = {
@@ -35,7 +35,8 @@ export default async function JoinByCodePage({
   const { code } = await searchParams;
   const raw = (code ?? '').trim().toUpperCase();
   if (!raw) return <NotFound reason="No join code was provided in the link." />;
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getServerReadClient();
+  if (!client) {
     return <NotFound reason="The class directory is offline right now. Please try again in a moment." />;
   }
 
@@ -45,7 +46,7 @@ export default async function JoinByCodePage({
     raw.length === 6 ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw,
   ]));
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('classes')
     .select('id')
     .in('join_code', candidates)

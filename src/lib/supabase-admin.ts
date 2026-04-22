@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { supabase as anonSupabase, isSupabaseConfigured } from '@/lib/supabase';
 
 // Server-only Supabase client that uses the service_role key, bypassing
 // RLS. Use ONLY from server routes that are already gated by auth (e.g.
@@ -31,4 +32,15 @@ export function getAdminSupabase(): SupabaseClient | null {
     },
   });
   return cached;
+}
+
+/** Preferred client for server-side reads that previously used the anon
+ *  client: admin when the service role key is set (bypasses RLS), anon
+ *  otherwise (fine for dev against permissive RLS). Returns null only when
+ *  both clients are unavailable (neither env var configured). */
+export function getServerReadClient(): SupabaseClient | null {
+  const admin = getAdminSupabase();
+  if (admin) return admin;
+  if (isSupabaseConfigured()) return anonSupabase;
+  return null;
 }

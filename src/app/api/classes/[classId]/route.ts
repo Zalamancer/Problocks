@@ -7,7 +7,7 @@
 // actually authenticated as the owning teacher.
 
 import { NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerReadClient } from '@/lib/supabase-admin';
 import { getTeacherSession } from '@/lib/teacher-auth';
 
 export async function GET(
@@ -15,11 +15,12 @@ export async function GET(
   { params }: { params: Promise<{ classId: string }> },
 ) {
   const { classId } = await params;
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getServerReadClient();
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const row = await supabase
+  const row = await client
     .from('classes')
     .select('id, name, subject, grade, color, teacher_google_sub, classroom_course_id, join_code')
     .eq('id', classId)

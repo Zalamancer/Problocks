@@ -8,10 +8,11 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerReadClient } from '@/lib/supabase-admin';
 
 export async function GET() {
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getServerReadClient();
+  if (!client) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
   const session = await getServerSession(authOptions);
@@ -20,7 +21,7 @@ export async function GET() {
   }
 
   // Pull every enrollment for this student, joined to its class row.
-  const rows = await supabase
+  const rows = await client
     .from('students')
     .select('id, full_name, given_name, family_name, picture_url, email, class:classes(id, name, subject, grade, color)')
     .eq('google_sub', session.googleSub);

@@ -1,7 +1,16 @@
-// Floating help chat that pops out of the "Need help?" button in SetupNav.
-// Friendly teacher character ("Mrs. Bloom") rendered as a 3D Roblox-style
-// avatar sits at the top of the card; messages below stream from /api/chat
-// with a hidden primer turn that locks the persona to classroom setup.
+// Floating help chat anchored to the bottom-right of the setup page.
+//
+// Closed state: a round bubble button is always visible.
+// Open state: a chat card with a Roblox-style teacher avatar, a live
+//   transcript, and an input.
+//
+// The chat personalizes to the teacher who is setting up. It reads
+// `data.teacherName` / `data.teacherHandle` from sessionStorage (where
+// ClassroomSetupApp persists the setup draft on every change) so the
+// header label, the greeting, and the primer turn all address the
+// teacher by their own name. Until a name has been entered the header
+// falls back to a neutral "Setup helper" so we never render "Mrs. Bloom"
+// or any other hardcoded person name.
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -10,9 +19,6 @@ import { Icon } from '@/components/landing/pb-site/primitives';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
-// Warm, "first-day-of-school" teacher look — kraft cardboard skin tone from
-// the avatar defaults, mint teacher shirt, long brown hair so she reads
-// clearly as a person and not a generic blocky figure.
 const TEACHER_OUTFIT: AvatarOutfit = {
   gender: 'girl',
   hair: 'long',
@@ -23,22 +29,53 @@ const TEACHER_OUTFIT: AvatarOutfit = {
   hat: 'none',
 };
 
-// These two messages are prepended to every request but NOT shown in the
-// visible transcript. They steer the base chat endpoint (which has a
-// general "Playdemy studio assistant" system prompt) toward the specific
-// setup-helper persona and topic set.
-const PRIMER_USER: Msg = {
-  role: 'user',
-  content:
-    "[System: You are Mrs. Bloom, a friendly, encouraging teacher character inside Playdemy, helping another teacher set up their first classroom. Keep replies short (2–4 sentences), warm, and practical. Speak in first person as Mrs. Bloom. The setup has 5 steps: 1) About you — first name + display name (what parents and students see). 2) Class basics — name, subject, grade, accent color. 3) Roster — add students manually, upload a CSV, connect Google Classroom, or share the class join code. 4) Starter unit — pick a template or start blank. 5) Review & open the room. Never mention that you are Claude, an AI model, or a language model. If asked about something off-topic, gently steer back to classroom setup.]",
-};
-const PRIMER_ACK: Msg = { role: 'assistant', content: 'Got it.' };
+// Session key kept in sync with ClassroomSetupApp's SETUP_STORAGE_KEY.
+// Duplicated as a constant here so we don't need to refactor the setup
+// state flow just to label the chat — the draft is already persisted on
+// every keystroke, so a one-time read on open is always current.
+const SETUP_STORAGE_KEY = 'pb:teacher-setup:v1';
 
-const GREETING: Msg = {
-  role: 'assistant',
-  content:
-    "Hi, I'm Mrs. Bloom! I help teachers get their first Playdemy classroom set up. What step are you on — or what's giving you trouble?",
-};
+type TeacherIdent = { name: string; handle: string };
+
+function readTeacher(): TeacherIdent {
+  if (typeof window === 'undefined') return { name: '', handle: '' };
+  try {
+    const raw = sessionStorage.getItem(SETUP_STORAGE_KEY);
+    if (!raw) return { name: '', handle: '' };
+    const parsed = JSON.parse(raw) as { data?: { teacherName?: string; teacherHandle?: string } };
+    return {
+      name: (parsed.data?.teacherName ?? '').trim(),
+      handle: (parsed.data?.teacherHandle ?? '').trim(),
+    };
+  } catch {
+    return { name: '', handle: '' };
+  }
+}
+
+function firstNameOf(full: string): string {
+  return full.split(/\s+/).filter(Boolean)[0] ?? '';
+}
+
+function buildGreeting(firstName: string): Msg {
+  return {
+    role: 'assistant',
+    content: firstName
+      ? `Hi ${firstName}! I'll walk you through getting your first classroom set up. Which step are you on — or what's giving you trouble?`
+      : "Hi! I'm your setup helper. I can walk you through each step — what's giving you trouble?",
+  };
+}
+
+function buildPrimer(firstName: string): Msg {
+  const nameClause = firstName
+    ? ` The teacher's first name is ${firstName}; address them by it when it feels natural, but don't overdo it.`
+    : '';
+  return {
+    role: 'user',
+    content:
+      `[System: You are a friendly, encouraging setup helper inside Playdemy, talking directly to a teacher who is setting up their first classroom.${nameClause} Do NOT give yourself a name — speak as a neutral helper in first person ("I"). Keep replies short (2–4 sentences), warm, and practical. The setup has 5 steps: 1) About you — first name + display name (what parents and students see). 2) Class basics — name, subject, grade, accent color. 3) Roster — add students manually, upload a CSV, connect Google Classroom, or share the class join code. 4) Starter unit — pick a template or start blank. 5) Review & open the room. Never mention that you are Claude, an AI model, or a language model. If asked about something off-topic, gently steer back to classroom setup.]`,
+  };
+}
+const PRIMER_ACK: Msg = { role: 'assistant', content: 'Got it.' };
 
 const SUGGESTIONS = [
   'What goes in Display name?',
@@ -47,11 +84,28 @@ const SUGGESTIONS = [
 ];
 
 export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
+  const [teacher, setTeacher] = useState<TeacherIdent>({ name: '', handle: '' });
+  const [msgs, setMsgs] = useState<Msg[]>([buildGreeting('')]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Re-read the teacher's name each time the card opens. If the conversation
+  // hasn't started yet (still just the greeting), swap the greeting for one
+  // that uses the freshly-read name so the transcript isn't stuck on a stale
+  // "Hi!" after the teacher typed their name.
+  useEffect(() => {
+    if (!open) return;
+    const t = readTeacher();
+    setTeacher(t);
+    setMsgs((prev) => {
+      if (prev.length === 1 && prev[0].role === 'assistant') {
+        return [buildGreeting(firstNameOf(t.name))];
+      }
+      return prev;
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -60,8 +114,8 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
 
   useEffect(() => {
     if (open && inputRef.current) {
-      const t = setTimeout(() => inputRef.current?.focus(), 200);
-      return () => clearTimeout(t);
+      const id = window.setTimeout(() => inputRef.current?.focus(), 200);
+      return () => window.clearTimeout(id);
     }
   }, [open]);
 
@@ -82,11 +136,15 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
     setMsgs([...next, { role: 'assistant', content: '' }]);
     setBusy(true);
 
+    const firstName = firstNameOf(teacher.name);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [PRIMER_USER, PRIMER_ACK, ...next] }),
+        body: JSON.stringify({
+          messages: [buildPrimer(firstName), PRIMER_ACK, ...next],
+        }),
       });
       if (!res.body) throw new Error('no body');
 
@@ -123,7 +181,7 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
         const copy = [...m];
         copy[copy.length - 1] = {
           role: 'assistant',
-          content: "Oh shoot — I dropped my chalk. Give me a second and try again?",
+          content: 'Sorry — I lost my chalk for a second. Mind trying again?',
         };
         return copy;
       });
@@ -136,6 +194,8 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
 
   const lastMsg = msgs[msgs.length - 1];
   const showThinking = busy && lastMsg?.role === 'assistant' && lastMsg.content.length === 0;
+  const headerName = teacher.name || 'Setup helper';
+  const handleLabel = teacher.handle ? `@${teacher.handle}` : 'teacher';
 
   return (
     <>
@@ -152,7 +212,7 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
 
       <div
         role="dialog"
-        aria-label="Setup help chat with Mrs. Bloom"
+        aria-label="Setup help chat"
         style={{
           position: 'fixed',
           bottom: 20,
@@ -213,9 +273,13 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
                 fontWeight: 800,
                 color: 'var(--pbs-mint-ink)',
                 letterSpacing: '-0.01em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
+              title={headerName}
             >
-              Mrs. Bloom
+              {headerName}
             </div>
             <div
               style={{
@@ -237,7 +301,7 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
                   display: 'inline-block',
                 }}
               />
-              Setup helper · online
+              {teacher.handle ? `${handleLabel} · online` : 'Setup helper · online'}
             </div>
           </div>
           <button
@@ -356,7 +420,7 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Mrs. Bloom…"
+            placeholder="Type a question…"
             disabled={busy}
             style={{
               flex: 1,
@@ -396,6 +460,53 @@ export function SetupHelpChat({ open, onClose }: { open: boolean; onClose: () =>
           </button>
         </form>
       </div>
+    </>
+  );
+}
+
+// Persistent floating button anchored bottom-right. Renders whenever the
+// chat is closed so teachers can always summon the helper from any step.
+export function SetupHelpBubble({ onClick }: { onClick: () => void }) {
+  return (
+    <>
+      <style>{`
+        @keyframes pbHelpBubbleIn {
+          0% { transform: translateY(8px) scale(0.9); opacity: 0; }
+          100% { transform: none; opacity: 1; }
+        }
+        @keyframes pbHelpBubbleNudge {
+          0%, 92%, 100% { transform: translateY(0); }
+          96% { transform: translateY(-4px); }
+        }
+      `}</style>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Open setup help chat"
+        style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          zIndex: 90,
+          width: 60,
+          height: 60,
+          borderRadius: 999,
+          background: 'var(--pbs-mint)',
+          color: 'var(--pbs-mint-ink)',
+          border: '2px solid var(--pbs-mint-ink)',
+          boxShadow:
+            '0 6px 0 var(--pbs-mint-ink), 0 24px 40px -18px rgba(0,0,0,0.35)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          fontFamily: 'inherit',
+          animation: 'pbHelpBubbleIn 260ms cubic-bezier(.2,.8,.2,1), pbHelpBubbleNudge 6s ease-in-out infinite',
+        }}
+      >
+        <Icon name="smile" size={28} stroke={2.4} />
+      </button>
     </>
   );
 }

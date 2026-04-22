@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/landing/pb-site/primitives';
-import { SetupHelpChat } from './SetupHelpChat';
+import { SetupHelpBubble, SetupHelpChat } from './SetupHelpChat';
 
 export const SetupNav = () => {
   const [helpOpen, setHelpOpen] = useState(false);
@@ -72,6 +72,7 @@ export const SetupNav = () => {
         </div>
       </nav>
 
+      {!helpOpen && <SetupHelpBubble onClick={() => setHelpOpen(true)}/>}
       <SetupHelpChat open={helpOpen} onClose={() => setHelpOpen(false)}/>
     </>
   );

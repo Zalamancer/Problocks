@@ -4,6 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Icon, Chunky } from '@/components/landing/pb-site/primitives';
 import { Field, StepCard, StepHeader } from './form';
 import type { SetupData, RosterMethod } from './types';
@@ -245,19 +246,19 @@ export const StepRoster = ({
                 {data.joinCode}
               </div>
               <div style={{
-                width: 100, height: 100, margin: '8px auto 0',
+                width: 116, height: 116, margin: '8px auto 0',
                 background: 'var(--pbs-paper)',
                 border: '1.5px solid var(--pbs-line-2)', borderRadius: 8,
-                position: 'relative', overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: 8,
               }}>
-                <div style={{
-                  position: 'absolute', inset: 8,
-                  backgroundImage: 'radial-gradient(var(--pbs-ink) 45%, transparent 46%)',
-                  backgroundSize: '9px 9px',
-                }}/>
-                <div style={{ position: 'absolute', top: 8, left: 8, width: 24, height: 24, border: '4px solid var(--pbs-ink)', background: 'var(--pbs-paper)' }}/>
-                <div style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, border: '4px solid var(--pbs-ink)', background: 'var(--pbs-paper)' }}/>
-                <div style={{ position: 'absolute', bottom: 8, left: 8, width: 24, height: 24, border: '4px solid var(--pbs-ink)', background: 'var(--pbs-paper)' }}/>
+                <QRCodeSVG
+                  value={`https://playdemy.app/join?code=${data.joinCode.replace(/-/g, '')}`}
+                  size={100}
+                  level="M"
+                  bgColor="transparent"
+                  fgColor="#1d1a14"
+                />
               </div>
               <div className="pbs-mono" style={{ fontSize: 10, color: 'var(--pbs-ink-muted)', marginTop: 8 }}>
                 playdemy.app/join

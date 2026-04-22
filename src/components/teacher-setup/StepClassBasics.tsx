@@ -39,13 +39,19 @@ export const StepClassBasics = ({
             value={data.classSubject}
             onChange={(e) => set('classSubject', e.target.value as SetupData['classSubject'])}
             options={[
-              { value: 'math', label: 'Math' },
-              { value: 'ela', label: 'Reading & writing' },
+              { value: 'math',    label: 'Math' },
+              { value: 'ela',     label: 'Reading & writing' },
               { value: 'science', label: 'Science' },
-              { value: 'cs', label: 'Computer science' },
-              { value: 'social', label: 'Social studies' },
-              { value: 'art', label: 'Art & music' },
-              { value: 'mixed', label: 'Mixed / homeroom' },
+              { value: 'cs',      label: 'Computer science' },
+              { value: 'social',  label: 'Social studies' },
+              { value: 'art',     label: 'Art' },
+              { value: 'music',   label: 'Music' },
+              { value: 'lang',    label: 'World languages' },
+              { value: 'pe',      label: 'PE & Health' },
+              { value: 'stem',    label: 'STEM / STEAM' },
+              { value: 'sped',    label: 'SPED / Resource' },
+              { value: 'other',   label: 'Other' },
+              { value: 'mixed',   label: 'Mixed / homeroom' },
             ]}
           />
         </Field>

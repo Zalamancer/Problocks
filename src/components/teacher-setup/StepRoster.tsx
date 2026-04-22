@@ -12,7 +12,6 @@ import { classroomFetch } from '@/lib/classroom-api';
 import type {
   ListCoursesResponse,
   ClassroomCourse,
-  ClassroomStudent,
 } from '@/lib/classroom-api';
 
 // Note: Clever + Microsoft Teams are intentionally hidden until we finish their
@@ -431,15 +430,12 @@ function GoogleClassroomConnect({
   }
 
   // ── Signed in ───────────────────────────────────────────────────────────
-  // Two-column split on the Roster step when we're authenticated: left is
-  // the existing course-picker card, right is the roster preview so the
-  // teacher sees *whose names will be pre-loaded* before they proceed to
-  // the next step. Both cards stretch to equal height (see
-  // .pb-setup-roster-split in setup.css) to mirror the DraftCard pattern
-  // on the Unit step.
+  // The course picker stays full-width in the center column. The *roster*
+  // preview that goes with this step lives in the right-hand preview rail
+  // (see ClassroomSetupApp — it swaps the generic ClassroomPreview for
+  // ClassroomRosterPreview while we're on this step with a course picked).
   return (
-    <div className="pb-setup-roster-split">
-    <StepCard style={{ height: '100%' }}>
+    <StepCard>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
         <div style={{
           width: 40, height: 40, borderRadius: 12,
@@ -561,201 +557,8 @@ function GoogleClassroomConnect({
           fontSize: 13, lineHeight: 1.5, color: 'var(--pbs-ink-soft)',
         }}>
           <strong style={{ color: 'var(--pbs-ink)' }}>Linked to &ldquo;{data.classroomCourseName}&rdquo;.</strong>
-          {' '}The roster on the right will be pre-loaded when you open the classroom, and
+          {' '}The roster in the right rail will be pre-loaded when you open the classroom, and
           Classroom assignments &amp; grades will sync to the teacher dashboard.
-        </div>
-      )}
-    </StepCard>
-    <ClassroomRosterPreview courseId={data.classroomCourseId}/>
-    </div>
-  );
-}
-
-// ── Roster preview card ─────────────────────────────────────────────────────
-// Shown next to the course picker when the teacher has linked a Google
-// Classroom course. Fetches the course's roster via our /people proxy and
-// renders a compact list of students so the teacher can confirm the class
-// they picked is the right one before committing. Uses the restricted
-// classroom.rosters.readonly scope (same one server-side import uses), so
-// this will 403 on unverified production accounts — we surface that inline
-// instead of silently hiding the card, so the teacher knows why it's empty.
-function ClassroomRosterPreview({ courseId }: { courseId: string | undefined }) {
-  const [students, setStudents] = useState<ClassroomStudent[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!courseId) {
-      setStudents([]);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    // /people returns both teachers + students in a single round-trip; we
-    // only need the students for a roster preview, but this is the same
-    // proxy the rest of the app uses so we don't have to add another.
-    classroomFetch<{
-      teachers?: unknown[];
-      students?: ClassroomStudent[];
-    }>(`/courses/${courseId}/people?pageSize=100`)
-      .then((res) => {
-        if (cancelled) return;
-        setStudents(res.students ?? []);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'Failed to load roster');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [courseId]);
-
-  return (
-    <StepCard style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 12,
-          background: 'var(--pbs-butter)', color: 'var(--pbs-butter-ink)',
-          border: '1.5px solid var(--pbs-butter-ink)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <Icon name="users" size={16} stroke={2.2}/>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
-            Classroom roster
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)' }}>
-            {courseId
-              ? (loading
-                  ? 'Loading students…'
-                  : `${students.length} student${students.length === 1 ? '' : 's'} will be pre-loaded`)
-              : 'Pick a course on the left to preview.'}
-          </div>
-        </div>
-      </div>
-
-      {!courseId && (
-        <div style={{
-          flex: 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 16, borderRadius: 12,
-          background: 'var(--pbs-cream-2)',
-          border: '1.5px dashed var(--pbs-line-2)',
-          fontSize: 13, color: 'var(--pbs-ink-muted)',
-          textAlign: 'center',
-        }}>
-          Your students will appear here once you link a course.
-        </div>
-      )}
-
-      {courseId && error && (
-        <div style={{
-          padding: 12, borderRadius: 12,
-          background: 'var(--pbs-coral)', color: 'var(--pbs-coral-ink)',
-          border: '1.5px solid var(--pbs-coral-ink)',
-          fontSize: 12.5, lineHeight: 1.5,
-        }}>
-          <strong>Can&apos;t preview roster:</strong> {error}
-          <br/>
-          This is expected outside Google CASA verification — students can still self-join.
-        </div>
-      )}
-
-      {courseId && !error && !loading && students.length === 0 && (
-        <div style={{
-          padding: 12, borderRadius: 12,
-          background: 'var(--pbs-paper)', border: '1.5px dashed var(--pbs-line-2)',
-          fontSize: 12.5, color: 'var(--pbs-ink-muted)',
-        }}>
-          No students enrolled in this course yet. Add them in Google Classroom and
-          they&apos;ll sync in automatically.
-        </div>
-      )}
-
-      {courseId && !error && students.length > 0 && (
-        <div style={{
-          flex: 1,
-          display: 'flex', flexDirection: 'column', gap: 6,
-          overflowY: 'auto',
-          maxHeight: 360,
-        }}>
-          {students.map((s) => {
-            const name = s.profile.name.fullName
-              || [s.profile.name.givenName, s.profile.name.familyName].filter(Boolean).join(' ')
-              || 'Student';
-            // Classroom returns protocol-relative URLs; normalise so <img>
-            // doesn't fire a malformed request.
-            const photo = s.profile.photoUrl
-              ? (s.profile.photoUrl.startsWith('http')
-                  ? s.profile.photoUrl
-                  : `https:${s.profile.photoUrl}`)
-              : null;
-            const initials = name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase();
-            return (
-              <div
-                key={s.userId}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 10px', borderRadius: 10,
-                  background: 'var(--pbs-paper)',
-                  border: '1px solid var(--pbs-line-2)',
-                }}
-              >
-                {photo ? (
-                  // Third-party images bypass next/image since we don't want
-                  // to add googleusercontent.com to next.config remote patterns
-                  // just for a setup preview.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photo}
-                    alt=""
-                    width={28}
-                    height={28}
-                    style={{
-                      width: 28, height: 28, borderRadius: 999,
-                      objectFit: 'cover',
-                      border: '1px solid var(--pbs-line-2)',
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 999,
-                    background: 'var(--pbs-butter)',
-                    color: 'var(--pbs-butter-ink)',
-                    border: '1px solid var(--pbs-butter-ink)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700,
-                    flexShrink: 0,
-                  }}>
-                    {initials}
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 13, fontWeight: 600,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {name}
-                  </div>
-                  {s.profile.emailAddress && (
-                    <div className="pbs-mono" style={{
-                      fontSize: 11, color: 'var(--pbs-ink-muted)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {s.profile.emailAddress}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
     </StepCard>

@@ -13,6 +13,7 @@ import { StepRoster } from './StepRoster';
 import { StepUnit } from './StepUnit';
 import { StepReview } from './StepReview';
 import { ClassroomPreview } from './ClassroomPreview';
+import { ClassroomRosterPreview } from './ClassroomRosterPreview';
 import { INITIAL_DATA, type SetupData } from './types';
 import './setup.css';
 
@@ -325,7 +326,14 @@ export const ClassroomSetupApp = () => {
           </section>
 
           <aside className="pb-setup-preview-rail">
-            <ClassroomPreview data={data} step={step}/>
+            {step === 2 && data.rosterMethod === 'google' && data.classroomCourseId ? (
+              <ClassroomRosterPreview
+                courseId={data.classroomCourseId}
+                courseName={data.classroomCourseName}
+              />
+            ) : (
+              <ClassroomPreview data={data} step={step}/>
+            )}
           </aside>
         </div>
       </main>

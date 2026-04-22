@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isPlatformAdmin, getTeacherSession } from '@/lib/teacher-auth';
+import { isPlatformAdmin, getTeacherSession, logAdminAction } from '@/lib/teacher-auth';
 import { getAdminSupabase } from '@/lib/supabase-admin';
 
 // PATCH /api/admin/teachers/:googleSub/role
@@ -64,6 +64,13 @@ export async function PATCH(
     console.error('Update teacher role error:', error);
     return NextResponse.json({ error: 'Failed to update role' }, { status: 404 });
   }
+
+  await logAdminAction({
+    action: body.role === 'admin' ? 'role_grant' : 'role_revoke',
+    targetType: 'teacher',
+    targetId: googleSub,
+    metadata: { newRole: body.role },
+  });
 
   return NextResponse.json({ teacher: data });
 }

@@ -33,6 +33,34 @@ export async function isPlatformAdmin(): Promise<boolean> {
   return row?.role === 'admin';
 }
 
+/** Append one row to admin_audit_log. All mutating admin surfaces should
+ *  call this after a successful change. Non-blocking: logs and swallows
+ *  any failure so we never break the user's happy path over an audit hiccup.
+ *  Uses the service-role admin client; no-op when the key isn't configured. */
+export async function logAdminAction(input: {
+  action: string;
+  targetType: 'teacher' | 'data_request' | 'game' | 'report';
+  targetId: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const session = await getTeacherSession();
+  if (!session?.googleSub) return;
+  const admin = getAdminSupabase();
+  if (!admin) return;
+
+  const { error } = await admin.from('admin_audit_log').insert({
+    actor_sub: session.googleSub,
+    actor_email: session.user?.email ?? null,
+    action: input.action,
+    target_type: input.targetType,
+    target_id: input.targetId,
+    metadata: input.metadata ?? null,
+  });
+  if (error) {
+    console.warn('logAdminAction insert failed:', error.message);
+  }
+}
+
 /** True when `gameId`'s creator (games.user_id, a Supabase auth.uid()) is
  *  enrolled in at least one class owned by `teacherGoogleSub`. Used by the
  *  moderation PATCH routes to make sure a teacher can only approve /

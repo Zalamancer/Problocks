@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getAdminSupabase } from '@/lib/supabase-admin';
-import { getTeacherSession, isPlatformAdmin, isGameInTeacherRoster } from '@/lib/teacher-auth';
+import { getTeacherSession, isPlatformAdmin, isGameInTeacherRoster, logAdminAction } from '@/lib/teacher-auth';
 
 // PATCH /api/moderation/games/:id
 // Body: { action: 'approve' | 'reject' }
@@ -67,6 +67,13 @@ export async function PATCH(
       .eq('game_id', id)
       .eq('status', 'open');
   }
+
+  await logAdminAction({
+    action: `game.${body.action}`,
+    targetType: 'game',
+    targetId: id,
+    metadata: { newStatus: data.moderation_status, isAdmin: admin },
+  });
 
   return NextResponse.json({ game: data });
 }

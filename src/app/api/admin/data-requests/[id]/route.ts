@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isPlatformAdmin } from '@/lib/teacher-auth';
+import { isPlatformAdmin, logAdminAction } from '@/lib/teacher-auth';
 import { getAdminSupabase } from '@/lib/supabase-admin';
 
 // PATCH /api/admin/data-requests/:id
@@ -40,6 +40,13 @@ export async function PATCH(
     console.error('Update data_request error:', error);
     return NextResponse.json({ error: 'Failed to update request' }, { status: 404 });
   }
+
+  await logAdminAction({
+    action: `data_request.${body.status}`,
+    targetType: 'data_request',
+    targetId: id,
+    metadata: { newStatus: body.status },
+  });
 
   return NextResponse.json({ request: data });
 }

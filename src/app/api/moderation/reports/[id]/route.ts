@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getAdminSupabase } from '@/lib/supabase-admin';
-import { getTeacherSession, isPlatformAdmin, isGameInTeacherRoster } from '@/lib/teacher-auth';
+import { getTeacherSession, isPlatformAdmin, isGameInTeacherRoster, logAdminAction } from '@/lib/teacher-auth';
 
 // PATCH /api/moderation/reports/:id
 // Body: { action: 'reviewed' | 'dismissed' }
@@ -62,6 +62,13 @@ export async function PATCH(
     console.error('Moderate report error:', error);
     return NextResponse.json({ error: 'Failed to update report' }, { status: 500 });
   }
+
+  await logAdminAction({
+    action: `report.${body.action}`,
+    targetType: 'report',
+    targetId: id,
+    metadata: { newStatus: body.action, isAdmin: admin },
+  });
 
   return NextResponse.json({ report: data });
 }

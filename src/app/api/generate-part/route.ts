@@ -20,6 +20,7 @@ import {
   type GenerationUsage,
 } from '@/lib/part-studio/types';
 import { MODEL_CATALOG, DEFAULT_MODEL } from '@/lib/part-studio/models';
+import { spendCreditsFor } from '@/lib/credits';
 
 function cliEnv(): NodeJS.ProcessEnv {
   return {
@@ -262,12 +263,22 @@ export async function POST(req: Request) {
     parentModel?: unknown;
     phraseHints?: unknown;
     model?: unknown;
+    userId?: unknown;
   };
 
   const userPrompt =
     typeof b.userPrompt === 'string' ? b.userPrompt.trim() : '';
   if (!userPrompt) {
     return NextResponse.json({ error: 'missing-userPrompt' }, { status: 400 });
+  }
+
+  const resolvedUserId = typeof b.userId === 'string' && b.userId ? b.userId : 'local-user';
+  const spend = await spendCreditsFor(resolvedUserId, 'generate-part');
+  if (!spend.ok && spend.reason === 'insufficient') {
+    return NextResponse.json(
+      { error: 'Not enough credits', needed: spend.cost, balance: spend.balance },
+      { status: 402 }
+    );
   }
 
   const modelAlias: ClaudeModelId =

@@ -17,6 +17,7 @@ import {
   Kanban,
   MoreVertical,
   Undo2,
+  Coins,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useStudio, type ViewMode } from '@/store/studio-store';
@@ -24,6 +25,7 @@ import { useSceneStore } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { useQualityStore } from '@/store/quality-store';
 import { useToastStore } from '@/store/toast-store';
+import { useCreditsStore } from '@/store/credits-store';
 import { PBButton, PBLogo, AvatarStack } from '@/components/ui';
 import { renderGameHtml, saveGame, saveAndPublish } from '@/lib/studio/save-game';
 
@@ -130,6 +132,14 @@ export function TopMenuBar() {
   const setBuildTool = useBuildingStore((s) => s.setTool);
   const gameQuality = useQualityStore((s) => s.settings);
   const addToast = useToastStore((s) => s.addToast);
+  const creditsBalance = useCreditsStore((s) => s.balance);
+  const refreshCredits = useCreditsStore((s) => s.refreshBalance);
+
+  useEffect(() => {
+    // Seed the counter on mount so first-visit users see their 100-credit
+    // signup grant without having to trigger a generation first.
+    void refreshCredits();
+  }, [refreshCredits]);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
   const activeGameFirstFile = activeGame?.files ? Object.keys(activeGame.files)[0] : undefined;
 
@@ -338,8 +348,9 @@ export function TopMenuBar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Right cluster: avatars + Undo + Share + Play + kebab */}
+      {/* Right cluster: credits + avatars + Undo + Share + Play + kebab */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {creditsBalance !== null && <CreditsPill balance={creditsBalance} />}
         <AvatarStack names={['Ms Alvarez', 'Jules Tran', 'Rosa Shah']} size={26} />
 
         {(() => {
@@ -465,5 +476,34 @@ export function TopMenuBar() {
         </div>
       </div>
     </div>
+  );
+}
+
+function CreditsPill({ balance }: { balance: number }) {
+  const low = balance <= 10;
+  return (
+    <a
+      href="#credits"
+      onClick={(e) => e.preventDefault()}
+      aria-label={`${balance} credits remaining`}
+      title={low ? 'Running low — generations cost credits.' : `${balance} credits available`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '5px 10px',
+        borderRadius: 999,
+        background: low ? 'var(--pb-coral-2, #fddad5)' : 'var(--pb-cream-2, #fff5df)',
+        color: low ? 'var(--pb-coral-ink, #a03a2e)' : 'var(--pb-ink, #1d1a14)',
+        border: `1.5px solid ${low ? 'var(--pb-coral-ink, #a03a2e)' : 'var(--pb-line-2, #e5dfd2)'}`,
+        fontSize: 12.5,
+        fontWeight: 700,
+        textDecoration: 'none',
+        fontFamily: 'inherit',
+      }}
+    >
+      <Coins size={13} strokeWidth={2.2} />
+      {balance.toLocaleString()}
+    </a>
   );
 }

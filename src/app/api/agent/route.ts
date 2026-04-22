@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import { homedir } from 'os';
 import { generateSprite, isAvailable as pixelLabAvailable } from '@/lib/pixellab';
 import { findSound, isAvailable as freesoundAvailable } from '@/lib/freesound';
+import { spendCreditsFor } from '@/lib/credits';
 
 // --- Claude CLI helpers ---
 
@@ -604,11 +605,31 @@ function closeStream(
 
 export async function POST(req: Request) {
   try {
-    const { messages } = (await req.json()) as {
+    const { messages, userId } = (await req.json()) as {
       messages: { role: string; content: string }[];
+      userId?: string;
     };
     const encoder = new TextEncoder();
     const userMsg = messages[messages.length - 1]?.content || '';
+    const resolvedUserId = userId || 'local-user';
+
+    // Credit metering: debit the generation cost up front so we can't produce
+    // an expensive multi-pass game for a user whose balance is gone. On
+    // insufficient balance we 402 before opening the stream. Catastrophic
+    // stream-time errors do not currently refund — Sprint 3 will add
+    // partial-credit refunds once the stream's success state is easier to
+    // inspect from here.
+    const spend = await spendCreditsFor(resolvedUserId, 'agent');
+    if (!spend.ok && spend.reason === 'insufficient') {
+      return new Response(
+        JSON.stringify({
+          error: 'Not enough credits',
+          needed: spend.cost,
+          balance: spend.balance,
+        }),
+        { status: 402, headers: { 'content-type': 'application/json' } }
+      );
+    }
 
     const readable = new ReadableStream({
       async start(controller) {

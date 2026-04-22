@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send, Copy, Check } from 'lucide-react';
 import { getGameHtml } from '@/lib/game-engine';
 import { useQualityStore } from '@/store/quality-store';
+import { useCreditsStore } from '@/store/credits-store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -145,11 +146,27 @@ export function StudioTerminal({
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, userId: 'local-user' }),
         signal: abortRef.current.signal,
       });
 
       if (!res.ok) {
+        if (res.status === 402) {
+          // Out of credits — surface the specific error + refresh the
+          // counter in the TopMenuBar so the user sees their balance.
+          const payload = await res.json().catch(() => ({ error: 'Not enough credits' })) as {
+            error?: string; needed?: number; balance?: number | null;
+          };
+          setLines((prev) => [
+            ...prev,
+            { type: 'error', text: `  ${payload.error ?? 'Not enough credits'} — need ${payload.needed ?? 0}, you have ${payload.balance ?? 0}.` },
+            { type: 'system', text: '  Ask your teacher to top up or try a smaller prompt.' },
+            { type: 'system', text: '' },
+          ]);
+          setIsStreaming(false);
+          void useCreditsStore.getState().refreshBalance();
+          return;
+        }
         const errorText = await res.text();
         setLines((prev) => [
           ...prev,
@@ -325,6 +342,9 @@ export function StudioTerminal({
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
+      // Any generation (success or failure) may have moved the balance — let
+      // the TopMenuBar pill reflect the new number without a manual refresh.
+      void useCreditsStore.getState().refreshBalance();
     }
   }, [input, isStreaming, messages, onGameGenerated]);
 

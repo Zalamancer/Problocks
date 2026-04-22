@@ -57,7 +57,10 @@ export const ClassroomPreview = ({
   step: number;
 }) => {
   const tone = data.color;
-  const liveOn = step === 2 && data.rosterMethod === 'code';
+  // Poll joined students whenever the teacher is using 'share a join code',
+  // regardless of which step they're currently on — once kids start showing
+  // up you want to see them from any tab, not just step 3.
+  const liveOn = data.rosterMethod === 'code';
 
   // Fall back to resolving the class by join_code if the reserve POST
   // hasn't populated reservedClassId yet (e.g. teacher isn't signed in

@@ -205,7 +205,6 @@ const Composer = ({
       }}>
         <div style={{ display: 'flex', gap: 4 }}>
           <IconBtn name="image"/>
-          <IconBtn name="sparkle"/>
         </div>
         <textarea
           value={text}

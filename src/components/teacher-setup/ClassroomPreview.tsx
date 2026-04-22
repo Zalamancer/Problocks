@@ -58,7 +58,25 @@ export const ClassroomPreview = ({
 }) => {
   const tone = data.color;
   const liveOn = step === 2 && data.rosterMethod === 'code';
-  const joined = useJoinedStudents(data.reservedClassId, liveOn);
+
+  // Fall back to resolving the class by join_code if the reserve POST
+  // hasn't populated reservedClassId yet (e.g. teacher isn't signed in
+  // with Google, so /api/classes 401'd). Keeps the right-rail poll in
+  // sync with the live join code whatever the auth state.
+  const [resolvedId, setResolvedId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!liveOn || data.reservedClassId) { setResolvedId(undefined); return; }
+    if (!data.joinCode) return;
+    let cancelled = false;
+    fetch(`/api/classes/lookup?code=${encodeURIComponent(data.joinCode)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j?.classId) setResolvedId(j.classId); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [liveOn, data.reservedClassId, data.joinCode]);
+
+  const pollClassId = data.reservedClassId ?? resolvedId;
+  const joined = useJoinedStudents(pollClassId, liveOn);
   const rosterCount: number | string = data.pastedNames && data.rosterMethod === 'paste'
     ? data.pastedNames.split(/\n|,/).map((s) => s.trim()).filter(Boolean).length
     : data.rosterMethod === 'code'  ? (joined.length > 0 ? joined.length : '?')

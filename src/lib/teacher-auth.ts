@@ -33,6 +33,38 @@ export async function isPlatformAdmin(): Promise<boolean> {
   return row?.role === 'admin';
 }
 
+/** True when `gameId`'s creator (games.user_id, a Supabase auth.uid()) is
+ *  enrolled in at least one class owned by `teacherGoogleSub`. Used by the
+ *  moderation PATCH routes to make sure a teacher can only approve /
+ *  reject / dismiss games that belong to their roster. Admins should
+ *  short-circuit to `true` before calling this. */
+export async function isGameInTeacherRoster(
+  gameId: string,
+  teacherGoogleSub: string
+): Promise<boolean> {
+  const admin = getAdminSupabase();
+  if (!admin) return false;
+
+  // Resolve the game's creator
+  const { data: game } = await admin
+    .from('games')
+    .select('user_id')
+    .eq('id', gameId)
+    .maybeSingle<{ user_id: string }>();
+
+  if (!game?.user_id) return false;
+
+  // Are they in any class I own?
+  const { data: match } = await admin
+    .from('students')
+    .select('id, classes!inner(teacher_google_sub)')
+    .eq('supabase_user_id', game.user_id)
+    .eq('classes.teacher_google_sub', teacherGoogleSub)
+    .limit(1);
+
+  return (match?.length ?? 0) > 0;
+}
+
 /** Upsert a teachers row from the NextAuth user profile + googleSub.
  *  Called from the NextAuth `events.signIn` callback so every sign-in
  *  refreshes the teacher's stored profile. Idempotent. */

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getAdminSupabase } from '@/lib/supabase-admin';
-import { isSignedInTeacher } from '@/lib/teacher-auth';
+import { getTeacherSession, isPlatformAdmin, isGameInTeacherRoster } from '@/lib/teacher-auth';
 
 // PATCH /api/moderation/games/:id
 // Body: { action: 'approve' | 'reject' }
@@ -15,7 +15,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!(await isSignedInTeacher())) {
+  const session = await getTeacherSession();
+  if (!session?.googleSub) {
     return NextResponse.json({ error: 'Teacher sign-in required' }, { status: 401 });
   }
 
@@ -24,6 +25,12 @@ export async function PATCH(
 
   if (!body || (body.action !== 'approve' && body.action !== 'reject')) {
     return NextResponse.json({ error: "Invalid action — expected 'approve' or 'reject'" }, { status: 400 });
+  }
+
+  // Admins can moderate anything; teachers only their own roster.
+  const admin = await isPlatformAdmin();
+  if (!admin && !(await isGameInTeacherRoster(id, session.googleSub))) {
+    return NextResponse.json({ error: 'Game is not in your roster' }, { status: 403 });
   }
 
   const client = getAdminSupabase() ?? (isSupabaseConfigured() ? supabase : null);

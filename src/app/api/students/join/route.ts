@@ -13,6 +13,7 @@ import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getServerUser } from '@/lib/supabase-server';
 
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured() || !supabase) {
@@ -44,6 +45,14 @@ export async function POST(req: NextRequest) {
   const [givenName, ...rest] = fullName.split(' ');
   const familyName = rest.join(' ') || null;
 
+  // If this visitor also has a Supabase auth session (student signed in via
+  // AuthScreen at /student), capture it so moderation can later join games
+  // (keyed on Supabase auth.uid()) back to the student's classes (keyed on
+  // google_sub). Anonymous visits still enrol — they just won't participate
+  // in class-scoped moderation until they link the accounts.
+  const supabaseUser = await getServerUser();
+  const supabaseUserId = supabaseUser.isAnonymous ? null : supabaseUser.id;
+
   const upsert = await supabase
     .from('students')
     .upsert(
@@ -55,6 +64,7 @@ export async function POST(req: NextRequest) {
         given_name: givenName ?? null,
         family_name: familyName,
         picture_url: user.image ?? null,
+        supabase_user_id: supabaseUserId,
       },
       { onConflict: 'class_id,google_sub' },
     )

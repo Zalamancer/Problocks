@@ -266,6 +266,7 @@ export const TeacherApp = () => {
         {view === 'student'     && detailStudent && (
           <StudentDetail
             s={detailStudent}
+            isReal={isReal}
             onBack={() => setView('students')}
             onViewAsStudent={goSelf}
           />

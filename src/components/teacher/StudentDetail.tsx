@@ -56,15 +56,16 @@ const TimelineRow = ({ e }: { e: ActivityEvent }) => {
 };
 
 export const StudentDetail = ({
-  s, onBack, onViewAsStudent,
+  s, isReal, onBack, onViewAsStudent,
 }: {
   s: Student;
+  isReal?: boolean;
   onBack: () => void;
   /** Open the "as student" view for THIS student (replaces the old top tab). */
   onViewAsStudent?: (s: Student) => void;
 }) => {
-  const activity = activityFor(s);
-  const trend = scoreTrendFor(s);
+  const activity = isReal ? [] : activityFor(s);
+  const trend = isReal ? [] : scoreTrendFor(s);
   const played    = activity.filter((a) => a.kind === 'played');
   const asked     = activity.filter((a) => a.kind === 'asked');
   const reviewed  = activity.filter((a) => a.kind === 'review');
@@ -117,11 +118,19 @@ export const StudentDetail = ({
         <Block tone="paper" style={{ padding: 18 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Score trend</div>
           <div style={{ fontSize: 11.5, color: 'var(--pbs-ink-muted)', marginBottom: 8 }}>Last 8 assignments</div>
-          <Sparkline data={trend} height={80}/>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6, color: 'var(--pbs-ink-muted)' }}>
-            <span className="pbs-mono">{Math.min(...trend).toFixed(0)}</span>
-            <span className="pbs-mono">{Math.max(...trend).toFixed(0)}</span>
-          </div>
+          {trend.length ? (
+            <>
+              <Sparkline data={trend} height={80}/>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6, color: 'var(--pbs-ink-muted)' }}>
+                <span className="pbs-mono">{Math.min(...trend).toFixed(0)}</span>
+                <span className="pbs-mono">{Math.max(...trend).toFixed(0)}</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ height: 80, display: 'grid', placeItems: 'center', fontSize: 12, color: 'var(--pbs-ink-muted)' }}>
+              No assignments yet.
+            </div>
+          )}
         </Block>
       </div>
 
@@ -156,7 +165,9 @@ export const StudentDetail = ({
         <Block tone="paper" style={{ padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Activity timeline</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {activity.map((e, i) => <TimelineRow key={i} e={e}/>)}
+            {activity.length
+              ? activity.map((e, i) => <TimelineRow key={i} e={e}/>)
+              : <div style={{ fontSize: 12, color: 'var(--pbs-ink-muted)', padding: '8px 2px' }}>No activity yet.</div>}
           </div>
         </Block>
 

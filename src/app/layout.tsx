@@ -5,6 +5,7 @@ import { QualityProvider } from "@/components/QualityProvider";
 import { DataSourceToggle } from "@/components/dev/DataSourceToggle";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { ClientAuthHydrator } from "@/components/ClientAuthHydrator";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -89,6 +90,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <QualityProvider />
+        <ClientAuthHydrator />
         {children}
         <ToastContainer />
         <ConfirmDialog />

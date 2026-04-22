@@ -5,6 +5,7 @@ import { Library, Gamepad2, Trash2, ExternalLink, RefreshCw } from 'lucide-react
 import { useStudio } from '@/store/studio-store';
 import { useToastStore } from '@/store/toast-store';
 import { useConfirmDialogStore } from '@/store/confirm-dialog-store';
+import { useCurrentUserId } from '@/store/auth-store';
 
 // "My Games" — the library panel for the studio left-rail.
 // Shows the union of (local drafts persisted to zustand/localStorage) and
@@ -32,8 +33,6 @@ interface MergedGame {
   location: 'local' | 'server' | 'both';
 }
 
-const CURRENT_USER_ID = 'local-user';
-
 export function LibraryPanel() {
   const games = useStudio((s) => s.games);
   const activeGameId = useStudio((s) => s.activeGameId);
@@ -44,6 +43,7 @@ export function LibraryPanel() {
   const openNewGameDialog = useStudio((s) => s.openNewGameDialog);
   const addToast = useToastStore((s) => s.addToast);
   const confirm = useConfirmDialogStore((s) => s.confirm);
+  const currentUserId = useCurrentUserId();
 
   const [serverGames, setServerGames] = useState<ServerGame[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ export function LibraryPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/games?userId=${encodeURIComponent(CURRENT_USER_ID)}`);
+      const res = await fetch(`/api/games?userId=${encodeURIComponent(currentUserId)}`);
       const json = await res.json() as { games?: ServerGame[]; error?: string };
       if (json.error) {
         addToast('error', `Library load failed: ${json.error}`);
@@ -64,7 +64,7 @@ export function LibraryPanel() {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, currentUserId]);
 
   useEffect(() => {
     void refresh();

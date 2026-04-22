@@ -26,6 +26,7 @@ import { useBuildingStore } from '@/store/building-store';
 import { useQualityStore } from '@/store/quality-store';
 import { useToastStore } from '@/store/toast-store';
 import { useCreditsStore } from '@/store/credits-store';
+import { useCurrentUserId } from '@/store/auth-store';
 import { PBButton, PBLogo, AvatarStack } from '@/components/ui';
 import { renderGameHtml, saveGame, saveAndPublish } from '@/lib/studio/save-game';
 
@@ -134,12 +135,14 @@ export function TopMenuBar() {
   const addToast = useToastStore((s) => s.addToast);
   const creditsBalance = useCreditsStore((s) => s.balance);
   const refreshCredits = useCreditsStore((s) => s.refreshBalance);
+  const currentUserId = useCurrentUserId();
 
   useEffect(() => {
-    // Seed the counter on mount so first-visit users see their 100-credit
-    // signup grant without having to trigger a generation first.
-    void refreshCredits();
-  }, [refreshCredits]);
+    // Seed the counter on mount (and whenever the user id changes from a
+    // sign-in / sign-out) so first-visit users see their 100-credit signup
+    // grant without having to trigger a generation first.
+    void refreshCredits(currentUserId);
+  }, [refreshCredits, currentUserId]);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
   const activeGameFirstFile = activeGame?.files ? Object.keys(activeGame.files)[0] : undefined;
 
@@ -161,7 +164,7 @@ export function TopMenuBar() {
     setSaving(true);
     try {
       const html = renderGameHtml(activeGame, gameQuality);
-      const res = await saveGame(activeGame, html);
+      const res = await saveGame(activeGame, html, currentUserId);
       if (res.error) {
         addToast('error', `Save failed: ${res.error}`);
       } else if (res.warning) {
@@ -174,7 +177,7 @@ export function TopMenuBar() {
     } finally {
       setSaving(false);
     }
-  }, [activeGame, gameQuality, saving, addToast]);
+  }, [activeGame, gameQuality, saving, addToast, currentUserId]);
 
   const handleShare = useCallback(async () => {
     if (!activeGame) {
@@ -185,7 +188,7 @@ export function TopMenuBar() {
     setSharing(true);
     try {
       const html = renderGameHtml(activeGame, gameQuality);
-      const res = await saveAndPublish(activeGame, html);
+      const res = await saveAndPublish(activeGame, html, currentUserId);
       if ('error' in res) {
         addToast('error', `Share failed: ${res.error}`);
         return;
@@ -201,7 +204,7 @@ export function TopMenuBar() {
     } finally {
       setSharing(false);
     }
-  }, [activeGame, gameQuality, sharing, addToast]);
+  }, [activeGame, gameQuality, sharing, addToast, currentUserId]);
 
   // Close menu on outside click / escape
   useEffect(() => {

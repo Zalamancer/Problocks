@@ -4,6 +4,7 @@ import { Terminal as TerminalIcon, X, Maximize2, Minimize2, Send, Copy, Check } 
 import { getGameHtml } from '@/lib/game-engine';
 import { useQualityStore } from '@/store/quality-store';
 import { useCreditsStore } from '@/store/credits-store';
+import { useCurrentUserId } from '@/store/auth-store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -46,6 +47,7 @@ export function StudioTerminal({
   const hasShownResume = useRef(false);
   const receivedGameEventRef = useRef(false);
   const gameQuality = useQualityStore((s) => s.settings);
+  const currentUserId = useCurrentUserId();
 
   // Show context-appropriate welcome message based on active game
   useEffect(() => {
@@ -146,7 +148,7 @@ export function StudioTerminal({
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, userId: 'local-user' }),
+        body: JSON.stringify({ messages: newMessages, userId: currentUserId }),
         signal: abortRef.current.signal,
       });
 
@@ -164,7 +166,7 @@ export function StudioTerminal({
             { type: 'system', text: '' },
           ]);
           setIsStreaming(false);
-          void useCreditsStore.getState().refreshBalance();
+          void useCreditsStore.getState().refreshBalance(currentUserId);
           return;
         }
         const errorText = await res.text();
@@ -344,9 +346,9 @@ export function StudioTerminal({
       abortRef.current = null;
       // Any generation (success or failure) may have moved the balance — let
       // the TopMenuBar pill reflect the new number without a manual refresh.
-      void useCreditsStore.getState().refreshBalance();
+      void useCreditsStore.getState().refreshBalance(currentUserId);
     }
-  }, [input, isStreaming, messages, onGameGenerated]);
+  }, [input, isStreaming, messages, onGameGenerated, currentUserId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

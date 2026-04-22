@@ -5,8 +5,11 @@ import type { BundleOptions } from '@/lib/game-engine/bundler';
 // Pure helpers for the Save / Share flow in the studio. Kept separate from
 // TopMenuBar so the same logic can be reused from a future keyboard-shortcut
 // handler or the My Games panel (duplicate on write).
-
-const CURRENT_USER_ID = 'local-user'; // Sprint 1 — see SaveGame notes in the route.
+//
+// Every helper takes an explicit userId so callers thread the authenticated
+// id from useAuthStore in. The server ignores body.userId when a real
+// Supabase session is attached, but passing it still matters for anonymous
+// dev flows that reuse 'local-user'.
 
 interface SaveResponse {
   id: string;
@@ -34,13 +37,17 @@ export function renderGameHtml(
 
 /** Write the active game to the server. Uses upsert semantics — calling twice
  *  with the same id updates the existing row. */
-export async function saveGame(game: GeneratedGame, html: string): Promise<SaveResponse> {
+export async function saveGame(
+  game: GeneratedGame,
+  html: string,
+  userId: string
+): Promise<SaveResponse> {
   const res = await fetch('/api/games/save', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       id: game.id,
-      userId: CURRENT_USER_ID,
+      userId,
       name: game.name,
       prompt: game.prompt || '(no prompt)',
       html,
@@ -65,9 +72,10 @@ export async function publishGame(gameId: string): Promise<PublishResponse> {
 /** End-to-end Share: save, publish, build a copy-ready /play/<id> URL. */
 export async function saveAndPublish(
   game: GeneratedGame,
-  html: string
+  html: string,
+  userId: string
 ): Promise<{ id: string; playUrl: string } | { error: string }> {
-  const saved = await saveGame(game, html);
+  const saved = await saveGame(game, html, userId);
   if (saved.error) return { error: saved.error };
   if (!saved.id) return { error: 'Save returned no game id' };
 

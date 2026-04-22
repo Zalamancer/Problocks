@@ -18,6 +18,7 @@ import {
   type Student,
 } from './sample-data';
 import { useTeacherData } from './teacher-data-context';
+import { ClassroomImported } from './ClassroomImported';
 
 const reteachBtn: React.CSSProperties = {
   padding: '6px 12px', borderRadius: 999,
@@ -83,6 +84,11 @@ export const Overview = ({
             >{joinUrl}</div>
           )}
         </Block>
+
+        {/* If this class is linked to a Google Classroom course, surface the
+            assignments + announcements here so the teacher sees their existing
+            content didn't get lost during Playdemy setup. */}
+        <ClassroomImported/>
       </div>
     );
   }

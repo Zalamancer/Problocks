@@ -8,6 +8,7 @@ import { CardboardHead } from './CardboardHead';
 import { type Assignment, type Student } from './sample-data';
 import { backBtn, kickerSty, MiniKpi } from './shared';
 import { useTeacherData } from './teacher-data-context';
+import { ClassroomImported } from './ClassroomImported';
 
 export const AssignmentsList = ({
   onAssignment, onNew, drafts = [],
@@ -18,20 +19,28 @@ export const AssignmentsList = ({
   // so newly-created cards appear at the top. Drafts render a "Draft" pill.
   drafts?: Assignment[];
 }) => {
-  const { assignments, isReal } = useTeacherData();
+  const { assignments, isReal, classroomCourseId, classroomAssignments } = useTeacherData();
   const all = [...drafts, ...assignments];
   if (isReal && all.length === 0) {
+    // Empty Playdemy-side assignment list. If the class is linked to Google
+    // Classroom and the teacher has coursework there, still show it via
+    // ClassroomImported — answers the "it didn't pull in my class content"
+    // complaint. Otherwise, fall back to the original empty-state card.
+    const hasClassroomContent = classroomCourseId && classroomAssignments.length > 0;
     return (
       <div className="pbs-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
           <div className="pbs-mono" style={kickerSty}>ASSIGNMENTS</div>
           <h1 style={{ margin: '6px 0 0', fontSize: 'clamp(28px, 3.4vw, 42px)', fontWeight: 700, letterSpacing: '-0.025em' }}>
-            No assignments yet.
+            {hasClassroomContent ? 'Imported from Google Classroom' : 'No assignments yet.'}
           </h1>
           <p style={{ margin: '10px 0 0', fontSize: 14.5, color: 'var(--pbs-ink-soft)', maxWidth: 540 }}>
-            Assignments you create from here will sync to Google Classroom.
+            {hasClassroomContent
+              ? 'These are your existing Google Classroom assignments. Create new ones in Playdemy and they\u2019ll sync back.'
+              : 'Assignments you create from here will sync to Google Classroom.'}
           </p>
         </div>
+        <ClassroomImported/>
         <div>
           <Chunky tone="butter" icon="plus" onClick={onNew}>New assignment</Chunky>
         </div>
@@ -49,6 +58,10 @@ export const AssignmentsList = ({
       </div>
       <Chunky tone="butter" icon="plus" onClick={onNew}>New assignment</Chunky>
     </div>
+
+    <ClassroomImported/>
+
+    <div style={{ height: 14 }}/>
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
       {all.map((a) => (

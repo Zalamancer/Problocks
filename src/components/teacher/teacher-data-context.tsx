@@ -19,6 +19,12 @@ import {
   type Assignment, type ClassRecord, type Mastery, type Student, type TeacherTone,
 } from './sample-data';
 import type { AvatarOutfit } from '@/components/student/RobloxAvatar';
+import type {
+  ClassroomCourseWork,
+  ClassroomAnnouncement,
+  ListCourseWorkResponse,
+  ListAnnouncementsResponse,
+} from '@/lib/classroom-api';
 
 const DEFAULT_TONES: TeacherTone[] = ['butter', 'mint', 'coral', 'sky', 'grape', 'pink'];
 const DEFAULT_EMOJIS = ['🐰','🦊','🦋','🐝','🦝','🦉','🐢','🐱','🐙','🐸','🐵','🦄'];
@@ -75,6 +81,15 @@ export type TeacherData = {
   loading: boolean;
   error: string | null;
   refresh: () => void;
+  // Google Classroom content, when this class is linked to a Classroom course
+  // (classes.classroom_course_id). These come straight from the Classroom API
+  // on every dashboard load, so they stay in sync with what the teacher sees
+  // in Classroom itself (no copy stored in Supabase).
+  classroomCourseId: string | null;
+  classroomAssignments: ClassroomCourseWork[];
+  classroomAnnouncements: ClassroomAnnouncement[];
+  classroomLoading: boolean;
+  classroomError: string | null;
 };
 
 const TeacherDataCtx = createContext<TeacherData | null>(null);
@@ -91,6 +106,11 @@ export const TeacherDataProvider = ({ children }: { children: React.ReactNode })
 
   const [realClass, setRealClass] = useState<ClassRecord | null>(null);
   const [realStudents, setRealStudents] = useState<Student[]>([]);
+  const [classroomCourseId, setClassroomCourseId] = useState<string | null>(null);
+  const [classroomAssignments, setClassroomAssignments] = useState<ClassroomCourseWork[]>([]);
+  const [classroomAnnouncements, setClassroomAnnouncements] = useState<ClassroomAnnouncement[]>([]);
+  const [classroomLoading, setClassroomLoading] = useState(false);
+  const [classroomError, setClassroomError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -129,6 +149,7 @@ export const TeacherDataProvider = ({ children }: { children: React.ReactNode })
           period: '—',
         });
         setRealStudents(studentRows.map(realToStudent));
+        setClassroomCourseId(classData.classroom_course_id ?? null);
       })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Fetch failed'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -136,21 +157,69 @@ export const TeacherDataProvider = ({ children }: { children: React.ReactNode })
     return () => { cancelled = true; };
   }, [classId, tick]);
 
+  // When the class is linked to a Google Classroom course, pull the current
+  // coursework + announcements on every dashboard load. We go through our
+  // /api/classroom/* proxies so the access token stays server-side. Filtered
+  // to PUBLISHED only — drafts and deleted entries shouldn't leak into the
+  // teacher dashboard and confuse the assignment counts.
+  useEffect(() => {
+    if (!classroomCourseId) {
+      setClassroomAssignments([]);
+      setClassroomAnnouncements([]);
+      setClassroomError(null);
+      return;
+    }
+    let cancelled = false;
+    setClassroomLoading(true);
+    setClassroomError(null);
+
+    const coursework = fetch(
+      `/api/classroom/courses/${classroomCourseId}/coursework?courseWorkStates=PUBLISHED&pageSize=100&orderBy=updateTime desc`,
+    ).then((r) => r.json().then((j: ListCourseWorkResponse & { error?: string }) => ({ ok: r.ok, j })));
+    const announcements = fetch(
+      `/api/classroom/courses/${classroomCourseId}/announcements?announcementStates=PUBLISHED&pageSize=50`,
+    ).then((r) => r.json().then((j: ListAnnouncementsResponse & { error?: string }) => ({ ok: r.ok, j })));
+
+    Promise.all([coursework, announcements])
+      .then(([cw, an]) => {
+        if (cancelled) return;
+        if (!cw.ok) {
+          setClassroomError(cw.j?.error ?? 'Failed to load Classroom content');
+          return;
+        }
+        setClassroomAssignments(cw.j.courseWork ?? []);
+        setClassroomAnnouncements(an.ok ? (an.j.announcements ?? []) : []);
+      })
+      .catch((e) => {
+        if (!cancelled) setClassroomError(e instanceof Error ? e.message : 'Classroom fetch failed');
+      })
+      .finally(() => { if (!cancelled) setClassroomLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [classroomCourseId, tick]);
+
   const value = useMemo<TeacherData>(() => {
     if (classId && realClass) {
       return {
         classRecord: realClass,
         classes: [realClass],
         students: realStudents,
-        assignments: [],   // no assignments schema yet
+        assignments: [],   // no Playdemy-native assignments schema yet — classroomAssignments below carries the imported Google Classroom items
         isReal: true,
         classId,
         loading,
         error,
         refresh,
+        classroomCourseId,
+        classroomAssignments,
+        classroomAnnouncements,
+        classroomLoading,
+        classroomError,
       };
     }
-    // Demo mode — whole mock pack.
+    // Demo mode — whole mock pack. Classroom fields stay empty so demo users
+    // don't see a spurious "From Google Classroom" card backed by real API
+    // calls they never authorised.
     return {
       classRecord: CLASSES[0],
       classes: CLASSES,
@@ -161,8 +230,17 @@ export const TeacherDataProvider = ({ children }: { children: React.ReactNode })
       loading,
       error,
       refresh,
+      classroomCourseId: null,
+      classroomAssignments: [],
+      classroomAnnouncements: [],
+      classroomLoading: false,
+      classroomError: null,
     };
-  }, [classId, realClass, realStudents, loading, error, refresh]);
+  }, [
+    classId, realClass, realStudents, loading, error, refresh,
+    classroomCourseId, classroomAssignments, classroomAnnouncements,
+    classroomLoading, classroomError,
+  ]);
 
   return <TeacherDataCtx.Provider value={value}>{children}</TeacherDataCtx.Provider>;
 };

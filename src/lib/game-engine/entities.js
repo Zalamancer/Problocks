@@ -1,5 +1,5 @@
 /**
- * Problocks Entity System
+ * Playdemy Entity System
  * Manages spawning, destroying, and querying game entities.
  * Each entity is a plain object with a `type`, position, and lifecycle hooks.
  */

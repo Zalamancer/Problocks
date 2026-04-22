@@ -19,7 +19,7 @@ export default async function DataRequestsAdminPage() {
         <div style={forbiddenCard}>
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 8px' }}>Admins only</h1>
           <p style={{ fontSize: 14, color: 'var(--pb-ink-muted, #6a6458)', margin: '0 0 16px' }}>
-            This dashboard is for Problocks platform staff. Your teacher
+            This dashboard is for Playdemy platform staff. Your teacher
             account can still manage your own classes from{' '}
             <Link href="/teacher" style={{ color: 'inherit', fontWeight: 700 }}>/teacher</Link>.
           </p>

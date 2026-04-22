@@ -1,5 +1,5 @@
 /**
- * Problocks Audio System
+ * Playdemy Audio System
  * Web Audio API synth sounds + audio file playback.
  */
 export function createAudio() {

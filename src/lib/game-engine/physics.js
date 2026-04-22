@@ -1,5 +1,5 @@
 /**
- * Problocks Physics System
+ * Playdemy Physics System
  * Simple AABB collision detection and basic movement helpers.
  */
 export function createPhysics() {

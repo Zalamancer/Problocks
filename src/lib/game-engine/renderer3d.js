@@ -1,5 +1,5 @@
 /**
- * Problocks 3D Renderer
+ * Playdemy 3D Renderer
  * Sets up Three.js scene, camera, lights, and provides helpers.
  * Uses Three.js r128 loaded via CDN (available as global `THREE`).
  */

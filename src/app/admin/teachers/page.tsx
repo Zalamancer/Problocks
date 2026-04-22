@@ -20,7 +20,7 @@ export default async function TeachersAdminPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 8px' }}>Admins only</h1>
           <p style={{ fontSize: 14, color: 'var(--pb-ink-muted, #6a6458)', margin: '0 0 12px' }}>
             Signed in as {session.user?.email ?? 'unknown'}. This page is for
-            Problocks platform staff.
+            Playdemy platform staff.
           </p>
           <Link href="/teacher" style={{ color: 'inherit', fontWeight: 700, fontSize: 13 }}>
             ← Teacher home

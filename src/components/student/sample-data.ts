@@ -1,4 +1,4 @@
-// Sample data for the Problocks Student demo. Ported from the Claude
+// Sample data for the Playdemy Student demo. Ported from the Claude
 // Design bundle (problocks/project/pb_student/dashboard.jsx).
 
 export type ToneTone = 'butter' | 'mint' | 'coral' | 'sky' | 'grape' | 'pink';

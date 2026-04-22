@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from 'react';
 
 // Pill — small rounded label used throughout the quiz UI (both the
 // teacher's dashboard and the student's solo screens). Mirrors the
-// Design-bundle "Pill" atom, mapped onto Problocks' --pb-* tokens so
+// Design-bundle "Pill" atom, mapped onto Playdemy' --pb-* tokens so
 // it themes correctly in dark / light / cream modes.
 //
 // Lives under src/components/quiz/ (not studio/) because the teacher

@@ -11,7 +11,7 @@
 // prepends the card to the list; drafts get a "Draft" pill in the grid.
 //
 // CSS var names are rewritten from the design's --butter/--line-2/--ink…
-// to Problocks' --pbs-butter / --pbs-line-2 / --pbs-ink tokens so the file
+// to Playdemy' --pbs-butter / --pbs-line-2 / --pbs-ink tokens so the file
 // drops into the existing teacher dashboard styling.
 'use client';
 

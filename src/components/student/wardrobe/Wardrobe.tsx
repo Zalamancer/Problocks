@@ -1,4 +1,4 @@
-// Full Problocks wardrobe page — Three.js avatar stage, 12-category picker,
+// Full Playdemy wardrobe page — Three.js avatar stage, 12-category picker,
 // filters (search / theme / rarity / owned-only), economy, presets, randomize.
 'use client';
 

@@ -1,5 +1,5 @@
 /**
- * Problocks Scene Manager
+ * Playdemy Scene Manager
  * Manages scene transitions (title → gameplay → gameover).
  * Each scene has optional enter/exit/update hooks provided by game scripts.
  */

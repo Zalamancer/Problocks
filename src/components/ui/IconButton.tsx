@@ -18,7 +18,7 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 /**
  * Icon-only button — canonical chunky-pastel build.
  *
- * Variant semantics on Problocks Studio paper surfaces:
+ * Variant semantics on Playdemy Studio paper surfaces:
  *   - solid   = paper tile with 1.5px ink border + 0 2px 0 ink stacked shadow
  *               (the "raised" tile used for primary toolbar slots)
  *   - ghost   = transparent, picks up cream-2 + 1.5px line-2 on hover

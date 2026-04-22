@@ -99,7 +99,7 @@ export function BlocksGameShell({
   >(null);
 
   // Add ?embed=1 to the game URL so it hides its in-iframe Parts/Scheme
-  // docks — the outer Problocks panels own that chrome now. Purely
+  // docks — the outer Playdemy panels own that chrome now. Purely
   // string-based so it's SSR-safe (no window reference).
   const embeddedGameSrc = useMemo(() => {
     const [pathAndQuery, hash = ''] = gameSrc.split('#');

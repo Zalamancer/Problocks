@@ -1,5 +1,5 @@
 /**
- * Problocks UDim2 — responsive positioning primitives.
+ * Playdemy UDim2 — responsive positioning primitives.
  *
  * Ported from Roblox's UDim / UDim2 model. Each axis is scale*parent + offset.
  * Lets AI-generated games position HUD elements that stay correct at any

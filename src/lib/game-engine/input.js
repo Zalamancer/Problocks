@@ -1,5 +1,5 @@
 /**
- * Problocks Input System
+ * Playdemy Input System
  * Tracks keyboard, mouse, and touch state with frame-accurate "just pressed" detection.
  */
 export function createInput(canvas) {

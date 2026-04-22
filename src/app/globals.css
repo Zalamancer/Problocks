@@ -44,7 +44,7 @@
   --glass-bg: rgba(24, 24, 27, 0.65);
   --glass-border: rgba(255, 255, 255, 0.05);
 
-  /* Problocks Studio design-bundle tone palette. Fallback values for dark
+  /* Playdemy Studio design-bundle tone palette. Fallback values for dark
      and light themes — cream overrides with the full-saturation design
      bundle values. Used by ported components (ConnectorsPanel, Pill, PBButton).
      "Ink" is the matching dark companion used for borders + text on that tone. */
@@ -429,7 +429,7 @@ body {
 .light .to-zinc-950      { --tw-gradient-to: rgb(var(--t-white)) !important; }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Cream Theme — "Problocks" playful light theme from the design mock.
+   Cream Theme — "Playdemy" playful light theme from the design mock.
    Layered on top of .light (applied together by useThemeEffect). The .light
    rules above already re-map zinc/white to --t-* palette vars; .cream just
    swaps those vars to warm cream tones and overrides a few identity pieces
@@ -502,7 +502,7 @@ body {
   --font-geist-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-geist-mono: var(--font-dm-mono), ui-monospace, monospace;
 
-  /* Six-tone pastel palette ported verbatim from the Problocks Studio design
+  /* Six-tone pastel palette ported verbatim from the Playdemy Studio design
      bundle (project/studio/atoms.jsx NODE_TONES + primitives.jsx Pill tones).
      Each tone pairs a pastel bg with a dark "ink" counterpart for border+text
      so Pill, PBButton, and ConnectorRow can render the chunky stacked-paper

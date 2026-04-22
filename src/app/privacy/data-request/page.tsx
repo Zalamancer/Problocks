@@ -3,7 +3,7 @@ import { DataRequestForm } from './DataRequestForm';
 
 export const metadata = {
   title: 'Data request',
-  description: 'Request deletion, export, or correction of a child\'s Problocks / Playdemy data.',
+  description: 'Request deletion, export, or correction of a child\'s Playdemy data.',
 };
 
 export default function DataRequestPage() {

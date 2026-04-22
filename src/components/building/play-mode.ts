@@ -1,5 +1,5 @@
 /**
- * Roblox-style play-mode controller for the Problocks studio.
+ * Roblox-style play-mode controller for the Playdemy studio.
  *
  * Spawns a capsule character into the existing BuildingCanvas scene and
  * handles WASD + jump with AABB collision against floors, walls, and parts.

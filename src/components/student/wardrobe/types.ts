@@ -1,4 +1,4 @@
-// Shared types for the Problocks wardrobe: category taxonomy, rarity
+// Shared types for the Playdemy wardrobe: category taxonomy, rarity
 // scale, themes, emote list, outfit shape.
 import type * as THREE from 'three';
 

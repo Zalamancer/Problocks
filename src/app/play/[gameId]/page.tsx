@@ -11,7 +11,7 @@ import Link from 'next/link';
 //
 // The HTML is stored inline in `games.html_content` and rendered into an
 // iframe via `srcDoc` with a restrictive sandbox so a misbehaving game can't
-// touch Problocks cookies / localStorage / parent DOM.
+// touch Playdemy cookies / localStorage / parent DOM.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,7 +74,7 @@ export default async function PlayGamePage({
           href="/"
           style={{ color: 'inherit', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}
         >
-          ← Problocks
+          ← Playdemy
         </Link>
         <div style={{ fontSize: 14, fontWeight: 700, flex: 1, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {data.name}

@@ -35,7 +35,7 @@ export default function GlobalError({
         >
           <div style={{ fontSize: 56 }}>⚠️</div>
           <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, lineHeight: 1.1 }}>
-            Problocks hit a problem
+            Playdemy hit a problem
           </h1>
           <p style={{ fontSize: 14, color: '#6a6458', maxWidth: 460, margin: 0, lineHeight: 1.55 }}>
             We&apos;ll be back shortly. If this persists, email{' '}

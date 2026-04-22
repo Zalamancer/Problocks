@@ -1,7 +1,7 @@
 /* Scoped styles for the ProBlocks landing page.
    All rules hang off `.pbs-root` so nothing leaks into /studio or the
    rest of the app's dark theme. Ported from the Claude Design bundle
-   (problocks/project/Problocks Website.html). */
+   (problocks/project/Playdemy Website.html). */
 
 .pbs-root {
   /* Base ink + paper */

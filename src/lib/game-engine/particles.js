@@ -1,5 +1,5 @@
 /**
- * Problocks Particle System
+ * Playdemy Particle System
  * Lightweight particle emitter for visual effects.
  */
 export function createParticles() {

@@ -22,7 +22,7 @@ export async function POST() {
 
   const supabaseUser = await getServerUser();
   if (supabaseUser.isAnonymous) {
-    return NextResponse.json({ error: 'Problocks account sign-in required' }, { status: 401 });
+    return NextResponse.json({ error: 'Playdemy account sign-in required' }, { status: 401 });
   }
 
   const admin = getAdminSupabase();

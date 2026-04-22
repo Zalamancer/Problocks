@@ -3,7 +3,7 @@
 // dependency for a handful of fetch calls.
 //
 // Env: RESEND_API_KEY (from https://resend.com → API Keys)
-//      EMAIL_FROM     (e.g. "Problocks <noreply@problocks.app>")
+//      EMAIL_FROM     (e.g. "Playdemy <noreply@playdemy.app>")
 //
 // When either env var is missing the helper silently logs and returns a
 // "skipped" result so dev flows don't blow up. Production MUST set both.
@@ -113,11 +113,11 @@ If you didn't file this request, please reply immediately so we can investigate.
 
 Reference: ${request.id}
 
-— The Problocks team`;
+— The Playdemy team`;
 
   return {
     to: request.requester_email,
-    subject: `Your Problocks ${kindLabel} request — ${status.replace('_', ' ')}`,
+    subject: `Your Playdemy ${kindLabel} request — ${status.replace('_', ' ')}`,
     text,
     replyTo: process.env.EMAIL_REPLY_TO,
   };

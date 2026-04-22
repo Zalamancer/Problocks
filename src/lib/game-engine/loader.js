@@ -1,5 +1,5 @@
 /**
- * Problocks Asset Loader
+ * Playdemy Asset Loader
  * Loads glTF models with caching. Requires THREE.GLTFLoader from CDN.
  */
 export function createLoader() {

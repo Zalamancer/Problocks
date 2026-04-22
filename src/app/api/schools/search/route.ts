@@ -98,7 +98,7 @@ async function searchNominatim(q: string, country?: string): Promise<Normalized[
     const res = await fetch(url.toString(), {
       headers: {
         Accept: 'application/json',
-        'User-Agent': 'Problocks/1.0 (https://problocks.app; schools-autocomplete)',
+        'User-Agent': 'Playdemy/1.0 (https://playdemy.app; schools-autocomplete)',
       },
       next: { revalidate: 300 },
     });

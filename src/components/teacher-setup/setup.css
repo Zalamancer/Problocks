@@ -36,6 +36,21 @@
   .pbs-root .pb-setup-grid { grid-template-columns: 1fr; }
 }
 
+/* Google Classroom "picker + roster preview" split on the Roster step.
+   Two equal(ish) columns when we have enough width in the center column,
+   stacked otherwise. `align-items: stretch` so both cards share the same
+   height (the roster card plays the same "right-rail companion" role as
+   DraftCard does on the Unit step). */
+.pbs-root .pb-setup-roster-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 900px) {
+  .pbs-root .pb-setup-roster-split { grid-template-columns: 1fr; }
+}
+
 .pbs-root input:focus,
 .pbs-root textarea:focus,
 .pbs-root select:focus { outline: none; }

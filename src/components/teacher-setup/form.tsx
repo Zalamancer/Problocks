@@ -70,7 +70,7 @@ export const Select = ({
 }: {
   value: string;
   onChange: (e: { target: { value: string } }) => void;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; shortLabel?: string }>;
   style?: React.CSSProperties;
 }) => {
   const [open, setOpen] = React.useState(false);
@@ -143,7 +143,7 @@ export const Select = ({
         }}
       >
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {current?.label}
+          {current?.shortLabel ?? current?.label}
         </span>
         <Icon
           name="chevron" size={14} stroke={2.4}

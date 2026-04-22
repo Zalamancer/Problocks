@@ -23,7 +23,8 @@ interface AdminStatus {
   };
   lastPurge: {
     at: string | null;
-    metadata: unknown;
+    results: Record<string, number | string> | null;
+    error: string | null;
   };
   recentAdminActions: Array<{
     id: string;
@@ -119,6 +120,7 @@ export function StatusView() {
               <RetentionTile label="Oldest rate-limit event" iso={status.retention.oldestRateLimitEvent} softCap="1 hour" />
               <RetentionTile label="Oldest play event" iso={status.retention.oldestPlayEvent} softCap="90 days" />
             </div>
+            <LastPurgeTile lastPurge={status.lastPurge} />
           </Section>
 
           <Section title="Recent admin actions">
@@ -210,6 +212,54 @@ function QueueTile({ icon: Icon, label, count, href }: { icon: React.ElementType
         color: count > 0 ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
       }}>{count}</div>
     </a>
+  );
+}
+
+function LastPurgeTile({ lastPurge }: { lastPurge: AdminStatus['lastPurge'] }) {
+  const when = lastPurge.at ? ageFromNow(lastPurge.at) : 'never — cron not configured?';
+  const results = lastPurge.results ?? {};
+  const entries = Object.entries(results);
+  return (
+    <div style={{
+      marginTop: 10,
+      padding: 12, borderRadius: 12,
+      background: lastPurge.error ? 'var(--pb-coral-2, #fddad5)' : 'var(--pb-paper)',
+      border: `1.5px solid ${lastPurge.error ? 'var(--pb-coral-ink, #a03a2e)' : 'var(--pb-line-2)'}`,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+        Last purge
+        <span style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--pb-ink-muted)' }}>{when}</span>
+      </div>
+      {lastPurge.error && (
+        <div style={{ fontSize: 12, color: 'var(--pb-coral-ink, #a03a2e)', marginTop: 4 }}>
+          {lastPurge.error}
+        </div>
+      )}
+      {entries.length > 0 && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 6,
+          marginTop: 8,
+        }}>
+          {entries.map(([bucket, n]) => (
+            <span
+              key={bucket}
+              style={{
+                padding: '2px 8px', borderRadius: 999,
+                background: typeof n === 'string'
+                  ? 'var(--pb-coral-2, #fddad5)'
+                  : 'var(--pb-cream-2, #fff5df)',
+                color: typeof n === 'string'
+                  ? 'var(--pb-coral-ink, #a03a2e)'
+                  : 'var(--pb-ink)',
+                fontSize: 11, fontWeight: 700,
+              }}
+            >
+              {bucket}: {typeof n === 'number' ? n.toLocaleString() : 'error'}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

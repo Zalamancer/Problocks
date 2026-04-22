@@ -27,7 +27,8 @@ interface AdminStatus {
   };
   lastPurge: {
     at: string | null;
-    metadata: unknown;
+    results: unknown;
+    error: string | null;
   };
   recentAdminActions: Array<{
     id: string;
@@ -76,11 +77,12 @@ export async function GET() {
       .order('created_at', { ascending: true }).limit(1).maybeSingle(),
     admin.from('play_events').select('created_at')
       .order('created_at', { ascending: true }).limit(1).maybeSingle(),
-    // Not strictly a "last purge" — we log purges to console today, not a
-    // durable table. Using the most recent admin_audit_log entry as a
-    // liveness signal instead. Sprint 10 can add a purges table.
-    admin.from('admin_audit_log').select('created_at, metadata')
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    // Sprint 10.2 — purge_runs table carries the actual start/finish
+    // timestamps + per-bucket counts. Much cleaner liveness signal than
+    // the old "most recent admin_audit_log entry" proxy.
+    admin.from('purge_runs')
+      .select('finished_at, started_at, results, error')
+      .order('started_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const recent = await admin
@@ -103,8 +105,11 @@ export async function GET() {
       oldestPlayEvent: (oldestPlay.data as { created_at: string } | null)?.created_at ?? null,
     },
     lastPurge: {
-      at: (lastPurge.data as { created_at: string } | null)?.created_at ?? null,
-      metadata: (lastPurge.data as { metadata: unknown } | null)?.metadata ?? null,
+      at: (lastPurge.data as { finished_at?: string; started_at?: string } | null)?.finished_at
+        ?? (lastPurge.data as { started_at?: string } | null)?.started_at
+        ?? null,
+      results: (lastPurge.data as { results: unknown } | null)?.results ?? null,
+      error: (lastPurge.data as { error: string | null } | null)?.error ?? null,
     },
     recentAdminActions: (recent.data ?? []) as AdminStatus['recentAdminActions'],
   };

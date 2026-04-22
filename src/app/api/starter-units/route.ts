@@ -15,7 +15,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminSupabase, getServerReadClient } from '@/lib/supabase-admin';
 
 export type StarterUnitRow = {
   id: string;
@@ -31,7 +31,8 @@ export type StarterUnitRow = {
 };
 
 export async function GET(req: NextRequest) {
-  if (!isSupabaseConfigured() || !supabase) {
+  const client = getServerReadClient();
+  if (!client) {
     return NextResponse.json({ units: [] as StarterUnitRow[] });
   }
   const { searchParams } = new URL(req.url);
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ units: [] as StarterUnitRow[] });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('starter_units')
     .select('id, subject, grade, title, weeks, blurb, bullets, tone, icon, usage_count')
     .eq('subject', subject)
@@ -74,7 +75,10 @@ type SaveBody = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!isSupabaseConfigured() || !supabase) {
+  // Writes go through the admin client so migration 019's `using (false)`
+  // UPDATE policy doesn't block the usage_count bump.
+  const admin = getAdminSupabase() ?? getServerReadClient();
+  if (!admin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
   const session = await getServerSession(authOptions);
@@ -84,7 +88,7 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ error: 'Bad body' }, { status: 400 });
 
   if (body.existingId) {
-    const { data: row, error: readErr } = await supabase
+    const { data: row, error: readErr } = await admin
       .from('starter_units')
       .select('usage_count')
       .eq('id', body.existingId)
@@ -92,7 +96,7 @@ export async function POST(req: NextRequest) {
     if (readErr || !row) {
       return NextResponse.json({ error: readErr?.message || 'Not found' }, { status: 404 });
     }
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('starter_units')
       .update({ usage_count: (row.usage_count ?? 0) + 1, updated_at: new Date().toISOString() })
       .eq('id', body.existingId)
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required unit fields' }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('starter_units')
     .insert({
       subject: u.subject,

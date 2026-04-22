@@ -1,5 +1,6 @@
 import { getServerSession, type Session } from 'next-auth';
 import { authOptions } from './auth';
+import { getAdminSupabase } from './supabase-admin';
 
 // Thin wrapper around NextAuth's getServerSession so teacher-facing routes
 // and pages can check "is a teacher logged in?" with one import. The studio
@@ -21,4 +22,66 @@ export async function getTeacherSession(): Promise<Session | null> {
 export async function isSignedInTeacher(): Promise<boolean> {
   const session = await getTeacherSession();
   return !!session?.user;
+}
+
+/** Upsert a teachers row from the NextAuth user profile + googleSub.
+ *  Called from the NextAuth `events.signIn` callback so every sign-in
+ *  refreshes the teacher's stored profile. Idempotent. */
+export async function upsertTeacherRow(profile: {
+  googleSub: string;
+  email?: string | null;
+  fullName?: string | null;
+  givenName?: string | null;
+  familyName?: string | null;
+  pictureUrl?: string | null;
+}): Promise<void> {
+  const admin = getAdminSupabase();
+  if (!admin) {
+    console.warn('upsertTeacherRow skipped: SUPABASE_SERVICE_ROLE_KEY not set');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from('teachers')
+    .upsert(
+      {
+        google_sub: profile.googleSub,
+        email: profile.email ?? null,
+        full_name: profile.fullName ?? null,
+        given_name: profile.givenName ?? null,
+        family_name: profile.familyName ?? null,
+        picture_url: profile.pictureUrl ?? null,
+        last_seen_at: now,
+      },
+      { onConflict: 'google_sub' }
+    );
+  if (error) {
+    console.error('upsertTeacherRow error:', error);
+  }
+}
+
+/** Resolve the current teacher's row from the database. Returns null when
+ *  there's no session, admin client isn't configured, or the row doesn't
+ *  exist (first sign-in — the events.signIn callback creates it). */
+export async function getTeacherRow(): Promise<{
+  google_sub: string;
+  email: string | null;
+  full_name: string | null;
+  picture_url: string | null;
+  role: 'teacher' | 'admin';
+} | null> {
+  const session = await getTeacherSession();
+  if (!session?.googleSub) return null;
+
+  const admin = getAdminSupabase();
+  if (!admin) return null;
+
+  const { data } = await admin
+    .from('teachers')
+    .select('google_sub, email, full_name, picture_url, role')
+    .eq('google_sub', session.googleSub)
+    .maybeSingle<{ google_sub: string; email: string | null; full_name: string | null; picture_url: string | null; role: 'teacher' | 'admin' }>();
+
+  return data ?? null;
 }

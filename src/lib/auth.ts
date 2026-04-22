@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
+import { upsertTeacherRow } from './teacher-auth';
 
 // Google Classroom scopes.
 //
@@ -77,6 +78,24 @@ export const authOptions: NextAuthOptions = {
       session.error = token.error as string | undefined;
       session.googleSub = token.googleSub as string | undefined;
       return session;
+    },
+  },
+  events: {
+    // Refresh the persisted teachers row on every successful sign-in so
+    // we always have the latest profile fields + a current last_seen_at
+    // stamp. Runs server-side; if the admin client isn't configured it
+    // logs a warning and no-ops.
+    async signIn({ profile }) {
+      if (!profile || !('sub' in profile) || typeof profile.sub !== 'string') return;
+      const p = profile as { sub: string; email?: string; name?: string; given_name?: string; family_name?: string; picture?: string };
+      await upsertTeacherRow({
+        googleSub: p.sub,
+        email: p.email ?? null,
+        fullName: p.name ?? null,
+        givenName: p.given_name ?? null,
+        familyName: p.family_name ?? null,
+        pictureUrl: p.picture ?? null,
+      });
     },
   },
   pages: {

@@ -153,23 +153,22 @@ export const StepClassBasics = ({
               { value: 'fri', label: 'Fri', tone: 'sky' },
             ]}
           />
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'flex-end' }}>
-            <Field label="Starts" style={{ flex: 1 }}>
-              <TimePicker
-                value={data.startTime}
-                onChange={onStartChange}
-              />
-            </Field>
+          <div style={{ position: 'relative', marginTop: 12 }}>
+            {/* Cartoon jump arrow sits at the top, spanning the gap
+                between the two field labels. Absolutely positioned so
+                the Starts/Ends pickers keep their original 1:1 layout. */}
             <div
               aria-label={`Class length ${duration} minutes`}
               style={{
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'flex-end',
-                height: 44, boxSizing: 'border-box',
-                padding: '0 2px',
+                position: 'absolute',
+                top: -2,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
                 color: 'var(--pbs-ink-muted)',
                 pointerEvents: 'none',
                 userSelect: 'none',
+                zIndex: 1,
               }}
             >
               <span
@@ -185,24 +184,24 @@ export const StepClassBasics = ({
                 {duration} min
               </span>
               <svg
-                width="54"
-                height="22"
-                viewBox="0 0 54 22"
+                width="64"
+                height="18"
+                viewBox="0 0 64 18"
                 fill="none"
                 aria-hidden="true"
                 style={{ display: 'block' }}
               >
-                {/* Cartoon jump arc from left picker to right picker */}
+                {/* Cartoon jump arc from left label to right label */}
                 <path
-                  d="M3 18 Q 27 -4 48 18"
+                  d="M3 15 Q 32 -6 58 15"
                   stroke="currentColor"
                   strokeWidth="1.8"
                   strokeLinecap="round"
                   fill="none"
                 />
-                {/* Arrowhead */}
+                {/* Arrowhead pointing down-right at the end */}
                 <path
-                  d="M44 14 L49 18 L44 20"
+                  d="M54 11 L59 15 L54 17"
                   stroke="currentColor"
                   strokeWidth="1.8"
                   strokeLinecap="round"
@@ -211,12 +210,20 @@ export const StepClassBasics = ({
                 />
               </svg>
             </div>
-            <Field label="Ends" style={{ flex: 1 }}>
-              <TimePicker
-                value={data.endTime}
-                onChange={onEndChange}
-              />
-            </Field>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Field label="Starts" style={{ flex: 1 }}>
+                <TimePicker
+                  value={data.startTime}
+                  onChange={onStartChange}
+                />
+              </Field>
+              <Field label="Ends" style={{ flex: 1 }}>
+                <TimePicker
+                  value={data.endTime}
+                  onChange={onEndChange}
+                />
+              </Field>
+            </div>
           </div>
         </Field>
       </div>

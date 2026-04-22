@@ -18,7 +18,12 @@ type Mode = 'group' | 'dm';
 
 type ThreadsState = Record<string, ChatMessage[]>;
 
-const initialThreads = (): ThreadsState => {
+// In demo mode we seed every channel + DM with sample transcripts so the
+// messaging UX has content to render. In real mode (?classId=… URL flag)
+// there's no messaging schema yet, so we start with an empty inbox — the
+// seeded "Ms. Rivera" chatter must not leak into a real classroom.
+const initialThreads = (isReal: boolean): ThreadsState => {
+  if (isReal) return {};
   const initial: ThreadsState = {};
   for (const [k, v] of Object.entries(SEED_GROUP)) initial[k] = [...v];
   for (const [id, v] of Object.entries(SEED_DM))   initial[`dm:${id}`] = [...v];
@@ -210,15 +215,23 @@ export const Messages = ({
   onCls?: (c: ClassRecord) => void;
   onStudent?: (s: Student) => void;
 }) => {
-  const { students, classes } = useTeacherData();
+  const { students, classes, isReal } = useTeacherData();
   const [mode, setMode]         = useState<Mode>('group');
   const [channelId, setChannel] = useState('general');
   const [dmStudentId, setDm]    = useState('s5');
   const [query, setQuery]       = useState('');
-  const [threadsState, setThreadsState] = useState<ThreadsState>(initialThreads);
+  const [threadsState, setThreadsState] = useState<ThreadsState>(() => initialThreads(isReal));
 
+  // Channels are part of the demo fixture too — the CHANNELS_BY_CLASS map
+  // is keyed by demo class ids (c1/c2/c3), so real-mode classes never have
+  // a match and naturally get an empty channel list.
   const channels = CHANNELS_BY_CLASS[cls.id] || [];
-  const threadIds = Object.keys(SEED_DM);
+  // Recent DM list comes from whichever threads actually exist right now,
+  // not from SEED_DM — in real mode SEED_DM is ignored so this starts empty
+  // and only grows as the teacher messages students.
+  const threadIds = isReal
+    ? Object.keys(threadsState).filter((k) => k.startsWith('dm:')).map((k) => k.slice(3))
+    : Object.keys(SEED_DM);
 
   const key = mode === 'group' ? `${cls.id}:${channelId}` : `dm:${dmStudentId}`;
   const activeChannel = channels.find((c) => c.id === channelId) || channels[0];
@@ -367,7 +380,14 @@ export const Messages = ({
               onSend={handleSend}
               onProfile={() => onStudent && onStudent(activeStudent)}
             />
-          ) : null}
+          ) : (
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, color: 'var(--pbs-ink-muted)', padding: 24,
+            }}>
+              No messages yet.
+            </div>
+          )}
         </Block>
 
         {/* RIGHT: details */}

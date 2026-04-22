@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Icon, Chunky } from '@/components/landing/pb-site/primitives';
 import { Field, StepCard, StepHeader } from './form';
@@ -363,6 +363,15 @@ function GoogleClassroomConnect({
     set('classroomCourseName', course.name);
   };
 
+  // Disconnect: drop the NextAuth session for Google + clear the linked
+  // course on the setup draft. We stay on /teacher/setup (redirect: false)
+  // so the teacher doesn't lose their other step data mid-flow.
+  const disconnect = async () => {
+    set('classroomCourseId', undefined);
+    set('classroomCourseName', undefined);
+    await signOut({ redirect: false });
+  };
+
   // ── Not signed in: the original marketing card with a real Connect CTA ───
   if (status !== 'authenticated') {
     const isLoading = status === 'loading';
@@ -447,6 +456,22 @@ function GoogleClassroomConnect({
           background: 'var(--pbs-mint)', color: 'var(--pbs-mint-ink)',
           border: '1.5px solid var(--pbs-mint-ink)',
         }}>Live</span>
+        <button
+          type="button"
+          onClick={disconnect}
+          style={{
+            padding: '6px 10px',
+            background: 'var(--pbs-paper)',
+            color: 'var(--pbs-ink)',
+            border: '1.5px solid var(--pbs-line-2)',
+            borderRadius: 10,
+            fontSize: 12, fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Disconnect
+        </button>
       </div>
 
       {loading && (

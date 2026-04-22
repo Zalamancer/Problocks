@@ -21,7 +21,10 @@ import type { LucideIcon } from 'lucide-react';
 import { useStudio, type ViewMode } from '@/store/studio-store';
 import { useSceneStore } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
+import { useQualityStore } from '@/store/quality-store';
+import { useToastStore } from '@/store/toast-store';
 import { PBButton, PBLogo, AvatarStack } from '@/components/ui';
+import { renderGameHtml, saveGame, saveAndPublish } from '@/lib/studio/save-game';
 
 // Playdemy Studio top bar — ported from the design bundle's topbar.jsx.
 // Layout: logo mark + breadcrumb (classroom > project) on the left,
@@ -122,14 +125,70 @@ export function TopMenuBar() {
   const isPlaying = useSceneStore((s) => s.isPlaying);
   const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
   const setBuildTool = useBuildingStore((s) => s.setTool);
+  const gameQuality = useQualityStore((s) => s.settings);
+  const addToast = useToastStore((s) => s.addToast);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
   const activeGameFirstFile = activeGame?.files ? Object.keys(activeGame.files)[0] : undefined;
+
+  const [saving, setSaving] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const togglePlay = useCallback(() => {
     const next = !isPlaying;
     setIsPlaying(next);
     if (next) setBuildTool('select');
   }, [isPlaying, setIsPlaying, setBuildTool]);
+
+  const handleSave = useCallback(async () => {
+    if (!activeGame) {
+      addToast('warning', 'Nothing to save yet — generate a game first.');
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    try {
+      const html = renderGameHtml(activeGame, gameQuality);
+      const res = await saveGame(activeGame, html);
+      if (res.error) {
+        addToast('error', `Save failed: ${res.error}`);
+      } else if (res.warning) {
+        addToast('info', res.warning);
+      } else {
+        addToast('success', 'Saved.');
+      }
+    } catch (err) {
+      addToast('error', `Save failed: ${(err as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [activeGame, gameQuality, saving, addToast]);
+
+  const handleShare = useCallback(async () => {
+    if (!activeGame) {
+      addToast('warning', 'Nothing to share yet — generate a game first.');
+      return;
+    }
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const html = renderGameHtml(activeGame, gameQuality);
+      const res = await saveAndPublish(activeGame, html);
+      if ('error' in res) {
+        addToast('error', `Share failed: ${res.error}`);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(res.playUrl);
+        addToast('success', 'Link copied — paste it anywhere to share.');
+      } catch {
+        addToast('info', `Link: ${res.playUrl}`);
+      }
+    } catch (err) {
+      addToast('error', `Share failed: ${(err as Error).message}`);
+    } finally {
+      setSharing(false);
+    }
+  }, [activeGame, gameQuality, sharing, addToast]);
 
   // Close menu on outside click / escape
   useEffect(() => {
@@ -158,8 +217,8 @@ export function TopMenuBar() {
 
   const menuItems: MenuEntry[] = [
     { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => openNewGameDialog() },
-    { id: 'save',    label: 'Save',                   icon: Save,   shortcut: '⌘S', onClick: () => {} },
-    { id: 'publish', label: 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => {} },
+    { id: 'save',    label: saving ? 'Saving…' : 'Save', icon: Save, shortcut: '⌘S', onClick: () => { void handleSave(); } },
+    { id: 'publish', label: sharing ? 'Publishing…' : 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => { void handleShare(); } },
     { separator: true },
     { id: 'marketplace', label: 'Marketplace', icon: Upload,   onClick: () => { window.location.href = '/marketplace'; } },
     { id: 'classroom',   label: 'Classroom',   icon: Sparkles, onClick: () => {} },
@@ -280,8 +339,14 @@ export function TopMenuBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <AvatarStack names={['Ms Alvarez', 'Jules Tran', 'Rosa Shah']} size={26} />
 
-        <PBButton variant="secondary" size="sm" icon={Share2}>
-          <span className="hidden sm:inline">Share</span>
+        <PBButton
+          variant="secondary"
+          size="sm"
+          icon={Share2}
+          onClick={handleShare}
+          disabled={sharing}
+        >
+          <span className="hidden sm:inline">{sharing ? 'Sharing…' : 'Share'}</span>
         </PBButton>
 
         <PBButton

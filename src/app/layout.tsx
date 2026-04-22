@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Bricolage_Grotesque, DM_Mono, Instrument_Serif } fro
 import "./globals.css";
 import { QualityProvider } from "@/components/QualityProvider";
 import { DataSourceToggle } from "@/components/dev/DataSourceToggle";
+import { ToastContainer } from "@/components/ui";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -88,6 +89,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <QualityProvider />
         {children}
+        <ToastContainer />
         <DataSourceToggle />
       </body>
     </html>

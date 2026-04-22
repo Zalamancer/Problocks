@@ -5,6 +5,7 @@
 import React from 'react';
 import { Icon } from '@/components/landing/pb-site/primitives';
 import { Field, TextInput, Select, ChipGroup, StepCard, StepHeader } from './form';
+import { TimePicker } from './TimePicker';
 import type { SetupData, ClassroomColor } from './types';
 
 const COLORS: ClassroomColor[] = ['butter', 'mint', 'coral', 'sky', 'grape', 'pink'];
@@ -127,19 +128,15 @@ export const StepClassBasics = ({
           />
           <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
             <Field label="Starts" style={{ flex: 1 }}>
-              <TextInput
+              <TimePicker
                 value={data.startTime}
-                onChange={(e) => set('startTime', e.target.value)}
-                placeholder="10:15 AM"
-                icon="bolt"
+                onChange={(v) => set('startTime', v)}
               />
             </Field>
             <Field label="Ends" style={{ flex: 1 }}>
-              <TextInput
+              <TimePicker
                 value={data.endTime}
-                onChange={(e) => set('endTime', e.target.value)}
-                placeholder="11:05 AM"
-                icon="bolt"
+                onChange={(v) => set('endTime', v)}
               />
             </Field>
           </div>

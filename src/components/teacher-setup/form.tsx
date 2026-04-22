@@ -69,39 +69,138 @@ export const Select = ({
   value, onChange, options, style,
 }: {
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onChange: (e: { target: { value: string } }) => void;
   options: Array<{ value: string; label: string }>;
   style?: React.CSSProperties;
-}) => (
-  <div className="pbs-input-wrap" style={{
-    position: 'relative',
-    padding: '11px 38px 11px 14px',
-    background: 'var(--pbs-paper)',
-    border: '1.5px solid var(--pbs-line-2)',
-    borderRadius: 12,
-    ...style,
-  }}>
-    <select
-      className="pbs-input-el"
-      value={value}
-      onChange={onChange}
-      style={{
-        width: '100%', appearance: 'none', WebkitAppearance: 'none',
-        border: 0, background: 'transparent',
-        fontSize: 14.5, color: 'var(--pbs-ink)', fontFamily: 'inherit',
-        cursor: 'pointer',
-      }}
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
-    <Icon
-      name="chevron" size={14} stroke={2.4}
-      style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%) rotate(90deg)', color: 'var(--pbs-ink-muted)', pointerEvents: 'none' }}
-    />
-  </div>
-);
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const [activeIdx, setActiveIdx] = React.useState(-1);
+  const wrapRef = React.useRef<HTMLDivElement | null>(null);
+  const btnRef = React.useRef<HTMLButtonElement | null>(null);
+
+  const current = options.find((o) => o.value === value) || options[0];
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const pick = (v: string) => {
+    onChange({ target: { value: v } });
+    setOpen(false);
+    btnRef.current?.focus();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setActiveIdx((i) => (i + 1) % options.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setActiveIdx((i) => (i - 1 + options.length) % options.length);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      else if (activeIdx >= 0) pick(options[activeIdx].value);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', ...style }}>
+      <button
+        ref={btnRef}
+        type="button"
+        className="pbs-input-wrap"
+        onClick={() => {
+          setOpen((o) => !o);
+          setActiveIdx(options.findIndex((o) => o.value === value));
+        }}
+        onKeyDown={onKeyDown}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          width: '100%',
+          padding: '11px 14px',
+          background: 'var(--pbs-paper)',
+          border: '1.5px solid var(--pbs-line-2)',
+          borderRadius: 12,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
+          fontFamily: 'inherit',
+          fontSize: 14.5,
+          color: 'var(--pbs-ink)',
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {current?.label}
+        </span>
+        <Icon
+          name="chevron" size={14} stroke={2.4}
+          style={{ transform: `rotate(${open ? -90 : 90}deg)`, color: 'var(--pbs-ink-muted)', transition: 'transform 140ms ease' }}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0, right: 0,
+            zIndex: 50,
+            background: 'var(--pbs-paper)',
+            border: '1.5px solid var(--pbs-line-2)',
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 3px 0 var(--pbs-line-2)',
+            overflow: 'hidden',
+            maxHeight: 320,
+            overflowY: 'auto',
+          }}
+        >
+          {options.map((o, i) => {
+            const active = i === activeIdx;
+            const selected = o.value === value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onMouseDown={(e) => { e.preventDefault(); pick(o.value); }}
+                onMouseEnter={() => setActiveIdx(i)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  width: '100%', textAlign: 'left',
+                  padding: '10px 14px',
+                  border: 0,
+                  background: active ? 'var(--pbs-cream-2)' : 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: 14,
+                  color: 'var(--pbs-ink)',
+                  borderBottom: i < options.length - 1 ? '1px solid var(--pbs-line)' : 'none',
+                  fontWeight: selected ? 700 : 500,
+                }}
+              >
+                <span>{o.label}</span>
+                {selected && <Icon name="check" size={13} stroke={2.4} style={{ color: 'var(--pbs-ink)' }}/>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 type ChipOption<V extends string> = {
   value: V;

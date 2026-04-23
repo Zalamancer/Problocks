@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2 } from 'lucide-react';
+import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2, Play, Square, User } from 'lucide-react';
 import { useFreeform, type FreeformAnchor, type FreeformImage } from '@/store/freeform-store';
 import {
   screenToWorld, worldToLocal, localToWorld,
   collisionToPath, pickImage, computeSnap, type SnapGuide,
 } from '@/lib/freeform-geom';
+import { CharacterLayer, pickCharacter } from './CharacterLayer';
 
 /**
  * 2D Freeform editor.
@@ -19,6 +20,9 @@ import {
  */
 export function FreeformView() {
   const images = useFreeform((s) => s.images);
+  const characters = useFreeform((s) => s.characters);
+  const selectedCharacterId = useFreeform((s) => s.selectedCharacterId);
+  const playing = useFreeform((s) => s.playing);
   const selectedImageId = useFreeform((s) => s.selectedImageId);
   const selectedCollisionId = useFreeform((s) => s.selectedCollisionId);
   const tool = useFreeform((s) => s.tool);
@@ -42,9 +46,15 @@ export function FreeformView() {
   const setZoom = useFreeform((s) => s.setZoom);
   const resetView = useFreeform((s) => s.resetView);
   const clearAll = useFreeform((s) => s.clearAll);
+  const addCharacter = useFreeform((s) => s.addCharacter);
+  const updateCharacter = useFreeform((s) => s.updateCharacter);
+  const deleteCharacter = useFreeform((s) => s.deleteCharacter);
+  const selectCharacter = useFreeform((s) => s.selectCharacter);
+  const setPlaying = useFreeform((s) => s.setPlaying);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const charInputRef = useRef<HTMLInputElement | null>(null);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
   // Last screen-space cursor position over the canvas, used so paste/drop
   // can land at the cursor instead of dead-center when the user has
@@ -163,6 +173,7 @@ export function FreeformView() {
 
   // Pointer down dispatch — figures out what kind of drag (if any) to start.
   const onPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    if (playing) return; // Play mode = no editing interactions.
     if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && e.metaKey)) {
       // Middle-click or alt/cmd-left-drag = pan.
       dragRef.current = { kind: 'pan', startX: e.clientX, startY: e.clientY, origPan: { ...pan } };
@@ -212,7 +223,22 @@ export function FreeformView() {
       return;
     }
 
-    // Select tool: pick image under cursor, drag to move.
+    // Select tool: character hit-test takes priority since characters are
+    // drawn on top of images.
+    const charHit = pickCharacter(world.x, world.y, characters);
+    if (charHit) {
+      selectCharacter(charHit.id);
+      dragRef.current = {
+        kind: 'move',
+        imageId: `char:${charHit.id}`,
+        startWX: world.x,
+        startWY: world.y,
+        origX: charHit.x,
+        origY: charHit.y,
+      };
+      svgRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
     const hit = pickImage(world.x, world.y, images);
     if (hit) {
       selectImage(hit.id);
@@ -228,8 +254,9 @@ export function FreeformView() {
     } else {
       // Click empty → deselect.
       selectImage(null);
+      selectCharacter(null);
     }
-  }, [tool, pan, eventToWorld, images, selectedImage, pendingPenImageId, pendingPenAnchors, selectImage, addPenAnchor, beginPenPath, commitPenPath, zoom]);
+  }, [tool, pan, playing, eventToWorld, images, characters, selectedImage, pendingPenImageId, pendingPenAnchors, selectImage, selectCharacter, addPenAnchor, beginPenPath, commitPenPath, zoom]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
@@ -251,6 +278,13 @@ export function FreeformView() {
       const dy = world.y - drag.startWY;
       let nx = drag.origX + dx;
       let ny = drag.origY + dy;
+      // Characters are tagged with a "char:" prefix on imageId to reuse
+      // the move-drag machinery without widening the DragState union.
+      if (drag.imageId.startsWith('char:')) {
+        const cid = drag.imageId.slice(5);
+        updateCharacter(cid, { x: nx, y: ny });
+        return;
+      }
       const moving = images.find((i) => i.id === drag.imageId);
       // Hold ⌘ (or Ctrl) while dragging to bypass snap — same convention
       // as Figma / Sketch / Illustrator.
@@ -334,7 +368,8 @@ export function FreeformView() {
         if (pendingPenImageId) commitPenPath(false);
       }
       else if (e.key === 'Escape') {
-        if (pendingPenImageId) cancelPenPath();
+        if (playing) setPlaying(false);
+        else if (pendingPenImageId) cancelPenPath();
         else selectImage(null);
       }
       else if ((e.key === 'Delete' || e.key === 'Backspace')) {
@@ -342,12 +377,14 @@ export function FreeformView() {
           deleteCollision(selectedImageId, selectedCollisionId);
         } else if (selectedImageId) {
           deleteImage(selectedImageId);
+        } else if (selectedCharacterId) {
+          deleteCharacter(selectedCharacterId);
         }
       }
     }
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setTool, pendingPenImageId, commitPenPath, cancelPenPath, selectImage, selectedCollisionId, selectedImageId, deleteCollision, deleteImage]);
+  }, [setTool, pendingPenImageId, commitPenPath, cancelPenPath, selectImage, selectedCollisionId, selectedImageId, selectedCharacterId, deleteCollision, deleteImage, deleteCharacter, playing, setPlaying]);
 
   function handleAddImage() { fileInputRef.current?.click(); }
 
@@ -392,6 +429,50 @@ export function FreeformView() {
       probe.src = s.src;
     });
   }, [addImage, pan, zoom]);
+
+  // Character import — prompts the user for the sprite-sheet grid so we
+  // can derive frame dimensions. Sensible defaults match the common
+  // LPC / RPG-Maker style 4×4 sheets (down, left, right, up × 4 frames).
+  function onCharacterPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const colsStr = window.prompt('Sprite sheet columns (frames per row)?', '4');
+    if (colsStr === null) { e.target.value = ''; return; }
+    const rowsStr = window.prompt('Sprite sheet rows? (convention: 0=down 1=left 2=right 3=up)', '4');
+    if (rowsStr === null) { e.target.value = ''; return; }
+    const cols = Math.max(1, parseInt(colsStr, 10) || 4);
+    const rows = Math.max(1, parseInt(rowsStr, 10) || 4);
+    const src = URL.createObjectURL(file);
+    const probe = new Image();
+    probe.onload = () => {
+      const frameW = (probe.naturalWidth || cols * 32) / cols;
+      const frameH = (probe.naturalHeight || rows * 32) / rows;
+      // Display characters at 3× the frame size by default — typical
+      // pixel-art up-scaling that still leaves room on a 1080p canvas.
+      const displayW = frameW * 3;
+      const displayH = frameH * 3;
+      // Spawn at the canvas center, or the cursor if hovered.
+      const svg = svgRef.current;
+      let cx = 0, cy = 0;
+      if (svg) {
+        const rect = svg.getBoundingClientRect();
+        const cs = cursorScreenRef.current ?? { x: rect.width / 2, y: rect.height / 2 };
+        const w = screenToWorld(cs.x, cs.y, pan, zoom);
+        cx = w.x; cy = w.y;
+      }
+      addCharacter(src, {
+        name: file.name.replace(/\.[^.]+$/, ''),
+        x: cx, y: cy,
+        width: displayW, height: displayH,
+        cols, rows, fps: 8, speed: 220,
+      });
+    };
+    probe.onerror = () => {
+      addCharacter(src, { name: file.name, cols, rows });
+    };
+    probe.src = src;
+    e.target.value = '';
+  }
 
   function onFilesPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -524,6 +605,13 @@ export function FreeformView() {
         className="hidden"
         onChange={onFilesPicked}
       />
+      <input
+        ref={charInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onCharacterPicked}
+      />
 
       <svg
         ref={svgRef}
@@ -591,6 +679,11 @@ export function FreeformView() {
               </g>
             );
           })}
+
+          {/* Characters — rendered above images so they visually walk on
+              top of the map. Sprite animation + WASD play loop live in
+              CharacterLayer. */}
+          <CharacterLayer zoom={zoom} />
 
           {/* Alignment guides — rendered above images so they stay visible
               while dragging. Magenta to match the standard editor convention. */}
@@ -682,8 +775,25 @@ export function FreeformView() {
         <ToolButton title="Add image…" onClick={handleAddImage}>
           <ImageIcon size={14} strokeWidth={2.2} />
         </ToolButton>
+        <ToolButton title="Deploy character (sprite sheet)…" onClick={() => charInputRef.current?.click()}>
+          <User size={14} strokeWidth={2.2} />
+        </ToolButton>
         <ToolButton title="Reset view" onClick={resetView}>
           <Maximize2 size={14} strokeWidth={2.2} />
+        </ToolButton>
+        <Separator />
+        <ToolButton
+          active={playing}
+          title={playing ? 'Stop test play (Esc in canvas)' : 'Test play — drive first character with WASD / arrows'}
+          onClick={() => {
+            if (characters.length === 0 && !playing) {
+              alert('Add a character first (the person icon) before test-playing.');
+              return;
+            }
+            setPlaying(!playing);
+          }}
+        >
+          {playing ? <Square size={14} strokeWidth={2.2} /> : <Play size={14} strokeWidth={2.2} />}
         </ToolButton>
         <Separator />
         <ToolButton title="Clear all" destructive onClick={() => { if (confirm('Clear the whole 2D scene?')) clearAll(); }}>

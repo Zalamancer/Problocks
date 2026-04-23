@@ -15,6 +15,31 @@ import { persist } from 'zustand/middleware';
 
 export type FreeformTool = 'select' | 'pen';
 
+/**
+ * Sprite-sheet character. Sheets are assumed to be a uniform grid of
+ * `cols × rows` frames. By the classic RPG convention, row 0 = down,
+ * row 1 = left, row 2 = right, row 3 = up. Any extra rows are treated
+ * as additional actions the game can trigger later.
+ */
+export interface FreeformCharacter {
+  id: string;
+  src: string;
+  name: string;
+  /** Spawn point in world coords (center of character). */
+  x: number;
+  y: number;
+  /** Display size per frame in world units. */
+  width: number;
+  height: number;
+  /** Grid of the sprite sheet. */
+  cols: number;
+  rows: number;
+  /** Animation speed (frames per second for the walk cycle). */
+  fps: number;
+  /** Movement speed in world units per second during play mode. */
+  speed: number;
+}
+
 export interface FreeformAnchor {
   /** Image-local coords. Origin is image center; +x right, +y down. */
   x: number;
@@ -53,8 +78,14 @@ export interface FreeformImage {
 
 interface FreeformStore {
   images: FreeformImage[];
+  characters: FreeformCharacter[];
   selectedImageId: string | null;
   selectedCollisionId: string | null;
+  selectedCharacterId: string | null;
+
+  /** Test-play mode — disables editing and lets WASD/arrows drive the
+   *  first character while walk animations cycle. */
+  playing: boolean;
 
   tool: FreeformTool;
   /** Anchors the user has dropped while pen tool is active and a path is
@@ -87,6 +118,12 @@ interface FreeformStore {
   selectCollision: (id: string | null) => void;
   deleteCollision: (imageId: string, collisionId: string) => void;
 
+  addCharacter: (src: string, opts?: Partial<Omit<FreeformCharacter, 'id' | 'src'>>) => string;
+  updateCharacter: (id: string, patch: Partial<Omit<FreeformCharacter, 'id'>>) => void;
+  deleteCharacter: (id: string) => void;
+  selectCharacter: (id: string | null) => void;
+  setPlaying: (p: boolean) => void;
+
   setPan: (x: number, y: number) => void;
   setZoom: (z: number) => void;
   resetView: () => void;
@@ -99,8 +136,11 @@ export const useFreeform = create<FreeformStore>()(
   persist(
     (set, get) => ({
       images: [],
+      characters: [],
       selectedImageId: null,
       selectedCollisionId: null,
+      selectedCharacterId: null,
+      playing: false,
 
       tool: 'select',
       pendingPenAnchors: [],
@@ -219,22 +259,67 @@ export const useFreeform = create<FreeformStore>()(
             state.selectedCollisionId === collisionId ? null : state.selectedCollisionId,
         })),
 
+      addCharacter: (src, opts = {}) => {
+        const id = newId();
+        set((state) => ({
+          characters: [
+            ...state.characters,
+            {
+              id,
+              src,
+              name: opts.name ?? 'Character',
+              x: opts.x ?? 0,
+              y: opts.y ?? 0,
+              width: opts.width ?? 96,
+              height: opts.height ?? 96,
+              cols: opts.cols ?? 4,
+              rows: opts.rows ?? 4,
+              fps: opts.fps ?? 8,
+              speed: opts.speed ?? 220,
+            },
+          ],
+          selectedCharacterId: id,
+          selectedImageId: null,
+        }));
+        return id;
+      },
+
+      updateCharacter: (id, patch) =>
+        set((state) => ({
+          characters: state.characters.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+        })),
+
+      deleteCharacter: (id) =>
+        set((state) => ({
+          characters: state.characters.filter((c) => c.id !== id),
+          selectedCharacterId: state.selectedCharacterId === id ? null : state.selectedCharacterId,
+        })),
+
+      selectCharacter: (id) =>
+        set({ selectedCharacterId: id, selectedImageId: null, selectedCollisionId: null }),
+
+      setPlaying: (p) => set({ playing: p }),
+
       setPan: (x, y) => set({ pan: { x, y } }),
       setZoom: (z) => set({ zoom: Math.max(0.1, Math.min(8, z)) }),
       resetView: () => set({ pan: { x: 0, y: 0 }, zoom: 1 }),
       clearAll: () =>
         set({
           images: [],
+          characters: [],
           selectedImageId: null,
           selectedCollisionId: null,
+          selectedCharacterId: null,
           pendingPenAnchors: [],
           pendingPenImageId: null,
+          playing: false,
         }),
     }),
     {
       name: 'pb-freeform-2d',
       partialize: (state) => ({
         images: state.images,
+        characters: state.characters,
         pan: state.pan,
         zoom: state.zoom,
       }),

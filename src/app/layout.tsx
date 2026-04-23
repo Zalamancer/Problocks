@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Bricolage_Grotesque, DM_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { QualityProvider } from "@/components/QualityProvider";
@@ -76,7 +76,47 @@ export const metadata: Metadata = {
       follow: true,
     },
   },
+  alternates: {
+    canonical: "https://playdemy.app",
+  },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    title: "Playdemy",
+    capable: true,
+    statusBarStyle: "default",
+  },
 };
+
+// Split `viewport` out per Next 14+ convention (themeColor + colorScheme
+// belong here, not in metadata). theme-color picks the cream paper so
+// iOS Safari's chrome matches the landing page.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fff7e6" },
+    { media: "(prefers-color-scheme: dark)",  color: "#1d1a14" },
+  ],
+  colorScheme: "light dark",
+};
+
+// JSON-LD structured data for SaaS classification — lets Google show
+// the right sidebar, rating, and pricing when the brand is searched.
+// Kept minimal; offers/rating can fill in later when we have numbers.
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Playdemy",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Web",
+  "url": "https://playdemy.app",
+  "description":
+    "Playdemy is an AI-powered game studio for classrooms. Students describe a game, AI builds it, classmates play it.",
+  "audience": {
+    "@type": "EducationalAudience",
+    "educationalRole": "student"
+  }
+} as const;
 
 export default function RootLayout({
   children,
@@ -89,6 +129,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} ${dmMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <QualityProvider />
         <ClientAuthHydrator />
         {children}

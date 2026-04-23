@@ -5,12 +5,14 @@ import { ChevronLeft } from 'lucide-react';
 import { useStudio, type GameSystem } from '@/store/studio-store';
 
 // New Game dialog: two-step picker.
-//   Step 0 — game world kind: 3D / 2D / topdown
-//   Step 1 — only shown when 3D was picked: freeform / tile-based / lego
+//   Step 0 — game world kind: 3D / 2D / topdown / quiz
+//   Step 1 — sub-style picker, only shown for kinds that branch (3D, 2D)
 // The chosen value becomes `gameSystem` in the studio store, which in turn
-// decides what the AssetsPanel renders (Models vs Parts vs placeholders).
+// decides what the AssetsPanel renders (Models vs Parts vs placeholders)
+// and which viewport WorkspaceView swaps in.
 
 type WorldKind = '3d' | '2d' | 'topdown' | 'quiz';
+type SubStep = '3d' | '2d';
 
 interface KindOption {
   id: WorldKind;
@@ -30,7 +32,7 @@ interface SubKindOption {
 
 const KINDS: KindOption[] = [
   { id: '3d',      emoji: '🧊', label: '3D',        desc: 'Full 3D world you move around in.' },
-  { id: '2d',      emoji: '🕹️', label: '2D',        desc: 'Side-view platformers and shooters.',   directSystem: '2d' },
+  { id: '2d',      emoji: '🕹️', label: '2D',        desc: 'Side-view platformers and shooters.' },
   { id: 'topdown', emoji: '🗺️', label: 'Top-down',  desc: 'Look-from-above tile maps and RPGs.',    directSystem: 'topdown' },
   { id: 'quiz',    emoji: '📝', label: 'Quiz Mode', desc: 'Real AP FRQ, broken into bite-sized tap-through steps.', directSystem: 'quiz' },
 ];
@@ -40,6 +42,11 @@ const THREE_D_SUBKINDS: SubKindOption[] = [
   { id: '3d-tile',     emoji: '🧩', label: 'Tile-based', desc: 'Snap walls, floors, and props to a grid.' },
   { id: '3d-lego',     emoji: '🧱', label: 'Lego',       desc: 'Stud-based bricks you click together.' },
   { id: '3d-voxel',    emoji: '🟫', label: 'Blocks',     desc: 'Minecraft-style voxel world. Click to place and break blocks.' },
+];
+
+const TWO_D_SUBKINDS: SubKindOption[] = [
+  { id: '2d-freeform', emoji: '🖼️', label: 'Freeform',   desc: 'Drop generated images on a canvas. Resize, rotate, and pen-draw collision boundaries.' },
+  { id: '2d',          emoji: '🧱', label: 'Tile-based', desc: 'Side-view platformer with grid-snapped sprite tiles.' },
 ];
 
 function StepDots({ total, current }: { total: number; current: number }) {
@@ -122,9 +129,12 @@ export function NewGameDialog() {
   const setActiveGameId = useStudio((s) => s.setActiveGameId);
 
   const [step, setStep] = useState(0);
+  // Tracks which branch we're on at step 1 so the title and option list
+  // match the kind the user just picked (3D vs 2D both show a sub-picker).
+  const [subStep, setSubStep] = useState<SubStep>('3d');
 
   // Reset to step 0 each time the dialog opens so the user always starts
-  // at the kind picker — otherwise reopening lands on the 3D sub-picker.
+  // at the kind picker — otherwise reopening lands on a sub-picker.
   useEffect(() => {
     if (open) setStep(0);
   }, [open]);
@@ -138,7 +148,8 @@ export function NewGameDialog() {
       close();
       return;
     }
-    // 3D — go to sub-kind step
+    // Branching kinds (3D, 2D) — record which branch and advance.
+    setSubStep(k.id as SubStep);
     setStep(1);
   }
 
@@ -150,7 +161,9 @@ export function NewGameDialog() {
 
   const title = step === 0
     ? 'What kind of game are you making?'
-    : 'Which 3D style?';
+    : subStep === '3d' ? 'Which 3D style?' : 'Which 2D style?';
+
+  const subKinds = subStep === '3d' ? THREE_D_SUBKINDS : TWO_D_SUBKINDS;
 
   return (
     <div
@@ -231,8 +244,11 @@ export function NewGameDialog() {
         )}
 
         {step === 1 && (
-          <div className="grid grid-cols-4 gap-3">
-            {THREE_D_SUBKINDS.map((s) => (
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${Math.min(subKinds.length, 4)}, minmax(0, 1fr))` }}
+          >
+            {subKinds.map((s) => (
               <Card
                 key={s.id}
                 emoji={s.emoji}

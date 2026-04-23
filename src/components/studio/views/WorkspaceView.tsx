@@ -9,6 +9,7 @@ import { useBuildingStore, type Tool } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 import { VoxelView } from './VoxelView';
 import { QuizView } from './QuizView';
+import { FreeformView } from './FreeformView';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and a minimal
@@ -45,6 +46,18 @@ export function WorkspaceView() {
     return (
       <div className="relative w-full h-full">
         <QuizView />
+      </div>
+    );
+  }
+
+  // 2D Freeform — image-based map editor with pen-tool collision authoring.
+  // Lives in its own viewport because the tools, coord system, and renderer
+  // are entirely 2D (SVG) and have nothing in common with the 3D Building
+  // canvas below.
+  if (gameSystem === '2d-freeform') {
+    return (
+      <div className="relative w-full h-full">
+        <FreeformView />
       </div>
     );
   }

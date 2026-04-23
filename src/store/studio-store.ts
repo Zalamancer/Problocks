@@ -23,6 +23,7 @@ export type GameSystem =
   | '3d-lego'
   | '3d-voxel'
   | '2d'
+  | '2d-freeform'
   | 'topdown'
   | 'quiz';
 

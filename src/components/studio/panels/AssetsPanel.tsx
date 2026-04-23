@@ -119,11 +119,15 @@ export function AssetsPanel() {
     );
   }
 
-  if (gameSystem === '2d' || gameSystem === 'topdown') {
+  if (gameSystem === '2d' || gameSystem === '2d-freeform' || gameSystem === 'topdown') {
+    const label =
+      gameSystem === '2d-freeform' ? '2D freeform image library'
+      : gameSystem === '2d' ? '2D sprite browser'
+      : 'Top-down tileset browser';
     return (
       <div className="flex-1 flex items-center justify-center px-6 text-center">
         <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
-          {gameSystem === '2d' ? '2D sprite browser' : 'Top-down tileset browser'}
+          {label}
           <br />coming soon.
         </p>
       </div>

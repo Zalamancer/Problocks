@@ -331,7 +331,15 @@ export function FreeformView() {
     }
     if (drag.kind === 'rotate') {
       const ang = (Math.atan2(world.y - drag.centerWY, world.x - drag.centerWX) * 180) / Math.PI;
-      updateImage(drag.imageId, { rotation: drag.origRot + (ang - drag.startAngle) });
+      let next = drag.origRot + (ang - drag.startAngle);
+      // Hold Shift to constrain to 15° increments — standard Figma /
+      // Sketch / Photoshop convention. (Illustrator uses 45°, but 15° is
+      // far more common and gives finer control over common angles.)
+      if (e.shiftKey) {
+        const STEP = 15;
+        next = Math.round(next / STEP) * STEP;
+      }
+      updateImage(drag.imageId, { rotation: next });
       return;
     }
     if (drag.kind === 'penHandle') {

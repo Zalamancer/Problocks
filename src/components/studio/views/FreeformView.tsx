@@ -7,6 +7,20 @@ import {
   screenToWorld, worldToLocal, localToWorld,
   collisionToPath, pickImage, computeSnap, imageAABB, type SnapGuide,
 } from '@/lib/freeform-geom';
+
+/**
+ * Read a File as a data: URL so it survives page reloads. Blob URLs from
+ * URL.createObjectURL are session-scoped and break on refresh, leaving
+ * orphan boxes in the persisted store.
+ */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
 import { CharacterLayer, pickCharacter } from './CharacterLayer';
 
 /**
@@ -450,42 +464,43 @@ export function FreeformView() {
     if (rowsStr === null) { e.target.value = ''; return; }
     const cols = Math.max(1, parseInt(colsStr, 10) || 4);
     const rows = Math.max(1, parseInt(rowsStr, 10) || 4);
-    const src = URL.createObjectURL(file);
-    const probe = new Image();
-    probe.onload = () => {
-      const frameW = (probe.naturalWidth || cols * 32) / cols;
-      const frameH = (probe.naturalHeight || rows * 32) / rows;
-      // Display characters at 3× the frame size by default — typical
-      // pixel-art up-scaling that still leaves room on a 1080p canvas.
-      const displayW = frameW * 3;
-      const displayH = frameH * 3;
-      // Spawn at the canvas center, or the cursor if hovered.
-      const svg = svgRef.current;
-      let cx = 0, cy = 0;
-      if (svg) {
-        const rect = svg.getBoundingClientRect();
-        const cs = cursorScreenRef.current ?? { x: rect.width / 2, y: rect.height / 2 };
-        const w = screenToWorld(cs.x, cs.y, pan, zoom);
-        cx = w.x; cy = w.y;
-      }
-      addCharacter(src, {
-        name: file.name.replace(/\.[^.]+$/, ''),
-        x: cx, y: cy,
-        width: displayW, height: displayH,
-        cols, rows, fps: 8, speed: 220,
-      });
-    };
-    probe.onerror = () => {
-      addCharacter(src, { name: file.name, cols, rows });
-    };
-    probe.src = src;
+    // Encode as data URL so the character survives a page refresh.
+    fileToDataUrl(file).then((src) => {
+      const probe = new Image();
+      probe.onload = () => {
+        const frameW = (probe.naturalWidth || cols * 32) / cols;
+        const frameH = (probe.naturalHeight || rows * 32) / rows;
+        const displayW = frameW * 3;
+        const displayH = frameH * 3;
+        const svg = svgRef.current;
+        let cx = 0, cy = 0;
+        if (svg) {
+          const rect = svg.getBoundingClientRect();
+          const cs = cursorScreenRef.current ?? { x: rect.width / 2, y: rect.height / 2 };
+          const w = screenToWorld(cs.x, cs.y, pan, zoom);
+          cx = w.x; cy = w.y;
+        }
+        addCharacter(src, {
+          name: file.name.replace(/\.[^.]+$/, ''),
+          x: cx, y: cy,
+          width: displayW, height: displayH,
+          cols, rows, fps: 8, speed: 220,
+        });
+      };
+      probe.onerror = () => {
+        addCharacter(src, { name: file.name, cols, rows });
+      };
+      probe.src = src;
+    }).catch((err) => console.error('[freeform] character read failed', err));
     e.target.value = '';
   }
 
   function onFilesPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    placeImageSources(files.map((f) => ({ src: URL.createObjectURL(f), name: f.name })));
+    Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name })))
+      .then((sources) => placeImageSources(sources))
+      .catch((err) => console.error('[freeform] file read failed', err));
     e.target.value = '';
   }
 
@@ -500,32 +515,35 @@ export function FreeformView() {
       const cd = e.clipboardData;
       if (!cd) return;
 
-      const sources: Array<{ src: string; name: string }> = [];
-
-      // Image blobs (screenshot tools, Figma, browsers' "Copy image", etc.)
+      // Collect Files first; URL fallback is sync and goes straight in.
+      const files: File[] = [];
       for (const item of Array.from(cd.items)) {
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) sources.push({ src: URL.createObjectURL(file), name: file.name || 'pasted' });
+          if (file) files.push(file);
         }
       }
 
-      // URL paste — text/uri-list or a bare http(s) string.
-      if (sources.length === 0) {
+      const httpSources: Array<{ src: string; name: string }> = [];
+      if (files.length === 0) {
         const uri = cd.getData('text/uri-list') || cd.getData('text/plain');
         const trimmed = uri?.trim();
         if (trimmed && /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?.*)?$/i.test(trimmed)) {
-          sources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+          httpSources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
         }
       }
 
-      if (sources.length === 0) return;
+      if (files.length === 0 && httpSources.length === 0) return;
       e.preventDefault();
-      // Drop at the cursor's last known canvas position, falling back to
-      // the canvas center inside placeImageSources.
       const cs = cursorScreenRef.current;
       const drop = cs ? screenToWorld(cs.x, cs.y, pan, zoom) : undefined;
-      placeImageSources(sources, drop);
+
+      if (httpSources.length > 0) placeImageSources(httpSources, drop);
+      if (files.length > 0) {
+        Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name || 'pasted' })))
+          .then((sources) => placeImageSources(sources, drop))
+          .catch((err) => console.error('[freeform] paste read failed', err));
+      }
     }
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -545,27 +563,31 @@ export function FreeformView() {
     e.preventDefault();
     const dt = e.dataTransfer;
     if (!dt) return;
-    const sources: Array<{ src: string; name: string }> = [];
+    const files: File[] = [];
     for (const f of Array.from(dt.files)) {
-      if (f.type.startsWith('image/')) {
-        sources.push({ src: URL.createObjectURL(f), name: f.name });
-      }
+      if (f.type.startsWith('image/')) files.push(f);
     }
-    if (sources.length === 0) {
+    const httpSources: Array<{ src: string; name: string }> = [];
+    if (files.length === 0) {
       const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
       const trimmed = uri?.trim();
       if (trimmed && /^https?:\/\//i.test(trimmed)) {
-        sources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+        httpSources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
       }
     }
-    if (sources.length === 0) return;
+    if (files.length === 0 && httpSources.length === 0) return;
     const svg = svgRef.current;
     let drop: { x: number; y: number } | undefined;
     if (svg) {
       const rect = svg.getBoundingClientRect();
       drop = screenToWorld(e.clientX - rect.left, e.clientY - rect.top, pan, zoom);
     }
-    placeImageSources(sources, drop);
+    if (httpSources.length > 0) placeImageSources(httpSources, drop);
+    if (files.length > 0) {
+      Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name })))
+        .then((sources) => placeImageSources(sources, drop))
+        .catch((err) => console.error('[freeform] drop read failed', err));
+    }
   }, [pan, zoom, placeImageSources]);
 
   // Adapter: the save-handle resize logic needs the original image snapshot

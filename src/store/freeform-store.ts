@@ -327,6 +327,21 @@ export const useFreeform = create<FreeformStore>()(
         pan: state.pan,
         zoom: state.zoom,
       }),
+      // Drop entries whose `src` is a stale `blob:` URL. URL.createObjectURL
+      // returns session-scoped URLs that die on page reload — without this
+      // cleanup, refresh leaves orphan rectangles whose <image> 404s but
+      // whose stored bounds still render the selection ring. New images
+      // get persisted as data URLs (see file picker / paste / drop in
+      // FreeformView), so this is mostly for state captured before the fix.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (Array.isArray(state.images)) {
+          state.images = state.images.filter((i) => i?.src && !i.src.startsWith('blob:'));
+        }
+        if (Array.isArray(state.characters)) {
+          state.characters = state.characters.filter((c) => c?.src && !c.src.startsWith('blob:'));
+        }
+      },
     },
   ),
 );

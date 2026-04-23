@@ -46,6 +46,10 @@ export function FreeformView() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
+  // Last screen-space cursor position over the canvas, used so paste/drop
+  // can land at the cursor instead of dead-center when the user has
+  // hovered the canvas. Reset when the pointer leaves.
+  const cursorScreenRef = useRef<{ x: number; y: number } | null>(null);
 
   // Drag state — kept in a ref so listeners don't re-bind on every move.
   type DragState =
@@ -158,6 +162,11 @@ export function FreeformView() {
   }, [tool, pan, eventToWorld, images, selectedImage, pendingPenImageId, pendingPenAnchors, selectImage, addPenAnchor, beginPenPath, commitPenPath, zoom]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (svg) {
+      const rect = svg.getBoundingClientRect();
+      cursorScreenRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
     const world = eventToWorld(e);
     setCursorWorld(world);
     const drag = dragRef.current;
@@ -251,32 +260,133 @@ export function FreeformView() {
 
   function handleAddImage() { fileInputRef.current?.click(); }
 
+  // Single entry point for "drop these images onto the canvas" — used by
+  // the file picker, paste, and drag-and-drop. Probes each image's natural
+  // size to preserve aspect ratio, defaults the drop point to the canvas
+  // center when no anchor is given.
+  const placeImageSources = useCallback((
+    sources: Array<{ src: string; name: string; revoke?: boolean }>,
+    drop?: { x: number; y: number },
+  ) => {
+    if (sources.length === 0) return;
+    let cx = drop?.x;
+    let cy = drop?.y;
+    if (cx === undefined || cy === undefined) {
+      const svg = svgRef.current;
+      if (svg) {
+        const rect = svg.getBoundingClientRect();
+        const center = screenToWorld(rect.width / 2, rect.height / 2, pan, zoom);
+        cx = center.x; cy = center.y;
+      } else {
+        cx = 0; cy = 0;
+      }
+    }
+    sources.forEach((s, i) => {
+      const probe = new Image();
+      // Allow remote URLs to render even if the host blocks credentials —
+      // SVG <image> doesn't need CORS for display, just sizing.
+      probe.crossOrigin = 'anonymous';
+      probe.onload = () => {
+        const maxDim = 320;
+        const ratio = (probe.naturalWidth || 1) / (probe.naturalHeight || 1);
+        const w = ratio >= 1 ? maxDim : maxDim * ratio;
+        const h = ratio >= 1 ? maxDim / ratio : maxDim;
+        addImage(s.src, { x: (cx as number) + i * 24, y: (cy as number) + i * 24, width: w, height: h, name: s.name });
+      };
+      probe.onerror = () => {
+        // Probe failed — drop the image at the default square so the user
+        // still gets something they can resize.
+        addImage(s.src, { x: (cx as number) + i * 24, y: (cy as number) + i * 24, name: s.name });
+      };
+      probe.src = s.src;
+    });
+  }, [addImage, pan, zoom]);
+
   function onFilesPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
-    const svg = svgRef.current;
-    let cx = 0, cy = 0;
-    if (svg) {
-      const rect = svg.getBoundingClientRect();
-      const center = screenToWorld(rect.width / 2, rect.height / 2, pan, zoom);
-      cx = center.x; cy = center.y;
-    }
-    files.forEach((f, i) => {
-      const url = URL.createObjectURL(f);
-      // Probe natural size so we keep the original aspect ratio instead of
-      // forcing the default square.
-      const probe = new Image();
-      probe.onload = () => {
-        const maxDim = 320;
-        const ratio = probe.width / probe.height;
-        const w = ratio >= 1 ? maxDim : maxDim * ratio;
-        const h = ratio >= 1 ? maxDim / ratio : maxDim;
-        addImage(url, { x: cx + i * 24, y: cy + i * 24, width: w, height: h, name: f.name });
-      };
-      probe.src = url;
-    });
+    placeImageSources(files.map((f) => ({ src: URL.createObjectURL(f), name: f.name })));
     e.target.value = '';
   }
+
+  // Paste — listens on the window because the SVG itself can't take focus
+  // and most pastes happen with the cursor over the canvas, not a focused
+  // input. Skip when an editable element is focused so Cmd+V in a text box
+  // (Chat, side-panel inputs) keeps its native behavior.
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      const cd = e.clipboardData;
+      if (!cd) return;
+
+      const sources: Array<{ src: string; name: string }> = [];
+
+      // Image blobs (screenshot tools, Figma, browsers' "Copy image", etc.)
+      for (const item of Array.from(cd.items)) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) sources.push({ src: URL.createObjectURL(file), name: file.name || 'pasted' });
+        }
+      }
+
+      // URL paste — text/uri-list or a bare http(s) string.
+      if (sources.length === 0) {
+        const uri = cd.getData('text/uri-list') || cd.getData('text/plain');
+        const trimmed = uri?.trim();
+        if (trimmed && /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?.*)?$/i.test(trimmed)) {
+          sources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+        }
+      }
+
+      if (sources.length === 0) return;
+      e.preventDefault();
+      // Drop at the cursor's last known canvas position, falling back to
+      // the canvas center inside placeImageSources.
+      const cs = cursorScreenRef.current;
+      const drop = cs ? screenToWorld(cs.x, cs.y, pan, zoom) : undefined;
+      placeImageSources(sources, drop);
+    }
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [pan, zoom, placeImageSources]);
+
+  // Drag-and-drop from desktop / browser — same path as paste.
+  const onDragOver = useCallback((e: React.DragEvent<SVGSVGElement>) => {
+    if (!e.dataTransfer) return;
+    const types = Array.from(e.dataTransfer.types);
+    if (types.includes('Files') || types.some((t) => t.startsWith('text/uri-list') || t.startsWith('text/plain'))) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const sources: Array<{ src: string; name: string }> = [];
+    for (const f of Array.from(dt.files)) {
+      if (f.type.startsWith('image/')) {
+        sources.push({ src: URL.createObjectURL(f), name: f.name });
+      }
+    }
+    if (sources.length === 0) {
+      const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
+      const trimmed = uri?.trim();
+      if (trimmed && /^https?:\/\//i.test(trimmed)) {
+        sources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+      }
+    }
+    if (sources.length === 0) return;
+    const svg = svgRef.current;
+    let drop: { x: number; y: number } | undefined;
+    if (svg) {
+      const rect = svg.getBoundingClientRect();
+      drop = screenToWorld(e.clientX - rect.left, e.clientY - rect.top, pan, zoom);
+    }
+    placeImageSources(sources, drop);
+  }, [pan, zoom, placeImageSources]);
 
   // Adapter: the save-handle resize logic needs the original image snapshot
   // captured at drag start, so corner handles call this to set up dragRef.
@@ -339,6 +449,9 @@ export function FreeformView() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={() => { cursorScreenRef.current = null; }}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
       >
         <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
           {/* Origin marker — small "+" so the user has a reference point */}
@@ -483,8 +596,9 @@ export function FreeformView() {
               2D Freeform canvas
             </p>
             <p style={{ fontSize: 12, fontWeight: 500 }}>
-              Drop generated images here, then move/resize/rotate them. Pick the
-              <strong> Pen tool</strong> to draw collision boundaries that travel with each image.
+              <strong>Paste</strong> (⌘V), drag-drop, or click the image button to add images.
+              Then move / resize / rotate them, or pick the <strong>Pen tool</strong> to draw
+              collision boundaries that travel with each image.
             </p>
           </div>
         </div>

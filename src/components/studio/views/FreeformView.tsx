@@ -65,6 +65,7 @@ export function FreeformView() {
   const deleteCharacter = useFreeform((s) => s.deleteCharacter);
   const selectCharacter = useFreeform((s) => s.selectCharacter);
   const setPlaying = useFreeform((s) => s.setPlaying);
+  const addAsset = useFreeform((s) => s.addAsset);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -438,19 +439,25 @@ export function FreeformView() {
       probe.crossOrigin = 'anonymous';
       probe.onload = () => {
         const maxDim = 320;
-        const ratio = (probe.naturalWidth || 1) / (probe.naturalHeight || 1);
+        const nw = probe.naturalWidth || 1;
+        const nh = probe.naturalHeight || 1;
+        const ratio = nw / nh;
         const w = ratio >= 1 ? maxDim : maxDim * ratio;
         const h = ratio >= 1 ? maxDim / ratio : maxDim;
+        // Register in the asset library too so the user can re-drop it
+        // from the left panel later. Dedupe is handled inside the store.
+        addAsset(s.src, { name: s.name, naturalWidth: nw, naturalHeight: nh });
         addImage(s.src, { x: (cx as number) + i * 24, y: (cy as number) + i * 24, width: w, height: h, name: s.name });
       };
       probe.onerror = () => {
         // Probe failed — drop the image at the default square so the user
         // still gets something they can resize.
+        addAsset(s.src, { name: s.name });
         addImage(s.src, { x: (cx as number) + i * 24, y: (cy as number) + i * 24, name: s.name });
       };
       probe.src = s.src;
     });
-  }, [addImage, pan, zoom]);
+  }, [addImage, addAsset, pan, zoom]);
 
   // Character import — prompts the user for the sprite-sheet grid so we
   // can derive frame dimensions. Sensible defaults match the common

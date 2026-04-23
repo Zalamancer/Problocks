@@ -80,9 +80,27 @@ export interface FreeformImage {
   flipY?: boolean;
 }
 
+/**
+ * A pasted / dropped / picked image registered in the project's asset
+ * library. Distinct from `images[]` (which are placed instances on the
+ * canvas) — one asset can be dropped onto the canvas multiple times,
+ * each becoming a separate FreeformImage that references the same src.
+ */
+export interface FreeformAsset {
+  id: string;
+  src: string;
+  name: string;
+  addedAt: number;
+  /** Natural pixel dimensions of the source image, captured on add so the
+   *  asset thumbnail can render at the correct aspect ratio. */
+  naturalWidth?: number;
+  naturalHeight?: number;
+}
+
 interface FreeformStore {
   images: FreeformImage[];
   characters: FreeformCharacter[];
+  assets: FreeformAsset[];
   selectedImageId: string | null;
   selectedCollisionId: string | null;
   selectedCharacterId: string | null;
@@ -122,6 +140,12 @@ interface FreeformStore {
   selectCollision: (id: string | null) => void;
   deleteCollision: (imageId: string, collisionId: string) => void;
 
+  /** Library upserts. If an asset with the same src already exists we
+   *  return its id and skip the insert — this keeps the asset row from
+   *  duplicating when the user re-pastes the same image. */
+  addAsset: (src: string, opts?: { name?: string; naturalWidth?: number; naturalHeight?: number }) => string;
+  deleteAsset: (id: string) => void;
+
   addCharacter: (src: string, opts?: Partial<Omit<FreeformCharacter, 'id' | 'src'>>) => string;
   updateCharacter: (id: string, patch: Partial<Omit<FreeformCharacter, 'id'>>) => void;
   deleteCharacter: (id: string) => void;
@@ -141,6 +165,7 @@ export const useFreeform = create<FreeformStore>()(
     (set, get) => ({
       images: [],
       characters: [],
+      assets: [],
       selectedImageId: null,
       selectedCollisionId: null,
       selectedCharacterId: null,
@@ -263,6 +288,32 @@ export const useFreeform = create<FreeformStore>()(
             state.selectedCollisionId === collisionId ? null : state.selectedCollisionId,
         })),
 
+      addAsset: (src, opts = {}) => {
+        // Dedupe on src — pasting the same image twice shouldn't create
+        // two identical asset rows. Data URLs are long but stable, so
+        // string equality is a safe identity check.
+        const existing = get().assets.find((a) => a.src === src);
+        if (existing) return existing.id;
+        const id = newId();
+        set((state) => ({
+          assets: [
+            ...state.assets,
+            {
+              id,
+              src,
+              name: opts.name ?? 'Asset',
+              addedAt: Date.now(),
+              naturalWidth: opts.naturalWidth,
+              naturalHeight: opts.naturalHeight,
+            },
+          ],
+        }));
+        return id;
+      },
+
+      deleteAsset: (id) =>
+        set((state) => ({ assets: state.assets.filter((a) => a.id !== id) })),
+
       addCharacter: (src, opts = {}) => {
         const id = newId();
         set((state) => ({
@@ -324,6 +375,7 @@ export const useFreeform = create<FreeformStore>()(
       partialize: (state) => ({
         images: state.images,
         characters: state.characters,
+        assets: state.assets,
         pan: state.pan,
         zoom: state.zoom,
       }),
@@ -340,6 +392,9 @@ export const useFreeform = create<FreeformStore>()(
         }
         if (Array.isArray(state.characters)) {
           state.characters = state.characters.filter((c) => c?.src && !c.src.startsWith('blob:'));
+        }
+        if (Array.isArray(state.assets)) {
+          state.assets = state.assets.filter((a) => a?.src && !a.src.startsWith('blob:'));
         }
       },
     },

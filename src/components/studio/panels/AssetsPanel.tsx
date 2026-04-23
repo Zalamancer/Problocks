@@ -9,6 +9,8 @@ import { PIECES, type PieceKind } from '@/lib/building-kit';
 import { useBuildingStore, type Tool } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 import { usePartStudio } from '@/store/part-studio-store';
+import { useFreeform } from '@/store/freeform-store';
+import { Trash2 } from 'lucide-react';
 
 interface AssetInfo {
   name: string;
@@ -119,11 +121,16 @@ export function AssetsPanel() {
     );
   }
 
-  if (gameSystem === '2d' || gameSystem === '2d-freeform' || gameSystem === 'topdown') {
-    const label =
-      gameSystem === '2d-freeform' ? '2D freeform image library'
-      : gameSystem === '2d' ? '2D sprite browser'
-      : 'Top-down tileset browser';
+  if (gameSystem === '2d-freeform') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <FreeformAssetsView />
+      </div>
+    );
+  }
+
+  if (gameSystem === '2d' || gameSystem === 'topdown') {
+    const label = gameSystem === '2d' ? '2D sprite browser' : 'Top-down tileset browser';
     return (
       <div className="flex-1 flex items-center justify-center px-6 text-center">
         <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
@@ -135,6 +142,154 @@ export function AssetsPanel() {
   }
 
   return <ModelsView />;
+}
+
+/**
+ * Library view for the 2D Freeform game system. Shows every image the
+ * user has pasted / dropped / picked, in reverse-chronological order.
+ * Clicking a thumbnail drops a new instance onto the canvas at the
+ * default size (placement happens via addImage in freeform-store, which
+ * triggers a re-render of the canvas through the store subscription).
+ *
+ * Empty state mirrors the canvas hint so the user always knows the
+ * three ways to add their first asset.
+ */
+function FreeformAssetsView() {
+  const assets = useFreeform((s) => s.assets);
+  const addImage = useFreeform((s) => s.addImage);
+  const deleteAsset = useFreeform((s) => s.deleteAsset);
+  const pan = useFreeform((s) => s.pan);
+  const zoom = useFreeform((s) => s.zoom);
+  const [search, setSearch] = useState('');
+
+  // Newest first — typically what the user just pasted is what they
+  // want to drop again next.
+  const sorted = [...assets].sort((a, b) => b.addedAt - a.addedAt);
+  const filtered = search.trim()
+    ? sorted.filter((a) => a.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : sorted;
+
+  function placeAsset(asset: typeof assets[number]) {
+    // Drop at viewport center in world coords. The canvas is mounted in
+    // a sibling component so we can't read its bounding rect from here;
+    // window inner size is a close-enough proxy because the canvas spans
+    // the center pane in the studio shell.
+    const sx = window.innerWidth / 2;
+    const sy = window.innerHeight / 2;
+    const x = (sx - pan.x) / zoom;
+    const y = (sy - pan.y) / zoom;
+    const maxDim = 320;
+    let w = maxDim, h = maxDim;
+    if (asset.naturalWidth && asset.naturalHeight) {
+      const ratio = asset.naturalWidth / asset.naturalHeight;
+      w = ratio >= 1 ? maxDim : maxDim * ratio;
+      h = ratio >= 1 ? maxDim / ratio : maxDim;
+    }
+    addImage(asset.src, { x, y, width: w, height: h, name: asset.name });
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="px-3 pt-3 pb-2">
+        <PanelSearchInput value={search} onChange={setSearch} placeholder="Search assets" />
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center px-6 text-center">
+          <p className="text-xs" style={{ color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
+            {assets.length === 0 ? (
+              <>Paste (⌘V), drag-drop, or use the toolbar to add an image. It&apos;ll show up here automatically.</>
+            ) : (
+              <>No assets match &quot;{search}&quot;.</>
+            )}
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
+          <div className="grid grid-cols-2 gap-2">
+            {filtered.map((asset) => (
+              <FreeformAssetCard
+                key={asset.id}
+                asset={asset}
+                onClick={() => placeAsset(asset)}
+                onDelete={() => deleteAsset(asset.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FreeformAssetCard({
+  asset,
+  onClick,
+  onDelete,
+}: {
+  asset: { id: string; src: string; name: string; naturalWidth?: number; naturalHeight?: number };
+  onClick: () => void;
+  onDelete: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="relative cursor-pointer transition-colors group"
+      style={{
+        background: 'var(--pb-paper)',
+        border: `1.5px solid ${hover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+        boxShadow: hover ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+      }}
+      title={`${asset.name} — click to place`}
+    >
+      <div
+        className="flex items-center justify-center"
+        style={{
+          aspectRatio: '1 / 1',
+          background: 'rgba(0,0,0,0.04)',
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={asset.src}
+          alt={asset.name}
+          className="max-w-full max-h-full"
+          style={{ objectFit: 'contain', imageRendering: 'pixelated' }}
+          draggable={false}
+        />
+      </div>
+      <div
+        className="px-2 py-1.5 truncate"
+        style={{ fontSize: 11, fontWeight: 600, color: 'var(--pb-ink)' }}
+      >
+        {asset.name}
+      </div>
+      {hover && (
+        <button
+          type="button"
+          title="Remove from library"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="absolute top-1 right-1 flex items-center justify-center transition-colors"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-coral-ink)',
+            color: 'var(--pb-coral-ink)',
+            cursor: 'pointer',
+          }}
+        >
+          <Trash2 size={11} strokeWidth={2.4} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 function ModelsView() {

@@ -73,23 +73,78 @@ export function FreeformView() {
     return screenToWorld(e.clientX - rect.left, e.clientY - rect.top, pan, zoom);
   }, [pan, zoom]);
 
-  // Wheel zoom — keep the cursor's world point fixed under the cursor by
-  // shifting pan in tandem with the zoom delta.
-  const onWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault();
+  // Wheel + pinch — attached as a NATIVE listener with { passive: false }
+  // because React's synthetic onWheel is registered passive in modern
+  // React, which makes preventDefault() a silent no-op. Without this fix,
+  // trackpad pinch (which fires wheel events with ctrlKey=true on Mac)
+  // and even some scroll wheels would trigger the browser's page zoom
+  // instead of zooming the canvas.
+  //
+  // Also captured: WebKit `gesturestart`/`gesturechange`/`gestureend`,
+  // which Safari fires for native trackpad pinches alongside the wheel
+  // events. Preventing them stops Safari's "Zoom Page" gesture.
+  useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
-    const factor = Math.exp(-e.deltaY * 0.0015);
-    const nextZoom = Math.max(0.1, Math.min(8, zoom * factor));
-    // Hold (sx, sy) world point invariant.
-    const wx = (sx - pan.x) / zoom;
-    const wy = (sy - pan.y) / zoom;
-    setPan(sx - wx * nextZoom, sy - wy * nextZoom);
-    setZoom(nextZoom);
-  }, [pan, zoom, setPan, setZoom]);
+
+    function applyZoom(sx: number, sy: number, factor: number) {
+      const cur = useFreeform.getState();
+      const nextZoom = Math.max(0.1, Math.min(8, cur.zoom * factor));
+      const wx = (sx - cur.pan.x) / cur.zoom;
+      const wy = (sy - cur.pan.y) / cur.zoom;
+      useFreeform.setState({
+        pan: { x: sx - wx * nextZoom, y: sy - wy * nextZoom },
+        zoom: nextZoom,
+      });
+    }
+
+    function onWheel(e: WheelEvent) {
+      // Always preventDefault so neither browser zoom (ctrlKey/pinch) nor
+      // accidental page scroll bleeds out of the canvas.
+      e.preventDefault();
+      const rect = svg!.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      // ctrlKey === pinch (or actual Ctrl+wheel). Both should zoom; the
+      // pinch deltaY is already scaled by the OS, plain wheel is bigger
+      // and benefits from a gentler exponent.
+      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+      applyZoom(sx, sy, factor);
+    }
+
+    // Safari-only trackpad pinch — fires as a sequence of GestureEvents
+    // with `scale` cumulative since the gesture began. We need a ref-bound
+    // baseline so we can derive a per-tick factor.
+    let gestureLastScale = 1;
+    function onGestureStart(e: Event) {
+      e.preventDefault();
+      gestureLastScale = 1;
+    }
+    function onGestureChange(e: Event & { scale?: number; clientX?: number; clientY?: number }) {
+      e.preventDefault();
+      const scale = e.scale ?? 1;
+      const tickFactor = scale / gestureLastScale;
+      gestureLastScale = scale;
+      const rect = svg!.getBoundingClientRect();
+      const sx = (e.clientX ?? rect.width / 2) - rect.left;
+      const sy = (e.clientY ?? rect.height / 2) - rect.top;
+      applyZoom(sx, sy, tickFactor);
+    }
+    function onGestureEnd(e: Event) {
+      e.preventDefault();
+    }
+
+    svg.addEventListener('wheel', onWheel, { passive: false });
+    svg.addEventListener('gesturestart', onGestureStart as EventListener, { passive: false });
+    svg.addEventListener('gesturechange', onGestureChange as EventListener, { passive: false });
+    svg.addEventListener('gestureend', onGestureEnd as EventListener, { passive: false });
+    return () => {
+      svg.removeEventListener('wheel', onWheel);
+      svg.removeEventListener('gesturestart', onGestureStart as EventListener);
+      svg.removeEventListener('gesturechange', onGestureChange as EventListener);
+      svg.removeEventListener('gestureend', onGestureEnd as EventListener);
+    };
+  }, []);
 
   // Pointer down dispatch — figures out what kind of drag (if any) to start.
   const onPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
@@ -444,7 +499,6 @@ export function FreeformView() {
             'repeating-linear-gradient(0deg, transparent 0 39px, rgba(0,0,0,0.04) 39px 40px), ' +
             'repeating-linear-gradient(90deg, transparent 0 39px, rgba(0,0,0,0.04) 39px 40px)',
         }}
-        onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

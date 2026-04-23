@@ -74,6 +74,10 @@ export interface FreeformImage {
   collisions: FreeformCollision[];
   /** Display label (defaults to filename). */
   name: string;
+  /** Mirror horizontally / vertically. Applied as a scale in the image's
+   *  transform group, so collisions flip with the image automatically. */
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 interface FreeformStore {
@@ -102,7 +106,7 @@ interface FreeformStore {
   setTool: (t: FreeformTool) => void;
 
   addImage: (src: string, opts?: { x?: number; y?: number; width?: number; height?: number; name?: string }) => string;
-  updateImage: (id: string, patch: Partial<Pick<FreeformImage, 'x' | 'y' | 'width' | 'height' | 'rotation' | 'zIndex' | 'name'>>) => void;
+  updateImage: (id: string, patch: Partial<Pick<FreeformImage, 'x' | 'y' | 'width' | 'height' | 'rotation' | 'zIndex' | 'name' | 'flipX' | 'flipY'>>) => void;
   deleteImage: (id: string) => void;
   selectImage: (id: string | null) => void;
 

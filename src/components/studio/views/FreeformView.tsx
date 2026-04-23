@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2, Play, Square, User } from 'lucide-react';
+import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2, Play, Square, User, FlipHorizontal, FlipVertical, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
 import { useFreeform, type FreeformAnchor, type FreeformImage } from '@/store/freeform-store';
 import {
   screenToWorld, worldToLocal, localToWorld,
-  collisionToPath, pickImage, computeSnap, type SnapGuide,
+  collisionToPath, pickImage, computeSnap, imageAABB, type SnapGuide,
 } from '@/lib/freeform-geom';
 import { CharacterLayer, pickCharacter } from './CharacterLayer';
 
@@ -640,8 +640,15 @@ export function FreeformView() {
 
           {sortedImages.map((img) => {
             const isSelected = img.id === selectedImageId;
+            const sx = img.flipX ? -1 : 1;
+            const sy = img.flipY ? -1 : 1;
+            // Flip is applied as a scale on the image group, so collisions
+            // mirror with the image automatically (they live in this same
+            // transform frame).
+            const xform = `translate(${img.x} ${img.y}) rotate(${img.rotation})`
+              + ((sx !== 1 || sy !== 1) ? ` scale(${sx} ${sy})` : '');
             return (
-              <g key={img.id} transform={`translate(${img.x} ${img.y}) rotate(${img.rotation})`}>
+              <g key={img.id} transform={xform}>
                 <image
                   href={img.src}
                   x={-img.width / 2}
@@ -754,6 +761,74 @@ export function FreeformView() {
           })()}
         </g>
       </svg>
+
+      {/* Floating context toolbar — appears above the selected image with
+          flip / order / delete actions. Hidden in play mode and while a
+          drag is active so it doesn't chase the image around. */}
+      {!playing && selectedImage && (() => {
+        const box = imageAABB(selectedImage);
+        // Top-edge midpoint in screen space, with a 14-px gap above so the
+        // toolbar doesn't overlap the rotation handle.
+        const screenMidX = box.cx * zoom + pan.x;
+        const screenTop = box.top * zoom + pan.y;
+        return (
+          <div
+            className="absolute z-10 flex items-center gap-1 p-1.5 pointer-events-auto"
+            style={{
+              left: screenMidX,
+              top: Math.max(8, screenTop - 14),
+              transform: 'translate(-50%, -100%)',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-ink)',
+              borderRadius: 12,
+              boxShadow: '0 3px 0 var(--pb-ink)',
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <ToolButton
+              title="Flip horizontally"
+              onClick={() => updateImage(selectedImage.id, { flipX: !selectedImage.flipX })}
+              active={!!selectedImage.flipX}
+            >
+              <FlipHorizontal size={14} strokeWidth={2.2} />
+            </ToolButton>
+            <ToolButton
+              title="Flip vertically"
+              onClick={() => updateImage(selectedImage.id, { flipY: !selectedImage.flipY })}
+              active={!!selectedImage.flipY}
+            >
+              <FlipVertical size={14} strokeWidth={2.2} />
+            </ToolButton>
+            <Separator />
+            <ToolButton
+              title="Bring to front"
+              onClick={() => {
+                const maxZ = images.reduce((m, i) => Math.max(m, i.zIndex), 0);
+                if (selectedImage.zIndex < maxZ) updateImage(selectedImage.id, { zIndex: maxZ + 1 });
+              }}
+            >
+              <ArrowUpToLine size={14} strokeWidth={2.2} />
+            </ToolButton>
+            <ToolButton
+              title="Send to back"
+              onClick={() => {
+                const minZ = images.reduce((m, i) => Math.min(m, i.zIndex), Infinity);
+                if (selectedImage.zIndex > minZ) updateImage(selectedImage.id, { zIndex: minZ - 1 });
+              }}
+            >
+              <ArrowDownToLine size={14} strokeWidth={2.2} />
+            </ToolButton>
+            <Separator />
+            <ToolButton
+              title="Delete  (Del)"
+              destructive
+              onClick={() => deleteImage(selectedImage.id)}
+            >
+              <Trash2 size={14} strokeWidth={2.2} />
+            </ToolButton>
+          </div>
+        );
+      })()}
 
       {/* Toolbar */}
       <div

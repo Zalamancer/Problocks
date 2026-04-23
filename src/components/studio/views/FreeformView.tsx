@@ -100,16 +100,27 @@ export function FreeformView() {
 
     function onWheel(e: WheelEvent) {
       // Always preventDefault so neither browser zoom (ctrlKey/pinch) nor
-      // accidental page scroll bleeds out of the canvas.
+      // page scroll bleeds out of the canvas.
       e.preventDefault();
       const rect = svg!.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
-      // ctrlKey === pinch (or actual Ctrl+wheel). Both should zoom; the
-      // pinch deltaY is already scaled by the OS, plain wheel is bigger
-      // and benefits from a gentler exponent.
-      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
-      applyZoom(sx, sy, factor);
+      // Mac trackpad: pinch → wheel with ctrlKey=true (synthesized by the
+      // browser even with no real Ctrl key down). Two-finger swipe → wheel
+      // with ctrlKey=false. Mouse wheel also has ctrlKey=false but typically
+      // only deltaY; we still pan it (most modern map editors pan on mouse
+      // wheel and zoom only on Ctrl+wheel) so the behavior stays consistent.
+      if (e.ctrlKey) {
+        const factor = Math.exp(-e.deltaY * 0.01);
+        applyZoom(sx, sy, factor);
+      } else {
+        // Pan in screen pixels — keeps panning speed independent of zoom
+        // level (matches Figma / Google Maps trackpad behavior).
+        const cur = useFreeform.getState();
+        useFreeform.setState({
+          pan: { x: cur.pan.x - e.deltaX, y: cur.pan.y - e.deltaY },
+        });
+      }
     }
 
     // Safari-only trackpad pinch — fires as a sequence of GestureEvents

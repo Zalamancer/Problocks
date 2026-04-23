@@ -3,11 +3,34 @@
 import React from 'react';
 import { Block, Chunky, FloatBlock, Icon, Pill } from '../pb-site/primitives';
 
-const COLS: Array<{ title: string; links: string[] }> = [
-  { title: 'Learn',        links: ['How it works', 'Subjects', 'Junior mode', 'Library'] },
-  { title: 'For teachers', links: ['Classroom plan', 'Standards', 'Lesson authoring', 'PD workshops'] },
-  { title: 'Makers',       links: ['Studio', 'Marketplace', 'Templates', 'Discord'] },
-  { title: 'Support',      links: ['Help center', 'Trust & safety', 'For parents', 'Contact'] },
+// Links with a real destination get rendered as anchors; everything
+// else renders as a muted "Coming soon" tag so the footer still
+// advertises the surface without leading visitors to a dead page.
+const COLS: Array<{ title: string; links: Array<{ label: string; href?: string }> }> = [
+  { title: 'Learn',        links: [
+    { label: 'How it works' },
+    { label: 'Subjects' },
+    { label: 'Junior mode' },
+    { label: 'Library' },
+  ] },
+  { title: 'For teachers', links: [
+    { label: 'Set up a class',  href: '/teacher/setup' },
+    { label: 'Standards' },
+    { label: 'Lesson authoring' },
+    { label: 'PD workshops' },
+  ] },
+  { title: 'Makers',       links: [
+    { label: 'Studio',          href: '/studio' },
+    { label: 'Marketplace',     href: '/marketplace' },
+    { label: 'Templates' },
+    { label: 'Discord' },
+  ] },
+  { title: 'Support',      links: [
+    { label: 'Help center',     href: 'mailto:tryproblocks@gmail.com' },
+    { label: 'Trust & safety',  href: '/privacy' },
+    { label: 'For parents',     href: '/privacy/data-request' },
+    { label: 'Contact',         href: 'mailto:tryproblocks@gmail.com' },
+  ] },
 ];
 
 export const Footer = ({ onMakeGame }: { onMakeGame?: () => void }) => (
@@ -81,7 +104,13 @@ export const Footer = ({ onMakeGame }: { onMakeGame?: () => void }) => (
             </div>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {col.links.map((l) => (
-                <li key={l}><a href="#" style={{ fontSize: 14, color: 'var(--pbs-ink-soft)' }}>{l}</a></li>
+                <li key={l.label}>
+                  {l.href ? (
+                    <a href={l.href} style={{ fontSize: 14, color: 'var(--pbs-ink-soft)' }}>{l.label}</a>
+                  ) : (
+                    <span title="Coming soon" style={{ fontSize: 14, color: 'var(--pbs-ink-muted)', cursor: 'default' }}>{l.label}</span>
+                  )}
+                </li>
               ))}
             </ul>
           </div>
@@ -98,8 +127,8 @@ export const Footer = ({ onMakeGame }: { onMakeGame?: () => void }) => (
         <div style={{ display: 'flex', gap: 18 }}>
           <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a>
           <a href="/terms" style={{ color: 'inherit' }}>Terms</a>
-          <a href="#" style={{ color: 'inherit' }}>COPPA</a>
-          <a href="#" style={{ color: 'inherit' }}>Status</a>
+          <a href="/privacy#coppa" style={{ color: 'inherit' }}>COPPA</a>
+          <a href="/privacy/data-request" style={{ color: 'inherit' }}>Data request</a>
         </div>
       </div>
     </div>

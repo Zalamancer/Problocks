@@ -142,7 +142,7 @@ export const JoinScreen = ({
         </Block>
 
         <div style={{ marginTop: 14, textAlign: 'center', fontSize: 12.5, color: 'var(--pbs-ink-muted)' }}>
-          No code? <a href="#" style={{ textDecoration: 'underline', fontWeight: 600 }}>Browse public games</a>
+          No code? <a href="/marketplace" style={{ textDecoration: 'underline', fontWeight: 600 }}>Browse public games</a>
         </div>
       </div>
 

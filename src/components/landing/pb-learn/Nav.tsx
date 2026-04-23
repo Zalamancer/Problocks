@@ -34,7 +34,7 @@ export const Nav = ({ onMakeGame }: { onMakeGame?: () => void }) => {
           boxShadow: scrolled ? '0 14px 30px -18px rgba(60,40,0,0.3)' : 'none',
           transition: 'box-shadow 200ms, background 200ms',
         }}>
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0', flexShrink: 0 }}>
+          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0', flexShrink: 0 }}>
             <Icon name="logo-block" size={28}/>
             <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>Playdemy</span>
             <span style={{

@@ -7,11 +7,36 @@ type Tone = 'butter'|'mint'|'coral'|'sky'|'grape'|'pink';
 
 export const Footer = ({ onStart }: { onStart?: () => void }) => {
   const swatches: Tone[] = ['butter','mint','coral','sky','grape','pink'];
-  const columns: Array<{ title: string; links: string[] }> = [
-    { title: 'Product',      links: ['Studio', 'Marketplace', 'Templates', 'Changelog', 'Roadmap'] },
-    { title: 'For teachers', links: ['Classroom plan', 'Rubrics', 'PD workshops', 'Curriculum map'] },
-    { title: 'Company',      links: ['About', 'Blog', 'Jobs', 'Press kit'] },
-    { title: 'Support',      links: ['Help center', 'Community', 'Trust & safety', 'Contact'] },
+  // Links with a real destination get rendered as anchors; everything
+  // else renders as a muted "Coming soon" tag so the footer still
+  // advertises the surface without leading visitors to a dead page.
+  const columns: Array<{ title: string; links: Array<{ label: string; href?: string }> }> = [
+    { title: 'Product',      links: [
+      { label: 'Studio',       href: '/studio' },
+      { label: 'Marketplace',  href: '/marketplace' },
+      { label: 'Templates' },
+      { label: 'Changelog' },
+      { label: 'Roadmap' },
+    ] },
+    { title: 'For teachers', links: [
+      { label: 'Set up a class', href: '/teacher/setup' },
+      { label: 'Rubrics' },
+      { label: 'PD workshops' },
+      { label: 'Curriculum map' },
+    ] },
+    { title: 'Company',      links: [
+      { label: 'About' },
+      { label: 'Blog' },
+      { label: 'Jobs' },
+      { label: 'Press kit' },
+    ] },
+    { title: 'Support',      links: [
+      { label: 'Help center',     href: 'mailto:tryproblocks@gmail.com' },
+      { label: 'Community' },
+      { label: 'Trust & safety',  href: '/privacy' },
+      { label: 'Contact',         href: 'mailto:tryproblocks@gmail.com' },
+      { label: 'Data request',    href: '/privacy/data-request' },
+    ] },
   ];
 
   return (
@@ -90,8 +115,17 @@ export const Footer = ({ onStart }: { onStart?: () => void }) => {
               </div>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {col.links.map((l) => (
-                  <li key={l}>
-                    <a href="#" style={{ fontSize: 14, color: 'var(--pbs-ink-soft)' }}>{l}</a>
+                  <li key={l.label}>
+                    {l.href ? (
+                      <a href={l.href} style={{ fontSize: 14, color: 'var(--pbs-ink-soft)' }}>{l.label}</a>
+                    ) : (
+                      <span
+                        title="Coming soon"
+                        style={{ fontSize: 14, color: 'var(--pbs-ink-muted)', cursor: 'default' }}
+                      >
+                        {l.label}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -109,8 +143,8 @@ export const Footer = ({ onStart }: { onStart?: () => void }) => {
           <div style={{ display: 'flex', gap: 18 }}>
             <a href="/privacy" style={{ color: 'inherit' }}>Privacy</a>
             <a href="/terms" style={{ color: 'inherit' }}>Terms</a>
-            <a href="#" style={{ color: 'inherit' }}>COPPA</a>
-            <a href="#" style={{ color: 'inherit' }}>Status</a>
+            <a href="/privacy#coppa" style={{ color: 'inherit' }}>COPPA</a>
+            <a href="/privacy/data-request" style={{ color: 'inherit' }}>Data request</a>
           </div>
         </div>
       </div>

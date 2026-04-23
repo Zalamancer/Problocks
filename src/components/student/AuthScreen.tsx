@@ -243,7 +243,7 @@ export const AuthScreen = ({
         </button>
 
         <div style={{ marginTop: 12, textAlign: 'center', fontSize: 11.5, color: 'var(--pbs-ink-muted)', lineHeight: 1.5 }}>
-          By continuing you agree to our <a href="#" style={{ textDecoration: 'underline' }}>Terms</a> and <a href="#" style={{ textDecoration: 'underline' }}>COPPA</a> notice. <br/>
+          By continuing you agree to our <a href="/terms" style={{ textDecoration: 'underline' }}>Terms</a> and <a href="/privacy#coppa" style={{ textDecoration: 'underline' }}>COPPA</a> notice. <br/>
           Under 13? A parent or teacher will set this up for you.
         </div>
       </div>

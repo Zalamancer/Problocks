@@ -5,7 +5,7 @@ import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2 } from 'l
 import { useFreeform, type FreeformAnchor, type FreeformImage } from '@/store/freeform-store';
 import {
   screenToWorld, worldToLocal, localToWorld,
-  collisionToPath, pickImage,
+  collisionToPath, pickImage, computeSnap, type SnapGuide,
 } from '@/lib/freeform-geom';
 
 /**
@@ -50,6 +50,10 @@ export function FreeformView() {
   // can land at the cursor instead of dead-center when the user has
   // hovered the canvas. Reset when the pointer leaves.
   const cursorScreenRef = useRef<{ x: number; y: number } | null>(null);
+  // Active alignment guides — populated during a 'move' drag whenever the
+  // moving image's edges/centers are within the snap threshold of another
+  // image. Cleared on pointer up.
+  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
 
   // Drag state — kept in a ref so listeners don't re-bind on every move.
   type DragState =
@@ -245,7 +249,27 @@ export function FreeformView() {
     if (drag.kind === 'move') {
       const dx = world.x - drag.startWX;
       const dy = world.y - drag.startWY;
-      updateImage(drag.imageId, { x: drag.origX + dx, y: drag.origY + dy });
+      let nx = drag.origX + dx;
+      let ny = drag.origY + dy;
+      const moving = images.find((i) => i.id === drag.imageId);
+      // Hold ⌘ (or Ctrl) while dragging to bypass snap — same convention
+      // as Figma / Sketch / Illustrator.
+      const snapDisabled = e.metaKey || e.ctrlKey;
+      if (moving && !snapDisabled) {
+        const others = images.filter((i) => i.id !== drag.imageId);
+        const threshold = 6 / zoom;  // 6 screen pixels in world units
+        const snap = computeSnap(
+          { x: nx, y: ny, width: moving.width, height: moving.height, rotation: moving.rotation },
+          others.map((o) => ({ id: o.id, x: o.x, y: o.y, width: o.width, height: o.height, rotation: o.rotation })),
+          threshold,
+        );
+        nx = snap.x;
+        ny = snap.y;
+        setSnapGuides(snap.guides);
+      } else {
+        if (snapGuides.length > 0) setSnapGuides([]);
+      }
+      updateImage(drag.imageId, { x: nx, y: ny });
       return;
     }
     if (drag.kind === 'resize') {
@@ -295,6 +319,7 @@ export function FreeformView() {
       svgRef.current.releasePointerCapture(e.pointerId);
     }
     dragRef.current = null;
+    setSnapGuides([]);
   }, []);
 
   // Keyboard shortcuts — V (select), P (pen), Enter (commit pen),
@@ -566,6 +591,36 @@ export function FreeformView() {
               </g>
             );
           })}
+
+          {/* Alignment guides — rendered above images so they stay visible
+              while dragging. Magenta to match the standard editor convention. */}
+          {snapGuides.map((g, i) => (
+            g.kind === 'v' ? (
+              <line
+                key={`g${i}`}
+                x1={g.value}
+                x2={g.value}
+                y1={g.start - 12 / zoom}
+                y2={g.end + 12 / zoom}
+                stroke="#ec4899"
+                strokeWidth={1 / zoom}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            ) : (
+              <line
+                key={`g${i}`}
+                y1={g.value}
+                y2={g.value}
+                x1={g.start - 12 / zoom}
+                x2={g.end + 12 / zoom}
+                stroke="#ec4899"
+                strokeWidth={1 / zoom}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )
+          ))}
 
           {/* In-progress pen path — rendered in the owning image's frame */}
           {pendingPenImageId && (() => {

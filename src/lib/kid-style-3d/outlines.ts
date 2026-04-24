@@ -46,21 +46,38 @@ function buildOutlineMaterial(opts: OutlineOptions, baseColor?: THREE.ColorRepre
   );
   const thickness = opts.thickness ?? 0.03;
 
+  // NOTE: InstancedMesh support requires applying `instanceMatrix` in
+  // the shader. Without it, every outline instance collapses onto the
+  // parent's origin, painting ghost outlines on the ground at the base
+  // of every tree / bush / cloud / flower. THREE sets USE_INSTANCING
+  // automatically for ShaderMaterial when the renderer sees an
+  // InstancedMesh, so guarding the transform with `#ifdef` keeps the
+  // non-instanced path identical.
   const vertex = opts.screenSpace
     ? `
       uniform float thickness;
       void main() {
-        vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
-        float depth = -viewPos.z;
-        vec3 pushed = position + normal * thickness * depth;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pushed, 1.0);
+        #ifdef USE_INSTANCING
+          vec4 viewPos = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+          float depth = -viewPos.z;
+          vec4 pushed = instanceMatrix * vec4(position + normal * thickness * depth, 1.0);
+          gl_Position = projectionMatrix * modelViewMatrix * pushed;
+        #else
+          vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+          float depth = -viewPos.z;
+          vec3 pushed = position + normal * thickness * depth;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pushed, 1.0);
+        #endif
       }
     `
     : `
       uniform float thickness;
       void main() {
-        vec3 pushed = position + normal * thickness;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pushed, 1.0);
+        vec4 pushed = vec4(position + normal * thickness, 1.0);
+        #ifdef USE_INSTANCING
+          pushed = instanceMatrix * pushed;
+        #endif
+        gl_Position = projectionMatrix * modelViewMatrix * pushed;
       }
     `;
 

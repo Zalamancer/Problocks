@@ -171,6 +171,15 @@ export function ScribbleOverlay() {
       }
       const s = activeStrokeRef.current;
       if (!s) return;
+      // Drop points the cursor barely moved to. Trackpads/mice fire
+      // pointermove on every pixel of motion; keeping all of them
+      // produces a chunky jagged path because each tiny segment
+      // becomes its own corner. ~1.5 px is small enough that the
+      // user can't see the lag and big enough to suppress noise.
+      const last = s.points[s.points.length - 1];
+      const dx = p.x - last.x;
+      const dy = p.y - last.y;
+      if (dx * dx + dy * dy < 2.25) return;
       s.points.push(p);
       paint();
     },
@@ -372,7 +381,8 @@ function strokeHits(s: Stroke, p: Pt): boolean {
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
-  if (s.points.length === 0) return;
+  const pts = s.points;
+  if (pts.length === 0) return;
   ctx.save();
   if (s.tool === 'eraser') {
     // Use destination-out so the eraser cuts through any underlying
@@ -384,10 +394,30 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
     ctx.strokeStyle = s.color;
   }
   ctx.lineWidth = s.width;
+  // Round joins/caps so the smoothed segments meet without sharp
+  // bevels at every quadratic seam.
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  const [first, ...rest] = s.points;
-  ctx.moveTo(first.x, first.y);
-  for (const p of rest) ctx.lineTo(p.x, p.y);
+  if (pts.length < 3) {
+    // Not enough points to interpolate — fall back to straight lines.
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  } else {
+    // Quadratic-through-midpoints smoothing (the "signature pad" trick).
+    // Each raw point becomes a Bezier *control* point; the curve passes
+    // through the midpoints of consecutive segments. The eye reads the
+    // resulting path as a single fluid stroke instead of a polyline.
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const midX = (pts[i].x + pts[i + 1].x) / 2;
+      const midY = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+    }
+    // Anchor the tail at the actual final pointer position.
+    const tail = pts[pts.length - 1];
+    ctx.lineTo(tail.x, tail.y);
+  }
   ctx.stroke();
   ctx.restore();
 }

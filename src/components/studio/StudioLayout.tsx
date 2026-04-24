@@ -24,6 +24,8 @@ import { getGameHtml } from '@/lib/game-engine';
 import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
 import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
+import { Freeform3DPropertiesPanel } from './panels/Freeform3DPropertiesPanel';
+import { useFreeform3D } from '@/store/freeform3d-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
 import { resolveEffectiveTask } from '@/lib/templates/types';
@@ -126,6 +128,8 @@ export function StudioLayout() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const viewMode = useStudio((s) => s.viewMode);
   const setViewMode = useStudio((s) => s.setViewMode);
+  const gameSystem = useStudio((s) => s.gameSystem);
+  const freeform3dSelectedId = useFreeform3D((s) => s.selectedId);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -581,6 +585,12 @@ export function StudioLayout() {
               detail when a flowchart task is selected. */}
           <RightPanel
             propertiesContent={(() => {
+              // 3D Freeform has its own Properties panel: selection-aware and
+              // backed by the freeform3d store (not the BuildingCanvas part
+              // selection which is irrelevant for this viewport).
+              if (gameSystem === '3d-freeform') {
+                return <Freeform3DPropertiesPanel headless />;
+              }
               if (openFileName) {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
                 const fileList = activeGame?.files ? Object.keys(activeGame.files) : [];

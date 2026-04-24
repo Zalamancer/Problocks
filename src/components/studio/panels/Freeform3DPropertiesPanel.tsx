@@ -1,0 +1,239 @@
+'use client';
+
+import { Trash2 } from 'lucide-react';
+import {
+  PanelSection,
+  PanelSlider,
+  PanelActionButton,
+  PanelColorSwatches,
+} from '@/components/ui';
+import { useFreeform3D } from '@/store/freeform3d-store';
+import { getPrefabDef, PALETTE } from '@/lib/kid-style-3d';
+import type { Vec3 } from '@/lib/kid-style-3d/scene-schema';
+
+/**
+ * Right-panel Properties content for the 3D Freeform studio. Reads the
+ * currently-selected SceneObject from useFreeform3D and exposes its
+ * transform + per-instance color as editable controls. Mutations go
+ * through the store's updateObject, which triggers applySceneToRoot in
+ * the viewport — pure one-way flow.
+ *
+ * Sections (all collapsible, per the studio's right-panel rules):
+ *   - Transform: position XYZ, rotation XYZ (degrees), scale XYZ + uniform
+ *   - Appearance: color swatches with the kid-style palette
+ *   - Info: prefab kind label (read-only)
+ *
+ * Delete lives in a sticky footer, matching the Problocks right-panel
+ * "primary action pinned to the bottom" rule.
+ */
+
+const KID_PALETTE_COLORS: string[] = [
+  PALETTE.coral,
+  PALETTE.mint,
+  PALETTE.butter,
+  PALETTE.sky,
+  PALETTE.ivory,
+  PALETTE.charcoal,
+  PALETTE.dustyRose,
+  PALETTE.sage,
+  PALETTE.grass,
+  PALETTE.woodLight,
+  PALETTE.woodDark,
+  '#ffffff',
+];
+
+interface Props {
+  headless?: boolean;
+}
+
+export function Freeform3DPropertiesPanel({ headless }: Props) {
+  const selectedId = useFreeform3D((s) => s.selectedId);
+  const object = useFreeform3D((s) =>
+    selectedId ? s.scene.objects.find((o) => o.id === selectedId) : null,
+  );
+  const updateObject = useFreeform3D((s) => s.updateObject);
+  const removeObject = useFreeform3D((s) => s.removeObject);
+
+  // Sections and controls are hooks — render a neutral empty state if no selection.
+  const def = object ? getPrefabDef(object.kind) : null;
+
+  const setAxis = (key: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, v: number) => {
+    if (!object) return;
+    const next = [...object[key]] as Vec3;
+    next[axis] = v;
+    updateObject(object.id, { [key]: next } as Partial<typeof object>);
+  };
+
+  const setColor = (color: string) => {
+    if (!object) return;
+    updateObject(object.id, { color });
+  };
+
+  const delBtn = (
+    <PanelActionButton
+      variant="destructive"
+      icon={Trash2}
+      fullWidth
+      onClick={() => object && removeObject(object.id)}
+      disabled={!object}
+    >
+      Delete object
+    </PanelActionButton>
+  );
+
+  const body = (
+    <>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {!object ? (
+          <div
+            className="h-full flex items-center justify-center text-center px-6"
+            style={{ color: 'var(--pb-ink-muted)', fontSize: 12.5, fontWeight: 500 }}
+          >
+            Click any object in the scene to edit its properties.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 px-3 py-3">
+            <PanelSection title="Info" collapsible defaultOpen>
+              <div className="flex items-center justify-between px-1 py-1 text-xs">
+                <span style={{ color: 'var(--pb-ink-muted)', fontWeight: 600 }}>Kind</span>
+                <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>
+                  {def?.label ?? object.kind}
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-1 py-1 text-xs">
+                <span style={{ color: 'var(--pb-ink-muted)', fontWeight: 600 }}>ID</span>
+                <span
+                  style={{
+                    color: 'var(--pb-ink-muted)',
+                    fontFamily: 'ui-monospace, monospace',
+                    fontSize: 11,
+                  }}
+                >
+                  {object.id}
+                </span>
+              </div>
+            </PanelSection>
+
+            <PanelSection title="Transform" collapsible defaultOpen>
+              <div className="flex flex-col gap-2.5">
+                <AxisTriple
+                  label="Position"
+                  suffix="u"
+                  min={-40}
+                  max={40}
+                  step={0.1}
+                  precision={2}
+                  values={object.position}
+                  onChange={(axis, v) => setAxis('position', axis, v)}
+                />
+                <AxisTriple
+                  label="Rotation"
+                  suffix="°"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  precision={0}
+                  values={object.rotation.map((r) => (r * 180) / Math.PI) as Vec3}
+                  onChange={(axis, v) => setAxis('rotation', axis, (v * Math.PI) / 180)}
+                />
+                <AxisTriple
+                  label="Scale"
+                  suffix="×"
+                  min={0.1}
+                  max={10}
+                  step={0.05}
+                  precision={2}
+                  values={object.scale}
+                  onChange={(axis, v) => setAxis('scale', axis, v)}
+                />
+                <PanelSlider
+                  label="Uniform scale"
+                  value={object.scale[0]}
+                  onChange={(v) =>
+                    updateObject(object.id, { scale: [v, v, v] })
+                  }
+                  min={0.1}
+                  max={10}
+                  step={0.05}
+                  precision={2}
+                  suffix="×"
+                />
+              </div>
+            </PanelSection>
+
+            <PanelSection title="Appearance" collapsible defaultOpen>
+              <PanelColorSwatches
+                label="Color"
+                value={object.color ?? def?.defaultColor ?? PALETTE.ivory}
+                onChange={setColor}
+                colors={KID_PALETTE_COLORS}
+              />
+            </PanelSection>
+          </div>
+        )}
+      </div>
+      <div
+        className="shrink-0 px-3 py-3"
+        style={{ borderTop: '1.5px solid var(--pb-line-2)', background: 'var(--pb-paper)' }}
+      >
+        {delBtn}
+      </div>
+    </>
+  );
+
+  if (headless) return <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{body}</div>;
+
+  return (
+    <aside
+      className="w-[300px] h-full flex flex-col rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      {body}
+    </aside>
+  );
+}
+
+function AxisTriple({
+  label,
+  values,
+  onChange,
+  min,
+  max,
+  step,
+  precision,
+  suffix,
+}: {
+  label: string;
+  values: Vec3;
+  onChange: (axis: 0 | 1 | 2, v: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  precision: number;
+  suffix: string;
+}) {
+  return (
+    <div>
+      <div
+        className="px-1 py-1 text-[11px]"
+        style={{
+          color: 'var(--pb-ink-muted)',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: 0.3,
+        }}
+      >
+        {label}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <PanelSlider label="X" value={values[0]} onChange={(v) => onChange(0, v)} min={min} max={max} step={step} precision={precision} suffix={suffix} compact />
+        <PanelSlider label="Y" value={values[1]} onChange={(v) => onChange(1, v)} min={min} max={max} step={step} precision={precision} suffix={suffix} compact />
+        <PanelSlider label="Z" value={values[2]} onChange={(v) => onChange(2, v)} min={min} max={max} step={step} precision={precision} suffix={suffix} compact />
+      </div>
+    </div>
+  );
+}
+

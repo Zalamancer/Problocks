@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitives';
 import { RobloxAvatar } from '../RobloxAvatar';
 import { outfitToAvatar } from './avatar-map';
+import { useUserAvatar } from '@/store/user-avatar-store';
 import {
   CATEGORY_LABELS, ITEMS_BY_CATEGORY, ITEMS_BY_ID,
   defaultOwned, isOwned,
@@ -53,6 +54,12 @@ export const Wardrobe = () => {
   // Memoize the converted outfit so RobloxAvatar's WebGL scene only rebuilds
   // when something it actually renders changes (skin/shirt/pants/face/hat/hair).
   const avatarOutfit = useMemo(() => outfitToAvatar(outfit), [outfit]);
+  // Mirror the current avatar outfit into the shared user-avatar-store so
+  // the 3D freeform studio's character renders with the same look.
+  const setStoreOutfit = useUserAvatar((s) => s.setOutfit);
+  useEffect(() => {
+    setStoreOutfit(avatarOutfit);
+  }, [avatarOutfit, setStoreOutfit]);
 
   const showFlash = (msg: string) => {
     setFlash(msg);

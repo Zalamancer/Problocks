@@ -18,9 +18,27 @@ import {
 } from '@/lib/kid-style-3d';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { useSceneStore } from '@/store/scene-store';
+import { useUserAvatar } from '@/store/user-avatar-store';
 import { TopToolbar } from './freeform3d/TopToolbar';
 import { setSelectionHighlight } from './freeform3d/selection-outline';
 import { setSpawnTargetProvider } from '@/lib/kid-style-3d/spawn-target';
+
+/** Convert a user-avatar AvatarOutfit into SceneObject.props for the
+    character prefab. Kept local because the character prefab is the
+    only consumer of this shape. */
+function outfitToCharacterProps(outfit: ReturnType<typeof useUserAvatar.getState>['outfit']) {
+  return {
+    skinColor:  outfit.skin,
+    pantsColor: outfit.pants,
+    shoeColor:  '#2a2438',
+    hair:       outfit.hair,
+    hairColor:  outfit.hairColor,
+    hat:        outfit.hat,
+    hatColor:   outfit.hatColor,
+    face:       outfit.face,
+    gender:     outfit.gender,
+  } as Record<string, string>;
+}
 
 /**
  * 3D Freeform viewport. Mounts a kid-style Three.js engine and keeps its
@@ -55,6 +73,7 @@ export function FreeformView3D() {
   const updateObject = useFreeform3D((s) => s.updateObject);
   const undo = useFreeform3D((s) => s.undo);
   const redo = useFreeform3D((s) => s.redo);
+  const userOutfit = useUserAvatar((s) => s.outfit);
 
   const [stats, setStats] = useState<SceneStats>({ vertices: 0, triangles: 0, meshes: 0 });
   // Silence "declared but unused" — addPrefab is retained as a store
@@ -127,7 +146,14 @@ export function FreeformView3D() {
     addPrefab('house',     [0, 0, -5]);
     addPrefab('tree-oak',  [-7, 0, 5]);
     addPrefab('tree-pine', [7, 0, -7]);
-    addPrefab('character', [2.5, 0, 3.5]);
+    // Character gets the student's current avatar outfit — hair style,
+    // hat, face, colours, gender — so it matches the profile card.
+    const outfit = useUserAvatar.getState().outfit;
+    useFreeform3D.getState().addPrefabFull('character', {
+      position: [2.5, 0, 3.5],
+      color: outfit.shirt,
+      props: outfitToCharacterProps(outfit),
+    });
     addPrefab('mailbox',   [-4, 0, 8]);
     addPrefab('balloon',   [-3.4, 0, 8]);
     addPrefab('bench',     [5.5, 0, 4.5]);
@@ -139,6 +165,23 @@ export function FreeformView3D() {
     // neutral plot, not "one thing highlighted".
     useFreeform3D.getState().select(null);
   }, [addPrefab]);
+
+  /* ---- live-sync every scene character to the user's current outfit ----
+      Updates each character's shirt color + outfit props when the
+      wardrobe changes. The hydrator rebuilds characters on props change
+      (see hydrate.ts), so the mesh hair / hat / face all refresh
+      without a scene-wide reload. */
+  useEffect(() => {
+    const chars = useFreeform3D.getState().scene.objects.filter((o) => o.kind === 'character');
+    if (chars.length === 0) return;
+    const patchProps = outfitToCharacterProps(userOutfit);
+    for (const c of chars) {
+      updateObject(c.id, {
+        color: userOutfit.shirt,
+        props: { ...(c.props ?? {}), ...patchProps },
+      });
+    }
+  }, [userOutfit, updateObject]);
 
   /* ---- sync store → engine ---- */
   useEffect(() => {

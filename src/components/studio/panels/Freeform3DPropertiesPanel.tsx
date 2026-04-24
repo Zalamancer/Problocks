@@ -11,7 +11,24 @@ import {
 } from '@/components/ui';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { getPrefabDef, PALETTE } from '@/lib/kid-style-3d';
-import type { Vec3 } from '@/lib/kid-style-3d/scene-schema';
+import type { Vec3 as SceneVec3 } from '@/lib/kid-style-3d/scene-schema';
+import { TransformControls, type Vec3 as ObjVec3 } from './TransformControls';
+
+/** Convert [x,y,z] tuple → {x,y,z} object for the shared TransformControls. */
+const toObj = (t: SceneVec3): ObjVec3 => ({ x: t[0], y: t[1], z: t[2] });
+/** Reverse: {x,y,z} object → [x,y,z] tuple for the store. */
+const toTup = (v: ObjVec3): SceneVec3 => [v.x, v.y, v.z];
+/** Radians tuple → degrees object (for rotation display). */
+const radToDegObj = (t: SceneVec3): ObjVec3 => ({
+  x: (t[0] * 180) / Math.PI,
+  y: (t[1] * 180) / Math.PI,
+  z: (t[2] * 180) / Math.PI,
+});
+const degObjToRad = (v: ObjVec3): SceneVec3 => [
+  (v.x * Math.PI) / 180,
+  (v.y * Math.PI) / 180,
+  (v.z * Math.PI) / 180,
+];
 
 /**
  * Right-panel Properties content for the 3D Freeform studio. Reads the
@@ -61,13 +78,6 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
 
   // Sections and controls are hooks — render a neutral empty state if no selection.
   const def = object ? getPrefabDef(object.kind) : null;
-
-  const setAxis = (key: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, v: number) => {
-    if (!object) return;
-    const next = [...object[key]] as Vec3;
-    next[axis] = v;
-    updateObject(object.id, { [key]: next } as Partial<typeof object>);
-  };
 
   const setColor = (color: string) => {
     if (!object) return;
@@ -126,42 +136,18 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
 
             <PanelSection title="Transform" collapsible defaultOpen>
               <div className="flex flex-col gap-2.5">
-                <AxisTriple
-                  label="Position"
-                  suffix="u"
-                  min={-40}
-                  max={40}
-                  step={0.1}
-                  precision={2}
-                  values={object.position}
-                  onChange={(axis, v) => setAxis('position', axis, v)}
-                />
-                <AxisTriple
-                  label="Rotation"
-                  suffix="°"
-                  min={-180}
-                  max={180}
-                  step={1}
-                  precision={0}
-                  values={object.rotation.map((r) => (r * 180) / Math.PI) as Vec3}
-                  onChange={(axis, v) => setAxis('rotation', axis, (v * Math.PI) / 180)}
-                />
-                <AxisTriple
-                  label="Scale"
-                  suffix="×"
-                  min={0.1}
-                  max={10}
-                  step={0.05}
-                  precision={2}
-                  values={object.scale}
-                  onChange={(axis, v) => setAxis('scale', axis, v)}
+                <TransformControls
+                  position={toObj(object.position)}
+                  rotation={radToDegObj(object.rotation)}
+                  scale={toObj(object.scale)}
+                  onPositionChange={(v) => updateObject(object.id, { position: toTup(v) })}
+                  onRotationChange={(v) => updateObject(object.id, { rotation: degObjToRad(v) })}
+                  onScaleChange={(v) => updateObject(object.id, { scale: toTup(v) })}
                 />
                 <PanelSlider
                   label="Uniform scale"
                   value={object.scale[0]}
-                  onChange={(v) =>
-                    updateObject(object.id, { scale: [v, v, v] })
-                  }
+                  onChange={(v) => updateObject(object.id, { scale: [v, v, v] })}
                   min={0.1}
                   max={10}
                   step={0.05}
@@ -269,44 +255,4 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
   );
 }
 
-function AxisTriple({
-  label,
-  values,
-  onChange,
-  min,
-  max,
-  step,
-  precision,
-  suffix,
-}: {
-  label: string;
-  values: Vec3;
-  onChange: (axis: 0 | 1 | 2, v: number) => void;
-  min: number;
-  max: number;
-  step: number;
-  precision: number;
-  suffix: string;
-}) {
-  return (
-    <div>
-      <div
-        className="px-1 py-1 text-[11px]"
-        style={{
-          color: 'var(--pb-ink-muted)',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: 0.3,
-        }}
-      >
-        {label}
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <PanelSlider label="X" value={values[0]} onChange={(v) => onChange(0, v)} min={min} max={max} step={step} precision={precision} suffix={suffix} compact />
-        <PanelSlider label="Y" value={values[1]} onChange={(v) => onChange(1, v)} min={min} max={max} step={step} precision={precision} suffix={suffix} compact />
-        <PanelSlider label="Z" value={values[2]} onChange={(v) => onChange(2, v)} min={min} max={max} step={step} precision={precision} suffix={suffix} compact />
-      </div>
-    </div>
-  );
-}
 

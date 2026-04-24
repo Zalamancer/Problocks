@@ -32,6 +32,29 @@ export const PREFAB_CATEGORIES: PrefabCategory[] = [
   { id: 'characters', label: 'Characters' },
 ];
 
+/**
+ * Prefab style = which visual kit a prefab belongs to. Today the whole
+ * catalog ships in one "chunky-pastel" kit — the Roblox-ish blocky look
+ * wired through materials.ts. Additional kits (lowpoly, voxel, realistic)
+ * will land as sibling prefab files and register here; the AssetsPanel
+ * filter and the AI agent both key off this list, so adding a new kit is
+ * a pure data/registration change.
+ */
+export type PrefabStyleId = 'chunky-pastel';
+
+export interface PrefabStyle {
+  id: PrefabStyleId;
+  label: string;
+  /** Short description surfaced in the Style filter dropdown. */
+  desc: string;
+}
+
+export const PREFAB_STYLES: PrefabStyle[] = [
+  { id: 'chunky-pastel', label: 'Chunky Pastel', desc: 'Soft blocky Roblox-ish kit' },
+];
+
+export const DEFAULT_PREFAB_STYLE: PrefabStyleId = 'chunky-pastel';
+
 /** Spec for a prop the Inspector can surface for a specific prefab kind. */
 export type PropSpec =
   | { kind: 'color'; key: string; label: string; defaultValue: string }

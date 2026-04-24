@@ -527,6 +527,7 @@ export function FreeformView3D() {
           props: {
             points: [[pt.x, pt.z]],
             width: b.pathWidth,
+            thickness: b.pathThickness,
           },
         });
         state.setBrushField('activePathId', id);
@@ -537,7 +538,12 @@ export function FreeformView3D() {
         (active.props?.points as Array<[number, number]> | undefined) ?? [];
       const nextPoints: Array<[number, number]> = [...oldPoints, [pt.x, pt.z]];
       state.updateObject(active.id, {
-        props: { ...(active.props ?? {}), points: nextPoints, width: b.pathWidth },
+        props: {
+          ...(active.props ?? {}),
+          points: nextPoints,
+          width: b.pathWidth,
+          thickness: b.pathThickness,
+        },
       });
     }
 

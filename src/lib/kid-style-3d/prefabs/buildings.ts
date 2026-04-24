@@ -288,24 +288,29 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
   }
 
   const width = (props?.width as number | undefined) ?? 2.2;
+  const thickness = (props?.thickness as number | undefined) ?? 0.2;
   const samplesPerSegment = (props?.samplesPerSegment as number | undefined) ?? 12;
   const fillColor = color ?? PALETTE.dirt;
 
   const g = new THREE.Group();
-  const mat = toonMaterial({ color: fillColor });
+  const topMat = toonMaterial({ color: fillColor });
+  // Darker sides read as edge shadow — anchors the path onto the
+  // grass instead of looking like it's floating.
+  const sideMat = toonMaterial({ color: PALETTE.dirtDark });
   const halfW = Math.max(0.1, width / 2);
-  const Y = 0.02;
+  const H = Math.max(0.02, thickness);
+  const Y_BOT = 0.02;        // slight lift so outlines don't z-fight with grass
+  const Y_TOP = Y_BOT + H;
 
   // --- Endcap helper -------------------------------------------------
-  // Small flat disc at a waypoint. Not a kidCylinder because that drops
-  // to a 5-sided prism in Low / Voxel perf modes and the bench ribbon
-  // then has an obvious pentagon where it ought to round off. Use a
-  // dedicated high-segment CircleGeometry at all perf tiers.
-  const capGeo = new THREE.CircleGeometry(halfW, 18);
-  capGeo.rotateX(-Math.PI / 2);
+  // Full cylinder (top disc + side) at a waypoint. Perf-mode-independent
+  // geometry (plain Three.js CylinderGeometry at 18 segments) so the
+  // disc stays round at every tier.
+  const capGeo = new THREE.CylinderGeometry(halfW, halfW, H, 18);
   const addCap = (x: number, z: number) => {
-    const cap = new THREE.Mesh(capGeo, mat);
-    cap.position.set(x, Y, z);
+    const cap = new THREE.Mesh(capGeo, topMat);
+    cap.position.set(x, Y_BOT + H / 2, z);
+    cap.castShadow = false;
     cap.receiveShadow = true;
     g.add(cap);
   };
@@ -318,11 +323,6 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
   }
 
   // --- Sample the spine ---------------------------------------------
-  // 2 points → straight line (LineCurve3 gives an exact straight
-  // spine with no chance of Catmull-Rom overshoot). 3+ points →
-  // Catmull-Rom with centripetal parameterisation, which avoids the
-  // loops + cusps the 'catmullrom' (uniform) type produces when
-  // waypoints land at uneven spacings.
   const a0 = new THREE.Vector3(waypoints[0][0], 0, waypoints[0][1]);
   const aN = new THREE.Vector3(
     waypoints[waypoints.length - 1][0],
@@ -346,14 +346,10 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
     const t = i / sampleCount;
     const p = curve.getPoint(t);
     const tan = curve.getTangent(t);
-    // Zero out any Y drift that Catmull-Rom might produce off a y=0
-    // control polyline; the whole ribbon must stay flat on the ground.
     p.y = 0;
     tan.y = 0;
     if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) continue;
     if (tan.lengthSq() < 1e-6) {
-      // Fallback: derive tangent from the previous sample so endpoint
-      // degeneracy doesn't crash the whole ribbon.
       const prev = samples[samples.length - 1];
       if (prev) tan.subVectors(p, prev);
       else tan.set(1, 0, 0);
@@ -363,50 +359,78 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
     tangents.push(tan);
   }
   if (samples.length < 2) {
-    // Nothing usable — degrade gracefully to two endcaps.
     addCap(waypoints[0][0], waypoints[0][1]);
     addCap(aN.x, aN.z);
     return g;
   }
 
-  // --- Build the triangle strip -------------------------------------
+  // --- Build the extruded ribbon ------------------------------------
+  // Per sample we emit 4 vertices: leftTop, rightTop, leftBot, rightBot.
+  // Each gap between samples gets 3 quads (top, left side, right side).
+  // Top uses the warm dirt color; sides use the darker dirt-edge color.
   const vertexCount = samples.length;
-  const positions = new Float32Array(vertexCount * 2 * 3);
-  const indices: number[] = [];
+  const topPositions = new Float32Array(vertexCount * 2 * 3);
+  const topIndices: number[] = [];
+  const sidePositions = new Float32Array(vertexCount * 4 * 3);
+  const sideIndices: number[] = [];
   for (let i = 0; i < vertexCount; i++) {
     const p = samples[i];
     const tan = tangents[i];
-    // Perpendicular in the XZ plane (rotate 90°).
     const px = -tan.z;
     const pz = tan.x;
-    const li = i * 6;
-    positions[li + 0] = p.x + px * halfW;
-    positions[li + 1] = Y;
-    positions[li + 2] = p.z + pz * halfW;
-    positions[li + 3] = p.x - px * halfW;
-    positions[li + 4] = Y;
-    positions[li + 5] = p.z - pz * halfW;
+    const lx = p.x + px * halfW, lz = p.z + pz * halfW; // left
+    const rx = p.x - px * halfW, rz = p.z - pz * halfW; // right
+    // Top strip: two verts (left / right) per sample.
+    const ti = i * 6;
+    topPositions[ti + 0] = lx; topPositions[ti + 1] = Y_TOP; topPositions[ti + 2] = lz;
+    topPositions[ti + 3] = rx; topPositions[ti + 4] = Y_TOP; topPositions[ti + 5] = rz;
+    // Side strip: four verts (leftTop, leftBot, rightTop, rightBot) per sample.
+    const si = i * 12;
+    sidePositions[si + 0]  = lx; sidePositions[si + 1]  = Y_TOP; sidePositions[si + 2]  = lz;
+    sidePositions[si + 3]  = lx; sidePositions[si + 4]  = Y_BOT; sidePositions[si + 5]  = lz;
+    sidePositions[si + 6]  = rx; sidePositions[si + 7]  = Y_TOP; sidePositions[si + 8]  = rz;
+    sidePositions[si + 9]  = rx; sidePositions[si + 10] = Y_BOT; sidePositions[si + 11] = rz;
   }
-  // Winding order chosen so triangle normals point +Y (up, toward the
-  // camera). The naive (a, a+1, a+2) order produced downward normals
-  // and MeshToonMaterial's FrontSide culling silently discarded the
-  // whole ribbon, leaving only the endcaps visible.
+  // Top quads — same winding fix as before (faces +Y).
   for (let i = 0; i < vertexCount - 1; i++) {
     const a = i * 2;
-    indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    topIndices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+  }
+  // Side quads. Per-sample side verts: [LT, LB, RT, RB] at indices
+  // [a, a+1, a+2, a+3] where a = i*4.
+  for (let i = 0; i < vertexCount - 1; i++) {
+    const a = i * 4;
+    const b = a + 4;
+    // Left side: LT_i → LB_i → LT_{i+1} → LB_{i+1}
+    // Normals should face in the +perpendicular direction (outward
+    // from the ribbon centreline). Winding set so that's the case.
+    sideIndices.push(a, a + 1, b,     a + 1, b + 1, b);
+    // Right side: RT_i → RB_i → RT_{i+1} → RB_{i+1} (flipped winding
+    // so normals face the -perpendicular direction, i.e. outward on
+    // the other side).
+    sideIndices.push(a + 2, b + 2, a + 3,     a + 3, b + 2, b + 3);
   }
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-  const ribbon = new THREE.Mesh(geo, mat);
-  ribbon.receiveShadow = true;
-  ribbon.castShadow = false;
-  g.add(ribbon);
+  const topGeo = new THREE.BufferGeometry();
+  topGeo.setAttribute('position', new THREE.BufferAttribute(topPositions, 3));
+  topGeo.setIndex(topIndices);
+  topGeo.computeVertexNormals();
+  const topMesh = new THREE.Mesh(topGeo, topMat);
+  topMesh.receiveShadow = true;
+  topMesh.castShadow = false;
+  g.add(topMesh);
 
-  // Endcaps at the first and last waypoint round off the chopped
-  // ribbon ends so short paths read as "rounded stub", not "board".
+  const sideGeo = new THREE.BufferGeometry();
+  sideGeo.setAttribute('position', new THREE.BufferAttribute(sidePositions, 3));
+  sideGeo.setIndex(sideIndices);
+  sideGeo.computeVertexNormals();
+  const sideMesh = new THREE.Mesh(sideGeo, sideMat);
+  sideMesh.receiveShadow = true;
+  sideMesh.castShadow = false;
+  g.add(sideMesh);
+
+  // Endcaps — full cylinders at the first and last waypoint so the
+  // rounded stub has visible side walls, not just a flat disc rim.
   addCap(waypoints[0][0], waypoints[0][1]);
   addCap(aN.x, aN.z);
 

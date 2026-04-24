@@ -216,6 +216,14 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
             precision={1}
             suffix="u"
           />
+          <PanelSlider
+            label="Thickness"
+            value={brush.pathThickness}
+            onChange={(v) => setBrushField('pathThickness', v)}
+            min={0.02} max={1.0} step={0.02}
+            precision={2}
+            suffix="u"
+          />
           <div
             className="px-1 text-[11px] leading-snug"
             style={{ color: 'var(--pb-ink-muted)' }}

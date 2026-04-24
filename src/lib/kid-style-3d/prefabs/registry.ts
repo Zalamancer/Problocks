@@ -135,7 +135,8 @@ export const PREFABS: PrefabDef[] = [
     kind: 'path-spline', label: 'Dirt Path', category: 'buildings', style: 'chunky-pastel',
     defaultColor: PALETTE.dirt, icon: '〰️',
     props: [
-      { kind: 'number', key: 'width', label: 'Width', defaultValue: 2.2, min: 0.5, max: 8, step: 0.1, suffix: 'u' },
+      { kind: 'number', key: 'width',     label: 'Width',     defaultValue: 2.2, min: 0.5, max: 8,   step: 0.1,  suffix: 'u' },
+      { kind: 'number', key: 'thickness', label: 'Thickness', defaultValue: 0.2, min: 0.02, max: 1.0, step: 0.02, suffix: 'u' },
     ],
   },
   { kind: 'mailbox',    label: 'Mailbox',         category: 'buildings', style: 'chunky-pastel', defaultColor: '#7ab0d8',         icon: '📪' },

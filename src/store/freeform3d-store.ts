@@ -90,6 +90,8 @@ export interface BrushSettings {
   activePathId: string | null;
   /** Spline mode only — path width in world units (default 2.2). */
   pathWidth: number;
+  /** Spline mode only — path thickness (height above grass). */
+  pathThickness: number;
   /** How many objects to scatter per click / paint tick. 1–20.
       In 'path' mode this is the number of tiles across the path
       width (1 = single tile line; 3–5 = wide road). */
@@ -126,6 +128,7 @@ export const DEFAULT_BRUSH: BrushSettings = {
   mode: 'scatter',
   activePathId: null,
   pathWidth: 2.2,
+  pathThickness: 0.2,
   density: 3,
   radius: 1.5,
   randomRotY: true,

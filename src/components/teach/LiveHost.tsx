@@ -374,6 +374,17 @@ function QuestionPanel({ room, onNext }: { room: RoomPublic; onNext: () => void 
         </div>
       )}
 
+      {micro.kind === 'whiteboard' && (
+        <div style={{ marginTop: 20, fontSize: 13, color: 'var(--pb-ink-muted)' }}>
+          Whiteboard answer — students draw on their device.
+          {micro.hint && (
+            <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: 'var(--pb-ink-soft)' }}>
+              Hint: {micro.hint}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ marginTop: 28, display: 'flex', justifyContent: 'center' }}>
         <button
           type="button"
@@ -407,10 +418,16 @@ function RevealPanel({ room, onNext }: { room: RoomPublic; onNext: () => void })
       correct: o.correct,
       count: answersHere.filter((a) => a.answerId === o.id).length,
     }));
-  } else {
+  } else if (micro.kind === 'number') {
     buckets = [
       { label: `Correct (±${micro.tol})`, correct: true,  count: answersHere.filter((a) => a.correct).length },
       { label: 'Other',                   correct: false, count: answersHere.filter((a) => !a.correct).length },
+    ];
+  } else {
+    // Whiteboard: no auto-grade yet, so just show "submitted vs not".
+    buckets = [
+      { label: 'Submitted',     correct: true,  count: answersHere.filter((a) => !!a.answerImagePath).length },
+      { label: 'Not submitted', correct: false, count: room.players.length - answersHere.filter((a) => !!a.answerImagePath).length },
     ];
   }
   const max = Math.max(1, ...buckets.map((b) => b.count));

@@ -152,6 +152,29 @@ export function MicroQuestion({
           }
         />
       )}
+
+      {micro.kind === 'whiteboard' && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '10px 12px',
+            borderRadius: 11,
+            border: '1.5px dashed var(--pb-line-2)',
+            background: 'var(--pb-cream-2)',
+            color: 'var(--pb-ink-muted)',
+            fontSize: 12,
+            fontWeight: 600,
+            lineHeight: 1.5,
+          }}
+        >
+          Whiteboard question — students draw on the play page.
+          {micro.hint && (
+            <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--pb-ink-soft)' }}>
+              Hint: {micro.hint}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,10 @@ export interface RoomAnswer {
   microId: string;
   answerId?: string;
   answerValue?: number;
+  // Storage object path in the `quiz-whiteboards` bucket. Set for
+  // whiteboard-kind submissions; the host dashboard fetches a signed
+  // URL on demand.
+  answerImagePath?: string;
   correct: boolean;
   msToAnswer: number;
   points: number;

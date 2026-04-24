@@ -26,7 +26,20 @@ export interface MicroNumber {
   explain: string;
 }
 
-export type Micro = MicroChoice | MicroNumber;
+// Whiteboard: student draws / writes a freehand answer on a canvas.
+// We can't auto-grade pixels yet, so the server marks any submission
+// `correct: true` (participation credit). When AI vision grading lands
+// it'll re-grade the stored PNG without changing this type.
+export interface MicroWhiteboard {
+  id: string;
+  prompt: string;
+  kind: 'whiteboard';
+  // Optional hint shown above the canvas (e.g. "Draw a free-body diagram").
+  hint?: string;
+  explain: string;
+}
+
+export type Micro = MicroChoice | MicroNumber | MicroWhiteboard;
 
 export interface FrqPart {
   id: string;
@@ -273,6 +286,24 @@ export const FRQ: Frq = {
             { id: 'D', text: 'Exactly zero', correct: false },
           ],
           explain: 'Slope = 2L/g. Larger slope ⇒ smaller g. The experiment underestimates g.',
+        },
+      ],
+    },
+    {
+      id: 'f',
+      label: 'Part (f)',
+      points: 1,
+      apText:
+        'On the diagram below, draw and label the forces acting on the cart while it slides down the ramp (assume the ramp is frictionless).',
+      highlight: [],
+      micros: [
+        {
+          id: 'f1',
+          kind: 'whiteboard',
+          prompt: 'Draw a free-body diagram for the cart on the ramp.',
+          hint: 'Two forces: gravity (mg, straight down) and the normal force (perpendicular to the ramp). Label each arrow.',
+          explain:
+            'Frictionless ramp ⇒ only mg (down) and N (perpendicular to the ramp surface) act on the cart. The net force points along the ramp with magnitude mg sin θ.',
         },
       ],
     },

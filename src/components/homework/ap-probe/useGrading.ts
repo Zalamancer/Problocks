@@ -9,6 +9,11 @@ export function isCorrect(micro: Micro, answer: NonNullable<AnswersByPart[string
   if (micro.kind === 'number') {
     return 'value' in answer && Math.abs(answer.value - micro.answer) <= micro.tol;
   }
+  if (micro.kind === 'whiteboard') {
+    // Pixel-grading is a future job for the vision model. Anything
+    // submitted with a non-empty drawing counts as participation credit.
+    return 'dataUrl' in answer && !!answer.dataUrl;
+  }
   return 'correct' in answer && answer.correct;
 }
 

@@ -20,6 +20,9 @@ export interface SubmitAnswerInput {
   microId: string;
   answerId?: string;
   answerValue?: number;
+  // Set when answering a whiteboard micro: storage path returned by
+  // the /answer/image upload endpoint.
+  answerImagePath?: string;
 }
 
 export interface SubmitAnswerResult {

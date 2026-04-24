@@ -407,7 +407,12 @@ export function HomeworkDesktop({ frq, onExit }: HomeworkDesktopProps) {
                                   marginTop: 4,
                                 }}
                               >
-                                ✓ Recorded · {m.kind === 'number' && 'value' in a ? a.value : a.id}
+                                ✓ Recorded ·{' '}
+                                {m.kind === 'number' && 'value' in a
+                                  ? a.value
+                                  : m.kind === 'whiteboard'
+                                    ? 'drawing'
+                                    : a.id}
                               </div>
                             )}
                             {graded && (

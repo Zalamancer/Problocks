@@ -24,7 +24,18 @@ export type NumberMicro = {
   explain: string;
 };
 
-export type Micro = ChoiceMicro | NumberMicro;
+// Whiteboard: student draws / writes a freehand answer on a canvas.
+// Homework keeps everything client-side, so we stash a PNG data URL
+// directly on the answer object — no upload needed.
+export type WhiteboardMicro = {
+  id: string;
+  kind: 'whiteboard';
+  prompt: string;
+  hint?: string;
+  explain: string;
+};
+
+export type Micro = ChoiceMicro | NumberMicro | WhiteboardMicro;
 
 export type Part = {
   id: string;
@@ -60,8 +71,11 @@ export type FRQ = {
 // What we store per answered micro-question.
 // For a multiple-choice answer: the picked ChoiceOption.
 // For a numeric answer: { id, value, correct }.
+// For a whiteboard answer: { id, dataUrl, correct } — dataUrl is the
+// PNG snapshot at submit time so the rubric can show a thumbnail.
 export type Answer =
   | ChoiceOption
-  | { id: 'num'; value: number; correct: boolean };
+  | { id: 'num'; value: number; correct: boolean }
+  | { id: 'wb'; dataUrl: string; correct: boolean };
 
 export type AnswersByPart = Record<string, Record<string, Answer>>;

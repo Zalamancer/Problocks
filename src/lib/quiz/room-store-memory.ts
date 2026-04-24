@@ -124,6 +124,7 @@ export async function submitAnswer(input: SubmitAnswerInput): Promise<SubmitAnsw
     input.microId,
     input.answerId,
     input.answerValue,
+    input.answerImagePath,
   );
   const now = Date.now();
   // Live scoring is time-to-answer from question reveal. Self-paced has
@@ -141,6 +142,7 @@ export async function submitAnswer(input: SubmitAnswerInput): Promise<SubmitAnsw
     microId: input.microId,
     answerId: input.answerId,
     answerValue: input.answerValue,
+    answerImagePath: input.answerImagePath,
     correct,
     msToAnswer: ms,
     points,

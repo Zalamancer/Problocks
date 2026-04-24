@@ -51,6 +51,7 @@ interface AnswerRow {
   micro_id: string;
   answer_id: string | null;
   answer_value: number | null;
+  answer_image_path: string | null;
   correct: boolean;
   ms_to_answer: number;
   points: number;
@@ -94,6 +95,7 @@ function toAnswer(a: AnswerRow): RoomAnswer {
     microId: a.micro_id,
     answerId: a.answer_id ?? undefined,
     answerValue: a.answer_value ?? undefined,
+    answerImagePath: a.answer_image_path ?? undefined,
     correct: a.correct,
     msToAnswer: a.ms_to_answer,
     points: a.points,
@@ -305,6 +307,7 @@ export async function submitAnswer(
     input.microId,
     input.answerId,
     input.answerValue,
+    input.answerImagePath,
   );
   const now = Date.now();
   const startedAt = roomRow.question_started_at ? Date.parse(roomRow.question_started_at) : null;
@@ -324,6 +327,7 @@ export async function submitAnswer(
       micro_id: input.microId,
       answer_id: input.answerId ?? null,
       answer_value: input.answerValue ?? null,
+      answer_image_path: input.answerImagePath ?? null,
       correct,
       ms_to_answer: ms,
       points,

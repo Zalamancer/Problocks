@@ -17,7 +17,16 @@ export async function POST(
     const microId = String(body?.microId ?? '');
     const answerId = typeof body?.answerId === 'string' ? body.answerId : undefined;
     const answerValue = typeof body?.answerValue === 'number' ? body.answerValue : undefined;
-    const result = await submitAnswer({ token, partId, microId, answerId, answerValue });
+    const answerImagePath =
+      typeof body?.answerImagePath === 'string' ? body.answerImagePath : undefined;
+    const result = await submitAnswer({
+      token,
+      partId,
+      microId,
+      answerId,
+      answerValue,
+      answerImagePath,
+    });
     return NextResponse.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';

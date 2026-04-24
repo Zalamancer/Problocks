@@ -1,10 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, use } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, use } from 'react';
 import { FRQ } from '@/lib/quiz/frq-content';
 import type { Micro } from '@/lib/quiz/frq-content';
 import type { RoomPublic, RoomPlayer } from '@/lib/quiz/room-types';
 import { useRoom } from '@/lib/quiz/use-room';
+import {
+  WhiteboardCanvas,
+  type WhiteboardHandle,
+} from '@/components/quiz/WhiteboardCanvas';
 
 // Public student page. Kahoot-style: big colored buttons, no question
 // text (question lives on the teacher's screen). Students land here by
@@ -91,7 +95,11 @@ export default function PlayQuizPage({
     setSeat(next);
   }, [room, pin]);
 
-  const submit = useCallback(async (opts: { answerId?: string; answerValue?: number }) => {
+  const submit = useCallback(async (opts: {
+    answerId?: string;
+    answerValue?: number;
+    answerImagePath?: string;
+  }) => {
     if (!room || !seat) return;
     const part = FRQ.parts[room.partIdx];
     const micro = part?.micros[room.microIdx];
@@ -149,6 +157,8 @@ export default function PlayQuizPage({
         <PlayingScreen
           room={room}
           playerId={seat.playerId}
+          token={seat.token}
+          roomId={room.id}
           lastResult={lastResult}
           answeredKey={answeredKey}
           onSubmit={submit}
@@ -242,15 +252,23 @@ function JoinForm({
 function PlayingScreen({
   room,
   playerId,
+  token,
+  roomId,
   lastResult,
   answeredKey,
   onSubmit,
 }: {
   room: RoomPublic;
   playerId: string;
+  token: string;
+  roomId: string;
   lastResult: { correct: boolean; points: number; newScore: number } | null;
   answeredKey: string | null;
-  onSubmit: (opts: { answerId?: string; answerValue?: number }) => void;
+  onSubmit: (opts: {
+    answerId?: string;
+    answerValue?: number;
+    answerImagePath?: string;
+  }) => void;
 }) {
   const me = room.players.find((p) => p.id === playerId);
   const part = FRQ.parts[room.partIdx];
@@ -266,7 +284,13 @@ function PlayingScreen({
         {room.phase === 'lobby' && <WaitingCard text="Hang tight — waiting for the teacher to start." />}
 
         {room.phase === 'question' && part && micro && !answeredThis && (
-          <QuestionInput micro={micro} onSubmit={onSubmit} />
+          <QuestionInput
+            micro={micro}
+            roomId={roomId}
+            token={token}
+            partId={part.id}
+            onSubmit={onSubmit}
+          />
         )}
         {room.phase === 'question' && answeredThis && (
           <WaitingCard text="Answer locked in. Waiting for others…" />
@@ -334,10 +358,20 @@ function WaitingCard({ text }: { text: string }) {
 
 function QuestionInput({
   micro,
+  roomId,
+  token,
+  partId,
   onSubmit,
 }: {
   micro: Micro;
-  onSubmit: (opts: { answerId?: string; answerValue?: number }) => void;
+  roomId: string;
+  token: string;
+  partId: string;
+  onSubmit: (opts: {
+    answerId?: string;
+    answerValue?: number;
+    answerImagePath?: string;
+  }) => void;
 }) {
   const [num, setNum] = useState('');
   if (micro.kind === 'choice') {
@@ -370,6 +404,17 @@ function QuestionInput({
           );
         })}
       </div>
+    );
+  }
+  if (micro.kind === 'whiteboard') {
+    return (
+      <WhiteboardQuestion
+        micro={micro}
+        roomId={roomId}
+        token={token}
+        partId={partId}
+        onSubmit={onSubmit}
+      />
     );
   }
   const parsed = parseFloat(num);
@@ -416,6 +461,101 @@ function QuestionInput({
         }}
       >
         Submit
+      </button>
+    </div>
+  );
+}
+
+function WhiteboardQuestion({
+  micro,
+  roomId,
+  token,
+  partId,
+  onSubmit,
+}: {
+  micro: Extract<Micro, { kind: 'whiteboard' }>;
+  roomId: string;
+  token: string;
+  partId: string;
+  onSubmit: (opts: { answerImagePath?: string }) => void;
+}) {
+  const ref = useRef<WhiteboardHandle | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submitWhiteboard = useCallback(async () => {
+    if (!ref.current) return;
+    if (!ref.current.hasContent()) {
+      setError('Draw something before submitting.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const blob = await ref.current.getPngBlob();
+      if (!blob) {
+        setError('Could not snapshot the canvas.');
+        return;
+      }
+      const form = new FormData();
+      form.append('token', token);
+      form.append('partId', partId);
+      form.append('microId', micro.id);
+      form.append('file', blob, `${partId}-${micro.id}.png`);
+      const res = await fetch(`/api/quiz/rooms/${roomId}/answer/image`, {
+        method: 'POST',
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error ?? 'Upload failed.');
+        return;
+      }
+      onSubmit({ answerImagePath: data.path });
+    } finally {
+      setBusy(false);
+    }
+  }, [micro.id, partId, roomId, token, onSubmit]);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {micro.hint && (
+        <div style={{ fontSize: 12, opacity: 0.75, textAlign: 'center', lineHeight: 1.5 }}>
+          {micro.hint}
+        </div>
+      )}
+      <WhiteboardCanvas ref={ref} width={320} height={360} disabled={busy} />
+      {error && (
+        <div
+          style={{
+            padding: '8px 12px',
+            borderRadius: 10,
+            background: 'rgba(255,90,110,0.18)',
+            border: '1px solid rgba(255,90,110,0.5)',
+            color: '#fecaca',
+            fontSize: 12,
+            textAlign: 'center',
+          }}
+        >
+          {error}
+        </div>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={submitWhiteboard}
+        style={{
+          padding: 16,
+          borderRadius: 14,
+          border: 0,
+          background: busy ? 'rgba(255,255,255,0.14)' : '#22c55e',
+          color: busy ? 'rgba(255,255,255,0.6)' : '#06331a',
+          fontSize: 16,
+          fontWeight: 800,
+          cursor: busy ? 'wait' : 'pointer',
+        }}
+      >
+        {busy ? 'Submitting…' : 'Submit drawing'}
       </button>
     </div>
   );
@@ -504,7 +644,11 @@ function SelfPacedScreen({
   const micro = part && step ? part.micros[step.microIdx] : null;
 
   const submit = useCallback(
-    async (opts: { answerId?: string; answerValue?: number }) => {
+    async (opts: {
+      answerId?: string;
+      answerValue?: number;
+      answerImagePath?: string;
+    }) => {
       if (!part || !micro || busy) return;
       setBusy(true);
       try {
@@ -566,7 +710,13 @@ function SelfPacedScreen({
           <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.4, marginBottom: 14 }}>
             {micro.prompt}
           </div>
-          <QuestionInput micro={micro} onSubmit={submit} />
+          <QuestionInput
+            micro={micro}
+            roomId={roomId}
+            token={token}
+            partId={part.id}
+            onSubmit={submit}
+          />
         </div>
       )}
 

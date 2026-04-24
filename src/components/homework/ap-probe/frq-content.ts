@@ -230,5 +230,23 @@ export const FRQ_CART_ON_INCLINE: FRQ = {
         },
       ],
     },
+    {
+      id: 'f',
+      label: 'Part (f)',
+      points: 1,
+      apText:
+        'On the diagram below, draw and label the forces acting on the cart while it slides down the ramp (assume the ramp is frictionless).',
+      highlight: [],
+      micros: [
+        {
+          id: 'f1',
+          kind: 'whiteboard',
+          prompt: 'Draw a free-body diagram for the cart on the ramp.',
+          hint: 'Two forces: gravity (mg, straight down) and the normal force (perpendicular to the ramp). Label each arrow.',
+          explain:
+            'Frictionless ramp ⇒ only mg (down) and N (perpendicular to the ramp surface) act on the cart. The net force points along the ramp with magnitude mg sin θ.',
+        },
+      ],
+    },
   ],
 };

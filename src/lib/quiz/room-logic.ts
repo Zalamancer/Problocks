@@ -96,6 +96,7 @@ export function gradeAnswer(
   microId: string,
   answerId?: string,
   answerValue?: number,
+  answerImagePath?: string,
 ): boolean {
   const frq = getFrq(frqId);
   if (!frq) throw new Error('frq-missing');
@@ -107,6 +108,11 @@ export function gradeAnswer(
   if (micro.kind === 'choice') {
     const opt = micro.options.find((o) => o.id === answerId);
     return !!opt?.correct;
+  }
+  if (micro.kind === 'whiteboard') {
+    // Pixel-grading is a future job for the vision model. Anything that
+    // arrived with an image path counts as a complete submission.
+    return !!answerImagePath;
   }
   if (answerValue == null) throw new Error('value-required');
   return Math.abs(answerValue - micro.answer) <= micro.tol;

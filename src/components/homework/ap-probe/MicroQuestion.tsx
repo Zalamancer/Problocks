@@ -3,8 +3,12 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import {
+  WhiteboardCanvas,
+  type WhiteboardHandle,
+} from '@/components/quiz/WhiteboardCanvas';
 import type { Answer, ChoiceOption, Micro } from './types';
 
 type MicroQuestionProps = {
@@ -45,6 +49,141 @@ export function MicroQuestion({ micro, answered, selected, onAnswer }: MicroQues
           onAnswer={onAnswer}
         />
       )}
+
+      {micro.kind === 'whiteboard' && (
+        <WhiteboardAnswer
+          micro={micro}
+          answered={answered}
+          selected={selected as { id: 'wb'; dataUrl: string; correct: boolean } | undefined}
+          onAnswer={onAnswer}
+        />
+      )}
+    </div>
+  );
+}
+
+function WhiteboardAnswer({
+  micro,
+  answered,
+  selected,
+  onAnswer,
+}: {
+  micro: Extract<Micro, { kind: 'whiteboard' }>;
+  answered: boolean;
+  selected?: { id: 'wb'; dataUrl: string; correct: boolean };
+  onAnswer: (answer: Answer) => void;
+}) {
+  const ref = useRef<WhiteboardHandle | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [warn, setWarn] = useState<string | null>(null);
+
+  const submit = useCallback(async () => {
+    if (!ref.current) return;
+    if (!ref.current.hasContent()) {
+      setWarn('Draw something before submitting.');
+      return;
+    }
+    setBusy(true);
+    setWarn(null);
+    try {
+      const blob = await ref.current.getPngBlob();
+      if (!blob) {
+        setWarn('Could not snapshot the canvas.');
+        return;
+      }
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result ?? ''));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+      });
+      onAnswer({ id: 'wb', dataUrl, correct: true });
+    } finally {
+      setBusy(false);
+    }
+  }, [onAnswer]);
+
+  if (selected?.dataUrl) {
+    // Once a drawing has been captured, swap the live canvas for the
+    // saved PNG. We do this whether or not the homework has been
+    // graded — the student should not be able to keep editing strokes
+    // after they hit Submit (the dataUrl is the answer of record).
+    const accent = answered
+      ? selected.correct
+        ? 'var(--pb-mint-ink)'
+        : 'var(--pb-coral-ink)'
+      : 'var(--pb-line-2)';
+    return (
+      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            overflow: 'hidden',
+            border: `1.5px solid ${accent}`,
+            boxShadow: `0 2px 0 ${accent}`,
+            alignSelf: 'flex-start',
+            maxWidth: 320,
+          }}
+        >
+          <img
+            src={selected.dataUrl}
+            alt="Your drawing"
+            style={{ display: 'block', width: '100%', height: 'auto' }}
+          />
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}>
+          {answered
+            ? 'Submitted — graded for participation.'
+            : 'Drawing locked in. Hit "Grade with rubric" when you\'re done with the rest.'}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {micro.hint && (
+        <div style={{ fontSize: 11.5, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
+          {micro.hint}
+        </div>
+      )}
+      <WhiteboardCanvas ref={ref} width={320} height={300} disabled={busy} theme="light" />
+      {warn && (
+        <div
+          style={{
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: 'var(--pb-coral)',
+            border: '1.5px solid var(--pb-coral-ink)',
+            color: 'var(--pb-coral-ink)',
+            fontSize: 11.5,
+            fontWeight: 700,
+          }}
+        >
+          {warn}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={submit}
+        disabled={busy}
+        style={{
+          alignSelf: 'flex-start',
+          padding: '10px 14px',
+          borderRadius: 10,
+          background: 'var(--pb-butter)',
+          color: 'var(--pb-butter-ink)',
+          border: '1.5px solid var(--pb-butter-ink)',
+          boxShadow: '0 2px 0 var(--pb-butter-ink)',
+          fontSize: 12,
+          fontWeight: 800,
+          cursor: busy ? 'wait' : 'pointer',
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {busy ? 'Saving…' : 'Submit drawing'}
+      </button>
     </div>
   );
 }

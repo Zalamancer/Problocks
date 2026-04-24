@@ -326,6 +326,255 @@ export function bench({ color }: BuildOptions): THREE.Object3D {
   return g;
 }
 
+/**
+ * Lamppost — chunky Pokopia-blue post with a boxy lantern cap and an
+ * amber bulb. Shadow-casting so it throws a cute stretched silhouette
+ * across painted dirt paths.
+ */
+export function lamppost({ color }: BuildOptions): THREE.Object3D {
+  const g = new THREE.Group();
+  const stoneColor = color ?? PALETTE.blueStone;
+  const trim = PALETTE.blueStoneLight;
+
+  const baseWide = new THREE.Mesh(
+    kidBox({ width: 0.55, height: 0.22, depth: 0.55, radius: 0.05 }),
+    toonMaterial({ color: PALETTE.blueStoneDark }),
+  );
+  baseWide.position.y = 0.11;
+  baseWide.castShadow = true; baseWide.receiveShadow = true;
+  g.add(baseWide);
+
+  const baseStep = new THREE.Mesh(
+    kidBox({ width: 0.4, height: 0.2, depth: 0.4, radius: 0.04 }),
+    toonMaterial({ color: stoneColor }),
+  );
+  baseStep.position.y = 0.32;
+  baseStep.castShadow = true;
+  g.add(baseStep);
+
+  const post = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.08, radiusBottom: 0.1, height: 2.2, radialSegments: 8 }),
+    toonMaterial({ color: stoneColor }),
+  );
+  post.position.y = 0.42 + 1.1;
+  post.castShadow = true;
+  g.add(post);
+
+  // Lantern cage — small box, amber bulb peeks through as a separate mesh
+  // so the toon gradient gives the bulb a visible 2-step highlight.
+  const lantern = new THREE.Mesh(
+    kidBox({ width: 0.35, height: 0.45, depth: 0.35, radius: 0.05 }),
+    toonMaterial({ color: trim }),
+  );
+  lantern.position.y = 2.7;
+  lantern.castShadow = true;
+  g.add(lantern);
+
+  const bulb = new THREE.Mesh(
+    kidSphere({ radius: 0.14, detail: 0 }),
+    toonMaterial({ color: PALETTE.lampGlow }),
+  );
+  bulb.position.y = 2.7;
+  g.add(bulb);
+
+  // Pyramid cap — adds the Pokopia "pagoda" silhouette without needing a
+  // new geometry primitive.
+  const cap = new THREE.Mesh(
+    kidCone({ radius: 0.28, height: 0.25, radialSegments: 4 }),
+    toonMaterial({ color: PALETTE.blueStoneDark }),
+  );
+  cap.position.y = 3.05;
+  cap.rotation.y = Math.PI / 4;
+  cap.castShadow = true;
+  g.add(cap);
+
+  addOutlinesToTree(g);
+  return g;
+}
+
+/**
+ * Stone column — a chunky stepped pillar in Pokopia-blue. Intended for
+ * decorative accents (gate markers, plaza edges, flanking props). Base /
+ * shaft / capital / knob stack gives a classical silhouette without any
+ * fancy geometry.
+ */
+export function stoneColumn({ color }: BuildOptions): THREE.Object3D {
+  const g = new THREE.Group();
+  const c = color ?? PALETTE.blueStone;
+
+  const baseWide = new THREE.Mesh(
+    kidBox({ width: 0.7, height: 0.22, depth: 0.7, radius: 0.05 }),
+    toonMaterial({ color: PALETTE.blueStoneDark }),
+  );
+  baseWide.position.y = 0.11;
+  baseWide.castShadow = true; baseWide.receiveShadow = true;
+  g.add(baseWide);
+
+  const baseInner = new THREE.Mesh(
+    kidBox({ width: 0.55, height: 0.12, depth: 0.55, radius: 0.04 }),
+    toonMaterial({ color: c }),
+  );
+  baseInner.position.y = 0.28;
+  baseInner.castShadow = true;
+  g.add(baseInner);
+
+  const shaft = new THREE.Mesh(
+    kidBox({ width: 0.42, height: 2.0, depth: 0.42, radius: 0.08 }),
+    toonMaterial({ color: c }),
+  );
+  shaft.position.y = 1.34;
+  shaft.castShadow = true; shaft.receiveShadow = true;
+  g.add(shaft);
+
+  const capital = new THREE.Mesh(
+    kidBox({ width: 0.58, height: 0.22, depth: 0.58, radius: 0.05 }),
+    toonMaterial({ color: PALETTE.blueStoneLight }),
+  );
+  capital.position.y = 2.45;
+  capital.castShadow = true;
+  g.add(capital);
+
+  const topWide = new THREE.Mesh(
+    kidBox({ width: 0.72, height: 0.18, depth: 0.72, radius: 0.05 }),
+    toonMaterial({ color: PALETTE.blueStoneDark }),
+  );
+  topWide.position.y = 2.65;
+  topWide.castShadow = true;
+  g.add(topWide);
+
+  const knob = new THREE.Mesh(
+    kidSphere({ radius: 0.2, detail: 0 }),
+    toonMaterial({ color: PALETTE.blueStoneLight }),
+  );
+  knob.position.y = 2.9;
+  knob.castShadow = true;
+  g.add(knob);
+
+  addOutlinesToTree(g);
+  return g;
+}
+
+/**
+ * Fountain — tiered circular basin with a bright water puck in the
+ * middle. Outer basin + water pool + center pillar + upper bowl + tiny
+ * water spout. Kept modest (~2u footprint) so a single one reads as a
+ * plaza centerpiece without eating the whole plot.
+ */
+export function fountain({ color }: BuildOptions): THREE.Object3D {
+  const g = new THREE.Group();
+  const stone = color ?? PALETTE.blueStone;
+
+  const basin = new THREE.Mesh(
+    kidCylinder({ radiusTop: 1.5, radiusBottom: 1.5, height: 0.55, radialSegments: 24 }),
+    toonMaterial({ color: stone }),
+  );
+  basin.position.y = 0.275;
+  basin.castShadow = true; basin.receiveShadow = true;
+  g.add(basin);
+
+  // Water surface sits slightly below the basin rim so the rim reads as
+  // a lip from every orbit angle.
+  const water = new THREE.Mesh(
+    kidCylinder({ radiusTop: 1.35, radiusBottom: 1.35, height: 0.12, radialSegments: 20 }),
+    toonMaterial({ color: PALETTE.water }),
+  );
+  water.position.y = 0.5;
+  water.receiveShadow = true;
+  g.add(water);
+
+  const centerPost = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.22, radiusBottom: 0.28, height: 0.9, radialSegments: 12 }),
+    toonMaterial({ color: stone }),
+  );
+  centerPost.position.y = 0.95;
+  centerPost.castShadow = true;
+  g.add(centerPost);
+
+  const upperBowl = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.55, radiusBottom: 0.4, height: 0.22, radialSegments: 18 }),
+    toonMaterial({ color: PALETTE.blueStoneLight }),
+  );
+  upperBowl.position.y = 1.5;
+  upperBowl.castShadow = true;
+  g.add(upperBowl);
+
+  const upperWater = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.42, radiusBottom: 0.42, height: 0.06, radialSegments: 14 }),
+    toonMaterial({ color: PALETTE.water }),
+  );
+  upperWater.position.y = 1.64;
+  g.add(upperWater);
+
+  // Tiny water spout — a skinny stretched ellipsoid reads as a jet
+  // without needing a shader or particle sim.
+  const spout = new THREE.Mesh(
+    kidSphere({ radius: 0.1, detail: 0 }),
+    toonMaterial({ color: PALETTE.water }),
+  );
+  spout.position.y = 1.95;
+  spout.scale.set(0.6, 2.4, 0.6);
+  g.add(spout);
+
+  addOutlinesToTree(g);
+  return g;
+}
+
+/**
+ * Gift box — small colorful cube with a contrasting cross-ribbon and a
+ * bow on top. Scatter a few around a cottage or quest giver and the
+ * scene immediately reads "Adopt-Me egg event".
+ */
+export function giftBox({ color }: BuildOptions): THREE.Object3D {
+  const g = new THREE.Group();
+  const wrap = color ?? PALETTE.roof;
+  const ribbon = PALETTE.butter;
+
+  const box = new THREE.Mesh(
+    kidBox({ width: 0.6, height: 0.5, depth: 0.6, radius: 0.06 }),
+    toonMaterial({ color: wrap }),
+  );
+  box.position.y = 0.25;
+  box.castShadow = true; box.receiveShadow = true;
+  g.add(box);
+
+  // Ribbon — two thin slabs crossed on top of the box. Slight overshoot
+  // past the box sides so they read as wrapping, not decals.
+  const ribbonA = new THREE.Mesh(
+    kidSimpleBox({ width: 0.63, height: 0.51, depth: 0.12 }),
+    toonMaterial({ color: ribbon }),
+  );
+  ribbonA.position.y = 0.25;
+  g.add(ribbonA);
+
+  const ribbonB = new THREE.Mesh(
+    kidSimpleBox({ width: 0.12, height: 0.51, depth: 0.63 }),
+    toonMaterial({ color: ribbon }),
+  );
+  ribbonB.position.y = 0.25;
+  g.add(ribbonB);
+
+  // Bow — two overlapping ellipsoids give a cartoon "loops" silhouette.
+  for (const x of [-0.11, 0.11]) {
+    const loop = new THREE.Mesh(
+      kidSphere({ radius: 0.11, detail: 0 }),
+      toonMaterial({ color: ribbon }),
+    );
+    loop.position.set(x, 0.58, 0);
+    loop.scale.set(1.1, 0.7, 0.8);
+    g.add(loop);
+  }
+
+  const bowKnot = new THREE.Mesh(
+    kidSphere({ radius: 0.06, detail: 0 }),
+    toonMaterial({ color: ribbon }),
+  );
+  bowKnot.position.y = 0.58;
+  g.add(bowKnot);
+
+  addOutlinesToTree(g);
+  return g;
+}
+
 export function balloon({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const c = color ?? PALETTE.balloonPink;

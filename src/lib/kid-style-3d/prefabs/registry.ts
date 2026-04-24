@@ -17,6 +17,7 @@ export type PrefabKind =
   | 'tree-oak' | 'tree-pine' | 'tree-random' | 'bush' | 'mushroom' | 'rock' | 'flower' | 'cloud'
   // buildings
   | 'house' | 'fence' | 'gate-post' | 'path-stone' | 'dirt' | 'mailbox' | 'bench' | 'balloon'
+  | 'lamppost' | 'stone-column' | 'fountain' | 'gift-box'
   // characters
   | 'character';
 
@@ -133,6 +134,10 @@ export const PREFABS: PrefabDef[] = [
   { kind: 'mailbox',    label: 'Mailbox',         category: 'buildings', style: 'chunky-pastel', defaultColor: '#7ab0d8',         icon: '📪' },
   { kind: 'bench',      label: 'Bench',           category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.woodLight, icon: '🪑' },
   { kind: 'balloon',    label: 'Balloon',         category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.balloonPink, icon: '🎈' },
+  { kind: 'lamppost',     label: 'Lamppost',      category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.blueStone, icon: '💡' },
+  { kind: 'stone-column', label: 'Stone Column',  category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.blueStone, icon: '🏛️' },
+  { kind: 'fountain',     label: 'Fountain',      category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.blueStone, icon: '⛲' },
+  { kind: 'gift-box',     label: 'Gift Box',      category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.roof,      icon: '🎁' },
 
   // --- Characters (chunky-pastel) ---
   {

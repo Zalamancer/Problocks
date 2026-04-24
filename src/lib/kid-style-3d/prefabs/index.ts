@@ -11,7 +11,10 @@ import type * as THREE from 'three';
 import type { BuildOptions } from './types';
 import { primitiveBox, primitiveSphere, primitiveCylinder, primitiveCone } from './primitives';
 import { treeOak, treePine, treeRandom, bush, mushroom, rock, flower, cloud } from './nature';
-import { house, fence, gatePost, pathStone, dirtPatch, mailbox, bench, balloon } from './buildings';
+import {
+  house, fence, gatePost, pathStone, dirtPatch, mailbox, bench, balloon,
+  lamppost, stoneColumn, fountain, giftBox,
+} from './buildings';
 import { character } from './character';
 
 export * from './registry';
@@ -42,6 +45,10 @@ export function buildPrefab(kind: string, opts: BuildOptions = {}): THREE.Object
     case 'mailbox':     return mailbox(opts);
     case 'bench':       return bench(opts);
     case 'balloon':     return balloon(opts);
+    case 'lamppost':      return lamppost(opts);
+    case 'stone-column':  return stoneColumn(opts);
+    case 'fountain':      return fountain(opts);
+    case 'gift-box':      return giftBox(opts);
     // characters
     case 'character':   return character(opts);
   }

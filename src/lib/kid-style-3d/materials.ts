@@ -44,6 +44,12 @@ export const PALETTE = {
   stoneDark: '#d0b888',
   dirt: '#d68552',         // painted-path / trail dirt — warm orange-brown
   dirtDark: '#a85e35',     // dirt edges / darker variant
+  // Pokopia-blue stone — lampposts / decorative columns / fountain basins
+  blueStone: '#3a4f8a',
+  blueStoneLight: '#5770b0',
+  blueStoneDark: '#222f5a',
+  lampGlow: '#ffe88a',     // lamp bulb amber
+  water: '#6ec5e8',        // fountain / pond water — bright pool blue
   charcoal: '#2a1a28',     // outlines, hair (slightly plum-tinted, not pure grey)
 
   // Wood tones

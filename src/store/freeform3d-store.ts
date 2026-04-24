@@ -57,6 +57,61 @@ export const DEFAULT_WORLD: WorldSettings = {
   showStats: false,
 };
 
+/**
+ * Paint-brush settings. When `enabled`, clicks/drags on the viewport
+ * ground scatter copies of `kind` with randomized rotation / scale /
+ * flip. Lets a user paint a forest of trees or a meadow of flowers
+ * without clicking each one individually.
+ *
+ * Tile click while enabled sets `kind` instead of spawning. Disabling
+ * the brush restores normal click-to-select / tile-to-spawn behaviour.
+ */
+export interface BrushSettings {
+  enabled: boolean;
+  /** Prefab kind the brush paints. '' when the user hasn't picked yet. */
+  kind: string;
+  /** How many objects to scatter per click / paint tick. 1–20. */
+  density: number;
+  /** Scatter radius around the click point, in world units (XZ jitter). */
+  radius: number;
+  /** Randomize Y rotation (0..2π) — most natural for trees/rocks/flowers. */
+  randomRotY: boolean;
+  /** Randomize X rotation ±tilt for the "tipped over" look. */
+  randomRotX: boolean;
+  /** Randomize Z rotation ±tilt. */
+  randomRotZ: boolean;
+  /** Max absolute tilt for X/Z random rotation in radians (0..π/4). */
+  rotationTilt: number;
+  /** Scale bounds for random scale. Each axis rolls independently unless
+      uniformScale is true. Set min=max to disable variance cleanly. */
+  scaleMin: number;
+  scaleMax: number;
+  /** If true, all axes share the same random factor (cheaper/safer for
+      non-symmetric prefabs like houses). */
+  uniformScale: boolean;
+  /** 50/50 chance of negating X scale per spawn — horizontal flip. */
+  randomFlip: boolean;
+  /** Minimum distance between spawned objects in one click (prevents
+      heavy stacking). 0 disables the check. */
+  minSpacing: number;
+}
+
+export const DEFAULT_BRUSH: BrushSettings = {
+  enabled: false,
+  kind: '',
+  density: 3,
+  radius: 1.5,
+  randomRotY: true,
+  randomRotX: false,
+  randomRotZ: false,
+  rotationTilt: Math.PI / 16,
+  scaleMin: 0.85,
+  scaleMax: 1.25,
+  uniformScale: true,
+  randomFlip: false,
+  minSpacing: 0.2,
+};
+
 interface Freeform3DState {
   scene: SceneJson;
   selectedId: string | null;
@@ -97,6 +152,13 @@ interface Freeform3DState {
   world: WorldSettings;
   setWorldField: <K extends keyof WorldSettings>(k: K, v: WorldSettings[K]) => void;
   resetWorld: () => void;
+
+  /** Paint-brush settings — click/drag on the viewport while enabled
+      to scatter copies of `brush.kind` with randomized transforms. */
+  brush: BrushSettings;
+  setBrushField: <K extends keyof BrushSettings>(k: K, v: BrushSettings[K]) => void;
+  setBrush: (patch: Partial<BrushSettings>) => void;
+  resetBrush: () => void;
 
   // Selection ------------------------------------------------------------
   select: (id: string | null) => void;
@@ -186,6 +248,13 @@ export const useFreeform3D = create<Freeform3DState>()(
       setWorldField: (k, v) =>
         set((s) => ({ world: { ...s.world, [k]: v } })),
       resetWorld: () => set({ world: DEFAULT_WORLD }),
+
+      brush: DEFAULT_BRUSH,
+      setBrushField: (k, v) =>
+        set((s) => ({ brush: { ...s.brush, [k]: v } })),
+      setBrush: (patch) =>
+        set((s) => ({ brush: { ...s.brush, ...patch } })),
+      resetBrush: () => set({ brush: DEFAULT_BRUSH }),
 
       select: (id) => set({ selectedId: id }),
 
@@ -450,6 +519,7 @@ export const useFreeform3D = create<Freeform3DState>()(
         activeStyle: s.activeStyle,
         world: s.world,
         performanceMode: s.performanceMode,
+        brush: s.brush,
       }),
       // Normalize any persisted scene on rehydrate so objects authored
       // before a schema field existed (rotation, scale, anchored, etc.)
@@ -474,6 +544,10 @@ export const useFreeform3D = create<Freeform3DState>()(
         if (state.performanceMode) {
           setGeometryPerfMode(state.performanceMode);
         }
+        // Fill in brush defaults for sessions saved before brush was
+        // introduced, then force brush off on rehydrate so a refresh
+        // doesn't trap the user in paint mode without knowing why.
+        state.brush = { ...DEFAULT_BRUSH, ...(state.brush ?? {}), enabled: false };
       },
     },
   ),

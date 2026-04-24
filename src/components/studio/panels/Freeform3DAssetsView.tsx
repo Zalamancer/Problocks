@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
-import { PanelSearchInput, PanelSelect } from '@/components/ui';
+import { SlidersHorizontal, Paintbrush } from 'lucide-react';
+import { PanelSearchInput, PanelSelect, PanelSection, PanelSlider, PanelToggle, PanelActionButton } from '@/components/ui';
 import {
   PREFAB_CATEGORIES,
   PREFAB_STYLES,
@@ -84,6 +84,8 @@ export function Freeform3DAssetsView() {
   const performanceMode = useFreeform3D((s) => s.performanceMode);
   const setPerformanceMode = useFreeform3D((s) => s.setPerformanceMode);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
+  const brush = useFreeform3D((s) => s.brush);
+  const setBrushField = useFreeform3D((s) => s.setBrushField);
 
   const hasActiveFilters =
     category !== 'all' ||
@@ -165,6 +167,14 @@ export function Freeform3DAssetsView() {
   }, [prefabs]);
 
   function handleSpawn(kind: string): void {
+    // Brush mode hijacks tile clicks: the click just picks which kind
+    // the brush will paint, without adding anything to the scene. The
+    // actual placement happens on 3D-viewport clicks/drags in
+    // FreeformView3D's brush paint handler.
+    if (brush.enabled) {
+      setBrushField('kind', kind);
+      return;
+    }
     const pos = getSpawnPosition();
     addPrefab(kind, pos);
   }
@@ -210,6 +220,24 @@ export function Freeform3DAssetsView() {
                 }}
               />
             )}
+          </button>
+          <button
+            onClick={() => setBrushField('enabled', !brush.enabled)}
+            className="relative shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: brush.enabled ? 'var(--pb-butter)' : 'var(--pb-paper)',
+              border: `1.5px solid ${brush.enabled ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: brush.enabled ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+              color: brush.enabled ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            title={brush.enabled ? 'Brush on — click to paint in the viewport' : 'Toggle brush'}
+          >
+            <Paintbrush size={15} strokeWidth={2.2} />
           </button>
         </div>
 
@@ -288,6 +316,116 @@ export function Freeform3DAssetsView() {
         )}
       </div>
 
+      {/* Brush options — only shown when the user flipped the brush
+          button on. Sits between the filters row and the tile grid so
+          the settings are obvious the moment brush mode engages. */}
+      {brush.enabled && (
+        <div className="shrink-0 px-3 pb-2 [&>div]:!mb-0">
+          <PanelSection
+            title="Brush"
+            collapsible
+            defaultOpen
+            icon={Paintbrush}
+            noBorder
+          >
+            <div
+              className="mb-3 px-2 py-2 rounded-lg text-xs"
+              style={{
+                background: 'var(--pb-cream-2)',
+                border: '1.5px solid var(--pb-line-2)',
+                color: 'var(--pb-ink)',
+              }}
+            >
+              {brush.kind
+                ? <>Painting: <span style={{ fontWeight: 700 }}>{brush.kind}</span> — click or drag in the viewport.</>
+                : <span style={{ color: 'var(--pb-ink-muted)' }}>Tap a tile below to pick what to paint.</span>}
+            </div>
+            <PanelSlider
+              label="Density"
+              value={brush.density}
+              onChange={(v) => setBrushField('density', v)}
+              min={1} max={20} step={1}
+            />
+            <PanelSlider
+              label="Radius"
+              value={brush.radius}
+              onChange={(v) => setBrushField('radius', v)}
+              min={0} max={6} step={0.1}
+              precision={1}
+              suffix="u"
+            />
+            <PanelSlider
+              label="Scale min"
+              value={brush.scaleMin}
+              onChange={(v) => {
+                setBrushField('scaleMin', v);
+                if (v > brush.scaleMax) setBrushField('scaleMax', v);
+              }}
+              min={0.2} max={3} step={0.05}
+              precision={2}
+            />
+            <PanelSlider
+              label="Scale max"
+              value={brush.scaleMax}
+              onChange={(v) => {
+                setBrushField('scaleMax', v);
+                if (v < brush.scaleMin) setBrushField('scaleMin', v);
+              }}
+              min={0.2} max={3} step={0.05}
+              precision={2}
+            />
+            <PanelToggle
+              label="Uniform scale"
+              checked={brush.uniformScale}
+              onChange={(v) => setBrushField('uniformScale', v)}
+            />
+            <PanelToggle
+              label="Random Y rotation"
+              checked={brush.randomRotY}
+              onChange={(v) => setBrushField('randomRotY', v)}
+            />
+            <PanelToggle
+              label="Random X tilt"
+              checked={brush.randomRotX}
+              onChange={(v) => setBrushField('randomRotX', v)}
+            />
+            <PanelToggle
+              label="Random Z tilt"
+              checked={brush.randomRotZ}
+              onChange={(v) => setBrushField('randomRotZ', v)}
+            />
+            {(brush.randomRotX || brush.randomRotZ) && (
+              <PanelSlider
+                label="Tilt range"
+                value={Math.round((brush.rotationTilt * 180) / Math.PI)}
+                onChange={(v) => setBrushField('rotationTilt', (v * Math.PI) / 180)}
+                min={0} max={45} step={1}
+                suffix="°"
+              />
+            )}
+            <PanelToggle
+              label="Random flip (mirror X)"
+              checked={brush.randomFlip}
+              onChange={(v) => setBrushField('randomFlip', v)}
+            />
+            <PanelSlider
+              label="Min spacing"
+              value={brush.minSpacing}
+              onChange={(v) => setBrushField('minSpacing', v)}
+              min={0} max={2} step={0.05}
+              precision={2}
+              suffix="u"
+            />
+            <PanelActionButton
+              onClick={() => useFreeform3D.getState().resetBrush()}
+              variant="secondary"
+            >
+              Reset brush
+            </PanelActionButton>
+          </PanelSection>
+        </div>
+      )}
+
       {/* Prefab list/grid — same card style as other views */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
         {sorted.length === 0 ? (
@@ -304,6 +442,7 @@ export function Freeform3DAssetsView() {
                 kind={p.kind}
                 label={p.label}
                 category={p.category}
+                active={brush.enabled && brush.kind === p.kind}
                 onSpawn={() => handleSpawn(p.kind)}
               />
             ))}
@@ -316,6 +455,7 @@ export function Freeform3DAssetsView() {
                 kind={p.kind}
                 label={p.label}
                 category={p.category}
+                active={brush.enabled && brush.kind === p.kind}
                 onSpawn={() => handleSpawn(p.kind)}
               />
             ))}
@@ -334,11 +474,14 @@ function PrefabCard({
   label,
   category,
   onSpawn,
+  active = false,
 }: {
   kind: string;
   label: string;
   category: PrefabCategory['id'];
   onSpawn: () => void;
+  /** Highlighted because the brush is picking this kind. */
+  active?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   // PrefabThumbnail populates the stats cache asynchronously on first
@@ -366,12 +509,16 @@ function PrefabCard({
       style={{
         borderRadius: 12,
         background: 'var(--pb-paper)',
-        border: `1.5px solid ${hover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-        boxShadow: hover ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+        border: `1.5px solid ${active ? 'var(--pb-coral-ink)' : hover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        boxShadow: active
+          ? '0 2px 0 var(--pb-coral-ink)'
+          : hover ? '0 2px 0 var(--pb-butter-ink)' : 'none',
         cursor: 'pointer',
         transition: 'border-color 120ms ease, box-shadow 120ms ease',
       }}
-      title={`${label} — click to add`}
+      title={active
+        ? `${label} — brush is painting this`
+        : `${label} — click to ${useFreeform3D.getState().brush.enabled ? 'pick for brush' : 'add'}`}
     >
       <div
         className="relative w-full aspect-square"
@@ -488,11 +635,13 @@ function PrefabRow({
   label,
   category,
   onSpawn,
+  active = false,
 }: {
   kind: string;
   label: string;
   category: PrefabCategory['id'];
   onSpawn: () => void;
+  active?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const [tick, setTick] = useState(0);
@@ -516,13 +665,17 @@ function PrefabRow({
       style={{
         padding: '9px 11px',
         borderRadius: 10,
-        background: hover ? 'var(--pb-cream-2)' : 'transparent',
-        border: hover ? '1.5px solid var(--pb-ink)' : '1.5px solid transparent',
-        boxShadow: hover ? '0 2px 0 var(--pb-ink)' : 'none',
+        background: active ? 'var(--pb-cream-2)' : hover ? 'var(--pb-cream-2)' : 'transparent',
+        border: `1.5px solid ${active ? 'var(--pb-coral-ink)' : hover ? 'var(--pb-ink)' : 'transparent'}`,
+        boxShadow: active
+          ? '0 2px 0 var(--pb-coral-ink)'
+          : hover ? '0 2px 0 var(--pb-ink)' : 'none',
         cursor: 'pointer',
         transition: 'background 120ms ease',
       }}
-      title={`${label} — click to add`}
+      title={active
+        ? `${label} — brush is painting this`
+        : `${label} — click to ${useFreeform3D.getState().brush.enabled ? 'pick for brush' : 'add'}`}
     >
       <span
         className="shrink-0"

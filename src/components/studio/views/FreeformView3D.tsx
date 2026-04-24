@@ -67,6 +67,8 @@ export function FreeformView3D() {
   const cameraMode = useFreeform3D((s) => s.cameraMode);
   const world = useFreeform3D((s) => s.world);
   const geomRev = useFreeform3D((s) => s.geomRev);
+  const brushEnabled = useFreeform3D((s) => s.brush.enabled);
+  const brushRadius = useFreeform3D((s) => s.brush.radius);
   const select = useFreeform3D((s) => s.select);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
   const removeObject = useFreeform3D((s) => s.removeObject);
@@ -303,7 +305,8 @@ export function FreeformView3D() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (isPlaying) return;   // play-mode has its own input handling
+    if (isPlaying) return;    // play-mode has its own input handling
+    if (brushEnabled) return; // brush owns left-click while painting
 
     let downX = 0;
     let downY = 0;
@@ -340,7 +343,165 @@ export function FreeformView3D() {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
     };
-  }, [select, isPlaying]);
+  }, [select, isPlaying, brushEnabled]);
+
+  /* ---- brush paint handler ---- */
+  useEffect(() => {
+    if (!brushEnabled) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (isPlaying) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    // Gizmo is noisy while painting — detach for the session.
+    gizmoRef.current?.detach();
+
+    // Take over left-mouse from OrbitControls so drag-paints don't also
+    // rotate the camera. Middle/right still work, so the user can still
+    // reframe during a paint session. Restored on cleanup.
+    const origMouseButtons = { ...engine.controls.mouseButtons };
+    (engine.controls.mouseButtons as { LEFT: number | null }).LEFT = null;
+
+    // Build a brush-cursor ring on the ground that tracks the pointer.
+    const ringGeo = new THREE.RingGeometry(0.95, 1.0, 48);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xd97757,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 999;
+    ring.visible = false;
+    engine.scene.add(ring);
+
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const raycaster = new THREE.Raycaster();
+    let isDown = false;
+    let lastPaint: THREE.Vector3 | null = null;
+
+    function pointToWorld(e: PointerEvent): THREE.Vector3 | null {
+      const rect = canvas!.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(ndc, engine!.camera);
+      const hit = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
+      return hit;
+    }
+
+    function paintAt(center: THREE.Vector3): void {
+      const state = useFreeform3D.getState();
+      const b = state.brush;
+      if (!b.kind) return;
+      const placed: THREE.Vector3[] = [];
+      for (let i = 0; i < b.density; i++) {
+        // Try several candidate positions so min-spacing can reject
+        // heavy clumps without starving the brush stroke.
+        let candidate: THREE.Vector3 | null = null;
+        for (let tries = 0; tries < 8; tries++) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.sqrt(Math.random()) * b.radius;
+          const c = new THREE.Vector3(
+            center.x + Math.cos(angle) * dist,
+            0,
+            center.z + Math.sin(angle) * dist,
+          );
+          if (b.minSpacing > 0 && placed.some((p) => p.distanceTo(c) < b.minSpacing)) continue;
+          candidate = c;
+          break;
+        }
+        if (!candidate) continue;
+        placed.push(candidate);
+
+        const rotY = b.randomRotY ? Math.random() * Math.PI * 2 : 0;
+        const rotX = b.randomRotX ? (Math.random() - 0.5) * 2 * b.rotationTilt : 0;
+        const rotZ = b.randomRotZ ? (Math.random() - 0.5) * 2 * b.rotationTilt : 0;
+        const span = Math.max(0, b.scaleMax - b.scaleMin);
+        const rollScale = () => b.scaleMin + Math.random() * span;
+        const sx = rollScale();
+        const sy = b.uniformScale ? sx : rollScale();
+        const sz = b.uniformScale ? sx : rollScale();
+        const flip = b.randomFlip && Math.random() < 0.5 ? -1 : 1;
+
+        const patch: {
+          position: [number, number, number];
+          rotation: [number, number, number];
+          scale:    [number, number, number];
+          props?: Record<string, unknown>;
+        } = {
+          position: [candidate.x, 0, candidate.z],
+          rotation: [rotX, rotY, rotZ],
+          scale: [sx * flip, sy, sz],
+        };
+        // Random trees each get their own seed so a painted forest has
+        // visually distinct trees instead of 20 identical ones.
+        if (b.kind === 'tree-random') {
+          patch.props = { seed: Math.floor(Math.random() * 1_000_000_000) };
+        }
+        state.addPrefabFull(b.kind, patch);
+      }
+    }
+
+    function tryPaint(point: THREE.Vector3): void {
+      const b = useFreeform3D.getState().brush;
+      const step = Math.max(0.1, b.radius * 0.5);
+      if (lastPaint && lastPaint.distanceTo(point) < step) return;
+      lastPaint = point.clone();
+      paintAt(point);
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      const pt = pointToWorld(e);
+      if (pt) {
+        ring.position.set(pt.x, 0.02, pt.z);
+        ring.scale.set(useFreeform3D.getState().brush.radius, useFreeform3D.getState().brush.radius, 1);
+        ring.visible = true;
+      } else {
+        ring.visible = false;
+      }
+      if (isDown && pt) tryPaint(pt);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return; // only left mouse paints
+      const pt = pointToWorld(e);
+      if (!pt) return;
+      isDown = true;
+      lastPaint = null;
+      tryPaint(pt);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const onPointerUp = () => {
+      isDown = false;
+      lastPaint = null;
+    };
+    const onPointerLeave = () => {
+      ring.visible = false;
+    };
+
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointerleave', onPointerLeave);
+
+    return () => {
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      engine.scene.remove(ring);
+      ringGeo.dispose();
+      ringMat.dispose();
+      engine.controls.mouseButtons = origMouseButtons;
+    };
+  }, [brushEnabled, isPlaying, brushRadius]);
 
   /* ---- keyboard shortcuts ---- */
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@/lib/kid-style-3d/prefabs';
 import { getSpawnPosition } from '@/lib/kid-style-3d/spawn-target';
 import { useFreeform3D } from '@/store/freeform3d-store';
-import { PrefabThumbnail } from '@/components/studio/PrefabThumbnail';
+import { PrefabThumbnail, getPrefabStats } from '@/components/studio/PrefabThumbnail';
 
 /**
  * Assets view for the 3D Freeform game system. Replaces the old bottom-
@@ -153,67 +153,172 @@ export function Freeform3DAssetsView() {
         ) : (
           <div className="grid grid-cols-2 gap-1.5">
             {filtered.map((p) => (
-              <button
+              <PrefabCard
                 key={p.kind}
-                type="button"
-                onClick={() => handleSpawn(p.kind)}
-                className="group relative flex flex-col overflow-hidden"
-                style={{
-                  borderRadius: 12,
-                  background: 'var(--pb-paper)',
-                  border: '1.5px solid var(--pb-line-2)',
-                  cursor: 'pointer',
-                  transition: 'border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--pb-butter-ink)';
-                  e.currentTarget.style.boxShadow = '0 2px 0 var(--pb-butter-ink)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--pb-line-2)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-                title={`${p.label} — click to add`}
-              >
-                <div
-                  className="relative w-full aspect-square"
-                  style={{ background: 'var(--pb-cream-2)' }}
-                >
-                  <PrefabThumbnail kind={p.kind} fluid />
-                  <span
-                    className="absolute bottom-1 left-1"
-                    style={{
-                      padding: '1px 6px',
-                      fontSize: 9,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.3,
-                      borderRadius: 4,
-                      background: 'var(--pb-paper)',
-                      color: 'var(--pb-ink-muted)',
-                      border: '1.5px solid var(--pb-line-2)',
-                    }}
-                  >
-                    {p.category.slice(0, 4)}
-                  </span>
-                </div>
-                <span
-                  className="block w-full truncate text-left"
-                  style={{
-                    padding: '6px 10px',
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    color: 'var(--pb-ink)',
-                    borderTop: '1.5px solid var(--pb-line-2)',
-                  }}
-                >
-                  {p.label}
-                </span>
-              </button>
+                kind={p.kind}
+                label={p.label}
+                category={p.category}
+                onSpawn={() => handleSpawn(p.kind)}
+              />
             ))}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+/** Single prefab tile with hover stats overlay. Extracted because the
+    hover state needs to be per-card (state in the parent would force
+    every card to re-render on any hover). */
+function PrefabCard({
+  kind,
+  label,
+  category,
+  onSpawn,
+}: {
+  kind: string;
+  label: string;
+  category: PrefabCategory['id'];
+  onSpawn: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  // PrefabThumbnail populates the stats cache asynchronously on first
+  // render. We poll via a tiny forceUpdate ticker while hovered so the
+  // overlay switches from "…" to real numbers within a frame of the
+  // render queue finishing. Only runs while hover is true, so idle
+  // cards cost nothing.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!hover) return;
+    if (getPrefabStats(kind)) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 120);
+    return () => window.clearInterval(id);
+  }, [hover, kind, tick]);
+
+  const stats = hover ? getPrefabStats(kind) : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSpawn}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="group relative flex flex-col overflow-hidden"
+      style={{
+        borderRadius: 12,
+        background: 'var(--pb-paper)',
+        border: `1.5px solid ${hover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        boxShadow: hover ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+        cursor: 'pointer',
+        transition: 'border-color 120ms ease, box-shadow 120ms ease',
+      }}
+      title={`${label} — click to add`}
+    >
+      <div
+        className="relative w-full aspect-square"
+        style={{ background: 'var(--pb-cream-2)' }}
+      >
+        <PrefabThumbnail kind={kind} fluid />
+        <span
+          className="absolute bottom-1 left-1"
+          style={{
+            padding: '1px 6px',
+            fontSize: 9,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: 0.3,
+            borderRadius: 4,
+            background: 'var(--pb-paper)',
+            color: 'var(--pb-ink-muted)',
+            border: '1.5px solid var(--pb-line-2)',
+          }}
+        >
+          {category.slice(0, 4)}
+        </span>
+
+        {/* Stats overlay — mirrors AssetExpandedStats in AssetsPanel so
+            the 3D Freeform view has the same "what am I about to
+            place" read as the medieval kit view. */}
+        {hover && (
+          <div
+            className="absolute inset-0 flex flex-col justify-center gap-1 p-2"
+            style={{
+              background: 'color-mix(in srgb, var(--pb-paper) 94%, transparent)',
+              fontSize: 11,
+            }}
+          >
+            <StatRow label="Kind" value={kind} mono={false} />
+            <StatRow
+              label="Tris"
+              value={stats ? formatCount(stats.triangles) : '…'}
+              valueClass={stats ? trisColor(stats.triangles) : undefined}
+            />
+            <StatRow
+              label="Verts"
+              value={stats ? formatCount(stats.vertices) : '…'}
+            />
+            <StatRow
+              label="Meshes"
+              value={stats ? String(stats.meshes) : '…'}
+            />
+            <StatRow label="Cat" value={category} mono={false} />
+          </div>
+        )}
+      </div>
+      <span
+        className="block w-full truncate text-left"
+        style={{
+          padding: '6px 10px',
+          fontSize: 12.5,
+          fontWeight: 600,
+          color: 'var(--pb-ink)',
+          borderTop: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function StatRow({
+  label,
+  value,
+  valueClass,
+  mono = true,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span style={{ color: 'var(--pb-ink-muted)' }}>{label}</span>
+      <span
+        className={valueClass}
+        style={{
+          color: 'var(--pb-ink)',
+          fontFamily: mono ? 'DM Mono, monospace' : 'inherit',
+          fontWeight: 600,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function formatCount(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function trisColor(tris: number): string {
+  if (tris <= 100) return 'text-green-400';
+  if (tris <= 500) return 'text-emerald-400';
+  if (tris <= 1000) return 'text-yellow-400';
+  if (tris <= 2000) return 'text-orange-400';
+  return 'text-red-400';
 }

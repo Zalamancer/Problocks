@@ -23,6 +23,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { buildPrefab } from '@/lib/kid-style-3d/prefabs';
+import { collectStats, type SceneStats } from '@/lib/kid-style-3d';
 
 // ── Shared renderer + scene (npm three) ──────────────────────────────
 
@@ -100,10 +101,18 @@ function enqueue(task: () => Promise<void>): void {
   void processQueue();
 }
 
-// ── Cache: kind → dataURL ────────────────────────────────────────────
+// ── Cache: kind → dataURL + stats ─────────────────────────────────────
 
 const cache = new Map<string, string>();
 const pending = new Map<string, Promise<string>>();
+const statsCache = new Map<string, SceneStats>();
+
+/** Synchronous getter — returns null if the prefab hasn't rendered yet.
+    Callers that care about "definitely has stats" should subscribe to
+    the PrefabThumbnail render (which writes both caches together). */
+export function getPrefabStats(kind: string): SceneStats | null {
+  return statsCache.get(kind) ?? null;
+}
 
 function renderPrefab(kind: string, size: number): Promise<string> {
   const cached = cache.get(kind);
@@ -143,6 +152,11 @@ function renderPrefab(kind: string, size: number): Promise<string> {
 
       renderer.render(scene, camera);
       const dataURL = canvas.toDataURL('image/png');
+
+      // Capture stats BEFORE disposal — once geometries are disposed
+      // collectStats will see 0 vertices. Mirrors what the viewport's
+      // FreeformView3D does after hydrating the scene.
+      statsCache.set(kind, collectStats(obj));
 
       scene.remove(obj);
       obj.traverse((n) => {

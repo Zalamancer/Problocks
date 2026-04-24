@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Bricolage_Grotesque, DM_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import { QualityProvider } from "@/components/QualityProvider";
-import { DataSourceToggle } from "@/components/dev/DataSourceToggle";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ClientAuthHydrator } from "@/components/ClientAuthHydrator";
@@ -138,7 +137,6 @@ export default function RootLayout({
         {children}
         <ToastContainer />
         <ConfirmDialog />
-        <DataSourceToggle />
       </body>
     </html>
   );

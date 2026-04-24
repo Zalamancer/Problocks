@@ -5,6 +5,7 @@ import { QualityProvider } from "@/components/QualityProvider";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ClientAuthHydrator } from "@/components/ClientAuthHydrator";
+import { ScribbleOverlay } from "@/components/scribble-overlay";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -137,6 +138,7 @@ export default function RootLayout({
         {children}
         <ToastContainer />
         <ConfirmDialog />
+        <ScribbleOverlay />
       </body>
     </html>
   );

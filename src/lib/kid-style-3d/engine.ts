@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PALETTE, groundMaterial } from './materials';
 import { animateRoot } from './animations';
+import { isCachedGeometry } from './geometry';
 
 export interface KidEngineOptions {
   canvas: HTMLCanvasElement;
@@ -263,7 +264,10 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
-        mesh.geometry?.dispose?.();
+        // Cached geometries are shared across many instances and live
+        // longer than this engine (module-level singleton). Disposing
+        // them here would break the next mount of the viewport.
+        if (!isCachedGeometry(mesh.geometry)) mesh.geometry?.dispose?.();
         const mat = mesh.material;
         if (Array.isArray(mat)) mat.forEach((m) => m.dispose?.());
         else mat?.dispose?.();

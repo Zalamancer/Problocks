@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { buildPrefab } from './prefabs';
 import type { SceneObject } from './scene-schema';
+import { isCachedGeometry } from './geometry';
 
 const OBJECT_ID_KEY = '__sceneId';
 const OBJECT_KIND_KEY = '__sceneKind';
@@ -133,7 +134,11 @@ function disposeTree(root: THREE.Object3D): void {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh) {
-      m.geometry?.dispose?.();
+      // Cached geometries are shared across every instance of a prefab —
+      // disposing one would pull the floor out from under every other
+      // mesh still pointing at it. Only dispose geometry we own (outlines
+      // share the source mesh's geometry too; they just reuse it).
+      if (!isCachedGeometry(m.geometry)) m.geometry?.dispose?.();
       const mat = m.material;
       if (Array.isArray(mat)) mat.forEach((mm) => mm.dispose?.());
       else mat?.dispose?.();

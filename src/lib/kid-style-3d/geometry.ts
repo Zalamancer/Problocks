@@ -6,11 +6,48 @@
  * segments. These helpers produce the soft, toy-like shapes that read
  * as Pokopia / Adopt Me / Roblox screenshots instead.
  *
+ * Low-end target (Celeron N4000 Chromebook, 4 GB RAM) pushes us to keep
+ * segment counts aggressive — every extra ring on a sphere or cap on a
+ * cylinder is paid for 100× in a typical plot.
+ *
+ * **Shared geometry cache** — identical (function, args) calls return the
+ * SAME BufferGeometry instance. Trees / flowers / fences are dropped
+ * dozens of times; memoising cuts memory and GPU uploads dramatically.
+ * Cached geometries carry `userData.__cached = true`; `hydrate.ts` checks
+ * this and skips disposal so removing one object doesn't tear down the
+ * geometry still used by siblings.
+ *
  * See docs/three-kid-style/01-geometry-materials.md.
  */
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// ---- geometry cache --------------------------------------------------
+
+type BG = THREE.BufferGeometry;
+const geoCache = new Map<string, BG>();
+
+function cached<T extends BG>(key: string, build: () => T): T {
+  const hit = geoCache.get(key);
+  if (hit) return hit as T;
+  const geo = build();
+  (geo.userData as { __cached?: boolean }).__cached = true;
+  geoCache.set(key, geo);
+  return geo;
+}
+
+/** For tests / hot-reload — not exported from the barrel. */
+export function _clearKidGeometryCache(): void {
+  for (const g of geoCache.values()) g.dispose();
+  geoCache.clear();
+}
+
+export function isCachedGeometry(g: BG | undefined): boolean {
+  return !!(g?.userData as { __cached?: boolean } | undefined)?.__cached;
+}
+
+// ---- rounded box ------------------------------------------------------
 
 export interface KidBoxOptions {
   width?: number;
@@ -18,39 +55,47 @@ export interface KidBoxOptions {
   depth?: number;
   /** Bevel radius in world units. 0.12–0.22 for props, 0.08 for walls. */
   radius?: number;
-  /** Bevel detail; 4 is the sweet spot. */
+  /** Bevel detail. Default 2 (was 4) — double savings on corners with no
+      visible difference at the camera distance the studio uses. */
   segments?: number;
 }
 
-export function kidBox(opts: KidBoxOptions = {}): THREE.BufferGeometry {
+export function kidBox(opts: KidBoxOptions = {}): BG {
   const w = opts.width ?? 1;
   const h = opts.height ?? 1;
   const d = opts.depth ?? 1;
   const r = clamp(opts.radius ?? 0.15, 0, Math.min(w, h, d) * 0.49);
-  const seg = opts.segments ?? 4;
-  return new RoundedBoxGeometry(w, h, d, seg, r);
+  const seg = opts.segments ?? 2;
+  return cached(`rb:${w}:${h}:${d}:${r}:${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r));
 }
 
-/**
- * Higher-detail sphere — default Three.js 32×16 has pinched poles visible
- * on character heads. 32×24 hides the pinch with barely-more cost.
- */
+// ---- sphere -----------------------------------------------------------
+
 export interface KidSphereOptions {
   radius?: number;
   detail?: 0 | 1 | 2;
 }
 
+/**
+ * Toon-shaded sphere. Segment counts tuned for Chromebook target:
+ *   detail 0 → 10×8   (pebbles, flower centres, blush — small + offscreen-ish)
+ *   detail 1 → 16×12  (default — tree canopy, mushroom cap)
+ *   detail 2 → 24×18  (hero characters only)
+ *
+ * Three.js was defaulting to 32×16, which looks barely different from
+ * 16×12 at the kid-style camera distance but carries ~4× the vertex
+ * weight.
+ */
 export function kidSphere(opts: KidSphereOptions = {}): THREE.SphereGeometry {
   const r = opts.radius ?? 0.5;
   const d = opts.detail ?? 1;
-  const seg = d >= 2 ? 48 : d >= 1 ? 32 : 16;
-  return new THREE.SphereGeometry(r, seg, Math.round(seg * 0.75));
+  const seg = d >= 2 ? 24 : d >= 1 ? 16 : 10;
+  const hSeg = Math.max(4, Math.round(seg * 0.75));
+  return cached(`sph:${r}:${seg}:${hSeg}`, () => new THREE.SphereGeometry(r, seg, hSeg)) as THREE.SphereGeometry;
 }
 
-/**
- * Cylinder with 32 radial segments by default — the Three.js default is 8,
- * which looks like cut crystal under toon lighting.
- */
+// ---- cylinder ---------------------------------------------------------
+
 export interface KidCylinderOptions {
   radiusTop?: number;
   radiusBottom?: number;
@@ -60,28 +105,35 @@ export interface KidCylinderOptions {
   openEnded?: boolean;
 }
 
+/** Default 12 radial segments (was 32). 12 is where a toon-shaded
+    cylinder stops reading as faceted at the studio's orbit distance. */
 export function kidCylinder(opts: KidCylinderOptions = {}): THREE.CylinderGeometry {
-  return new THREE.CylinderGeometry(
-    opts.radiusTop ?? 0.5,
-    opts.radiusBottom ?? 0.5,
-    opts.height ?? 1,
-    opts.radialSegments ?? 32,
-    opts.heightSegments ?? 1,
-    opts.openEnded ?? false,
-  );
+  const rt = opts.radiusTop ?? 0.5;
+  const rb = opts.radiusBottom ?? 0.5;
+  const h  = opts.height ?? 1;
+  const radial = opts.radialSegments ?? 12;
+  const hSeg   = opts.heightSegments ?? 1;
+  const open   = opts.openEnded ?? false;
+  return cached(
+    `cyl:${rt}:${rb}:${h}:${radial}:${hSeg}:${open ? 1 : 0}`,
+    () => new THREE.CylinderGeometry(rt, rb, h, radial, hSeg, open),
+  ) as THREE.CylinderGeometry;
 }
+
+// ---- cone -------------------------------------------------------------
 
 export function kidCone(opts: {
   radius?: number;
   height?: number;
   radialSegments?: number;
 } = {}): THREE.ConeGeometry {
-  return new THREE.ConeGeometry(
-    opts.radius ?? 0.5,
-    opts.height ?? 1,
-    opts.radialSegments ?? 32,
-  );
+  const r = opts.radius ?? 0.5;
+  const h = opts.height ?? 1;
+  const radial = opts.radialSegments ?? 12;
+  return cached(`cone:${r}:${h}:${radial}`, () => new THREE.ConeGeometry(r, h, radial)) as THREE.ConeGeometry;
 }
+
+// ---- capsule ----------------------------------------------------------
 
 export function kidCapsule(opts: {
   radius?: number;
@@ -89,13 +141,14 @@ export function kidCapsule(opts: {
   capSegments?: number;
   radialSegments?: number;
 } = {}): THREE.CapsuleGeometry {
-  return new THREE.CapsuleGeometry(
-    opts.radius ?? 0.3,
-    opts.length ?? 1,
-    opts.capSegments ?? 8,
-    opts.radialSegments ?? 32,
-  );
+  const r = opts.radius ?? 0.3;
+  const L = opts.length ?? 1;
+  const cap = opts.capSegments ?? 3;
+  const radial = opts.radialSegments ?? 12;
+  return cached(`cap:${r}:${L}:${cap}:${radial}`, () => new THREE.CapsuleGeometry(r, L, cap, radial)) as THREE.CapsuleGeometry;
 }
+
+// ---- torus ------------------------------------------------------------
 
 export function kidTorus(opts: {
   radius?: number;
@@ -103,13 +156,17 @@ export function kidTorus(opts: {
   radialSegments?: number;
   tubularSegments?: number;
 } = {}): THREE.TorusGeometry {
-  return new THREE.TorusGeometry(
-    opts.radius ?? 0.5,
-    opts.tubeRadius ?? 0.15,
-    opts.radialSegments ?? 16,
-    opts.tubularSegments ?? 32,
-  );
+  const r  = opts.radius ?? 0.5;
+  const tr = opts.tubeRadius ?? 0.15;
+  const radial   = opts.radialSegments ?? 8;
+  const tubular  = opts.tubularSegments ?? 16;
+  return cached(
+    `torus:${r}:${tr}:${radial}:${tubular}`,
+    () => new THREE.TorusGeometry(r, tr, radial, tubular),
+  ) as THREE.TorusGeometry;
 }
+
+// ---- utility ----------------------------------------------------------
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { SlidersHorizontal, Paintbrush } from 'lucide-react';
-import { PanelSearchInput, PanelSelect, PanelSection, PanelSlider, PanelToggle, PanelActionButton } from '@/components/ui';
+import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import {
   PREFAB_CATEGORIES,
   PREFAB_STYLES,
@@ -316,117 +316,11 @@ export function Freeform3DAssetsView() {
         )}
       </div>
 
-      {/* Brush options — only shown when the user flipped the brush
-          button on. Sits between the filters row and the tile grid so
-          the settings are obvious the moment brush mode engages. */}
-      {brush.enabled && (
-        <div className="shrink-0 px-3 pb-2 [&>div]:!mb-0">
-          <PanelSection
-            title="Brush"
-            collapsible
-            defaultOpen
-            icon={Paintbrush}
-            noBorder
-          >
-            <div
-              className="mb-3 px-2 py-2 rounded-lg text-xs"
-              style={{
-                background: 'var(--pb-cream-2)',
-                border: '1.5px solid var(--pb-line-2)',
-                color: 'var(--pb-ink)',
-              }}
-            >
-              {brush.kind
-                ? <>Painting: <span style={{ fontWeight: 700 }}>{brush.kind}</span> — click or drag in the viewport.</>
-                : <span style={{ color: 'var(--pb-ink-muted)' }}>Tap a tile below to pick what to paint.</span>}
-            </div>
-            <PanelSlider
-              label="Density"
-              value={brush.density}
-              onChange={(v) => setBrushField('density', v)}
-              min={1} max={20} step={1}
-            />
-            <PanelSlider
-              label="Radius"
-              value={brush.radius}
-              onChange={(v) => setBrushField('radius', v)}
-              min={0} max={6} step={0.1}
-              precision={1}
-              suffix="u"
-            />
-            <PanelSlider
-              label="Scale min"
-              value={brush.scaleMin}
-              onChange={(v) => {
-                setBrushField('scaleMin', v);
-                if (v > brush.scaleMax) setBrushField('scaleMax', v);
-              }}
-              min={0.2} max={3} step={0.05}
-              precision={2}
-            />
-            <PanelSlider
-              label="Scale max"
-              value={brush.scaleMax}
-              onChange={(v) => {
-                setBrushField('scaleMax', v);
-                if (v < brush.scaleMin) setBrushField('scaleMin', v);
-              }}
-              min={0.2} max={3} step={0.05}
-              precision={2}
-            />
-            <PanelToggle
-              label="Uniform scale"
-              checked={brush.uniformScale}
-              onChange={(v) => setBrushField('uniformScale', v)}
-            />
-            <PanelToggle
-              label="Random Y rotation"
-              checked={brush.randomRotY}
-              onChange={(v) => setBrushField('randomRotY', v)}
-            />
-            <PanelToggle
-              label="Random X tilt"
-              checked={brush.randomRotX}
-              onChange={(v) => setBrushField('randomRotX', v)}
-            />
-            <PanelToggle
-              label="Random Z tilt"
-              checked={brush.randomRotZ}
-              onChange={(v) => setBrushField('randomRotZ', v)}
-            />
-            {(brush.randomRotX || brush.randomRotZ) && (
-              <PanelSlider
-                label="Tilt range"
-                value={Math.round((brush.rotationTilt * 180) / Math.PI)}
-                onChange={(v) => setBrushField('rotationTilt', (v * Math.PI) / 180)}
-                min={0} max={45} step={1}
-                suffix="°"
-              />
-            )}
-            <PanelToggle
-              label="Random flip (mirror X)"
-              checked={brush.randomFlip}
-              onChange={(v) => setBrushField('randomFlip', v)}
-            />
-            <PanelSlider
-              label="Min spacing"
-              value={brush.minSpacing}
-              onChange={(v) => setBrushField('minSpacing', v)}
-              min={0} max={2} step={0.05}
-              precision={2}
-              suffix="u"
-            />
-            <PanelActionButton
-              onClick={() => useFreeform3D.getState().resetBrush()}
-              variant="secondary"
-            >
-              Reset brush
-            </PanelActionButton>
-          </PanelSection>
-        </div>
-      )}
-
-      {/* Prefab list/grid — same card style as other views */}
+      {/* Prefab list/grid — same card style as other views. Brush
+          options live in the right Properties panel so the Assets
+          panel stays focused on browsing/picking. The 🖌 toggle in
+          the top search row still lives here because it controls
+          how tile clicks behave. */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
         {sorted.length === 0 ? (
           <div className="flex items-center justify-center py-8">

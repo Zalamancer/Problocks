@@ -1,6 +1,6 @@
 'use client';
 
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { Paintbrush, RotateCcw, Trash2 } from 'lucide-react';
 import {
   PanelSection,
   PanelSlider,
@@ -101,6 +101,9 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
   const world = useFreeform3D((s) => s.world);
   const setWorldField = useFreeform3D((s) => s.setWorldField);
   const resetWorld = useFreeform3D((s) => s.resetWorld);
+  const brush = useFreeform3D((s) => s.brush);
+  const setBrushField = useFreeform3D((s) => s.setBrushField);
+  const resetBrush = useFreeform3D((s) => s.resetBrush);
 
   // Sections and controls are hooks — render a neutral empty state if no selection.
   const def = object ? getPrefabDef(object.kind) : null;
@@ -115,7 +118,19 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
     updateObject(object.id, { props: { ...(object.props ?? {}), [key]: value } });
   };
 
-  const delBtn = object ? (
+  // Sticky footer action picks the most relevant button for whichever
+  // mode the right panel is currently showing. Brush takes priority
+  // over selection/world because the user intentionally flipped it on.
+  const footerBtn = brush.enabled ? (
+    <PanelActionButton
+      variant="secondary"
+      icon={RotateCcw}
+      fullWidth
+      onClick={resetBrush}
+    >
+      Reset brush
+    </PanelActionButton>
+  ) : object ? (
     <PanelActionButton
       variant="destructive"
       icon={Trash2}
@@ -133,6 +148,129 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
     >
       Reset world
     </PanelActionButton>
+  );
+
+  const brushBody = (
+    <div className="flex flex-col gap-3 px-3 py-3">
+      <div
+        className="px-1 text-[11px] uppercase tracking-wider flex items-center gap-1.5"
+        style={{ color: 'var(--pb-ink-muted)', fontWeight: 700 }}
+      >
+        <Paintbrush size={12} strokeWidth={2.4} />
+        Brush mode — click or drag in the viewport
+      </div>
+
+      <div
+        className="px-3 py-2 rounded-lg text-xs"
+        style={{
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          color: 'var(--pb-ink)',
+        }}
+      >
+        {brush.kind ? (
+          <>Painting: <span style={{ fontWeight: 700 }}>{brush.kind}</span></>
+        ) : (
+          <span style={{ color: 'var(--pb-ink-muted)' }}>
+            Tap a tile in the Assets panel to pick what to paint.
+          </span>
+        )}
+      </div>
+
+      <PanelSection title="Coverage" collapsible defaultOpen>
+        <PanelSlider
+          label="Density"
+          value={brush.density}
+          onChange={(v) => setBrushField('density', v)}
+          min={1} max={20} step={1}
+        />
+        <PanelSlider
+          label="Radius"
+          value={brush.radius}
+          onChange={(v) => setBrushField('radius', v)}
+          min={0} max={6} step={0.1}
+          precision={1}
+          suffix="u"
+        />
+        <PanelSlider
+          label="Min spacing"
+          value={brush.minSpacing}
+          onChange={(v) => setBrushField('minSpacing', v)}
+          min={0} max={2} step={0.05}
+          precision={2}
+          suffix="u"
+        />
+      </PanelSection>
+
+      <PanelSection title="Scale" collapsible defaultOpen>
+        <PanelSlider
+          label="Min"
+          value={brush.scaleMin}
+          onChange={(v) => {
+            setBrushField('scaleMin', v);
+            if (v > brush.scaleMax) setBrushField('scaleMax', v);
+          }}
+          min={0.2} max={3} step={0.05}
+          precision={2}
+        />
+        <PanelSlider
+          label="Max"
+          value={brush.scaleMax}
+          onChange={(v) => {
+            setBrushField('scaleMax', v);
+            if (v < brush.scaleMin) setBrushField('scaleMin', v);
+          }}
+          min={0.2} max={3} step={0.05}
+          precision={2}
+        />
+        <PanelToggle
+          label="Uniform scale"
+          description="(one factor for all axes)"
+          checked={brush.uniformScale}
+          onChange={(v) => setBrushField('uniformScale', v)}
+        />
+        <PanelToggle
+          label="Random flip (mirror X)"
+          checked={brush.randomFlip}
+          onChange={(v) => setBrushField('randomFlip', v)}
+        />
+      </PanelSection>
+
+      <PanelSection title="Rotation" collapsible defaultOpen>
+        <PanelToggle
+          label="Random Y rotation"
+          description="(0..360°)"
+          checked={brush.randomRotY}
+          onChange={(v) => setBrushField('randomRotY', v)}
+        />
+        <PanelToggle
+          label="Random X tilt"
+          checked={brush.randomRotX}
+          onChange={(v) => setBrushField('randomRotX', v)}
+        />
+        <PanelToggle
+          label="Random Z tilt"
+          checked={brush.randomRotZ}
+          onChange={(v) => setBrushField('randomRotZ', v)}
+        />
+        {(brush.randomRotX || brush.randomRotZ) && (
+          <PanelSlider
+            label="Tilt range"
+            value={Math.round((brush.rotationTilt * 180) / Math.PI)}
+            onChange={(v) => setBrushField('rotationTilt', (v * Math.PI) / 180)}
+            min={0} max={45} step={1}
+            suffix="°"
+          />
+        )}
+      </PanelSection>
+
+      <PanelActionButton
+        variant="secondary"
+        onClick={() => setBrushField('enabled', false)}
+      >
+        Exit brush mode
+      </PanelActionButton>
+    </div>
   );
 
   const worldBody = (
@@ -206,7 +344,9 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
   const body = (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {!object ? (
+        {brush.enabled ? (
+          brushBody
+        ) : !object ? (
           worldBody
         ) : (
           <div className="flex flex-col gap-3 px-3 py-3">
@@ -332,7 +472,7 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
         className="shrink-0 px-3 py-3"
         style={{ borderTop: '1.5px solid var(--pb-line-2)', background: 'var(--pb-paper)' }}
       >
-        {delBtn}
+        {footerBtn}
       </div>
     </>
   );

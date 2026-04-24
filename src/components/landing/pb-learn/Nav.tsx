@@ -19,6 +19,7 @@ export const Nav = ({ onMakeGame }: { onMakeGame?: () => void }) => {
     ['Students', '#students'],
     ['Teachers', '#teachers'],
     ['Subjects', '#subjects'],
+    ['Lessons', '/lessons'],
   ];
 
   return (
@@ -46,17 +47,30 @@ export const Nav = ({ onMakeGame }: { onMakeGame?: () => void }) => {
           </a>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>
-            {links.map(([label, href]) => (
-              <a key={label} href={href} style={{
-                fontSize: 13.5, fontWeight: 500,
-                padding: '7px 10px', borderRadius: 999,
-                color: 'var(--pbs-ink-soft)', transition: 'color 120ms, background 120ms',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pbs-ink)'; e.currentTarget.style.background = 'rgba(29,26,20,0.05)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pbs-ink-soft)'; e.currentTarget.style.background = 'transparent'; }}
-              >{label}</a>
-            ))}
+            {links.map(([label, href]) => {
+              const isRoute = href.startsWith('/');
+              return isRoute ? (
+                <Link key={label} href={href} style={{
+                  fontSize: 13.5, fontWeight: 500,
+                  padding: '7px 10px', borderRadius: 999,
+                  color: 'var(--pbs-ink-soft)', transition: 'color 120ms, background 120ms',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pbs-ink)'; e.currentTarget.style.background = 'rgba(29,26,20,0.05)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pbs-ink-soft)'; e.currentTarget.style.background = 'transparent'; }}
+                >{label}</Link>
+              ) : (
+                <a key={label} href={href} style={{
+                  fontSize: 13.5, fontWeight: 500,
+                  padding: '7px 10px', borderRadius: 999,
+                  color: 'var(--pbs-ink-soft)', transition: 'color 120ms, background 120ms',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--pbs-ink)'; e.currentTarget.style.background = 'rgba(29,26,20,0.05)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--pbs-ink-soft)'; e.currentTarget.style.background = 'transparent'; }}
+                >{label}</a>
+              );
+            })}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>

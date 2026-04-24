@@ -233,16 +233,19 @@ function mulberry32(seed: number): () => number {
 }
 
 // Leaf/trunk palettes — each style evokes a different mood.
-// Greens pushed deeper/more saturated to match the Pokopia reference;
-// the old palette drifted pastel and washed out against the vivid sky.
-const PAL_GREEN  = ['#3ea04a', '#54b048', '#6dc257', '#2f9140', '#78cc5a', '#46a84e', '#5ab84a', PALETTE.mint];
-const PAL_AUTUMN = ['#e85a2a', '#d94520', '#c44536', '#e8a020', '#f07030', '#b84d2a', '#d9883a', '#e6641a'];
-const PAL_CHERRY = ['#ff8cb5', '#ea78a0', '#ffa5c5', '#e05a88', '#ff6ea8', '#f59ab8', '#d85080'];
-const PAL_FANTASY = ['#9d5aff', '#b06aff', '#5abfe8', '#e060e5', '#5a9ce8', '#c850ff', '#40e0a0'];
-const PAL_WOOD_BROWN = [PALETTE.woodDark, PALETTE.woodShadow, PALETTE.woodLight];
+// All values hard-coded (not `PALETTE.x`) so the tree-random picker
+// isn't frozen to whatever theme was active at module import time.
+// Numbers tuned against the Pokopia reference: deep forest greens
+// (blue-shifted, not lime), fire-engine autumn, hot-pink cherry,
+// saturated purples/teals for fantasy, red-rust trunks.
+const PAL_GREEN  = ['#2d9040', '#3aa348', '#52b055', '#2a7a34', '#46a050', '#388a3e', '#4fb052', '#2e8a3c'];
+const PAL_AUTUMN = ['#e04820', '#c43018', '#d93a30', '#e88818', '#f06028', '#b83820', '#d97530', '#e65818'];
+const PAL_CHERRY = ['#ff5a92', '#e04878', '#ff78a8', '#d83a70', '#ff4080', '#f07098', '#c82860'];
+const PAL_FANTASY = ['#8a2ce0', '#9840e8', '#38a0d0', '#d04ae0', '#4080e0', '#b030e0', '#20b080'];
+const PAL_WOOD_BROWN = ['#a84830', '#8a3520', '#c46f4a', '#932f1c', '#b0553a'];
 const PAL_WOOD_BIRCH = ['#ece7d3', '#d6d1bb', '#c4bfa5'];
-const PAL_FRUIT = ['#d94545', '#c73e3e', '#e06464']; // cherry / apple reds
-const PAL_FRUIT_CITRUS = ['#f0b040', '#e8a020', '#ffb858'];
+const PAL_FRUIT = ['#d93020', '#c42818', '#e03828']; // cherry / apple reds — pure fire-engine
+const PAL_FRUIT_CITRUS = ['#f0a020', '#e88010', '#ffb030'];
 
 type TreeStyle = 'green' | 'autumn' | 'cherry' | 'fantasy' | 'birch' | 'dead';
 type CanopyShape = 'round' | 'stacked' | 'cone' | 'cluster' | 'umbrella' | 'tall';

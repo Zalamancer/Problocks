@@ -32,16 +32,34 @@ export const THEMES: Record<ThemeId, Theme> = {
     label: 'Vivid',
     desc: 'Saturated Pokopia / Adopt-Me look',
     palette: {
-      sky: '#5cb4f0',
-      skyTop: '#2e8fd9',
+      // Sky + ground
+      sky: '#4aa5ee',
+      skyTop: '#1a7ad0',
       skyHorizon: '#bfe6ff',
       cloud: '#ffffff',
       fogFar: '#bfe6ff',
-      grass: '#6ac557',
-      grassDark: '#4ea340',
-      mint: '#6dc257',
-      sage: '#46a84e',
-      flowerBush: '#3ea04a',
+      grass: '#3ea04a',           // deeper saturated green (was too limey)
+      grassDark: '#2e7f38',
+      // Foliage
+      mint: '#3ea045',            // default tree canopy
+      sage: '#2d8038',            // canopy accent — darker for layering
+      flowerBush: '#2f9038',
+      // Wood — shift away from tan/yellow into the target's red-rust
+      // range so trunks and bench slats read as cedar, not oak.
+      woodLight: '#c46f4a',       // bench slats / picket wood
+      woodDark: '#a84830',        // tree trunks / door panels
+      woodShadow: '#582010',      // deep under-trunk shadow tone
+      // Blue stone — columns, lamps, fountains. Target is near-navy,
+      // not the medium slate the baseline used.
+      blueStone: '#1e2a58',
+      blueStoneLight: '#3a4a85',
+      blueStoneDark: '#0d1438',
+      // Accents — punchier brights for the "candy store" read
+      coral: '#ff5a92',
+      roof: '#d9342e',            // target roofs are fire-engine red
+      roofRidge: '#a42020',
+      flowerPink: '#ff5a92',
+      balloonPink: '#ff5a92',
     },
   },
   pastel: {

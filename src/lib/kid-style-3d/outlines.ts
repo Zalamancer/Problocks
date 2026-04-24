@@ -1,0 +1,127 @@
+/**
+ * Inverted-hull outline — the Pokopia/BOTW/Adopt-Me trick.
+ *
+ * Duplicate a mesh, push its vertices along their normals, render only
+ * back faces, colour it dark. Cheap (just extra draw calls, no post-
+ * process), per-object opt-in, composes with any camera. The single
+ * biggest "kid-style" upgrade after switching to MeshToonMaterial.
+ *
+ * See docs/three-kid-style/03-outlines.md for the three alternative
+ * methods (OutlineEffect addon, post-process edge-detection) and
+ * why this one wins on Chromebook hardware.
+ */
+
+import * as THREE from 'three';
+import { outlineColorFor } from './materials';
+
+export interface OutlineOptions {
+  /**
+   * Outline color. If omitted, auto-derived from the mesh's base material
+   * color (darkened in HSL) so each object gets a harmonized outline
+   * instead of every mesh in the scene sharing the same pure black.
+   */
+  color?: THREE.ColorRepresentation;
+  /** Push distance in world units. 0.02–0.04 for characters; 0.01 for tiny props. */
+  thickness?: number;
+  /**
+   * Screen-space thickness. When true, far objects keep the same outline
+   * thickness in pixels instead of shrinking with distance — the modern
+   * Roblox / Pokopia look. Slightly more expensive.
+   */
+  screenSpace?: boolean;
+  /** Draw order for the outline pass (default -1, i.e. before the main mesh). */
+  renderOrder?: number;
+}
+
+const OUTLINE_USER_DATA_KEY = '__kidOutline';
+
+/**
+ * Build a shader material that pushes each vertex along its local normal.
+ * Produces constant-thickness outlines regardless of mesh shape, unlike the
+ * naïve "scale by a constant" approach which distorts on non-uniform meshes.
+ */
+function buildOutlineMaterial(opts: OutlineOptions, baseColor?: THREE.ColorRepresentation): THREE.ShaderMaterial {
+  const color = new THREE.Color(
+    opts.color ?? outlineColorFor(baseColor ?? '#999999'),
+  );
+  const thickness = opts.thickness ?? 0.03;
+
+  const vertex = opts.screenSpace
+    ? `
+      uniform float thickness;
+      void main() {
+        vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+        float depth = -viewPos.z;
+        vec3 pushed = position + normal * thickness * depth;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pushed, 1.0);
+      }
+    `
+    : `
+      uniform float thickness;
+      void main() {
+        vec3 pushed = position + normal * thickness;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pushed, 1.0);
+      }
+    `;
+
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      thickness: { value: thickness },
+      outlineColor: { value: color },
+    },
+    vertexShader: vertex,
+    fragmentShader: `
+      uniform vec3 outlineColor;
+      void main() { gl_FragColor = vec4(outlineColor, 1.0); }
+    `,
+    side: THREE.BackSide,
+    // We don't want outlines to blend into fog — the silhouette should stay
+    // crisp even on distant props.
+    fog: false,
+  });
+}
+
+/**
+ * Attach an inverted-hull outline to a mesh. The outline is parented to
+ * the source mesh so it inherits position/rotation/scale automatically —
+ * you never have to re-sync it when animating.
+ */
+export function addOutline(mesh: THREE.Mesh, opts: OutlineOptions = {}): THREE.Mesh {
+  // Idempotent: calling twice doesn't stack outlines.
+  const existing = mesh.userData[OUTLINE_USER_DATA_KEY] as THREE.Mesh | undefined;
+  if (existing) return existing;
+
+  const baseColor =
+    (mesh.material as THREE.MeshStandardMaterial | undefined)?.color?.getHex?.() ??
+    undefined;
+  const outlineMat = buildOutlineMaterial(opts, baseColor);
+
+  const outline = new THREE.Mesh(mesh.geometry, outlineMat);
+  outline.renderOrder = opts.renderOrder ?? -1;
+  outline.castShadow = false;
+  outline.receiveShadow = false;
+  outline.frustumCulled = mesh.frustumCulled;
+  outline.name = `${mesh.name || 'mesh'}__outline`;
+
+  mesh.add(outline);
+  mesh.userData[OUTLINE_USER_DATA_KEY] = outline;
+  return outline;
+}
+
+/** Walk a subtree adding outlines to every Mesh found. Skips already-outlined ones. */
+export function addOutlinesToTree(root: THREE.Object3D, opts: OutlineOptions = {}): void {
+  root.traverse((obj) => {
+    if (!(obj as THREE.Mesh).isMesh) return;
+    // Don't re-outline the outline itself.
+    if (obj.name.endsWith('__outline')) return;
+    addOutline(obj as THREE.Mesh, opts);
+  });
+}
+
+export function removeOutline(mesh: THREE.Mesh): void {
+  const outline = mesh.userData[OUTLINE_USER_DATA_KEY] as THREE.Mesh | undefined;
+  if (!outline) return;
+  mesh.remove(outline);
+  (outline.material as THREE.Material).dispose?.();
+  delete mesh.userData[OUTLINE_USER_DATA_KEY];
+}

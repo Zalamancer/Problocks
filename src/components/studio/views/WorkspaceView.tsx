@@ -10,6 +10,7 @@ import { useStudio } from '@/store/studio-store';
 import { VoxelView } from './VoxelView';
 import { QuizView } from './QuizView';
 import { FreeformView } from './FreeformView';
+import { FreeformView3D } from './FreeformView3D';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and a minimal
@@ -58,6 +59,19 @@ export function WorkspaceView() {
     return (
       <div className="relative w-full h-full">
         <FreeformView />
+      </div>
+    );
+  }
+
+  // 3D Freeform — kid-style (Roblox/Pokopia-like) scene with rounded
+  // primitives, toon materials, and inverted-hull outlines. Runs on its
+  // own engine (see src/lib/kid-style-3d/) so nothing leaks into the
+  // tile/lego building canvas below, which has a different coord system
+  // and snapping model.
+  if (gameSystem === '3d-freeform') {
+    return (
+      <div className="relative w-full h-full">
+        <FreeformView3D />
       </div>
     );
   }

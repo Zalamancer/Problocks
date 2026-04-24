@@ -76,8 +76,15 @@ async function runSeed(
       { onConflict: 'google_sub' },
     );
   if (ensureTeacher.error) {
+    const msg = ensureTeacher.error.message;
+    const isRls = /row-level security/i.test(msg);
     return NextResponse.json(
-      { error: `teachers upsert: ${ensureTeacher.error.message}` },
+      {
+        error: `teachers upsert: ${msg}`,
+        hint: isRls
+          ? 'Set SUPABASE_SERVICE_ROLE_KEY in .env.local (Supabase Dashboard → Settings → API → service_role) and restart npm run dev. The teachers table is closed to anon writes (migration 015).'
+          : undefined,
+      },
       { status: 500 },
     );
   }

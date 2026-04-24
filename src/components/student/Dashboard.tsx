@@ -8,6 +8,7 @@ import { Block, Chunky, Icon, Pill } from '@/components/landing/pb-site/primitiv
 import { AvatarBlob } from './atoms';
 import { RobloxAvatar } from './RobloxAvatar';
 import { useDataSourceStore } from '@/store/data-source-store';
+import { OwnerSwitchButton } from '@/components/owner-switch-button';
 import {
   EXPLORE,
   SAMPLE_RECENT,
@@ -69,6 +70,7 @@ export const Dashboard = ({
               <StatChip icon="coin" tone="mint" value={coins.toLocaleString()} label="blocks"/>
             </div>
           )}
+          <OwnerSwitchButton email={user?.email} to="teacher" />
           <AvatarMenu user={user} onLogout={onLogout}/>
         </div>
       </header>

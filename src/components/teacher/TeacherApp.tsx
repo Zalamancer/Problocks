@@ -18,6 +18,7 @@ import { type Assignment, type ClassRecord, type Student } from './sample-data';
 import { teacherWrap } from './shared';
 import { useDataSourceStore } from '@/store/data-source-store';
 import { useTeacherData } from './teacher-data-context';
+import { OwnerSwitchButton } from '@/components/owner-switch-button';
 
 type View = 'overview' | 'assignments' | 'assignment' | 'new-assignment' | 'students' | 'student' | 'self' | 'messages';
 
@@ -224,6 +225,8 @@ export const TeacherApp = () => {
               );
             })}
           </nav>
+
+          <OwnerSwitchButton email={teacherEmail} to="student" />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1.5px solid var(--pbs-line-2)' }}>
             <div style={{

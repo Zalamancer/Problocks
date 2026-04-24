@@ -10,7 +10,7 @@
 import type * as THREE from 'three';
 import type { BuildOptions } from './types';
 import { primitiveBox, primitiveSphere, primitiveCylinder, primitiveCone } from './primitives';
-import { treeOak, treePine, bush, mushroom, rock, flower, cloud } from './nature';
+import { treeOak, treePine, treeRandom, bush, mushroom, rock, flower, cloud } from './nature';
 import { house, fence, gatePost, pathStone, mailbox, bench, balloon } from './buildings';
 import { character } from './character';
 
@@ -27,6 +27,7 @@ export function buildPrefab(kind: string, opts: BuildOptions = {}): THREE.Object
     // nature
     case 'tree-oak':    return treeOak(opts);
     case 'tree-pine':   return treePine(opts);
+    case 'tree-random': return treeRandom(opts);
     case 'bush':        return bush(opts);
     case 'mushroom':    return mushroom(opts);
     case 'rock':        return rock(opts);

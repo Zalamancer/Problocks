@@ -192,9 +192,22 @@ export const useFreeform3D = create<Freeform3DState>()(
       addPrefab: (kind, position = [0, 0, 0]) => {
         const def = getPrefabDef(kind);
         if (!def) return '';
+        // Random-variation prefabs (tree-random) bake a unique seed into
+        // props at spawn time so the same archetype + dimensions persist
+        // across save / undo / reload. Without this, every hydrate pass
+        // would regenerate a different tree for the same SceneObject.id.
+        const isRandomTree = kind === 'tree-random';
+        const spawnProps: Record<string, unknown> | undefined = isRandomTree
+          ? { seed: Math.floor(Math.random() * 1_000_000_000) }
+          : undefined;
+        // Skip the default-color assignment for random trees so the
+        // builder's own seeded leaf-color pick actually runs (color is
+        // left undefined; the user can still override later via the
+        // inspector and it'll take precedence over the random pick).
         const obj = makeSceneObject(kind, {
           position,
-          color: def.defaultColor,
+          color: isRandomTree ? undefined : def.defaultColor,
+          props: spawnProps,
         });
         pushHistory(set, get);
         set((s) => ({

@@ -14,7 +14,7 @@ export type PrefabKind =
   // primitives
   | 'rounded-box' | 'sphere' | 'cylinder' | 'cone'
   // nature
-  | 'tree-oak' | 'tree-pine' | 'bush' | 'mushroom' | 'rock' | 'flower' | 'cloud'
+  | 'tree-oak' | 'tree-pine' | 'tree-random' | 'bush' | 'mushroom' | 'rock' | 'flower' | 'cloud'
   // buildings
   | 'house' | 'fence' | 'gate-post' | 'path-stone' | 'mailbox' | 'bench' | 'balloon'
   // characters
@@ -98,6 +98,10 @@ export const PREFABS: PrefabDef[] = [
     props: [
       { kind: 'color', key: 'trunkColor', label: 'Trunk', defaultValue: PALETTE.woodShadow },
     ],
+  },
+  {
+    kind: 'tree-random', label: 'Random Tree', category: 'nature', style: 'chunky-pastel',
+    defaultColor: PALETTE.mint, icon: '🎲',
   },
   { kind: 'bush',     label: 'Bush',     category: 'nature', style: 'chunky-pastel', defaultColor: PALETTE.flowerBush, icon: '🌿' },
   { kind: 'mushroom', label: 'Mushroom', category: 'nature', style: 'chunky-pastel', defaultColor: PALETTE.flowerPink, icon: '🍄' },

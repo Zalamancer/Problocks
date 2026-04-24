@@ -233,10 +233,12 @@ function mulberry32(seed: number): () => number {
 }
 
 // Leaf/trunk palettes — each style evokes a different mood.
-const PAL_GREEN  = [PALETTE.mint, PALETTE.sage, PALETTE.flowerBush, '#a8d58a', '#8ac082', '#c7e0a6', '#7eb870', '#9fc98b'];
-const PAL_AUTUMN = ['#e8a355', '#d97757', '#c44536', '#e8c355', '#f0a058', '#b84d2a', '#d9883a', '#e0a02b'];
-const PAL_CHERRY = ['#f2b6c6', '#eaa0b4', '#f7d0dc', '#ffc1d1', '#d98a9e', '#f5c8d5', '#ffa8c0'];
-const PAL_FANTASY = ['#9d7ae8', '#b58cff', '#6ec5c9', '#e48be8', '#7cb5f0', '#d090ff', '#8defc7'];
+// Greens pushed deeper/more saturated to match the Pokopia reference;
+// the old palette drifted pastel and washed out against the vivid sky.
+const PAL_GREEN  = ['#3ea04a', '#54b048', '#6dc257', '#2f9140', '#78cc5a', '#46a84e', '#5ab84a', PALETTE.mint];
+const PAL_AUTUMN = ['#e85a2a', '#d94520', '#c44536', '#e8a020', '#f07030', '#b84d2a', '#d9883a', '#e6641a'];
+const PAL_CHERRY = ['#ff8cb5', '#ea78a0', '#ffa5c5', '#e05a88', '#ff6ea8', '#f59ab8', '#d85080'];
+const PAL_FANTASY = ['#9d5aff', '#b06aff', '#5abfe8', '#e060e5', '#5a9ce8', '#c850ff', '#40e0a0'];
 const PAL_WOOD_BROWN = [PALETTE.woodDark, PALETTE.woodShadow, PALETTE.woodLight];
 const PAL_WOOD_BIRCH = ['#ece7d3', '#d6d1bb', '#c4bfa5'];
 const PAL_FRUIT = ['#d94545', '#c73e3e', '#e06464']; // cherry / apple reds

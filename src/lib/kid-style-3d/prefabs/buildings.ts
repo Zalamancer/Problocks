@@ -243,6 +243,24 @@ export function pathStone({ color }: BuildOptions): THREE.Object3D {
   return m;
 }
 
+/**
+ * Dirt patch — wide flat disc for brush-painting dirt paths through
+ * grass. Low profile (0.04u) and no outline so neighbouring patches
+ * blend into a continuous trail when scattered by the paint-brush.
+ * Casts no shadow (it *is* the shadow, effectively) but receives
+ * shadows from props above it.
+ */
+export function dirtPatch({ color }: BuildOptions): THREE.Object3D {
+  const m = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.75, radiusBottom: 0.75, height: 0.04, radialSegments: 12 }),
+    toonMaterial({ color: color ?? PALETTE.dirt }),
+  );
+  m.position.y = 0.03;
+  m.castShadow = false;
+  m.receiveShadow = true;
+  return m;
+}
+
 export function mailbox({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const boxColor = color ?? '#7ab0d8';

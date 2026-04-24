@@ -42,6 +42,8 @@ export const PALETTE = {
   curbDark: '#a89890',
   stone: '#e8d4a8',        // path stones
   stoneDark: '#d0b888',
+  dirt: '#d68552',         // painted-path / trail dirt — warm orange-brown
+  dirtDark: '#a85e35',     // dirt edges / darker variant
   charcoal: '#2a1a28',     // outlines, hair (slightly plum-tinted, not pure grey)
 
   // Wood tones

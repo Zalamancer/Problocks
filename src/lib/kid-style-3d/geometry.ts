@@ -154,10 +154,19 @@ export function kidSimpleBox(
 export function kidTriPrism(width: number, height: number, depth: number): BG {
   // Extreme: pitched roof → flat-topped slab. House ends up looking
   // like a minecraft-style hip-roofed cube; still reads as "house".
+  //
+  // Important: the real tri-prism puts its base at y=0 (peak at y=h).
+  // THREE.BoxGeometry centres at the origin (y=[-h/2, +h/2]), so a raw
+  // swap sinks the roof half-way into the walls and leaves the ridge
+  // beam floating. Translate the box up by h/2 so its base matches.
   if (PERF_MODE === 'extreme') {
     return cached(
       `prism-cube:${width}:${height}:${depth}`,
-      () => new THREE.BoxGeometry(width, height, depth),
+      () => {
+        const g = new THREE.BoxGeometry(width, height, depth);
+        g.translate(0, height / 2, 0);
+        return g;
+      },
     );
   }
   return cached(`prism:${width}:${height}:${depth}`, () => {

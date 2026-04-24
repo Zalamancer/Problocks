@@ -19,12 +19,18 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Eraser, Pen, RotateCcw, Trash2, X } from 'lucide-react';
+import { Eraser, Pen, RotateCcw, Scissors, Trash2, X } from 'lucide-react';
 
-type Tool = 'pen' | 'eraser';
+// `eraser` = pixel eraser (uses globalCompositeOperation: destination-out
+// so it carves through anything underneath). `eraser-stroke` = whole-
+// stroke eraser: hovering over a stroke deletes the entire stroke, like
+// Procreate / Notability's object eraser.
+type Tool = 'pen' | 'eraser' | 'eraser-stroke';
 type Pt = { x: number; y: number };
 interface Stroke {
-  tool: Tool;
+  // Only 'pen' and 'eraser' produce stored strokes. 'eraser-stroke'
+  // mutates the array directly — it never adds anything.
+  tool: 'pen' | 'eraser';
   color: string;
   width: number;
   points: Pt[];
@@ -107,6 +113,22 @@ export function ScribbleOverlay() {
     y: e.clientY,
   });
 
+  const eraseStrokeAt = useCallback(
+    (p: Pt): boolean => {
+      // Walk strokes from top (most recently drawn) so a touch removes
+      // the visually frontmost stroke first. Stop at the first hit.
+      const arr = strokesRef.current;
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (strokeHits(arr[i], p)) {
+          arr.splice(i, 1);
+          return true;
+        }
+      }
+      return false;
+    },
+    [],
+  );
+
   const begin = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (!active) return;
@@ -114,26 +136,45 @@ export function ScribbleOverlay() {
       if (!canvas) return;
       canvas.setPointerCapture(e.pointerId);
       drawingRef.current = true;
+      const p = pointAt(e);
+      if (tool === 'eraser-stroke') {
+        if (eraseStrokeAt(p)) {
+          paint();
+          repaintToolbar((n) => n + 1);
+        }
+        return;
+      }
       activeStrokeRef.current = {
         tool,
         color,
         width: tool === 'eraser' ? ERASER_WIDTH : PEN_WIDTH,
-        points: [pointAt(e)],
+        points: [p],
       };
       paint();
     },
-    [active, color, tool, paint],
+    [active, color, tool, paint, eraseStrokeAt],
   );
 
   const extend = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (!drawingRef.current) return;
+      const p = pointAt(e);
+      if (tool === 'eraser-stroke') {
+        // Stream-erase: while dragging, remove every stroke the cursor
+        // passes through. Repaint only when we actually deleted one to
+        // avoid extra frames.
+        if (eraseStrokeAt(p)) {
+          paint();
+          repaintToolbar((n) => n + 1);
+        }
+        return;
+      }
       const s = activeStrokeRef.current;
       if (!s) return;
-      s.points.push(pointAt(e));
+      s.points.push(p);
       paint();
     },
-    [paint],
+    [tool, eraseStrokeAt, paint],
   );
 
   const end = useCallback(
@@ -233,7 +274,13 @@ export function ScribbleOverlay() {
               active={tool === 'eraser'}
               onClick={() => setTool('eraser')}
               icon={<Eraser size={13} strokeWidth={2.4} />}
-              label="Eraser"
+              label="Erase"
+            />
+            <ToolPill
+              active={tool === 'eraser-stroke'}
+              onClick={() => setTool('eraser-stroke')}
+              icon={<Scissors size={13} strokeWidth={2.4} />}
+              label="Stroke"
             />
             <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.2)', margin: '0 2px' }} />
             {PEN_COLORS.map((c) => (
@@ -283,7 +330,12 @@ export function ScribbleOverlay() {
               inset: 0,
               zIndex: 99999,
               touchAction: 'none',
-              cursor: tool === 'eraser' ? 'cell' : 'crosshair',
+              cursor:
+                tool === 'eraser'
+                  ? 'cell'
+                  : tool === 'eraser-stroke'
+                    ? 'not-allowed'
+                    : 'crosshair',
               background: 'transparent',
             }}
           />
@@ -291,6 +343,32 @@ export function ScribbleOverlay() {
       )}
     </>
   );
+}
+
+// Distance from point p to segment a-b. Returns Infinity for a degenerate
+// (zero-length) segment so callers can skip cleanly.
+function distToSegment(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+// True when cursor `p` is within hit distance of any segment in stroke
+// `s`. Pad by half the stroke width so chunkier strokes are easier to
+// catch, and add a small constant so single-tap pen dots are clickable.
+const HIT_PAD = 6;
+function strokeHits(s: Stroke, p: Pt): boolean {
+  const slop = HIT_PAD + s.width / 2;
+  const pts = s.points;
+  if (pts.length === 1) return Math.hypot(p.x - pts[0].x, p.y - pts[0].y) <= slop;
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (distToSegment(p, pts[i], pts[i + 1]) <= slop) return true;
+  }
+  return false;
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {

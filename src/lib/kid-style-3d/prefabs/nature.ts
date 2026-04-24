@@ -242,7 +242,11 @@ const PAL_GREEN  = ['#2d9040', '#3aa348', '#52b055', '#2a7a34', '#46a050', '#388
 const PAL_AUTUMN = ['#e04820', '#c43018', '#d93a30', '#e88818', '#f06028', '#b83820', '#d97530', '#e65818'];
 const PAL_CHERRY = ['#ff5a92', '#e04878', '#ff78a8', '#d83a70', '#ff4080', '#f07098', '#c82860'];
 const PAL_FANTASY = ['#8a2ce0', '#9840e8', '#38a0d0', '#d04ae0', '#4080e0', '#b030e0', '#20b080'];
-const PAL_WOOD_BROWN = ['#a84830', '#8a3520', '#c46f4a', '#932f1c', '#b0553a'];
+// Warm cedar-to-rust trunks matching the Pokopia reference. Lighter
+// values lean pink-red (looks like cherry/cedar bark); darker values
+// are deeper rust. Shifted lighter overall so trunks pop against the
+// orange dirt path without blending into it.
+const PAL_WOOD_BROWN = ['#c4755a', '#b05845', '#a84830', '#d48875', '#b06555'];
 const PAL_WOOD_BIRCH = ['#ece7d3', '#d6d1bb', '#c4bfa5'];
 const PAL_FRUIT = ['#d93020', '#c42818', '#e03828']; // cherry / apple reds — pure fire-engine
 const PAL_FRUIT_CITRUS = ['#f0a020', '#e88010', '#ffb030'];
@@ -294,10 +298,12 @@ export function treeRandom({ color, props }: BuildOptions): THREE.Object3D {
                     : PAL_WOOD_BROWN;
 
   // ---- trunk(s) ------------------------------------------------------
+  // Taller defaults than before (target trees stand 3–5u tall). Multi-
+  // trunk variants still read because the canopy sits above them.
   const trunkRoll = rng();
   const trunkCount: 1 | 2 | 3 = trunkRoll < 0.10 ? 3 : trunkRoll < 0.24 ? 2 : 1;
-  const trunkH = 0.6 + rng() * 1.6;                    // 0.6–2.2
-  const mainTrunkR = 0.15 + rng() * 0.20;              // 0.15–0.35
+  const trunkH = 1.2 + rng() * 2.0;                    // 1.2–3.2
+  const mainTrunkR = 0.18 + rng() * 0.22;              // 0.18–0.40
   const perTrunkR = mainTrunkR * (trunkCount === 3 ? 0.7 : trunkCount === 2 ? 0.82 : 1.0);
   const trunkColor = pick(woodPalette);
 
@@ -350,53 +356,72 @@ export function treeRandom({ color, props }: BuildOptions): THREE.Object3D {
   const leafBase   = color ?? pick(leafPalette);
   const leafAccent = pick(leafPalette);
 
-  if (shape === 'round') {
-    const r = 0.7 + rng() * 0.5;
-    const ball = new THREE.Mesh(
-      kidSphere({ radius: r, detail: 1 }),
-      toonMaterial({ color: leafBase }),
+  // --- Canopy construction helpers ------------------------------------
+  // All non-cluster shapes build on flat hex cylinders (6 radial
+  // segments) to match the Pokopia reference's layered-disc silhouette
+  // instead of smooth spheres.
+  const makeHexTier = (r: number, h: number, color: string) =>
+    new THREE.Mesh(
+      kidCylinder({ radiusTop: r * 0.95, radiusBottom: r, height: h, radialSegments: 6 }),
+      toonMaterial({ color }),
     );
-    ball.position.y = trunkH + r * 0.65;
+
+  if (shape === 'round') {
+    // One chunky hex "ball" — a tall hex cylinder with slight top taper
+    // reads as a puffy canopy at orbit distance. Bigger than before so
+    // it dominates the silhouette instead of looking like a pom-pom.
+    const r = 1.0 + rng() * 0.7;
+    const h = r * 1.4;
+    const ball = makeHexTier(r, h, leafBase);
+    ball.position.y = trunkH + h * 0.5;
     ball.castShadow = true; ball.receiveShadow = true;
     g.add(ball);
+    // Tiny accent hex tier on top so it doesn't read as a lozenge.
+    const topTier = makeHexTier(r * 0.55, h * 0.35, leafAccent);
+    topTier.position.y = trunkH + h + (h * 0.35) * 0.5 - 0.1;
+    topTier.castShadow = true;
+    g.add(topTier);
   } else if (shape === 'stacked') {
-    const BASE = 0.85 + rng() * 0.3;
-    const baseY = trunkH + BASE * 0.4;
-    const sphereGeo = kidSphere({ radius: BASE, detail: 1 });
-    const leafXs: InstanceTransform[] = [
-      { position: [0, baseY, 0], scale: 1 },
-      { position: [0, baseY + BASE * 0.8, 0], scale: 0.55 + rng() * 0.25 },
-    ];
-    const accentXs: InstanceTransform[] = [
-      {
-        position: [(rng() - 0.5) * 0.45, baseY + BASE * 0.45, (rng() - 0.5) * 0.45],
-        scale: 0.5 + rng() * 0.25,
-      },
-    ];
-    const leafM   = kidInstanced(sphereGeo, toonMaterial({ color: leafBase   }), leafXs);
-    const accentM = kidInstanced(sphereGeo, toonMaterial({ color: leafAccent }), accentXs);
-    leafM.castShadow = true; accentM.castShadow = true;
-    g.add(leafM, accentM);
-  } else if (shape === 'cone') {
-    const tierCount = 3 + Math.floor(rng() * 3);          // 3–5
-    const BASE_R = 0.70 + rng() * 0.40;
-    const BASE_H = 0.60 + rng() * 0.40;
-    const tiers: InstanceTransform[] = [];
+    // The Pokopia hero: 3–5 flat hex discs stacked with decreasing
+    // radius. Alternating leafBase / leafAccent gives it the
+    // candy-striped "wedding cake" read from the reference.
+    const tierCount = 3 + Math.floor(rng() * 3);           // 3–5
+    const startR = 0.95 + rng() * 0.6;                     // widest disc
     let y = trunkH;
     for (let i = 0; i < tierCount; i++) {
-      const s = Math.max(0.28, 1 - i * (0.18 + rng() * 0.10));
-      const tierH = BASE_H * s;
-      tiers.push({ position: [0, y + tierH / 2, 0], scale: [s, s, s] });
-      y += tierH * 0.55;
+      const t = i / (tierCount - 1);
+      const r = startR * (1 - t * (0.55 + rng() * 0.1));
+      const h = 0.22 + rng() * 0.14;
+      const color = i % 2 === 0 ? leafBase : leafAccent;
+      const tier = makeHexTier(r, h, color);
+      tier.position.y = y + h * 0.5;
+      tier.castShadow = true; tier.receiveShadow = true;
+      g.add(tier);
+      // Tiers slightly overlap so the silhouette reads continuous
+      // instead of a series of floating frisbees.
+      y += h * 0.78;
     }
-    const canopy = kidInstanced(
-      kidCone({ radius: BASE_R, height: BASE_H }),
-      toonMaterial({ color: leafBase }),
-      tiers,
-    );
-    canopy.castShadow = true; canopy.receiveShadow = true;
-    g.add(canopy);
+  } else if (shape === 'cone') {
+    // Pine / evergreen: 4–6 hex tiers that taper hard. Unlike
+    // 'stacked', each tier is TALLER than it is wide, giving the
+    // classic Christmas-tree zig-zag silhouette.
+    const tierCount = 4 + Math.floor(rng() * 3);           // 4–6
+    const startR = 0.8 + rng() * 0.4;
+    let y = trunkH;
+    for (let i = 0; i < tierCount; i++) {
+      const t = i / (tierCount - 1);
+      const r = startR * (1 - t * 0.8);
+      const h = 0.55 + rng() * 0.25;
+      const color = i % 2 === 0 ? leafBase : leafAccent;
+      const tier = makeHexTier(r, h, color);
+      tier.position.y = y + h * 0.5;
+      tier.castShadow = true; tier.receiveShadow = true;
+      g.add(tier);
+      y += h * 0.7;
+    }
   } else if (shape === 'cluster') {
+    // Only shape that still uses spheres — bushy / maple feel where
+    // offset blobs at different heights give a rolling canopy.
     const count = 4 + Math.floor(rng() * 5);              // 4–8 blobs
     const xs: InstanceTransform[] = [];
     for (let i = 0; i < count; i++) {
@@ -404,39 +429,47 @@ export function treeRandom({ color, props }: BuildOptions): THREE.Object3D {
       const radial = 0.20 + rng() * 0.5;
       xs.push({
         position: [Math.cos(a) * radial, trunkH + 0.20 + rng() * 0.7, Math.sin(a) * radial],
-        scale: 0.55 + rng() * 0.55,
+        scale: 0.6 + rng() * 0.6,
       });
     }
     const blobs = kidInstanced(
-      kidSphere({ radius: 0.5, detail: 1 }),
+      kidSphere({ radius: 0.55, detail: 1 }),
       toonMaterial({ color: leafBase }),
       xs,
     );
     blobs.castShadow = true; blobs.receiveShadow = true;
     g.add(blobs);
   } else if (shape === 'umbrella') {
-    // Wide squashed canopy — palm-ish / maple umbrella feel.
-    const r = 0.95 + rng() * 0.55;
-    const ball = new THREE.Mesh(
-      kidSphere({ radius: r, detail: 1 }),
-      toonMaterial({ color: leafBase }),
-    );
-    ball.position.y = trunkH + r * 0.25;
-    ball.scale.set(1, 0.4 + rng() * 0.15, 1);
-    ball.castShadow = true; ball.receiveShadow = true;
-    g.add(ball);
+    // Wide flat hex disc — palm / maple umbrella. One big slab that
+    // hovers above the trunk. Accent hex on top for depth.
+    const r = 1.15 + rng() * 0.5;
+    const h = 0.22 + rng() * 0.12;
+    const disc = makeHexTier(r, h, leafBase);
+    disc.position.y = trunkH + h * 0.5;
+    disc.castShadow = true; disc.receiveShadow = true;
+    g.add(disc);
+    const topBlob = makeHexTier(r * 0.4, h * 0.9, leafAccent);
+    topBlob.position.y = trunkH + h + h * 0.4;
+    topBlob.castShadow = true;
+    g.add(topBlob);
   } else {
-    // Tall — elongated columnar canopy (cypress / poplar).
-    const r = 0.45 + rng() * 0.3;
-    const h = 1.2 + rng() * 1.0;
-    const stretched = new THREE.Mesh(
-      kidSphere({ radius: r, detail: 1 }),
-      toonMaterial({ color: leafBase }),
-    );
-    stretched.position.y = trunkH + h * 0.45;
-    stretched.scale.set(1, h / (r * 2), 1);
-    stretched.castShadow = true; stretched.receiveShadow = true;
-    g.add(stretched);
+    // Tall — narrow columnar canopy (cypress / poplar / that red
+    // exclamation-mark tree in the reference). Stack of 4–7 narrow
+    // hex tiers with lightly varying radius.
+    const tierCount = 4 + Math.floor(rng() * 4);           // 4–7
+    const startR = 0.35 + rng() * 0.25;
+    let y = trunkH;
+    for (let i = 0; i < tierCount; i++) {
+      const t = i / (tierCount - 1);
+      const bulge = Math.sin(t * Math.PI);                 // fat middle
+      const r = startR * (0.7 + bulge * 0.45);
+      const h = 0.35 + rng() * 0.2;
+      const tier = makeHexTier(r, h, i % 2 === 0 ? leafBase : leafAccent);
+      tier.position.y = y + h * 0.5;
+      tier.castShadow = true; tier.receiveShadow = true;
+      g.add(tier);
+      y += h * 0.82;
+    }
   }
 
   // ---- optional fruits / berries ------------------------------------

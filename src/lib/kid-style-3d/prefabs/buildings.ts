@@ -292,34 +292,74 @@ export function mailbox({ color }: BuildOptions): THREE.Object3D {
   return g;
 }
 
+/**
+ * Bench — rustic Pokopia-park bench: three horizontal plank slats on
+ * two fat pillared block legs. No tall backrest (the target uses
+ * benches purely for seating, not for silhouette), but keeps a short
+ * back slat so it reads as a proper bench from orbit.
+ */
 export function bench({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const wood = color ?? PALETTE.woodLight;
+  const legColor = PALETTE.woodDark;
 
-  const seat = new THREE.Mesh(
-    kidBox({ width: 1.8, height: 0.14, depth: 0.55, radius: 0.06 }),
-    toonMaterial({ color: wood }),
-  );
-  seat.position.y = 0.5;
-  seat.castShadow = true; seat.receiveShadow = true;
-  g.add(seat);
-
-  const backRest = new THREE.Mesh(
-    kidBox({ width: 1.8, height: 0.8, depth: 0.1, radius: 0.04 }),
-    toonMaterial({ color: wood }),
-  );
-  backRest.position.set(0, 0.9, -0.22);
-  backRest.castShadow = true;
-  g.add(backRest);
-
-  for (const x of [-0.7, 0.7]) {
-    const leg = new THREE.Mesh(
-      kidBox({ width: 0.1, height: 0.5, depth: 0.45, radius: 0.03 }),
-      toonMaterial({ color: PALETTE.woodDark }),
+  // Three seat planks — side-by-side along Z with small gaps. Each
+  // plank is a kidBox so the rounded corners read as chamfered wood.
+  const plankDepth = 0.16;
+  const plankGap = 0.04;
+  const seatW = 1.8;
+  const plankY = 0.62;
+  const planks = [-1, 0, 1];
+  for (const i of planks) {
+    const plank = new THREE.Mesh(
+      kidBox({ width: seatW, height: 0.1, depth: plankDepth, radius: 0.035 }),
+      toonMaterial({ color: wood }),
     );
-    leg.position.set(x, 0.25, 0);
-    leg.castShadow = true;
-    g.add(leg);
+    plank.position.set(0, plankY, i * (plankDepth + plankGap));
+    plank.castShadow = true; plank.receiveShadow = true;
+    g.add(plank);
+  }
+
+  // Short back slat — a single plank sitting ~0.35 above the seat on
+  // the back row. Gives the silhouette a "bench, not a table" read
+  // without adding the cathedral-height backrest of the old version.
+  const backSlat = new THREE.Mesh(
+    kidBox({ width: seatW, height: 0.14, depth: 0.08, radius: 0.035 }),
+    toonMaterial({ color: wood }),
+  );
+  backSlat.position.set(0, plankY + 0.32, -(plankDepth + plankGap) - 0.1);
+  backSlat.castShadow = true;
+  g.add(backSlat);
+
+  // Two fat pillared legs — a squat stepped block at each end. The
+  // wider base + narrower top stack reads as hand-carved garden
+  // furniture rather than a floating slab.
+  for (const x of [-0.72, 0.72]) {
+    const legBase = new THREE.Mesh(
+      kidBox({ width: 0.24, height: 0.18, depth: 0.7, radius: 0.04 }),
+      toonMaterial({ color: legColor }),
+    );
+    legBase.position.set(x, 0.09, 0);
+    legBase.castShadow = true; legBase.receiveShadow = true;
+    g.add(legBase);
+
+    const legStem = new THREE.Mesh(
+      kidBox({ width: 0.16, height: 0.38, depth: 0.58, radius: 0.03 }),
+      toonMaterial({ color: legColor }),
+    );
+    legStem.position.set(x, 0.37, 0);
+    legStem.castShadow = true;
+    g.add(legStem);
+
+    // Capital — small block at the top of each leg that the planks
+    // visually rest on. Reads as a joinery detail at orbit distance.
+    const legCap = new THREE.Mesh(
+      kidBox({ width: 0.22, height: 0.08, depth: 0.64, radius: 0.03 }),
+      toonMaterial({ color: wood }),
+    );
+    legCap.position.set(x, 0.6, 0);
+    legCap.castShadow = true;
+    g.add(legCap);
   }
 
   addOutlinesToTree(g);
@@ -327,128 +367,226 @@ export function bench({ color }: BuildOptions): THREE.Object3D {
 }
 
 /**
- * Lamppost — chunky Pokopia-blue post with a boxy lantern cap and an
- * amber bulb. Shadow-casting so it throws a cute stretched silhouette
- * across painted dirt paths.
+ * Lamppost — decorative Pokopia park lamp: stepped square plinth,
+ * slim hex post, mid-post knob, scroll-neck, open-cage lantern
+ * (4 thin vertical bars with an amber bulb inside), pyramid roof.
+ * Taller + slimmer than a simple post so it reads as "wrought iron
+ * gaslight" instead of "bollard".
  */
 export function lamppost({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const stoneColor = color ?? PALETTE.blueStone;
-  const trim = PALETTE.blueStoneLight;
+  const light = PALETTE.blueStoneLight;
+  const dark = PALETTE.blueStoneDark;
 
-  const baseWide = new THREE.Mesh(
-    kidBox({ width: 0.55, height: 0.22, depth: 0.55, radius: 0.05 }),
-    toonMaterial({ color: PALETTE.blueStoneDark }),
+  // --- plinth: two-tier stepped base --------------------------------
+  const plinth0 = new THREE.Mesh(
+    kidBox({ width: 0.48, height: 0.16, depth: 0.48, radius: 0.04 }),
+    toonMaterial({ color: dark }),
   );
-  baseWide.position.y = 0.11;
-  baseWide.castShadow = true; baseWide.receiveShadow = true;
-  g.add(baseWide);
+  plinth0.position.y = 0.08;
+  plinth0.castShadow = true; plinth0.receiveShadow = true;
+  g.add(plinth0);
 
-  const baseStep = new THREE.Mesh(
-    kidBox({ width: 0.4, height: 0.2, depth: 0.4, radius: 0.04 }),
+  const plinth1 = new THREE.Mesh(
+    kidBox({ width: 0.38, height: 0.18, depth: 0.38, radius: 0.03 }),
     toonMaterial({ color: stoneColor }),
   );
-  baseStep.position.y = 0.32;
-  baseStep.castShadow = true;
-  g.add(baseStep);
+  plinth1.position.y = 0.25;
+  plinth1.castShadow = true;
+  g.add(plinth1);
 
+  // --- post: slim hex cylinder, the lamp's spine --------------------
   const post = new THREE.Mesh(
-    kidCylinder({ radiusTop: 0.08, radiusBottom: 0.1, height: 2.2, radialSegments: 8 }),
+    kidCylinder({ radiusTop: 0.06, radiusBottom: 0.08, height: 2.4, radialSegments: 6 }),
     toonMaterial({ color: stoneColor }),
   );
-  post.position.y = 0.42 + 1.1;
+  post.position.y = 0.34 + 1.2;
   post.castShadow = true;
   g.add(post);
 
-  // Lantern cage — small box, amber bulb peeks through as a separate mesh
-  // so the toon gradient gives the bulb a visible 2-step highlight.
-  const lantern = new THREE.Mesh(
-    kidBox({ width: 0.35, height: 0.45, depth: 0.35, radius: 0.05 }),
-    toonMaterial({ color: trim }),
+  // Mid-post knob — a small sphere break in the shaft. Target lamps
+  // have this scroll/bulge detail roughly 1/3 up the pole.
+  const midKnob = new THREE.Mesh(
+    kidSphere({ radius: 0.12, detail: 0 }),
+    toonMaterial({ color: light }),
   );
-  lantern.position.y = 2.7;
-  lantern.castShadow = true;
-  g.add(lantern);
+  midKnob.position.y = 1.1;
+  midKnob.castShadow = true;
+  g.add(midKnob);
 
+  // --- neck: a widening scroll under the lantern --------------------
+  const neckRing = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.18, radiusBottom: 0.08, height: 0.16, radialSegments: 6 }),
+    toonMaterial({ color: light }),
+  );
+  neckRing.position.y = 2.7;
+  neckRing.castShadow = true;
+  g.add(neckRing);
+
+  const neckSlab = new THREE.Mesh(
+    kidBox({ width: 0.3, height: 0.08, depth: 0.3, radius: 0.03 }),
+    toonMaterial({ color: dark }),
+  );
+  neckSlab.position.y = 2.82;
+  neckSlab.castShadow = true;
+  g.add(neckSlab);
+
+  // --- lantern: open cage, 4 thin bars around an amber bulb ---------
+  // Bars are skinny boxes at the 4 corners; bulb sphere shows through
+  // the gaps. Reads as a 4-sided gas lantern from any orbit angle.
+  const lanternY = 3.07;
+  const lanternH = 0.38;
+  const barX = 0.14;
+  for (const x of [-barX, barX]) {
+    for (const z of [-barX, barX]) {
+      const bar = new THREE.Mesh(
+        kidSimpleBox({ width: 0.04, height: lanternH, depth: 0.04 }),
+        toonMaterial({ color: dark }),
+      );
+      bar.position.set(x, lanternY, z);
+      bar.castShadow = true;
+      g.add(bar);
+    }
+  }
+  // Top + bottom caps of the cage — thin slabs so the bars visually
+  // connect into a box silhouette.
+  for (const y of [lanternY - lanternH / 2, lanternY + lanternH / 2]) {
+    const cap = new THREE.Mesh(
+      kidBox({ width: 0.34, height: 0.05, depth: 0.34, radius: 0.02 }),
+      toonMaterial({ color: dark }),
+    );
+    cap.position.y = y;
+    cap.castShadow = true;
+    g.add(cap);
+  }
+
+  // --- bulb: the bright amber core ----------------------------------
   const bulb = new THREE.Mesh(
-    kidSphere({ radius: 0.14, detail: 0 }),
+    kidSphere({ radius: 0.13, detail: 0 }),
     toonMaterial({ color: PALETTE.lampGlow }),
   );
-  bulb.position.y = 2.7;
+  bulb.position.y = lanternY;
   g.add(bulb);
 
-  // Pyramid cap — adds the Pokopia "pagoda" silhouette without needing a
-  // new geometry primitive.
-  const cap = new THREE.Mesh(
-    kidCone({ radius: 0.28, height: 0.25, radialSegments: 4 }),
-    toonMaterial({ color: PALETTE.blueStoneDark }),
+  // --- roof: pyramid on top of the lantern --------------------------
+  const roof = new THREE.Mesh(
+    kidCone({ radius: 0.22, height: 0.2, radialSegments: 4 }),
+    toonMaterial({ color: dark }),
   );
-  cap.position.y = 3.05;
-  cap.rotation.y = Math.PI / 4;
-  cap.castShadow = true;
-  g.add(cap);
+  roof.position.y = lanternY + lanternH / 2 + 0.1;
+  roof.rotation.y = Math.PI / 4;
+  roof.castShadow = true;
+  g.add(roof);
+
+  const roofFinial = new THREE.Mesh(
+    kidSphere({ radius: 0.05, detail: 0 }),
+    toonMaterial({ color: light }),
+  );
+  roofFinial.position.y = lanternY + lanternH / 2 + 0.24;
+  g.add(roofFinial);
 
   addOutlinesToTree(g);
   return g;
 }
 
 /**
- * Stone column — a chunky stepped pillar in Pokopia-blue. Intended for
- * decorative accents (gate markers, plaza edges, flanking props). Base /
- * shaft / capital / knob stack gives a classical silhouette without any
- * fancy geometry.
+ * Stone column — an ornate Pokopia pillar: stepped plinth, hexagonal
+ * shaft, multi-ring capital, and a bulbous knob on top. Hex shaft
+ * comes from kidCylinder with 6 radial segments; reads as classical
+ * navy stone at the studio orbit distance.
  */
 export function stoneColumn({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const c = color ?? PALETTE.blueStone;
+  const light = PALETTE.blueStoneLight;
+  const dark = PALETTE.blueStoneDark;
 
-  const baseWide = new THREE.Mesh(
-    kidBox({ width: 0.7, height: 0.22, depth: 0.7, radius: 0.05 }),
-    toonMaterial({ color: PALETTE.blueStoneDark }),
+  // --- plinth: three stepped square tiers -------------------------
+  const plinth0 = new THREE.Mesh(
+    kidBox({ width: 0.85, height: 0.14, depth: 0.85, radius: 0.04 }),
+    toonMaterial({ color: dark }),
   );
-  baseWide.position.y = 0.11;
-  baseWide.castShadow = true; baseWide.receiveShadow = true;
-  g.add(baseWide);
+  plinth0.position.y = 0.07;
+  plinth0.castShadow = true; plinth0.receiveShadow = true;
+  g.add(plinth0);
 
-  const baseInner = new THREE.Mesh(
-    kidBox({ width: 0.55, height: 0.12, depth: 0.55, radius: 0.04 }),
+  const plinth1 = new THREE.Mesh(
+    kidBox({ width: 0.72, height: 0.12, depth: 0.72, radius: 0.04 }),
     toonMaterial({ color: c }),
   );
-  baseInner.position.y = 0.28;
-  baseInner.castShadow = true;
-  g.add(baseInner);
+  plinth1.position.y = 0.2;
+  plinth1.castShadow = true;
+  g.add(plinth1);
 
+  const plinth2 = new THREE.Mesh(
+    kidBox({ width: 0.62, height: 0.1, depth: 0.62, radius: 0.03 }),
+    toonMaterial({ color: light }),
+  );
+  plinth2.position.y = 0.31;
+  plinth2.castShadow = true;
+  g.add(plinth2);
+
+  // --- shaft: hexagonal cylinder, the visual hero of the column ---
   const shaft = new THREE.Mesh(
-    kidBox({ width: 0.42, height: 2.0, depth: 0.42, radius: 0.08 }),
+    kidCylinder({ radiusTop: 0.28, radiusBottom: 0.3, height: 2.0, radialSegments: 6 }),
     toonMaterial({ color: c }),
   );
-  shaft.position.y = 1.34;
+  shaft.position.y = 0.36 + 1.0;
   shaft.castShadow = true; shaft.receiveShadow = true;
   g.add(shaft);
 
-  const capital = new THREE.Mesh(
-    kidBox({ width: 0.58, height: 0.22, depth: 0.58, radius: 0.05 }),
-    toonMaterial({ color: PALETTE.blueStoneLight }),
+  // --- capital: three rings + a wider slab --------------------------
+  const capRing0 = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.36, radiusBottom: 0.32, height: 0.1, radialSegments: 6 }),
+    toonMaterial({ color: light }),
   );
-  capital.position.y = 2.45;
-  capital.castShadow = true;
-  g.add(capital);
+  capRing0.position.y = 2.4;
+  capRing0.castShadow = true;
+  g.add(capRing0);
 
-  const topWide = new THREE.Mesh(
-    kidBox({ width: 0.72, height: 0.18, depth: 0.72, radius: 0.05 }),
-    toonMaterial({ color: PALETTE.blueStoneDark }),
+  const capSlab = new THREE.Mesh(
+    kidBox({ width: 0.62, height: 0.16, depth: 0.62, radius: 0.04 }),
+    toonMaterial({ color: c }),
   );
-  topWide.position.y = 2.65;
-  topWide.castShadow = true;
-  g.add(topWide);
+  capSlab.position.y = 2.53;
+  capSlab.castShadow = true;
+  g.add(capSlab);
+
+  const capTop = new THREE.Mesh(
+    kidBox({ width: 0.74, height: 0.12, depth: 0.74, radius: 0.04 }),
+    toonMaterial({ color: dark }),
+  );
+  capTop.position.y = 2.67;
+  capTop.castShadow = true;
+  g.add(capTop);
+
+  // --- crown: bulbous knob on a small stem --------------------------
+  const neck = new THREE.Mesh(
+    kidCylinder({ radiusTop: 0.13, radiusBottom: 0.17, height: 0.14, radialSegments: 6 }),
+    toonMaterial({ color: c }),
+  );
+  neck.position.y = 2.8;
+  neck.castShadow = true;
+  g.add(neck);
 
   const knob = new THREE.Mesh(
-    kidSphere({ radius: 0.2, detail: 0 }),
-    toonMaterial({ color: PALETTE.blueStoneLight }),
+    kidSphere({ radius: 0.22, detail: 0 }),
+    toonMaterial({ color: light }),
   );
-  knob.position.y = 2.9;
+  knob.position.y = 3.0;
   knob.castShadow = true;
   g.add(knob);
+
+  // Tiny pointed pip on top — the little nipple-cap you see on the
+  // target column. Cheap to add, huge for silhouette readability.
+  const pip = new THREE.Mesh(
+    kidCone({ radius: 0.08, height: 0.14, radialSegments: 6 }),
+    toonMaterial({ color: dark }),
+  );
+  pip.position.y = 3.22;
+  pip.castShadow = true;
+  g.add(pip);
 
   addOutlinesToTree(g);
   return g;

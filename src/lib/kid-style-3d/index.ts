@@ -12,3 +12,4 @@ export * from './scene-schema';
 export * from './hydrate';
 export * from './gizmo';
 export * from './animations';
+export * from './play-controller';

@@ -56,6 +56,8 @@ export interface KidEngine {
   raycastRoot: (ndc: THREE.Vector2) => THREE.Intersection | null;
   /** Intersect a ray from NDC with the ground plane. Returns world point or null. */
   raycastGround: (ndc: THREE.Vector2) => THREE.Vector3 | null;
+  /** Override the per-frame callback; receives dt. Null restores default (controls.update). */
+  setPerFrame: (cb: ((dt: number) => void) | null) => void;
 }
 
 export function createKidEngine(opts: KidEngineOptions): KidEngine {
@@ -227,9 +229,12 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   const clock = new THREE.Clock();
   let rafId = 0;
   let running = false;
+  let perFrameCb: ((dt: number) => void) | null = null;
   function tick() {
     if (!running) return;
-    controls.update();
+    const dt = clock.getDelta();
+    if (perFrameCb) perFrameCb(dt);
+    else controls.update();
     animateRoot(root, {
       time: clock.getElapsedTime(),
       pointer: pointerActive ? pointer : null,
@@ -280,5 +285,6 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     resize,
     raycastRoot,
     raycastGround,
+    setPerFrame: (cb) => { perFrameCb = cb; },
   };
 }

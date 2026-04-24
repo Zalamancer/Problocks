@@ -3,6 +3,7 @@
 import { Copy, Trash2, Undo2, Redo2, Eraser } from 'lucide-react';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { ScenesMenu } from './ScenesMenu';
+import { SettingsMenu } from './SettingsMenu';
 
 /**
  * Floating top-right toolbar for the 3D Freeform studio.
@@ -53,6 +54,8 @@ export function TopToolbar() {
         />
         <Divider />
         <ToolbarButton icon={<Eraser size={14} strokeWidth={2.2} />} label="Clear all" onClick={clearScene} destructive />
+        <Divider />
+        <SettingsMenu />
       </div>
     </div>
   );

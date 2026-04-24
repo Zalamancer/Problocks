@@ -10,8 +10,11 @@ import {
   createKidGizmo,
   type KidGizmo,
   type GizmoMode,
+  createPlayController,
+  type PlayController,
 } from '@/lib/kid-style-3d';
 import { useFreeform3D } from '@/store/freeform3d-store';
+import { useSceneStore } from '@/store/scene-store';
 import { PrefabPalette } from './freeform3d/PrefabPalette';
 import { TopToolbar } from './freeform3d/TopToolbar';
 import { setSelectionHighlight } from './freeform3d/selection-outline';
@@ -36,15 +39,21 @@ export function FreeformView3D() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<KidEngine | null>(null);
   const gizmoRef = useRef<KidGizmo | null>(null);
+  const playRef = useRef<PlayController | null>(null);
 
   const objects = useFreeform3D((s) => s.scene.objects);
   const selectedId = useFreeform3D((s) => s.selectedId);
+  const cameraMode = useFreeform3D((s) => s.cameraMode);
   const select = useFreeform3D((s) => s.select);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
   const removeObject = useFreeform3D((s) => s.removeObject);
   const updateObject = useFreeform3D((s) => s.updateObject);
   const undo = useFreeform3D((s) => s.undo);
   const redo = useFreeform3D((s) => s.redo);
+
+  // Studio-wide Play toggle lives in scene-store. We react to it here to
+  // enter/exit freeform 3D play mode (WASD + follow camera).
+  const isPlaying = useSceneStore((s) => s.isPlaying);
 
   /* ---- boot engine once + gizmo ---- */
   useEffect(() => {
@@ -141,6 +150,8 @@ export function FreeformView3D() {
     const engine = engineRef.current;
     const gizmo = gizmoRef.current;
     if (!engine || !gizmo) return;
+    // No gizmo while playing — the viewport becomes the game view.
+    if (isPlaying) { gizmo.detach(); return; }
     if (!selectedId) {
       gizmo.detach();
       return;
@@ -151,12 +162,64 @@ export function FreeformView3D() {
     );
     if (match) gizmo.attach(match);
     else gizmo.detach();
-  }, [selectedId, objects]);
+  }, [selectedId, objects, isPlaying]);
 
-  /* ---- click picking on the canvas ---- */
+  /* ---- play mode: attach controller when isPlaying flips true ---- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    if (!isPlaying) {
+      if (playRef.current) {
+        playRef.current.stop();
+        playRef.current.dispose();
+        playRef.current = null;
+      }
+      engine.setPerFrame(null);
+      return;
+    }
+    // Find a character in the scene. First one wins — users can put the
+    // starter character back in front of the house if the pick feels wrong.
+    const characterObj = engine.root.children.find(
+      (c) => c.userData.__sceneKind === 'character',
+    );
+    if (!characterObj) {
+      // No character — fall through gracefully. The isPlaying state will
+      // flip back when the user hits Stop.
+      engine.setPerFrame((dt) => { engine.controls.update(); void dt; });
+      return;
+    }
+    // Deselect so the gizmo doesn't flash on the character mesh.
+    useFreeform3D.getState().select(null);
+
+    const controller = createPlayController({
+      camera: engine.camera,
+      character: characterObj,
+      domElement: engine.renderer.domElement,
+      orbit: engine.controls,
+      mode: cameraMode,
+    });
+    controller.start();
+    playRef.current = controller;
+    engine.setPerFrame((dt) => controller.update(dt));
+
+    return () => {
+      controller.stop();
+      controller.dispose();
+      playRef.current = null;
+      engine.setPerFrame(null);
+    };
+  }, [isPlaying, cameraMode]);
+
+  /* ---- camera mode live-switch (while playing) ---- */
+  useEffect(() => {
+    if (isPlaying && playRef.current) playRef.current.setMode(cameraMode);
+  }, [cameraMode, isPlaying]);
+
+  /* ---- click picking on the canvas (edit mode only) ---- */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (isPlaying) return;   // play-mode has its own input handling
 
     let downX = 0;
     let downY = 0;
@@ -193,7 +256,7 @@ export function FreeformView3D() {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
     };
-  }, [select]);
+  }, [select, isPlaying]);
 
   /* ---- keyboard shortcuts ---- */
   useEffect(() => {
@@ -252,9 +315,9 @@ export function FreeformView3D() {
         className="block w-full h-full"
         style={{ outline: 'none', cursor: 'default', touchAction: 'none' }}
       />
-      <PrefabPalette onAdd={spawnAtTarget} />
-      <TopToolbar />
-      <HintBadge />
+      {!isPlaying && <PrefabPalette onAdd={spawnAtTarget} />}
+      {!isPlaying && <TopToolbar />}
+      {isPlaying ? <PlayHud cameraMode={cameraMode} /> : <HintBadge />}
     </div>
   );
 }
@@ -271,6 +334,25 @@ function HintBadge() {
       }}
     >
       Drag · scroll · right-drag · click to select · Del to remove
+    </div>
+  );
+}
+
+function PlayHud({ cameraMode }: { cameraMode: 'third' | 'first' }) {
+  const hint = cameraMode === 'first'
+    ? 'WASD · mouse to look · click to lock pointer · Space to jump · Shift to sprint'
+    : 'WASD · drag mouse to orbit · Space to jump · Shift to sprint';
+  return (
+    <div
+      className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-medium"
+      style={{
+        background: 'rgba(0,0,0,0.55)',
+        color: 'rgba(255,255,255,0.9)',
+        backdropFilter: 'blur(6px)',
+        letterSpacing: 0.2,
+      }}
+    >
+      {hint}
     </div>
   );
 }

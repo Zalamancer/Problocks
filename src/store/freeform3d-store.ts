@@ -20,6 +20,8 @@ import { getPrefabDef } from '@/lib/kid-style-3d/prefabs';
 
 const HISTORY_LIMIT = 50;
 
+export type CameraMode = 'third' | 'first';
+
 interface Freeform3DState {
   scene: SceneJson;
   selectedId: string | null;
@@ -33,6 +35,11 @@ interface Freeform3DState {
   savedScenes: Record<string, SceneJson>;
   /** Name of the last-saved-or-loaded scene, or null if unsaved. */
   currentSceneName: string | null;
+
+  /** Play-mode camera mode — 'third' follows the character, 'first' is
+      pointer-locked mouselook. */
+  cameraMode: CameraMode;
+  setCameraMode: (m: CameraMode) => void;
 
   // Selection ------------------------------------------------------------
   select: (id: string | null) => void;
@@ -82,6 +89,8 @@ export const useFreeform3D = create<Freeform3DState>()(
       redoStack: [],
       savedScenes: {},
       currentSceneName: null,
+      cameraMode: 'third',
+      setCameraMode: (m) => set({ cameraMode: m }),
 
       select: (id) => set({ selectedId: id }),
 
@@ -304,6 +313,7 @@ export const useFreeform3D = create<Freeform3DState>()(
         scene: s.scene,
         savedScenes: s.savedScenes,
         currentSceneName: s.currentSceneName,
+        cameraMode: s.cameraMode,
       }),
     },
   ),

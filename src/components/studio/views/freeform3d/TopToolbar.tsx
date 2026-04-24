@@ -2,6 +2,7 @@
 
 import { Copy, Trash2, Undo2, Redo2, Eraser } from 'lucide-react';
 import { useFreeform3D } from '@/store/freeform3d-store';
+import { ScenesMenu } from './ScenesMenu';
 
 /**
  * Floating top-right toolbar for the 3D Freeform studio.
@@ -32,6 +33,8 @@ export function TopToolbar() {
           boxShadow: '0 3px 0 var(--pb-line-2)',
         }}
       >
+        <ScenesMenu />
+        <Divider />
         <ToolbarButton icon={<Undo2 size={14} strokeWidth={2.2} />} label="Undo" disabled={undoDepth === 0} onClick={undo} />
         <ToolbarButton icon={<Redo2 size={14} strokeWidth={2.2} />} label="Redo" disabled={redoDepth === 0} onClick={redo} />
         <Divider />

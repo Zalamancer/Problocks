@@ -28,6 +28,12 @@ interface Freeform3DState {
   undoStack: SceneObject[][];
   redoStack: SceneObject[][];
 
+  /** Named saved scenes. Separate from `scene` so the in-progress edit
+      state doesn't collide with last-saved snapshots. */
+  savedScenes: Record<string, SceneJson>;
+  /** Name of the last-saved-or-loaded scene, or null if unsaved. */
+  currentSceneName: string | null;
+
   // Selection ------------------------------------------------------------
   select: (id: string | null) => void;
 
@@ -40,6 +46,15 @@ interface Freeform3DState {
   setColor: (id: string, color: string) => void;
   clearScene: () => void;
   replaceScene: (scene: SceneJson) => void;
+
+  // Scene library --------------------------------------------------------
+  saveSceneAs: (name: string) => void;
+  loadScene: (name: string) => boolean;
+  deleteSavedScene: (name: string) => void;
+  newScene: () => void;
+  renameCurrent: (newName: string) => boolean;
+  exportSceneJSON: () => string;
+  importSceneJSON: (json: string, asName?: string) => boolean;
 
   // History --------------------------------------------------------------
   undo: () => void;
@@ -65,6 +80,8 @@ export const useFreeform3D = create<Freeform3DState>()(
       selectedId: null,
       undoStack: [],
       redoStack: [],
+      savedScenes: {},
+      currentSceneName: null,
 
       select: (id) => set({ selectedId: id }),
 
@@ -140,6 +157,121 @@ export const useFreeform3D = create<Freeform3DState>()(
         set({ scene, selectedId: null, redoStack: [] });
       },
 
+      saveSceneAs: (name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const snap: SceneJson = {
+          version: 1,
+          objects: snapshot(get().scene.objects),
+          meta: {
+            ...get().scene.meta,
+            name: trimmed,
+            updatedAt: new Date().toISOString(),
+            createdAt: get().scene.meta?.createdAt ?? new Date().toISOString(),
+          },
+        };
+        set((s) => ({
+          savedScenes: { ...s.savedScenes, [trimmed]: snap },
+          currentSceneName: trimmed,
+          scene: snap,
+        }));
+      },
+
+      loadScene: (name) => {
+        const snap = get().savedScenes[name];
+        if (!snap) return false;
+        pushHistory(set, get);
+        set({
+          scene: {
+            ...snap,
+            objects: snapshot(snap.objects),
+          },
+          currentSceneName: name,
+          selectedId: null,
+          redoStack: [],
+        });
+        return true;
+      },
+
+      deleteSavedScene: (name) => {
+        set((s) => {
+          if (!(name in s.savedScenes)) return s;
+          const next = { ...s.savedScenes };
+          delete next[name];
+          return {
+            savedScenes: next,
+            currentSceneName: s.currentSceneName === name ? null : s.currentSceneName,
+          };
+        });
+      },
+
+      newScene: () => {
+        pushHistory(set, get);
+        set({
+          scene: { version: 1, objects: [], meta: { createdAt: new Date().toISOString() } },
+          currentSceneName: null,
+          selectedId: null,
+          redoStack: [],
+        });
+      },
+
+      renameCurrent: (newName) => {
+        const trimmed = newName.trim();
+        if (!trimmed) return false;
+        const cur = get().currentSceneName;
+        if (!cur) {
+          get().saveSceneAs(trimmed);
+          return true;
+        }
+        if (cur === trimmed) return true;
+        set((s) => {
+          const next = { ...s.savedScenes };
+          const existing = next[cur];
+          if (existing) {
+            delete next[cur];
+            next[trimmed] = { ...existing, meta: { ...existing.meta, name: trimmed } };
+          }
+          return {
+            savedScenes: next,
+            currentSceneName: trimmed,
+            scene: { ...s.scene, meta: { ...s.scene.meta, name: trimmed } },
+          };
+        });
+        return true;
+      },
+
+      exportSceneJSON: () => {
+        return JSON.stringify(get().scene, null, 2);
+      },
+
+      importSceneJSON: (json, asName) => {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(json);
+        } catch {
+          return false;
+        }
+        if (!parsed || typeof parsed !== 'object') return false;
+        const candidate = parsed as Partial<SceneJson>;
+        if (!Array.isArray(candidate.objects)) return false;
+        pushHistory(set, get);
+        const scene: SceneJson = {
+          version: 1,
+          objects: snapshot(candidate.objects as SceneObject[]),
+          meta: candidate.meta ?? { name: asName ?? 'Imported scene' },
+        };
+        set((s) => ({
+          scene,
+          currentSceneName: asName ?? scene.meta?.name ?? null,
+          selectedId: null,
+          redoStack: [],
+          savedScenes: asName
+            ? { ...s.savedScenes, [asName]: scene }
+            : s.savedScenes,
+        }));
+        return true;
+      },
+
       undo: () => {
         set((s) => {
           const prev = s.undoStack[s.undoStack.length - 1];
@@ -168,7 +300,11 @@ export const useFreeform3D = create<Freeform3DState>()(
     }),
     {
       name: 'problocks-freeform3d-v1',
-      partialize: (s) => ({ scene: s.scene }),
+      partialize: (s) => ({
+        scene: s.scene,
+        savedScenes: s.savedScenes,
+        currentSceneName: s.currentSceneName,
+      }),
     },
   ),
 );

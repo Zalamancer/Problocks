@@ -36,7 +36,14 @@ import { GRADE_DATA as ENG_10 }                      from './english/grade-10';
 import { GRADE_DATA as ENG_11 }                      from './english/grade-11';
 import { GRADE_DATA as ENG_12 }                      from './english/grade-12';
 
-export type { DeepGrade, DeepUnit, DeepLesson, PracticeQuestion } from './types';
+import { OPENSTAX_BANK } from './openstax-bank';
+import type { PracticeQuestion } from './types';
+
+export type { DeepGrade, DeepUnit, DeepLesson, PracticeQuestion, KhanItem } from './types';
+
+export function getOpenStaxBank(subjectId: string, gradeKey: string): PracticeQuestion[] {
+  return OPENSTAX_BANK[`${subjectId}-${gradeKey}`] ?? [];
+}
 
 export const DEEP_MATH: DeepGrade[] = [
   MATH_K, MATH_1, MATH_2, MATH_3, MATH_4, MATH_5, MATH_6, MATH_7, MATH_8,
@@ -56,8 +63,11 @@ export function findDeepGrade(subjectId: string, gradeKey: string): DeepGrade | 
   return list.find((g) => g.grade === gradeKey);
 }
 
-export function countDeep(list: DeepGrade[]): { units: number; lessons: number; items: number; questions: number } {
-  let units = 0, lessons = 0, items = 0, questions = 0;
+export function countDeep(
+  list: DeepGrade[],
+  subjectId?: 'math' | 'science' | 'english',
+): { units: number; lessons: number; items: number; questions: number; openstax: number } {
+  let units = 0, lessons = 0, items = 0, questions = 0, openstax = 0;
   for (const grade of list) {
     for (const unit of grade.units) {
       units++;
@@ -71,6 +81,7 @@ export function countDeep(list: DeepGrade[]): { units: number; lessons: number; 
         questions += lesson.questions?.length ?? 0;
       }
     }
+    if (subjectId) openstax += getOpenStaxBank(subjectId, grade.grade).length;
   }
-  return { units, lessons, items, questions };
+  return { units, lessons, items, questions, openstax };
 }

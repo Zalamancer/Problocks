@@ -2,6 +2,7 @@ export type PracticeQuestion = {
   prompt: string;
   answer: string;
   explanation?: string;
+  source?: string;
 };
 
 export type KhanItemType = 'exercise' | 'video' | 'article';

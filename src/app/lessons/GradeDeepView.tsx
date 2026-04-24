@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { CurriculumSubject } from '@/lib/templates/data/curriculum';
 import type { DeepGrade, DeepUnit, DeepLesson, PracticeQuestion, KhanItem } from '@/lib/templates/data/curriculum-deep';
+import { getOpenStaxBank } from '@/lib/templates/data/curriculum-deep';
 import { Block, Pill, Icon } from '@/components/landing/pb-site/primitives';
 
 type Tone = CurriculumSubject['tone'];
@@ -242,6 +243,58 @@ const UnitBlock = ({ unit, tone, index }: { unit: DeepUnit; tone: Tone; index: n
   );
 };
 
+const OpenStaxBankSection = ({ bank, tone }: { bank: PracticeQuestion[]; tone: Tone }) => {
+  const [open, setOpen] = useState(false);
+  if (bank.length === 0) return null;
+  return (
+    <Block tone="paper" style={{ padding: 0, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: '100%', textAlign: 'left',
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '16px 20px',
+          background: 'var(--pbs-cream-2)', color: 'var(--pbs-ink)',
+          border: 'none', cursor: 'pointer',
+          borderBottom: open ? '1.5px solid var(--pbs-line-2)' : 'none',
+        }}
+      >
+        <div style={{
+          flex: '0 0 36px', height: 36, borderRadius: 10,
+          background: 'var(--pbs-paper)', color: 'var(--pbs-ink)',
+          border: '1.5px solid var(--pbs-line-2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em',
+        }}>OS</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.015em', lineHeight: 1.2 }}>
+            OpenStax Practice Bank
+          </div>
+          <div style={{ fontSize: 12.5, marginTop: 3, color: 'var(--pbs-ink-soft)', lineHeight: 1.4 }}>
+            Real exercises with answers from peer-reviewed OpenStax textbooks (CC BY 4.0).
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
+          <Pill tone={tone} style={{ background: 'var(--pbs-paper)', fontSize: 11.5, padding: '4px 9px' }}>
+            {bank.length} real Qs
+          </Pill>
+          <span style={{ display: 'inline-flex', transform: `rotate(${open ? -90 : 90}deg)`, transition: 'transform 160ms' }}>
+            <Icon name="chevron" size={16} stroke={2.2} />
+          </span>
+        </div>
+      </button>
+      {open && (
+        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {bank.map((q, i) => (
+            <QuestionRow key={i} question={q} tone={tone} label={q.source} />
+          ))}
+        </div>
+      )}
+    </Block>
+  );
+};
+
 export const GradeDeepView = ({ grade, subject }: { grade: DeepGrade; subject: CurriculumSubject }) => {
   const totalLessons = grade.units.reduce((s, u) => s + u.lessons.length, 0);
   const totalItems = grade.units.reduce((s, u) => s + u.lessons.reduce((a, l) => a + (l.items?.length ?? 0), 0), 0);
@@ -249,6 +302,7 @@ export const GradeDeepView = ({ grade, subject }: { grade: DeepGrade; subject: C
     + (l.items?.filter((i) => i.question).length ?? 0)
     + (l.questions?.length ?? 0)
   , 0), 0);
+  const openstaxBank = getOpenStaxBank(subject.id, grade.grade);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{
@@ -266,6 +320,7 @@ export const GradeDeepView = ({ grade, subject }: { grade: DeepGrade; subject: C
             {grade.units.length} units · {totalLessons} lessons
             {totalItems > 0 && <> · {totalItems} items</>}
             {' · '}{totalQs} practice Qs
+            {openstaxBank.length > 0 && <> · {openstaxBank.length} from OpenStax</>}
           </div>
         </div>
         <a
@@ -284,6 +339,8 @@ export const GradeDeepView = ({ grade, subject }: { grade: DeepGrade; subject: C
           Open on Khan <Icon name="arrow-up-right" size={12} stroke={2.2} />
         </a>
       </div>
+
+      {openstaxBank.length > 0 && <OpenStaxBankSection bank={openstaxBank} tone={subject.tone} />}
 
       {grade.units.map((unit, i) => (
         <UnitBlock key={unit.name} unit={unit} tone={subject.tone} index={i} />

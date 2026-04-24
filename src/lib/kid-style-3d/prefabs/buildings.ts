@@ -261,6 +261,123 @@ export function dirtPatch({ color }: BuildOptions): THREE.Object3D {
   return m;
 }
 
+/**
+ * Path spline — ONE continuous ribbon mesh that follows a Catmull-Rom
+ * curve through a list of waypoints. Intended for the "click on ground
+ * to extend a dirt road" interaction: each click appends a point, the
+ * whole mesh regenerates, and the user sees a single path (not scattered
+ * tiles). Rendered flush to the ground (y=0.02) with a pair of rounded
+ * semicircular endcaps so short segments don't look chopped.
+ *
+ * Props:
+ *   points: [[x,z], [x,z], ...]       — waypoints in world coords (required)
+ *   width:  number                    — total path width in u (default 2.2)
+ *   samplesPerSegment: number         — curve sampling density (default 12)
+ */
+export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
+  const waypoints = (props?.points as Array<[number, number]> | undefined) ?? [];
+  const width = (props?.width as number | undefined) ?? 2.2;
+  const samplesPerSegment = (props?.samplesPerSegment as number | undefined) ?? 12;
+  const fillColor = color ?? PALETTE.dirt;
+
+  const g = new THREE.Group();
+  const mat = toonMaterial({ color: fillColor });
+  const halfW = width / 2;
+  const Y = 0.02;
+
+  // Degenerate cases — single point or empty. Render a disc so the user
+  // still sees "where they clicked" while building up the path.
+  if (waypoints.length < 2) {
+    if (waypoints.length === 1) {
+      const [x, z] = waypoints[0];
+      const disc = new THREE.Mesh(
+        kidCylinder({ radiusTop: halfW, radiusBottom: halfW, height: 0.04, radialSegments: 16 }),
+        mat,
+      );
+      disc.position.set(x, Y, z);
+      disc.receiveShadow = true;
+      g.add(disc);
+    }
+    return g;
+  }
+
+  // Build a Catmull-Rom curve in the XZ plane (Y locked to 0). Using
+  // Vector3 with y=0 lets Three handle tangent math for us.
+  const pts3 = waypoints.map(([x, z]) => new THREE.Vector3(x, 0, z));
+  const curve = new THREE.CatmullRomCurve3(pts3, false, 'catmullrom', 0.5);
+
+  // Sample the curve. Density = samplesPerSegment * segments so the
+  // ribbon stays smooth regardless of how many waypoints the user
+  // placed. Hard floor of 24 samples for very short paths.
+  const segments = Math.max(1, waypoints.length - 1);
+  const sampleCount = Math.max(24, segments * samplesPerSegment);
+  const samples = curve.getPoints(sampleCount); // Vector3[], length sampleCount+1
+
+  // Build a triangle strip: for each sample, emit a left/right vertex
+  // perpendicular to the tangent. Two verts per sample → 2 triangles
+  // per gap between samples.
+  const vertexCount = samples.length;
+  const positions = new Float32Array(vertexCount * 2 * 3);
+  const indices: number[] = [];
+
+  const tmpTan = new THREE.Vector3();
+  for (let i = 0; i < vertexCount; i++) {
+    const p = samples[i];
+    // Tangent from finite difference — getTangent via curve works but
+    // oscillates near endpoints; finite diff between neighbouring
+    // samples is stable and cheap.
+    const prev = samples[Math.max(0, i - 1)];
+    const next = samples[Math.min(vertexCount - 1, i + 1)];
+    tmpTan.subVectors(next, prev);
+    tmpTan.y = 0;
+    if (tmpTan.lengthSq() < 1e-6) { tmpTan.set(1, 0, 0); }
+    else { tmpTan.normalize(); }
+    // Perpendicular in the XZ plane (rotate 90°).
+    const px = -tmpTan.z;
+    const pz = tmpTan.x;
+
+    const li = i * 6;
+    positions[li + 0] = p.x + px * halfW;
+    positions[li + 1] = Y;
+    positions[li + 2] = p.z + pz * halfW;
+    positions[li + 3] = p.x - px * halfW;
+    positions[li + 4] = Y;
+    positions[li + 5] = p.z - pz * halfW;
+  }
+
+  for (let i = 0; i < vertexCount - 1; i++) {
+    const a = i * 2;
+    const b = a + 1;
+    const c = a + 2;
+    const d = a + 3;
+    indices.push(a, b, c, b, d, c);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const ribbon = new THREE.Mesh(geo, mat);
+  ribbon.receiveShadow = true;
+  ribbon.castShadow = false;
+  g.add(ribbon);
+
+  // Endcaps — a small disc at the first and last waypoint rounds off
+  // the chopped-square ribbon ends so short paths read as "path stub",
+  // not "board on the ground".
+  for (const endpoint of [waypoints[0], waypoints[waypoints.length - 1]]) {
+    const cap = new THREE.Mesh(
+      kidCylinder({ radiusTop: halfW, radiusBottom: halfW, height: 0.04, radialSegments: 16 }),
+      mat,
+    );
+    cap.position.set(endpoint[0], Y, endpoint[1]);
+    cap.receiveShadow = true;
+    g.add(cap);
+  }
+
+  return g;
+}
+
 export function mailbox({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const boxColor = color ?? '#7ab0d8';

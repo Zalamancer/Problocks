@@ -12,7 +12,7 @@ import type { BuildOptions } from './types';
 import { primitiveBox, primitiveSphere, primitiveCylinder, primitiveCone } from './primitives';
 import { treeOak, treePine, treeRandom, bush, mushroom, rock, flower, cloud } from './nature';
 import {
-  house, fence, gatePost, pathStone, dirtPatch, mailbox, bench, balloon,
+  house, fence, gatePost, pathStone, dirtPatch, pathSpline, mailbox, bench, balloon,
   lamppost, stoneColumn, fountain, giftBox,
 } from './buildings';
 import { character } from './character';
@@ -42,6 +42,7 @@ export function buildPrefab(kind: string, opts: BuildOptions = {}): THREE.Object
     case 'gate-post':   return gatePost(opts);
     case 'path-stone':  return pathStone(opts);
     case 'dirt':        return dirtPatch(opts);
+    case 'path-spline': return pathSpline(opts);
     case 'mailbox':     return mailbox(opts);
     case 'bench':       return bench(opts);
     case 'balloon':     return balloon(opts);

@@ -16,7 +16,7 @@ export type PrefabKind =
   // nature
   | 'tree-oak' | 'tree-pine' | 'tree-random' | 'bush' | 'mushroom' | 'rock' | 'flower' | 'cloud'
   // buildings
-  | 'house' | 'fence' | 'gate-post' | 'path-stone' | 'dirt' | 'mailbox' | 'bench' | 'balloon'
+  | 'house' | 'fence' | 'gate-post' | 'path-stone' | 'dirt' | 'path-spline' | 'mailbox' | 'bench' | 'balloon'
   | 'lamppost' | 'stone-column' | 'fountain' | 'gift-box'
   // characters
   | 'character';
@@ -131,6 +131,13 @@ export const PREFABS: PrefabDef[] = [
   { kind: 'gate-post',  label: 'Gate Post',       category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.fence,     icon: '📮' },
   { kind: 'path-stone', label: 'Stepping Stone',  category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.stone,     icon: '⬜' },
   { kind: 'dirt',       label: 'Dirt Patch',      category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.dirt,      icon: '🟤' },
+  {
+    kind: 'path-spline', label: 'Dirt Path', category: 'buildings', style: 'chunky-pastel',
+    defaultColor: PALETTE.dirt, icon: '〰️',
+    props: [
+      { kind: 'number', key: 'width', label: 'Width', defaultValue: 2.2, min: 0.5, max: 8, step: 0.1, suffix: 'u' },
+    ],
+  },
   { kind: 'mailbox',    label: 'Mailbox',         category: 'buildings', style: 'chunky-pastel', defaultColor: '#7ab0d8',         icon: '📪' },
   { kind: 'bench',      label: 'Bench',           category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.woodLight, icon: '🪑' },
   { kind: 'balloon',    label: 'Balloon',         category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.balloonPink, icon: '🎈' },

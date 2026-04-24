@@ -182,21 +182,58 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
         <PanelSelect
           label="Brush mode"
           value={brush.mode}
-          onChange={(v) => setBrushField('mode', v as typeof brush.mode)}
+          onChange={(v) => {
+            setBrushField('mode', v as typeof brush.mode);
+            // Leaving spline mode finalises the active path so the next
+            // spline session starts fresh.
+            if (v !== 'spline') setBrushField('activePathId', null);
+          }}
           options={[
             { value: 'scatter', label: 'Scatter (radial spread)' },
-            { value: 'path',    label: 'Path (drag a trail)' },
+            { value: 'path',    label: 'Stroke (drag a trail)' },
+            { value: 'spline',  label: 'Spline (click to extend)' },
           ]}
         />
         <div
           className="px-1 text-[11px] leading-snug"
           style={{ color: 'var(--pb-ink-muted)' }}
         >
-          {brush.mode === 'path'
-            ? 'Hold left mouse and drag across the ground. Tiles spread perpendicular to your drag direction.'
-            : 'Click or drag to scatter tiles in a circle around the cursor.'}
+          {brush.mode === 'spline'
+            ? 'Click on the ground to drop a waypoint. Keep clicking to extend the path — it curves automatically through your points. Right-click to finish.'
+            : brush.mode === 'path'
+              ? 'Hold left mouse and drag across the ground. Tiles spread perpendicular to your drag direction.'
+              : 'Click or drag to scatter tiles in a circle around the cursor.'}
         </div>
       </PanelSection>
+
+      {brush.mode === 'spline' && (
+        <PanelSection title="Path" collapsible defaultOpen>
+          <PanelSlider
+            label="Width"
+            value={brush.pathWidth}
+            onChange={(v) => setBrushField('pathWidth', v)}
+            min={0.5} max={8} step={0.1}
+            precision={1}
+            suffix="u"
+          />
+          <div
+            className="px-1 text-[11px] leading-snug"
+            style={{ color: 'var(--pb-ink-muted)' }}
+          >
+            {brush.activePathId
+              ? 'Drawing — click to add a waypoint, right-click to finish.'
+              : 'Click the ground to start a new path.'}
+          </div>
+          {brush.activePathId && (
+            <PanelActionButton
+              variant="secondary"
+              onClick={() => setBrushField('activePathId', null)}
+            >
+              Finish path
+            </PanelActionButton>
+          )}
+        </PanelSection>
+      )}
 
       <PanelSection title="Coverage" collapsible defaultOpen>
         <PanelSlider

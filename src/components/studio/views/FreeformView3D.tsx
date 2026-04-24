@@ -512,10 +512,58 @@ export function FreeformView3D() {
       }
       if (isDown && pt) tryPaint(pt);
     };
+    function splineClick(pt: THREE.Vector3): void {
+      const state = useFreeform3D.getState();
+      const b = state.brush;
+      const activeId = b.activePathId;
+      const active = activeId
+        ? state.scene.objects.find((o) => o.id === activeId && o.kind === 'path-spline')
+        : null;
+      if (!active) {
+        // Start a fresh path. Store the new id so subsequent clicks
+        // extend it instead of spawning another one.
+        const id = state.addPrefabFull('path-spline', {
+          position: [0, 0, 0],
+          props: {
+            points: [[pt.x, pt.z]],
+            width: b.pathWidth,
+          },
+        });
+        state.setBrushField('activePathId', id);
+        return;
+      }
+      // Extend the existing path with a new waypoint.
+      const oldPoints =
+        (active.props?.points as Array<[number, number]> | undefined) ?? [];
+      const nextPoints: Array<[number, number]> = [...oldPoints, [pt.x, pt.z]];
+      state.updateObject(active.id, {
+        props: { ...(active.props ?? {}), points: nextPoints, width: b.pathWidth },
+      });
+    }
+
     const onPointerDown = (e: PointerEvent) => {
+      if (e.button === 2) {
+        // Right-click in spline mode = finalize the active path so the
+        // next left-click starts a fresh one. Swallow the event so the
+        // browser context menu doesn't open over the canvas.
+        const mode = useFreeform3D.getState().brush.mode;
+        if (mode === 'spline') {
+          useFreeform3D.getState().setBrushField('activePathId', null);
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
       if (e.button !== 0) return; // only left mouse paints
       const pt = pointToWorld(e);
       if (!pt) return;
+      const mode = useFreeform3D.getState().brush.mode;
+      if (mode === 'spline') {
+        splineClick(pt);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       isDown = true;
       lastPaint = null;
       prevPathPos = null;
@@ -523,6 +571,13 @@ export function FreeformView3D() {
       e.preventDefault();
       e.stopPropagation();
     };
+    // Block the native context menu so right-click works as "finalize
+    // path" without popping the browser menu over the canvas.
+    const onContextMenu = (e: MouseEvent) => {
+      const mode = useFreeform3D.getState().brush.mode;
+      if (mode === 'spline') e.preventDefault();
+    };
+    canvas.addEventListener('contextmenu', onContextMenu);
     const onPointerUp = () => {
       isDown = false;
       lastPaint = null;
@@ -538,6 +593,7 @@ export function FreeformView3D() {
     canvas.addEventListener('pointerleave', onPointerLeave);
 
     return () => {
+      canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);

@@ -81,8 +81,15 @@ export interface BrushSettings {
   kind: string;
   /** Scatter = random spread in a radius (forest / meadow painting).
       Path = drag a continuous trail with tiles perpendicular to the
-      motion direction (dirt paths / cobblestone roads). */
-  mode: 'scatter' | 'path';
+      motion direction. Spline = click multiple times on the ground to
+      extend a single ribbon mesh that follows a Catmull-Rom curve
+      through the waypoints. */
+  mode: 'scatter' | 'path' | 'spline';
+  /** Spline mode only — id of the path-spline SceneObject currently
+      being extended. null = the next click starts a fresh path. */
+  activePathId: string | null;
+  /** Spline mode only — path width in world units (default 2.2). */
+  pathWidth: number;
   /** How many objects to scatter per click / paint tick. 1–20.
       In 'path' mode this is the number of tiles across the path
       width (1 = single tile line; 3–5 = wide road). */
@@ -117,6 +124,8 @@ export const DEFAULT_BRUSH: BrushSettings = {
   enabled: false,
   kind: '',
   mode: 'scatter',
+  activePathId: null,
+  pathWidth: 2.2,
   density: 3,
   radius: 1.5,
   randomRotY: true,

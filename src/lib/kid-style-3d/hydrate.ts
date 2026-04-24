@@ -90,9 +90,15 @@ function createSceneObject(obj: SceneObject): THREE.Object3D {
 }
 
 function applyTransform(target: THREE.Object3D, obj: SceneObject): void {
-  target.position.set(obj.position[0], obj.position[1], obj.position[2]);
-  target.rotation.set(obj.rotation[0], obj.rotation[1], obj.rotation[2]);
-  target.scale.set(obj.scale[0], obj.scale[1], obj.scale[2]);
+  // Defensive reads — AI-driven addPrefabFull callers and imported scenes
+  // can land here with a missing rotation/scale field. Fall back to the
+  // identity transform on any gap instead of crashing the scene hydrator.
+  const p = obj.position ?? [0, 0, 0];
+  const r = obj.rotation ?? [0, 0, 0];
+  const s = obj.scale ?? [1, 1, 1];
+  target.position.set(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
+  target.rotation.set(r[0] ?? 0, r[1] ?? 0, r[2] ?? 0);
+  target.scale.set(s[0] ?? 1, s[1] ?? 1, s[2] ?? 1);
 }
 
 function applyColorIfChanged(target: THREE.Object3D, obj: SceneObject): void {

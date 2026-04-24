@@ -21,6 +21,7 @@ import type { SceneObject } from './scene-schema';
 const OBJECT_ID_KEY = '__sceneId';
 const OBJECT_KIND_KEY = '__sceneKind';
 const OBJECT_COLOR_KEY = '__sceneColor';
+const OBJECT_PROPS_KEY = '__scenePropsJson';
 
 export function applySceneToRoot(root: THREE.Group, objects: SceneObject[]): void {
   const desired = new Map<string, SceneObject>();
@@ -47,11 +48,21 @@ export function applySceneToRoot(root: THREE.Group, objects: SceneObject[]): voi
   for (const obj of objects) {
     const have = existing.get(obj.id);
     if (have) {
-      if (have.userData[OBJECT_KIND_KEY] !== obj.kind) {
-        // Kind change — easier to rebuild than mutate in place.
+      const propsNow = JSON.stringify(obj.props ?? {});
+      const propsPrev = have.userData[OBJECT_PROPS_KEY] as string | undefined;
+      const kindChanged = have.userData[OBJECT_KIND_KEY] !== obj.kind;
+      const propsChanged = propsNow !== propsPrev;
+      if (kindChanged || propsChanged) {
+        // Kind or per-prefab props changed — rebuild in place. The
+        // in-place color shortcut can't reach sub-meshes of compound
+        // prefabs (house.roofColor, character.hairColor, etc.), so a
+        // rebuild is the safe default when props shift.
+        const preservedAnimBaseY = have.userData.__animBaseY as number | undefined;
         root.remove(have);
         disposeTree(have);
-        root.add(createSceneObject(obj));
+        const rebuilt = createSceneObject(obj);
+        if (preservedAnimBaseY != null) rebuilt.userData.__animBaseY = preservedAnimBaseY;
+        root.add(rebuilt);
         continue;
       }
       applyTransform(have, obj);
@@ -67,6 +78,7 @@ function createSceneObject(obj: SceneObject): THREE.Object3D {
   built.userData[OBJECT_ID_KEY] = obj.id;
   built.userData[OBJECT_KIND_KEY] = obj.kind;
   built.userData[OBJECT_COLOR_KEY] = obj.color ?? '';
+  built.userData[OBJECT_PROPS_KEY] = JSON.stringify(obj.props ?? {});
   applyTransform(built, obj);
   return built;
 }

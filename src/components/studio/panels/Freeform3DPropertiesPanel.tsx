@@ -6,6 +6,7 @@ import {
   PanelSlider,
   PanelActionButton,
   PanelColorSwatches,
+  PanelSelect,
 } from '@/components/ui';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { getPrefabDef, PALETTE } from '@/lib/kid-style-3d';
@@ -70,6 +71,11 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
   const setColor = (color: string) => {
     if (!object) return;
     updateObject(object.id, { color });
+  };
+
+  const setPropValue = (key: string, value: string | number) => {
+    if (!object) return;
+    updateObject(object.id, { props: { ...(object.props ?? {}), [key]: value } });
   };
 
   const delBtn = (
@@ -172,6 +178,56 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
                 colors={KID_PALETTE_COLORS}
               />
             </PanelSection>
+
+            {def?.props && def.props.length > 0 && (
+              <PanelSection title={`${def.label} details`} collapsible defaultOpen>
+                <div className="flex flex-col gap-3">
+                  {def.props.map((spec) => {
+                    const current =
+                      (object.props?.[spec.key] as string | number | undefined) ??
+                      spec.defaultValue;
+                    if (spec.kind === 'color') {
+                      return (
+                        <PanelColorSwatches
+                          key={spec.key}
+                          label={spec.label}
+                          value={String(current)}
+                          onChange={(v) => setPropValue(spec.key, v)}
+                          colors={KID_PALETTE_COLORS}
+                        />
+                      );
+                    }
+                    if (spec.kind === 'number') {
+                      return (
+                        <PanelSlider
+                          key={spec.key}
+                          label={spec.label}
+                          value={Number(current)}
+                          onChange={(v) => setPropValue(spec.key, v)}
+                          min={spec.min}
+                          max={spec.max}
+                          step={spec.step}
+                          precision={spec.step < 1 ? 2 : 0}
+                          suffix={spec.suffix}
+                        />
+                      );
+                    }
+                    if (spec.kind === 'select') {
+                      return (
+                        <PanelSelect
+                          key={spec.key}
+                          label={spec.label}
+                          value={String(current)}
+                          onChange={(v) => setPropValue(spec.key, v)}
+                          options={spec.options}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </PanelSection>
+            )}
           </div>
         )}
       </div>

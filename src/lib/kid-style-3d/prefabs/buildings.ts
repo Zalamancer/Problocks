@@ -275,67 +275,110 @@ export function dirtPatch({ color }: BuildOptions): THREE.Object3D {
  *   samplesPerSegment: number         — curve sampling density (default 12)
  */
 export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
-  const waypoints = (props?.points as Array<[number, number]> | undefined) ?? [];
+  const rawWaypoints = (props?.points as Array<[number, number]> | undefined) ?? [];
+  // Deduplicate near-identical consecutive waypoints. Catmull-Rom
+  // divides by segment length when constructing phantom endpoints; two
+  // coincident control points make it explode into NaN ribbons.
+  const waypoints: Array<[number, number]> = [];
+  for (const [x, z] of rawWaypoints) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+    const last = waypoints[waypoints.length - 1];
+    if (last && Math.hypot(x - last[0], z - last[1]) < 1e-3) continue;
+    waypoints.push([x, z]);
+  }
+
   const width = (props?.width as number | undefined) ?? 2.2;
   const samplesPerSegment = (props?.samplesPerSegment as number | undefined) ?? 12;
   const fillColor = color ?? PALETTE.dirt;
 
   const g = new THREE.Group();
   const mat = toonMaterial({ color: fillColor });
-  const halfW = width / 2;
+  const halfW = Math.max(0.1, width / 2);
   const Y = 0.02;
 
-  // Degenerate cases — single point or empty. Render a disc so the user
-  // still sees "where they clicked" while building up the path.
-  if (waypoints.length < 2) {
-    if (waypoints.length === 1) {
-      const [x, z] = waypoints[0];
-      const disc = new THREE.Mesh(
-        kidCylinder({ radiusTop: halfW, radiusBottom: halfW, height: 0.04, radialSegments: 16 }),
-        mat,
-      );
-      disc.position.set(x, Y, z);
-      disc.receiveShadow = true;
-      g.add(disc);
-    }
+  // --- Endcap helper -------------------------------------------------
+  // Small flat disc at a waypoint. Not a kidCylinder because that drops
+  // to a 5-sided prism in Low / Voxel perf modes and the bench ribbon
+  // then has an obvious pentagon where it ought to round off. Use a
+  // dedicated high-segment CircleGeometry at all perf tiers.
+  const capGeo = new THREE.CircleGeometry(halfW, 18);
+  capGeo.rotateX(-Math.PI / 2);
+  const addCap = (x: number, z: number) => {
+    const cap = new THREE.Mesh(capGeo, mat);
+    cap.position.set(x, Y, z);
+    cap.receiveShadow = true;
+    g.add(cap);
+  };
+
+  // --- Degenerate: 0 or 1 points ------------------------------------
+  if (waypoints.length === 0) return g;
+  if (waypoints.length === 1) {
+    addCap(waypoints[0][0], waypoints[0][1]);
     return g;
   }
 
-  // Build a Catmull-Rom curve in the XZ plane (Y locked to 0). Using
-  // Vector3 with y=0 lets Three handle tangent math for us.
-  const pts3 = waypoints.map(([x, z]) => new THREE.Vector3(x, 0, z));
-  const curve = new THREE.CatmullRomCurve3(pts3, false, 'catmullrom', 0.5);
+  // --- Sample the spine ---------------------------------------------
+  // 2 points → straight line (LineCurve3 gives an exact straight
+  // spine with no chance of Catmull-Rom overshoot). 3+ points →
+  // Catmull-Rom with centripetal parameterisation, which avoids the
+  // loops + cusps the 'catmullrom' (uniform) type produces when
+  // waypoints land at uneven spacings.
+  const a0 = new THREE.Vector3(waypoints[0][0], 0, waypoints[0][1]);
+  const aN = new THREE.Vector3(
+    waypoints[waypoints.length - 1][0],
+    0,
+    waypoints[waypoints.length - 1][1],
+  );
+  const curve: THREE.Curve<THREE.Vector3> = waypoints.length === 2
+    ? new THREE.LineCurve3(a0, aN)
+    : new THREE.CatmullRomCurve3(
+        waypoints.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+        false,
+        'centripetal',
+        0.5,
+      );
 
-  // Sample the curve. Density = samplesPerSegment * segments so the
-  // ribbon stays smooth regardless of how many waypoints the user
-  // placed. Hard floor of 24 samples for very short paths.
   const segments = Math.max(1, waypoints.length - 1);
-  const sampleCount = Math.max(24, segments * samplesPerSegment);
-  const samples = curve.getPoints(sampleCount); // Vector3[], length sampleCount+1
+  const sampleCount = Math.max(12, segments * samplesPerSegment);
+  const samples: THREE.Vector3[] = [];
+  const tangents: THREE.Vector3[] = [];
+  for (let i = 0; i <= sampleCount; i++) {
+    const t = i / sampleCount;
+    const p = curve.getPoint(t);
+    const tan = curve.getTangent(t);
+    // Zero out any Y drift that Catmull-Rom might produce off a y=0
+    // control polyline; the whole ribbon must stay flat on the ground.
+    p.y = 0;
+    tan.y = 0;
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.z)) continue;
+    if (tan.lengthSq() < 1e-6) {
+      // Fallback: derive tangent from the previous sample so endpoint
+      // degeneracy doesn't crash the whole ribbon.
+      const prev = samples[samples.length - 1];
+      if (prev) tan.subVectors(p, prev);
+      else tan.set(1, 0, 0);
+    }
+    tan.normalize();
+    samples.push(p);
+    tangents.push(tan);
+  }
+  if (samples.length < 2) {
+    // Nothing usable — degrade gracefully to two endcaps.
+    addCap(waypoints[0][0], waypoints[0][1]);
+    addCap(aN.x, aN.z);
+    return g;
+  }
 
-  // Build a triangle strip: for each sample, emit a left/right vertex
-  // perpendicular to the tangent. Two verts per sample → 2 triangles
-  // per gap between samples.
+  // --- Build the triangle strip -------------------------------------
   const vertexCount = samples.length;
   const positions = new Float32Array(vertexCount * 2 * 3);
   const indices: number[] = [];
-
-  const tmpTan = new THREE.Vector3();
   for (let i = 0; i < vertexCount; i++) {
     const p = samples[i];
-    // Tangent from finite difference — getTangent via curve works but
-    // oscillates near endpoints; finite diff between neighbouring
-    // samples is stable and cheap.
-    const prev = samples[Math.max(0, i - 1)];
-    const next = samples[Math.min(vertexCount - 1, i + 1)];
-    tmpTan.subVectors(next, prev);
-    tmpTan.y = 0;
-    if (tmpTan.lengthSq() < 1e-6) { tmpTan.set(1, 0, 0); }
-    else { tmpTan.normalize(); }
+    const tan = tangents[i];
     // Perpendicular in the XZ plane (rotate 90°).
-    const px = -tmpTan.z;
-    const pz = tmpTan.x;
-
+    const px = -tan.z;
+    const pz = tan.x;
     const li = i * 6;
     positions[li + 0] = p.x + px * halfW;
     positions[li + 1] = Y;
@@ -344,13 +387,9 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
     positions[li + 4] = Y;
     positions[li + 5] = p.z - pz * halfW;
   }
-
   for (let i = 0; i < vertexCount - 1; i++) {
     const a = i * 2;
-    const b = a + 1;
-    const c = a + 2;
-    const d = a + 3;
-    indices.push(a, b, c, b, d, c);
+    indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
   }
 
   const geo = new THREE.BufferGeometry();
@@ -362,18 +401,10 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
   ribbon.castShadow = false;
   g.add(ribbon);
 
-  // Endcaps — a small disc at the first and last waypoint rounds off
-  // the chopped-square ribbon ends so short paths read as "path stub",
-  // not "board on the ground".
-  for (const endpoint of [waypoints[0], waypoints[waypoints.length - 1]]) {
-    const cap = new THREE.Mesh(
-      kidCylinder({ radiusTop: halfW, radiusBottom: halfW, height: 0.04, radialSegments: 16 }),
-      mat,
-    );
-    cap.position.set(endpoint[0], Y, endpoint[1]);
-    cap.receiveShadow = true;
-    g.add(cap);
-  }
+  // Endcaps at the first and last waypoint round off the chopped
+  // ribbon ends so short paths read as "rounded stub", not "board".
+  addCap(waypoints[0][0], waypoints[0][1]);
+  addCap(aN.x, aN.z);
 
   return g;
 }

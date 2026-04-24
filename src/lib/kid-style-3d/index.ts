@@ -10,3 +10,4 @@ export * from './outlines';
 export * from './prefabs';
 export * from './scene-schema';
 export * from './hydrate';
+export * from './gizmo';

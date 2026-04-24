@@ -7,6 +7,9 @@ import {
   type KidEngine,
   applySceneToRoot,
   sceneIdForObject,
+  createKidGizmo,
+  type KidGizmo,
+  type GizmoMode,
 } from '@/lib/kid-style-3d';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { PrefabPalette } from './freeform3d/PrefabPalette';
@@ -32,27 +35,54 @@ import { setSelectionHighlight } from './freeform3d/selection-outline';
 export function FreeformView3D() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<KidEngine | null>(null);
+  const gizmoRef = useRef<KidGizmo | null>(null);
 
   const objects = useFreeform3D((s) => s.scene.objects);
   const selectedId = useFreeform3D((s) => s.selectedId);
   const select = useFreeform3D((s) => s.select);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
   const removeObject = useFreeform3D((s) => s.removeObject);
+  const updateObject = useFreeform3D((s) => s.updateObject);
   const undo = useFreeform3D((s) => s.undo);
   const redo = useFreeform3D((s) => s.redo);
 
-  /* ---- boot engine once ---- */
+  /* ---- boot engine once + gizmo ---- */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const engine = createKidEngine({ canvas });
     engine.start();
     engineRef.current = engine;
+
+    // Gizmo lives for the lifetime of the engine; detached by default.
+    const gizmo = createKidGizmo({
+      camera: engine.camera,
+      domElement: canvas,
+      scene: engine.scene,
+      orbit: engine.controls,
+      onChange: (obj) => {
+        const id = obj.userData.__sceneId as string | undefined;
+        if (!id) return;
+        // Read transform from the object and push to the store. The
+        // hydrator will see "no change" on the next tick and skip any
+        // rebuild, so this is cheap even at 60Hz during a drag.
+        updateObject(id, {
+          position: [obj.position.x, obj.position.y, obj.position.z],
+          rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+          scale: [obj.scale.x, obj.scale.y, obj.scale.z],
+        });
+      },
+    });
+    gizmo.detach();
+    gizmoRef.current = gizmo;
+
     return () => {
+      gizmo.dispose();
       engine.dispose();
       engineRef.current = null;
+      gizmoRef.current = null;
     };
-  }, []);
+  }, [updateObject]);
 
   /* ---- seed scene once if empty ---- */
   useEffect(() => {
@@ -88,9 +118,30 @@ export function FreeformView3D() {
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
+    // Don't thrash the gizmo during a drag — applySceneToRoot would
+    // briefly re-parent/re-transform the attached object and cancel the
+    // user's manipulation.
+    if (gizmoRef.current?.isDragging()) return;
     applySceneToRoot(engine.root, objects);
     setSelectionHighlight(engine.root, selectedId);
   }, [objects, selectedId]);
+
+  /* ---- attach gizmo to selected object ---- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    const gizmo = gizmoRef.current;
+    if (!engine || !gizmo) return;
+    if (!selectedId) {
+      gizmo.detach();
+      return;
+    }
+    // Find the top-level hydrated object with this scene id.
+    const match = engine.root.children.find(
+      (c) => c.userData.__sceneId === selectedId,
+    );
+    if (match) gizmo.attach(match);
+    else gizmo.detach();
+  }, [selectedId, objects]);
 
   /* ---- click picking on the canvas ---- */
   useEffect(() => {
@@ -148,6 +199,21 @@ export function FreeformView3D() {
         removeObject(currentId);
         e.preventDefault();
         return;
+      }
+      // W/E/R — standard gizmo mode switch (translate/rotate/scale).
+      // Matches Blender, Unity, Three.js editor.
+      if (!meta && !e.shiftKey && !e.altKey) {
+        const modeMap: Record<string, GizmoMode> = {
+          w: 'translate', W: 'translate',
+          e: 'rotate',    E: 'rotate',
+          r: 'scale',     R: 'scale',
+        };
+        const mode = modeMap[e.key];
+        if (mode && gizmoRef.current) {
+          gizmoRef.current.setMode(mode);
+          e.preventDefault();
+          return;
+        }
       }
       if (meta && (e.key === 'z' || e.key === 'Z')) {
         if (e.shiftKey) redo();

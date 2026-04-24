@@ -3,380 +3,373 @@ import type { DeepGrade } from '../types';
 export const GRADE_DATA: DeepGrade = {
   grade: '11',
   label: 'High School Physics',
-  sourceUrl: 'https://www.khanacademy.org/science/high-school-physics',
+  sourceUrl: 'https://www.khanacademy.org/science/highschool-physics',
   units: [
     {
-      name: 'Forces and Motion',
-      description: 'Describe motion with kinematics and apply Newton\'s laws to 1D systems.',
+      name: 'Motion and forces',
       lessons: [
         {
-          name: 'Distance, Displacement, and Speed',
-          description: 'Distinguish scalar and vector quantities of motion.',
-          questions: [
-            { prompt: 'A runner goes 400 m north then 400 m south. What is displacement?', answer: '0 m', explanation: 'Start and end at the same point; vector sum is zero.' },
-            { prompt: 'Average speed for 100 m in 20 s?', answer: '5 m/s', explanation: 'speed = distance/time = 100/20 = 5.' },
+          name: 'Describing motion',
+          items: [
+            { label: 'Introduction to high school physics', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/v/introduction-to-high-school-physics' },
+            { label: 'Position, velocity, and speed', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/v/position_velocity_speed' },
+            { label: 'Acceleration', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/v/intro_to_acceleration' },
+            { label: 'Interpreting motion data', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/v/interpreting_motion_data' },
+            { label: 'Understand: motion variables', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/e/understand-motion-variables', question: { prompt: 'Solve a quick numerical example related to: Understand: motion variables.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: constant speed motion', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/e/apply-constant-speed-motion', question: { prompt: 'An object travels 60 m in 12 s. What is its average speed?', answer: '5 m/s', explanation: 'speed = distance / time.' } },
+            { label: 'Apply: accelerated motion', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:describing-motion/e/apply-accelerated-motion', question: { prompt: 'Solve a quick numerical example related to: Apply: accelerated motion.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Acceleration and Kinematics',
-          description: 'Use v = u + at and other kinematic equations.',
-          questions: [
-            { prompt: 'A car speeds up from 0 to 30 m/s in 10 s. Find acceleration.', answer: '3 m/s^2', explanation: 'a = (v - u)/t = (30 - 0)/10 = 3.' },
-            { prompt: 'How far does it travel? (u = 0, a = 3 m/s^2, t = 10 s)', answer: '150 m', explanation: 's = ut + (1/2)at^2 = 0 + 0.5 * 3 * 100 = 150.' },
+          name: 'Forces',
+          items: [
+            { label: 'Intro to forces (part 1)', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:forces/v/intro_to_forces_1' },
+            { label: 'Intro to forces (part 2)', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:forces/v/intro_to_forces_2' },
+            { label: 'Understand: forces', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:forces/e/understand-forces', question: { prompt: 'Solve a quick numerical example related to: Understand: forces.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: free body diagrams', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:forces/e/apply-free-body-diagrams', question: { prompt: 'Solve a quick numerical example related to: Apply: free body diagrams.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: net force', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:forces/e/apply-net-force', question: { prompt: 'Solve a quick numerical example related to: Apply: net force.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Newton\'s First Law',
-          description: 'Objects keep moving (or stay still) unless acted on by a net force.',
-          questions: [
-            { prompt: 'What is the law of inertia also called?', answer: 'Newton\'s First Law', explanation: 'Objects resist changes in motion unless forced.' },
-            { prompt: 'If net force on a sliding puck is zero, what happens?', answer: 'It continues at constant velocity.', explanation: 'No net force means no acceleration.' },
+          name: 'Newton\'s first and second laws',
+          items: [
+            { label: 'Newton\'s first law', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/v/newtons_first_law' },
+            { label: 'Newton\'s second law', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/v/newtons_second_law' },
+            { label: 'Newton\'s first and second laws', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/a/what-is-newtons-second-law' },
+            { label: 'Understand: Newton\'s first and second laws', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/e/understand-newton-s-second-law', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
+            { label: 'Apply: Newton\'s first and second laws', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/e/apply-newton-s-second-law', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
+            { label: 'Newton\'s second law calculations', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/v/newtons_second_law_calculations' },
+            { label: 'Apply: Newton\'s second law calculations', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:newtons-first-and-second-laws/e/apply-newton-s-second-law-calculations', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
           ],
         },
         {
-          name: 'Newton\'s Second Law',
-          description: 'Apply F = ma to calculate forces, masses, or accelerations.',
-          questions: [
-            { prompt: 'A 5 kg block accelerates at 2 m/s^2. What force was applied?', answer: '10 N', explanation: 'F = ma = 5 * 2 = 10 N.' },
-            { prompt: 'Double the mass, same force. What happens to acceleration?', answer: 'It halves', explanation: 'a = F/m is inversely proportional to m.' },
-          ],
-        },
-        {
-          name: 'Newton\'s Third Law',
-          description: 'Every action has an equal and opposite reaction.',
-          questions: [
-            { prompt: 'You push a wall with 50 N. What force does the wall exert back?', answer: '50 N (opposite direction)', explanation: 'Action-reaction pairs are equal and opposite.' },
-            { prompt: 'Why don\'t action-reaction forces cancel each other?', answer: 'They act on different objects.', explanation: 'Only forces on the same object can cancel.' },
-          ],
-        },
-        {
-          name: 'Friction',
-          description: 'Differentiate static and kinetic friction.',
-          questions: [
-            { prompt: 'A 10 kg block has μk = 0.2. Find kinetic friction force (g = 10 m/s^2).', answer: '20 N', explanation: 'f = μ * N = 0.2 * (10 * 10) = 20 N.' },
-            { prompt: 'Which is usually greater: static or kinetic friction?', answer: 'Static friction', explanation: 'It is harder to start motion than to keep something moving.' },
+          name: 'Activity: How do engineers design strong bridges?',
+          items: [
+            { label: 'Activity: How do engineers design strong bridges?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:motion-and-forces/x6679aa2c65c01e53:activity-how-do-engineers-design-strong-bridges/a/activity-how-do-engineers-design-strong-bridges' },
           ],
         },
       ],
     },
     {
-      name: 'Two-Dimensional Motion and Projectiles',
-      description: 'Use vectors to analyze projectile trajectories and circular motion.',
+      name: 'Force pairs and momentum',
       lessons: [
         {
-          name: 'Vector Components',
-          description: 'Break vectors into perpendicular x and y pieces.',
-          questions: [
-            { prompt: 'A vector has magnitude 10 at 30° above horizontal. Find its x-component.', answer: '8.66 (≈ 10 * cos 30°)', explanation: 'x = v * cos(θ).' },
-            { prompt: 'Find the y-component.', answer: '5 (10 * sin 30°)', explanation: 'y = v * sin(θ) = 10 * 0.5 = 5.' },
+          name: 'Newton\'s third law',
+          items: [
+            { label: 'Newton\'s third law', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:newtons-third-law/v/newtons_third_law' },
+            { label: 'Systems and Newton\'s third law', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:newtons-third-law/a/what-is-newtons-third-law' },
+            { label: 'Understand: Newton\'s third law', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:newtons-third-law/e/understand-newton-s-third-law', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
+            { label: 'Apply: Newton\'s third law', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:newtons-third-law/e/apply-newton-s-third-law', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
           ],
         },
-        {
-          name: 'Horizontal Projectile Motion',
-          description: 'Analyze objects launched horizontally under gravity.',
-          questions: [
-            { prompt: 'A ball is thrown horizontally from 20 m high. How long until it lands? (g = 10 m/s^2)', answer: '2 s', explanation: 'h = (1/2)gt^2 -> t = sqrt(2h/g) = sqrt(4) = 2.' },
-            { prompt: 'Initial velocity 10 m/s horizontal. How far does it travel?', answer: '20 m', explanation: 'x = v * t = 10 * 2 = 20.' },
-          ],
-        },
-        {
-          name: 'Angled Projectile Motion',
-          description: 'Combine horizontal and vertical motion for projectiles launched at angles.',
-          questions: [
-            { prompt: 'What launch angle gives maximum range (no air resistance)?', answer: '45°', explanation: 'sin(2θ) is maximum at 2θ = 90°, so θ = 45°.' },
-            { prompt: 'At the peak of flight, what is vertical velocity?', answer: '0 m/s', explanation: 'Momentarily zero as it changes direction.' },
-          ],
-        },
-        {
-          name: 'Uniform Circular Motion',
-          description: 'Study centripetal acceleration keeping objects on circular paths.',
-          questions: [
-            { prompt: 'Centripetal acceleration for v = 10 m/s, r = 5 m?', answer: '20 m/s^2', explanation: 'a = v^2/r = 100/5 = 20.' },
-            { prompt: 'Does centripetal force do work on the object?', answer: 'No', explanation: 'Force is perpendicular to motion, so W = 0.' },
-          ],
-        },
-        {
-          name: 'Gravitation',
-          description: 'Apply Newton\'s law of universal gravitation.',
-          questions: [
-            { prompt: 'If distance between two masses doubles, gravitational force becomes?', answer: '1/4 of the original', explanation: 'F ∝ 1/r^2; double r -> force divided by 4.' },
-            { prompt: 'What is g on Earth\'s surface?', answer: '9.8 m/s^2 (≈ 10 m/s^2)', explanation: 'Gravitational acceleration at sea level.' },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Introduction to Energy',
-      description: 'Define work, kinetic and potential energy, and conservation.',
-      lessons: [
-        {
-          name: 'Work',
-          description: 'Calculate work as W = F*d*cos(θ).',
-          questions: [
-            { prompt: 'A 10 N force pushes a box 5 m in the force direction. Work done?', answer: '50 J', explanation: 'W = F * d = 10 * 5 = 50 J.' },
-            { prompt: 'Force perpendicular to motion does how much work?', answer: '0 J', explanation: 'cos(90°) = 0, so W = 0.' },
-          ],
-        },
-        {
-          name: 'Kinetic Energy',
-          description: 'Use KE = (1/2)mv^2.',
-          questions: [
-            { prompt: 'KE of a 2 kg object moving at 5 m/s?', answer: '25 J', explanation: 'KE = 0.5 * 2 * 25 = 25 J.' },
-            { prompt: 'Double the speed. How does KE change?', answer: 'KE becomes 4 times larger.', explanation: 'KE ∝ v^2.' },
-          ],
-        },
-        {
-          name: 'Potential Energy',
-          description: 'Calculate gravitational PE as mgh.',
-          questions: [
-            { prompt: 'PE of 3 kg lifted 10 m? (g = 10)', answer: '300 J', explanation: 'PE = mgh = 3 * 10 * 10 = 300 J.' },
-            { prompt: 'At what height does gravitational PE equal zero?', answer: 'At the reference level (usually ground).', explanation: 'PE is measured relative to a chosen zero point.' },
-          ],
-        },
-        {
-          name: 'Conservation of Energy',
-          description: 'Use total mechanical energy equals KE + PE.',
-          questions: [
-            { prompt: 'A 2 kg ball dropped from 5 m. Find speed just before hitting ground (g = 10).', answer: '10 m/s', explanation: 'mgh = (1/2)mv^2; v = sqrt(2gh) = sqrt(100) = 10.' },
-            { prompt: 'Energy lost to friction goes to what?', answer: 'Heat (thermal energy)', explanation: 'Mechanical energy converts to internal energy.' },
-          ],
-        },
-        {
-          name: 'Power',
-          description: 'Power = work/time or P = Fv.',
-          questions: [
-            { prompt: 'How much power to lift 50 kg 2 m in 10 s? (g = 10)', answer: '100 W', explanation: 'W = mgh = 1000 J; P = W/t = 100 W.' },
-            { prompt: 'Unit of power?', answer: 'Watt (J/s)', explanation: '1 W = 1 J per second.' },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Momentum and Collisions',
-      description: 'Use impulse and momentum conservation for collisions.',
-      lessons: [
         {
           name: 'Momentum',
-          description: 'Define p = m*v.',
-          questions: [
-            { prompt: 'Momentum of 4 kg moving at 5 m/s?', answer: '20 kg·m/s', explanation: 'p = mv = 4 * 5.' },
-            { prompt: 'Is momentum a vector or scalar?', answer: 'Vector', explanation: 'It has both magnitude and direction.' },
+          items: [
+            { label: 'Momentum', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:momentum/v/momentum' },
+            { label: 'Understand: momentum', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:momentum/e/understand-momentum', question: { prompt: 'A 2.0 kg cart at 3.0 m/s has what momentum?', answer: '6.0 kg·m/s', explanation: 'p = m v = 2.0 x 3.0 = 6.0.' } },
+            { label: 'Conservation of momentum', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:momentum/v/conservation_of_momentum' },
+            { label: 'Understand: conservation of momentum', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:momentum/e/understand-conservation-momentum', question: { prompt: 'A 2.0 kg cart at 3.0 m/s has what momentum?', answer: '6.0 kg·m/s', explanation: 'p = m v = 2.0 x 3.0 = 6.0.' } },
           ],
         },
         {
           name: 'Impulse',
-          description: 'Impulse equals force * time equals change in momentum.',
-          questions: [
-            { prompt: '10 N force applied for 2 s to a 5 kg object. Change in velocity?', answer: '4 m/s', explanation: 'J = Ft = 20 N·s; Δv = J/m = 20/5 = 4.' },
-            { prompt: 'Why do airbags reduce injury?', answer: 'They extend collision time, reducing force for same impulse.', explanation: 'F = J/t, so more t means less F.' },
+          items: [
+            { label: 'Impulse', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:impulse/v/impulse' },
+            { label: 'Understand: impulse', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:impulse/e/understand-impulse', question: { prompt: 'A 2.0 kg cart at 3.0 m/s has what momentum?', answer: '6.0 kg·m/s', explanation: 'p = m v = 2.0 x 3.0 = 6.0.' } },
+            { label: 'Apply: impulse', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:impulse/e/apply-impulse', question: { prompt: 'A 2.0 kg cart at 3.0 m/s has what momentum?', answer: '6.0 kg·m/s', explanation: 'p = m v = 2.0 x 3.0 = 6.0.' } },
           ],
         },
         {
-          name: 'Conservation of Momentum',
-          description: 'Total momentum is conserved in closed systems.',
-          questions: [
-            { prompt: 'Cart A (2 kg, 3 m/s) collides with stationary cart B (4 kg). They stick. Final velocity?', answer: '1 m/s', explanation: 'p_initial = 6; p_final = 6 = 6*v -> v = 1.' },
-            { prompt: 'In what system is momentum conserved?', answer: 'Any isolated system (no external forces).', explanation: 'External forces change total momentum.' },
-          ],
-        },
-        {
-          name: 'Elastic Collisions',
-          description: 'Both momentum and kinetic energy are conserved.',
-          questions: [
-            { prompt: 'Are billiard ball collisions typically elastic or inelastic?', answer: 'Nearly elastic', explanation: 'Little KE is lost during the brief contact.' },
-            { prompt: 'Two identical elastic carts: one moving, one still. After collision, what happens?', answer: 'Moving cart stops; still cart moves at initial speed.', explanation: 'Characteristic of equal-mass elastic collision.' },
-          ],
-        },
-        {
-          name: 'Inelastic Collisions',
-          description: 'Momentum conserved, KE lost to deformation/heat.',
-          questions: [
-            { prompt: 'What defines a perfectly inelastic collision?', answer: 'Objects stick together after collision.', explanation: 'Maximum KE lost while conserving momentum.' },
-            { prompt: 'Is KE conserved in an inelastic collision?', answer: 'No, some is converted to other forms.', explanation: 'Heat, sound, deformation absorb KE.' },
+          name: 'Activity: How do engineers design safety cushions to save lives?',
+          items: [
+            { label: 'Activity: How do engineers design safety cushions to save lives?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:force-pairs-and-momentum/x6679aa2c65c01e53:activity-how-do-engineers-design-safety-cushions-to-save-lives/a/activity-how-do-engineers-design-safety-cushions-to-save-lives' },
           ],
         },
       ],
     },
     {
-      name: 'Waves and Sound',
-      description: 'Study transverse and longitudinal waves, superposition, and sound.',
+      name: 'Gravitation',
       lessons: [
         {
-          name: 'Wave Properties',
-          description: 'Define wavelength, frequency, amplitude, and period.',
-          questions: [
-            { prompt: 'Wave equation v = f * λ. If f = 10 Hz and λ = 2 m, find v.', answer: '20 m/s', explanation: 'v = 10 * 2 = 20 m/s.' },
-            { prompt: 'What is the relationship between period T and frequency f?', answer: 'T = 1/f', explanation: 'Period is seconds per cycle; frequency is cycles per second.' },
+          name: 'Newton\'s law of gravitation',
+          items: [
+            { label: 'Newton\'s law of gravitation', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:newtons-law-of-gravitation/v/newtons_law_of_gravitation' },
+            { label: 'Understand: Newton\'s law of gravitation', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:newtons-law-of-gravitation/e/understand-newton-s-law-of-gravitation', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
+            { label: 'Apply: Newton\'s law of gravitation', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:newtons-law-of-gravitation/e/apply-newton-s-law-of-gravitation', question: { prompt: 'A 5.0 kg object is pushed with 20 N net force. What is its acceleration?', answer: '4.0 m/s2', explanation: 'a = F / m = 20 / 5.0 = 4.0.' } },
           ],
         },
         {
-          name: 'Transverse vs Longitudinal',
-          description: 'Compare waves that oscillate perpendicular to and along the direction of motion.',
-          questions: [
-            { prompt: 'Is sound transverse or longitudinal?', answer: 'Longitudinal', explanation: 'Air particles vibrate parallel to wave direction.' },
-            { prompt: 'Give an example of a transverse wave.', answer: 'Light (or wave on a rope)', explanation: 'Oscillations are perpendicular to travel.' },
+          name: 'Falling objects',
+          items: [
+            { label: 'Falling objects', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:falling-objects/v/falling_objects' },
+            { label: 'Understand: falling objects', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:falling-objects/e/understand-falling-objects', question: { prompt: 'Solve a quick numerical example related to: Understand: falling objects.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Superposition and Interference',
-          description: 'Waves combine constructively or destructively.',
-          questions: [
-            { prompt: 'What happens when two in-phase waves meet?', answer: 'Constructive interference - amplitudes add.', explanation: 'Crests align, producing larger crest.' },
-            { prompt: 'What causes destructive interference?', answer: 'Waves meeting 180° out of phase.', explanation: 'Crest meets trough, canceling amplitude.' },
+          name: 'Orbital motion',
+          items: [
+            { label: 'Centripetal force', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:orbital-motion/v/centripetal_force' },
+            { label: 'Understand: centripetal force', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:orbital-motion/e/understand-centripetal-force', question: { prompt: 'Centripetal acceleration points in which direction?', answer: 'Toward the center of the circle.', explanation: 'a_c = v^2 / r.' } },
+            { label: 'Orbital motion', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:orbital-motion/v/orbital_motion' },
+            { label: 'Understand: orbital motion', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:orbital-motion/e/understand-orbital-motion', question: { prompt: 'Solve a quick numerical example related to: Understand: orbital motion.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: orbital motion', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:orbital-motion/e/apply-orbital-motion', question: { prompt: 'Solve a quick numerical example related to: Apply: orbital motion.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Sound Waves and Intensity',
-          description: 'Relate sound properties: pitch, loudness, and speed.',
-          questions: [
-            { prompt: 'Approximate speed of sound in air at room temperature?', answer: '343 m/s', explanation: 'Depends on temperature and medium.' },
-            { prompt: 'What property of a wave determines pitch?', answer: 'Frequency', explanation: 'Higher frequency = higher pitch.' },
-          ],
-        },
-        {
-          name: 'Doppler Effect',
-          description: 'Pitch changes when source or observer moves.',
-          questions: [
-            { prompt: 'An ambulance approaches. Does the siren sound higher or lower?', answer: 'Higher pitch', explanation: 'Compressed wavefronts increase frequency.' },
-            { prompt: 'What happens to observed frequency as the source moves away?', answer: 'It decreases.', explanation: 'Wavefronts stretch, lowering frequency.' },
+          name: 'Activity: Why is a Neptune year so long?',
+          items: [
+            { label: 'Activity: Why is a Neptune year so long?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:gravitation/x6679aa2c65c01e53:activity-why-is-a-neptune-year-so-long/a/activity-why-is-a-neptune-year-so-long' },
           ],
         },
       ],
     },
     {
-      name: 'Light and Electromagnetic Radiation',
-      description: 'Explore the EM spectrum, reflection, refraction, and wave-particle duality.',
+      name: 'Electrostatics',
       lessons: [
         {
-          name: 'Electromagnetic Spectrum',
-          description: 'Order EM waves by wavelength and frequency.',
-          questions: [
-            { prompt: 'Which has higher frequency: radio waves or X-rays?', answer: 'X-rays', explanation: 'X-rays have much shorter wavelengths and higher energies.' },
-            { prompt: 'What is the speed of light in vacuum?', answer: '3 x 10^8 m/s', explanation: 'Same for all EM waves in vacuum.' },
+          name: 'Coulomb\'s law',
+          items: [
+            { label: 'Coulomb\'s law', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:coulombs-law/v/coulombs_law' },
+            { label: 'Electric fields', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:coulombs-law/v/electric-field-definition' },
+            { label: 'Understand: Coulomb\'s law', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:coulombs-law/e/understand-coulombs-law', question: { prompt: 'Solve a quick numerical example related to: Understand: Coulomb\'s law.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: Coulomb\'s law', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:coulombs-law/e/apply-coulombs-law', question: { prompt: 'Solve a quick numerical example related to: Apply: Coulomb\'s law.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Reflection',
-          description: 'Apply the law of reflection: angle in = angle out.',
-          questions: [
-            { prompt: 'Light hits a mirror at 30° from the normal. What is the reflected angle?', answer: '30°', explanation: 'Angle of incidence equals angle of reflection.' },
-            { prompt: 'What is specular reflection?', answer: 'Reflection from a smooth surface producing a clear image.', explanation: 'Opposite of diffuse reflection from rough surfaces.' },
+          name: 'Static electricity',
+          items: [
+            { label: 'Static electricity', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:static-electricity/v/static_electricity' },
+            { label: 'Apply: static electricity', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:static-electricity/e/apply-static-electricity', question: { prompt: 'Solve a quick numerical example related to: Apply: static electricity.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Refraction',
-          description: 'Light bends when changing media; use Snell\'s law.',
-          questions: [
-            { prompt: 'Index of refraction for water?', answer: '≈ 1.33', explanation: 'Light travels ~25% slower in water than vacuum.' },
-            { prompt: 'Does light bend toward or away from normal entering a denser medium?', answer: 'Toward the normal', explanation: 'It slows down, causing bending toward the normal.' },
-          ],
-        },
-        {
-          name: 'Lenses and Mirrors',
-          description: 'Compare converging and diverging optical elements.',
-          questions: [
-            { prompt: 'A magnifying glass is what type of lens?', answer: 'Converging (convex) lens', explanation: 'Bends parallel rays to a focal point.' },
-            { prompt: 'Do concave mirrors converge or diverge light?', answer: 'Converge', explanation: 'Parallel rays reflect through the focal point.' },
-          ],
-        },
-        {
-          name: 'Wave-Particle Duality',
-          description: 'Introduce photons and Einstein\'s photoelectric effect.',
-          questions: [
-            { prompt: 'What is a photon?', answer: 'A quantum (particle) of light carrying energy E = hf.', explanation: 'Light behaves as both wave and particle.' },
-            { prompt: 'Who received the Nobel Prize for explaining the photoelectric effect?', answer: 'Albert Einstein (1921)', explanation: 'Not for relativity - for photons!' },
+          name: 'Activity: Why do clothes develop static cling in a dryer?',
+          items: [
+            { label: 'Activity: Why do clothes develop static cling in a dryer?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electrostatics/x6679aa2c65c01e53:activity-why-do-clothes-develop-static-cling-in-a-dryer/a/activity-why-do-clothes-develop-static-cling-in-a-dryer' },
           ],
         },
       ],
     },
     {
-      name: 'Electricity and Magnetism',
-      description: 'Analyze charges, circuits, Ohm\'s law, and magnetic fields.',
+      name: 'Energy',
       lessons: [
         {
-          name: 'Electric Charge and Coulomb\'s Law',
-          description: 'Quantify force between point charges.',
-          questions: [
-            { prompt: 'Double the distance between two charges. The force becomes?', answer: '1/4 of original', explanation: 'F ∝ 1/r^2.' },
-            { prompt: 'Like charges do what?', answer: 'Repel each other', explanation: 'Opposite charges attract.' },
+          name: 'Kinetic and potential energy',
+          items: [
+            { label: 'Kinetic energy', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:kinetic-and-potential-energy/v/kinetic_energy' },
+            { label: 'Apply: kinetic energy', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:kinetic-and-potential-energy/e/apply-kinetic-energy', question: { prompt: 'A 2.0 kg ball moves at 4.0 m/s. What is its kinetic energy?', answer: '16 J', explanation: 'KE = 0.5 m v^2 = 0.5 x 2 x 16 = 16.' } },
+            { label: 'Potential energy', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:kinetic-and-potential-energy/v/potential_energy' },
+            { label: 'Apply: potential energy', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:kinetic-and-potential-energy/e/apply-potential-energy', question: { prompt: 'A 1.0 kg book is lifted 2.0 m. Find its gravitational PE (g = 10 m/s2).', answer: '20 J', explanation: 'PE = m g h = 1 x 10 x 2 = 20.' } },
           ],
         },
         {
-          name: 'Ohm\'s Law',
-          description: 'V = IR relates voltage, current, and resistance.',
-          questions: [
-            { prompt: 'A 12 V battery drives 3 A through a resistor. What is R?', answer: '4 Ω', explanation: 'R = V/I = 12/3 = 4.' },
-            { prompt: 'What are the units of current?', answer: 'Amperes (A) = coulombs per second.', explanation: 'Charge flow rate.' },
+          name: 'Conservation of energy',
+          items: [
+            { label: 'Conservation of energy', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:conservation-of-energy/v/conservation_of_energy' },
+            { label: 'Apply: conservation of energy', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:conservation-of-energy/e/apply-conservation-of-energy', question: { prompt: 'State the law of conservation of energy.', answer: 'Energy is neither created nor destroyed, only transformed.', explanation: 'Total energy of an isolated system is constant.' } },
           ],
         },
         {
-          name: 'Series and Parallel Circuits',
-          description: 'Combine resistors in two basic ways.',
-          questions: [
-            { prompt: 'Two 10 Ω resistors in series. Total?', answer: '20 Ω', explanation: 'R_total = R1 + R2.' },
-            { prompt: 'Two 10 Ω resistors in parallel. Total?', answer: '5 Ω', explanation: '1/R = 1/10 + 1/10 = 1/5.' },
+          name: 'Activity: How do engineers design roller coasters?',
+          items: [
+            { label: 'Activity: How do engineers design roller coasters?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:activity-how-do-engineers-design-roller-coasters/a/activity-how-do-engineers-design-roller-coasters' },
           ],
         },
         {
-          name: 'Electric Power',
-          description: 'Calculate power as P = IV.',
-          questions: [
-            { prompt: 'A 120 V device draws 2 A. Power used?', answer: '240 W', explanation: 'P = IV = 2 * 120 = 240.' },
-            { prompt: 'How can you write P using R and I?', answer: 'P = I^2 * R', explanation: 'Substitute V = IR into P = IV.' },
-          ],
-        },
-        {
-          name: 'Magnetic Fields',
-          description: 'Describe magnetic fields around magnets and current-carrying wires.',
-          questions: [
-            { prompt: 'What unit measures magnetic field strength?', answer: 'Tesla (T)', explanation: '1 T = 1 kg/(A·s^2).' },
-            { prompt: 'Use the right-hand rule for current in a wire. Why?', answer: 'To find the direction of the magnetic field around the wire.', explanation: 'Thumb along I, fingers curl in B direction.' },
+          name: 'Work and power',
+          items: [
+            { label: 'Work and power', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:work-and-power/v/work_and_power' },
+            { label: 'Translational kinetic energy and work', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:work-and-power/a/what-is-kinetic-energy' },
+            { label: 'Apply: work and power', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:energy/x6679aa2c65c01e53:work-and-power/e/apply-work-and-power', question: { prompt: 'Solve a quick numerical example related to: Apply: work and power.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
       ],
     },
     {
-      name: 'Thermodynamics',
-      description: 'Relate heat, temperature, and energy through thermodynamic laws.',
+      name: 'Electromagnetics',
       lessons: [
         {
-          name: 'Temperature and Heat',
-          description: 'Distinguish temperature (average KE) from heat (energy transfer).',
-          questions: [
-            { prompt: 'Convert 25 C to Kelvin.', answer: '298 K', explanation: 'K = C + 273.' },
-            { prompt: 'Does a pot of boiling water have higher temperature or more total heat than an iceberg?', answer: 'Higher temperature, less total heat.', explanation: 'Heat depends on mass too.' },
+          name: 'Voltage and current',
+          items: [
+            { label: 'Voltage (electric potential difference)', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:voltage-and-current/v/what_is_voltage' },
+            { label: 'Electric current', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:voltage-and-current/v/electric_current' },
+            { label: 'Apply: voltage and current', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:voltage-and-current/e/apply-voltage-and-current', question: { prompt: 'A 12 V battery drives 4.0 A through a resistor. What is its resistance?', answer: '3.0 Ω', explanation: 'R = V / I = 12 / 4 = 3.' } },
           ],
         },
         {
-          name: 'Zeroth Law',
-          description: 'If A and B are in thermal equilibrium with C, A and B are with each other.',
-          questions: [
-            { prompt: 'What does the Zeroth Law enable us to do?', answer: 'Define temperature via thermometers.', explanation: 'Transitive property of thermal equilibrium.' },
-            { prompt: 'What does thermal equilibrium mean?', answer: 'No net heat flow between objects.', explanation: 'They are at the same temperature.' },
+          name: 'Magnetic field due to current',
+          items: [
+            { label: 'Magnetic field due to current', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:magnetic-field-due-to-current/v/oersteds-experiment-magnetic-field-due-to-current' },
+            { label: 'Right hand thumb rule', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:magnetic-field-due-to-current/v/right-hand-thumb-rule-solved-numerical' },
+            { label: 'Apply: magnetic field due to straight current-carrying conductors', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:magnetic-field-due-to-current/e/apply-magnetic-field-due-to-straight-current-carrying-conductor', question: { prompt: 'A 12 V battery drives 4.0 A through a resistor. What is its resistance?', answer: '3.0 Ω', explanation: 'R = V / I = 12 / 4 = 3.' } },
+            { label: 'Magnetic field due to current-carrying loop', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:magnetic-field-due-to-current/v/magnetic-field-due-to-current-carrying-loop' },
+            { label: 'Magnetic field due to a solenoid', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:magnetic-field-due-to-current/v/magnetic-fields-through-solenoids' },
+            { label: 'Apply: magnetic field due to current-carrying coils', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:magnetic-field-due-to-current/e/apply-magnetic-field-due-to-current-carrying-coils', question: { prompt: 'A 12 V battery drives 4.0 A through a resistor. What is its resistance?', answer: '3.0 Ω', explanation: 'R = V / I = 12 / 4 = 3.' } },
           ],
         },
         {
-          name: 'First Law of Thermodynamics',
-          description: 'ΔU = Q - W: energy is conserved.',
-          questions: [
-            { prompt: '500 J of heat added to gas, it does 200 J of work. Change in internal energy?', answer: '300 J', explanation: 'ΔU = Q - W = 500 - 200 = 300.' },
-            { prompt: 'The First Law restates what broader principle?', answer: 'Conservation of energy.', explanation: 'Energy cannot be created or destroyed.' },
+          name: 'Electric motors',
+          items: [
+            { label: 'Force on a current-carrying conductor in a magnetic field', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-motors/v/force-on-a-current-carrying-conductor-ni-a-magnetic-field' },
+            { label: 'Apply: force on a current-carrying conductor in a magnetic field', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-motors/e/apply-force-on-a-current-carrying-conductor-in-a-magnetic-field', question: { prompt: 'A 12 V battery drives 4.0 A through a resistor. What is its resistance?', answer: '3.0 Ω', explanation: 'R = V / I = 12 / 4 = 3.' } },
+            { label: 'Electric motors', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-motors/v/electric-motor' },
+            { label: 'Apply: electric motors', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-motors/e/apply-electric-motors', question: { prompt: 'Solve a quick numerical example related to: Apply: electric motors.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
           ],
         },
         {
-          name: 'Second Law and Entropy',
-          description: 'Entropy of an isolated system never decreases.',
-          questions: [
-            { prompt: 'Does entropy increase or decrease when ice melts?', answer: 'Increases', explanation: 'Disorder of molecules increases going from solid to liquid.' },
-            { prompt: 'Can heat spontaneously flow from cold to hot?', answer: 'No', explanation: 'Violates the Second Law of Thermodynamics.' },
+          name: 'Electromagnetic induction',
+          items: [
+            { label: 'Electromagnetic induction', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electromagnetic-induction/v/electromagnetic-induction-faradays-experiments' },
+            { label: 'Apply: electromagnetic induction', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electromagnetic-induction/e/apply-electromagnetic-induction', question: { prompt: 'A current-carrying wire creates what kind of field around it?', answer: 'A magnetic field (in circular loops around the wire).', explanation: 'Right-hand rule gives the direction.' } },
           ],
         },
         {
-          name: 'Heat Engines and Efficiency',
-          description: 'Efficiency = W/Qin; Carnot sets the maximum.',
-          questions: [
-            { prompt: 'An engine absorbs 1000 J and does 400 J of work. Efficiency?', answer: '40%', explanation: 'e = W/Qin = 400/1000.' },
-            { prompt: 'What is the maximum theoretical efficiency called?', answer: 'Carnot efficiency', explanation: 'e = 1 - Tc/Th with temperatures in Kelvin.' },
+          name: 'Activity: How can motion produce electricity?',
+          items: [
+            { label: 'Activity: How can motion produce electricity?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:activity-how-can-motion-produce-electricity/a/activity-how-can-motion-produce-electricity' },
+          ],
+        },
+        {
+          name: 'Electric generators',
+          items: [
+            { label: 'Right hand generator rule', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-generators/v/right-hand-generator-rule' },
+            { label: 'AC and DC generators', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-generators/v/ac-dc-generator' },
+            { label: 'Apply: electric generators', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetics/x6679aa2c65c01e53:electric-generators/e/apply-electric-generators', question: { prompt: 'Solve a quick numerical example related to: Apply: electric generators.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Electromagnetic radiation',
+      lessons: [
+        {
+          name: 'The electromagnetic spectrum',
+          items: [
+            { label: 'The electromagnetic spectrum', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:the-electromagnetic-spectrum/a/the-electromagnetic-spectrum' },
+            { label: 'Apply: the electromagnetic spectrum', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:the-electromagnetic-spectrum/e/apply-the-electromagnetic-spectrum', question: { prompt: 'A current-carrying wire creates what kind of field around it?', answer: 'A magnetic field (in circular loops around the wire).', explanation: 'Right-hand rule gives the direction.' } },
+          ],
+        },
+        {
+          name: 'Wave behaviors of EM radiation',
+          items: [
+            { label: 'Electromagnetic waves', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:wave-behaviors-of-em-radiation/v/electromagnetic_waves' },
+            { label: 'Apply: electromagnetic waves', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:wave-behaviors-of-em-radiation/e/apply-electromagnetic-waves', question: { prompt: 'A current-carrying wire creates what kind of field around it?', answer: 'A magnetic field (in circular loops around the wire).', explanation: 'Right-hand rule gives the direction.' } },
+            { label: 'Refraction of light', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:wave-behaviors-of-em-radiation/v/refraction_of_light' },
+            { label: 'Diffraction and interference of light', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:wave-behaviors-of-em-radiation/v/diffraction_and_interference_of_light' },
+            { label: 'Apply: refraction, diffraction, and interference of light', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:wave-behaviors-of-em-radiation/e/apply-refraction-diffraction-and-interference-of-light', question: { prompt: 'What is the angle of reflection if the angle of incidence is 30°?', answer: '30°', explanation: 'Law of reflection: angles are equal.' } },
+          ],
+        },
+        {
+          name: 'Activity: Why do optical discs reflect rainbow colors?',
+          items: [
+            { label: 'Activity: Why do optical discs reflect rainbow colors?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:activity-why-do-optical-discs-reflect-rainbow-colors/a/activity-why-do-optical-discs-reflect-rainbow-colors' },
+          ],
+        },
+        {
+          name: 'Particle behaviors of EM radiation',
+          items: [
+            { label: 'The photoelectric and photovoltaic effects', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:particle-behaviors-of-em-radiation/v/the_photoelectric_and_photovoltaic_effects' },
+            { label: 'Apply: the photoelectric and photovoltaic effects', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:particle-behaviors-of-em-radiation/e/apply-the-photoelectric-and-photovoltaic-effects', question: { prompt: 'Solve a quick numerical example related to: Apply: the photoelectric and photovoltaic effects.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Atomic spectra', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:particle-behaviors-of-em-radiation/v/atomic_spectra' },
+            { label: 'Apply: atomic spectra', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:particle-behaviors-of-em-radiation/e/apply-atomic-spectra', question: { prompt: 'Solve a quick numerical example related to: Apply: atomic spectra.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+          ],
+        },
+        {
+          name: 'Activity: How can starlight reveal the elements in a star?',
+          items: [
+            { label: 'Activity: How can starlight reveal the elements in a star?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:activity-how-can-starlight-reveal-the-elements-in-a-star/a/activity-how-can-starlight-reveal-the-elements-in-a-star' },
+          ],
+        },
+        {
+          name: 'EM radiation from the Sun',
+          items: [
+            { label: 'Blackbody radiation', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:em-radiation-from-the-sun/v/blackbody_radiation' },
+            { label: 'Stars', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:em-radiation-from-the-sun/a/modeling-stars' },
+            { label: 'Why is the sky blue?', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:em-radiation-from-the-sun/v/why-is-the-sky-blue' },
+            { label: 'The greenhouse effect', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:em-radiation-from-the-sun/v/the-_greenhouse_effect' },
+            { label: 'Apply: EM radiation from the Sun', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:em-radiation-from-the-sun/e/apply-em-radiation-from-the-sun', question: { prompt: 'Solve a quick numerical example related to: Apply: EM radiation from the Sun.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'The Big Bang theory', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:em-radiation-from-the-sun/a/the-big-bang-theory' },
+          ],
+        },
+        {
+          name: 'Activity: How do carbon dioxide and albedo affect how Earth interacts with sunlight?',
+          items: [
+            { label: 'Activity: How do carbon dioxide and albedo affect how Earth interacts with sunlight?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:electromagnetic-radiation/x6679aa2c65c01e53:activity-how-do-carbon-dioxide-and-albedo-affect-how-earth-interacts-with-sunlight/a/activity-how-do-carbon-dioxide-and-albedo-affect-how-earth-interacts-with-sunlight' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Nuclear physics',
+      lessons: [
+        {
+          name: 'Radioactive decay',
+          items: [
+            { label: 'Intro to radioactive decay', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/v/intro-to-radioactive-decay' },
+            { label: 'Alpha decay', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/v/alpha-decay' },
+            { label: 'Apply: alpha decay', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/e/apply-alpha-decay', question: { prompt: 'Solve a quick numerical example related to: Apply: alpha decay.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Beta decay', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/v/beta-decay' },
+            { label: 'Apply: beta decay', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/e/apply-beta-decay', question: { prompt: 'Solve a quick numerical example related to: Apply: beta decay.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Gamma decay', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/v/gamma-decay' },
+            { label: 'Understand: radioactive decay', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/e/understand-radioactive-decay', question: { prompt: 'Solve a quick numerical example related to: Understand: radioactive decay.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: alpha, beta, and gamma decay', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:radioactive-decay/e/apply-alpha-beta-gamma', question: { prompt: 'Solve a quick numerical example related to: Apply: alpha, beta, and gamma decay.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+          ],
+        },
+        {
+          name: 'Half-life',
+          items: [
+            { label: 'Half-life', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:half-life/v/half-life-radiometric-dating' },
+            { label: 'Understand: half-life and radiometric dating', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:half-life/e/understand-half-life-and-radiometric-dating', question: { prompt: 'Solve a quick numerical example related to: Understand: half-life and radiometric dating.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: half-life and radiometric dating', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:half-life/e/apply-half-life-and-radiometric-dating', question: { prompt: 'Solve a quick numerical example related to: Apply: half-life and radiometric dating.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+          ],
+        },
+        {
+          name: 'Activity: How do we know when dinosaurs lived on Earth?',
+          items: [
+            { label: 'Activity: How do we know when dinosaurs lived on Earth?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:activity-how-do-we-know-when-dinosaurs-lived-on-earth/a/activity-how-do-we-know-when-dinosaurs-lived-on-earth' },
+          ],
+        },
+        {
+          name: 'Nuclear fusion',
+          items: [
+            { label: 'Nuclear fusion', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:nuclear-fusion/v/nuclear-fusion' },
+            { label: 'Understand: nuclear fusion', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:nuclear-fusion/e/understand-nuclear-fusion', question: { prompt: 'Solve a quick numerical example related to: Understand: nuclear fusion.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+          ],
+        },
+        {
+          name: 'Nuclear fission',
+          items: [
+            { label: 'Nuclear fission', type: 'video', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:nuclear-fission/v/nuclear-fission' },
+            { label: 'Understand: nuclear fission', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:nuclear-fission/e/understand-nuclear-fission', question: { prompt: 'Solve a quick numerical example related to: Understand: nuclear fission.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+            { label: 'Apply: nuclear fission', type: 'exercise', href: '/science/highschool-physics/x6679aa2c65c01e53:nuclear-physics/x6679aa2c65c01e53:nuclear-fission/e/apply-nuclear-fission', question: { prompt: 'Solve a quick numerical example related to: Apply: nuclear fission.', answer: 'A clean numerical answer (e.g. round numbers) using the lesson formula.', explanation: 'Use the lesson formula with simple values.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Teacher resources',
+      lessons: [
+        {
+          name: 'Unit guides',
+          items: [
+            { label: 'How to use our NGSS-aligned unit guides', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:unit-guides/a/how-to-use-our-ngss-aligned-unit-guides' },
+            { label: 'High school physics unit guides', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:unit-guides/a/physics-unit-guides' },
+          ],
+        },
+        {
+          name: 'Hands-on physics activities',
+          items: [
+            { label: 'Introduction to hands-on science activities', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/introduction-to-hands-on-science-activities' },
+            { label: 'Activity: How do engineers design strong bridges?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-do-engineers-design-strong-bridges' },
+            { label: 'Activity: How do engineers design safety cushions to save lives?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-do-engineers-design-safety-cushions-to-save-lives' },
+            { label: 'Activity: Why is a Neptune year so long?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-why-is-a-neptune-year-so-long' },
+            { label: 'Activity: Why do clothes develop static cling in a dryer?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-why-do-clothes-develop-static-cling-in-a-dryer' },
+            { label: 'Activity: How do engineers design roller coasters?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-do-engineers-design-roller-coasters' },
+            { label: 'Activity: How can motion produce electricity?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-can-motion-produce-electricity' },
+            { label: 'Activity: Why do optical discs reflect rainbow colors?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-why-do-optical-discs-reflect-rainbow-colors' },
+            { label: 'Activity: How can starlight reveal the elements in a star?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-can-starlight-reveal-the-elements-in-a-star' },
+            { label: 'Activity: How do carbon dioxide and albedo affect how Earth interacts with sunlight?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-do-carbon-dioxide-and-albedo-affect-how-earth-interacts-with-sunlight' },
+            { label: 'Activity: How do we know when dinosaurs lived on Earth?', type: 'article', href: '/science/highschool-physics/x6679aa2c65c01e53:teacher-resources/x6679aa2c65c01e53:untitled-227/a/activity-how-do-we-know-when-dinosaurs-lived-on-earth' },
           ],
         },
       ],

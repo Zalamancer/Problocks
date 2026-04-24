@@ -3,1208 +3,965 @@ import type { DeepGrade } from '../types';
 export const GRADE_DATA: DeepGrade = {
   grade: '6-8',
   label: 'Middle School Science (Integrated)',
-  sourceUrl: 'https://www.khanacademy.org/science/middle-school-physics',
+  sourceUrl: 'https://www.khanacademy.org/science/ms-physics',
   units: [
     {
-      name: 'Physics: Motion and Forces',
-      description: "Describe motion with speed and velocity, then apply Newton's laws to everyday interactions.",
+      name: 'Physics - Motion and forces',
       lessons: [
         {
-          name: 'Speed and Velocity',
-          description: 'Speed is distance over time; velocity adds direction.',
-          questions: [
-            {
-              prompt: 'A car travels 120 km in 2 hours. What is its average speed?',
-              answer: '60 km/h',
-              explanation: 'Speed = distance divided by time.',
-            },
-            {
-              prompt: 'Two objects have the same speed but different velocities. What differs?',
-              answer: 'Their direction of motion',
-              explanation: 'Velocity is a vector, including direction.',
-            },
+          name: 'Motion',
+          items: [
+            { label: 'Introduction to middle school physics', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/v/intro-to-middle-school-physics' },
+            { label: 'Speed and velocity', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/v/speed-and-velocity' },
+            { label: 'Acceleration', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/v/ms-acceleration' },
+            { label: 'Reference frames', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/v/reference-frames' },
+            { label: 'Describing motion', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/a/describing-motion' },
+            { label: 'Understand: motion', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/e/understand-representing-motion', question: { prompt: 'Define in one sentence: Understand: motion.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
+            { label: 'Apply: motion', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:motion/e/apply-motion', question: { prompt: 'Define in one sentence: Apply: motion.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Acceleration',
-          description: 'Acceleration measures how quickly velocity changes.',
-          questions: [
-            {
-              prompt: 'If a cyclist speeds up from rest to 10 m/s in 5 seconds, what is the acceleration?',
-              answer: '2 m/s^2',
-              explanation: 'Acceleration = change in velocity divided by time.',
-            },
-            {
-              prompt: 'Can an object moving at constant speed still accelerate?',
-              answer: 'Yes, if it changes direction',
-              explanation: 'Direction change is also acceleration.',
-            },
+          name: 'Forces',
+          items: [
+            { label: 'Forces', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:forces/v/forces' },
+            { label: 'Newton\'s third law', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:forces/v/newtons-third-law' },
+            { label: 'Forces and Newton\'s third law', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:forces/a/forces-and-newtons-third-law' },
+            { label: 'Understand: forces and Newton\'s third law', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:forces/e/understand-action-and-reaction-forces', question: { prompt: 'What does Newton\'s Second Law state in equation form?', answer: 'F = m a', explanation: 'Force equals mass times acceleration.' } },
+            { label: 'Apply: forces and Newton\'s third law', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:forces/e/apply-forces-and-newton-s-third-law', question: { prompt: 'What does Newton\'s Second Law state in equation form?', answer: 'F = m a', explanation: 'Force equals mass times acceleration.' } },
           ],
         },
         {
-          name: "Newton's First Law",
-          description: 'Objects keep their motion unless an unbalanced force acts.',
-          questions: [
-            {
-              prompt: 'Why do passengers lurch forward when a car brakes?',
-              answer: 'Inertia keeps them moving while the car stops',
-              explanation: "Newton's first law: motion continues without a new force.",
-            },
-            {
-              prompt: 'What property measures an object resistance to change in motion?',
-              answer: 'Mass (inertia)',
-              explanation: 'Greater mass means greater inertia.',
-            },
-          ],
-        },
-        {
-          name: "Newton's Second Law",
-          description: 'Force equals mass times acceleration (F = ma).',
-          questions: [
-            {
-              prompt: 'What force is needed to accelerate a 10 kg cart at 3 m/s^2?',
-              answer: '30 N',
-              explanation: 'F = m * a = 10 * 3 = 30 newtons.',
-            },
-            {
-              prompt: 'If the same force is applied to a heavy and a light object, which accelerates more?',
-              answer: 'The light one',
-              explanation: 'Smaller mass means greater acceleration.',
-            },
-          ],
-        },
-        {
-          name: "Newton's Third Law",
-          description: 'Every action has an equal and opposite reaction.',
-          questions: [
-            {
-              prompt: 'When a rocket pushes exhaust down, what pushes the rocket up?',
-              answer: 'The reaction force from the exhaust',
-              explanation: 'Action-reaction forces are equal and opposite.',
-            },
-            {
-              prompt: 'Why does walking forward require pushing backward on the ground?',
-              answer: 'The ground pushes you forward in reaction',
-              explanation: "Newton's third law makes walking possible.",
-            },
+          name: 'Connecting motion and forces',
+          items: [
+            { label: 'Newton\'s first law', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:connecting-motion-and-forces/v/newtons-first-law' },
+            { label: 'Newton\'s second law', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:connecting-motion-and-forces/v/newtons-second-law' },
+            { label: 'Connecting motion and forces', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:connecting-motion-and-forces/a/forces-and-acceleration' },
+            { label: 'Understand: connecting motion and forces', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:connecting-motion-and-forces/e/understand-forces-and-acceleration', question: { prompt: 'True or False: Gravity is a contact force.', answer: 'False', explanation: 'Gravity acts at a distance, no contact required.' } },
+            { label: 'Apply: connecting motion and forces', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:motion-and-forces/x1baed5db7c1bb50b:connecting-motion-and-forces/e/apply-forces-and-acceleration', question: { prompt: 'True or False: Gravity is a contact force.', answer: 'False', explanation: 'Gravity acts at a distance, no contact required.' } },
           ],
         },
       ],
     },
     {
-      name: 'Physics: Non-Contact Forces',
-      description: 'Explore gravitational, electric, and magnetic forces that act across empty space.',
+      name: 'Physics - Non-contact interactions',
       lessons: [
         {
-          name: 'Gravity and Mass',
-          description: 'Gravity pulls masses together without touching.',
-          questions: [
-            {
-              prompt: 'Why does an apple fall from a tree?',
-              answer: 'Earth gravity pulls it down',
-              explanation: 'All masses attract; Earth pull dominates.',
-            },
-            {
-              prompt: 'How does gravity change with distance?',
-              answer: 'It gets weaker as distance increases',
-              explanation: 'Gravity follows an inverse-square law.',
-            },
+          name: 'Gravitational force',
+          items: [
+            { label: 'Gravitational force', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:gravitational-force/v/gravitational-force' },
+            { label: 'Understand: gravitational force', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:gravitational-force/e/understand-gravitational-forces', question: { prompt: 'True or False: Gravity is a contact force.', answer: 'False', explanation: 'Gravity acts at a distance, no contact required.' } },
+            { label: 'Apply: gravitational force', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:gravitational-force/e/apply-gravitational-force', question: { prompt: 'True or False: Gravity is a contact force.', answer: 'False', explanation: 'Gravity acts at a distance, no contact required.' } },
           ],
         },
         {
-          name: 'Electric Charge',
-          description: 'Like charges repel; opposite charges attract.',
-          questions: [
-            {
-              prompt: 'Two negative charges are placed near each other. What happens?',
-              answer: 'They repel',
-              explanation: 'Like charges push each other apart.',
-            },
-            {
-              prompt: 'Why does hair stand up after rubbing with a balloon?',
-              answer: 'The hairs share a charge and repel each other',
-              explanation: 'Static charge causes repulsion.',
-            },
+          name: 'Activity: How can a skydiver fall safely?',
+          items: [
+            { label: 'Activity: How can a skydiver fall safely?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:unit-2-phenomenon-based-activities/a/activity-how-can-a-skydiver-fall-safely' },
           ],
         },
         {
-          name: 'Magnetic Fields',
-          description: 'Magnets create fields that push or pull on other magnets.',
-          questions: [
-            {
-              prompt: 'What happens when two north poles face each other?',
-              answer: 'They repel',
-              explanation: 'Like poles repel in magnetism.',
-            },
-            {
-              prompt: 'What shape does a magnetic field take around a bar magnet?',
-              answer: 'Loops from north to south',
-              explanation: 'Field lines curve from N to S outside the magnet.',
-            },
+          name: 'Electric and magnetic forces',
+          items: [
+            { label: 'Electric force', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:electric-and-magnetic-forces/v/electric-force' },
+            { label: 'Magnetic force', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:electric-and-magnetic-forces/v/magnetic-force' },
+            { label: 'Electric and magnetic forces', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:electric-and-magnetic-forces/a/electromagnetism' },
+            { label: 'Understand: electric and magnetic forces', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:electric-and-magnetic-forces/e/understand-magnetic-forces', question: { prompt: 'True or False: Gravity is a contact force.', answer: 'False', explanation: 'Gravity acts at a distance, no contact required.' } },
+            { label: 'Apply: electric and magnetic forces', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:electric-and-magnetic-forces/e/understand-electromagnetism', question: { prompt: 'True or False: Gravity is a contact force.', answer: 'False', explanation: 'Gravity acts at a distance, no contact required.' } },
           ],
         },
         {
-          name: 'Electromagnets',
-          description: 'Current-carrying wires produce magnetic fields.',
-          questions: [
-            {
-              prompt: 'How can you make an electromagnet stronger?',
-              answer: 'Add more coils or more current',
-              explanation: 'More turns and more current increase field strength.',
-            },
-            {
-              prompt: 'Name a device that uses an electromagnet.',
-              answer: 'A scrapyard crane (or motor, or doorbell)',
-              explanation: 'Many devices depend on electromagnets.',
-            },
-          ],
-        },
-        {
-          name: 'Fields and Energy',
-          description: 'Fields store energy that can do work on objects.',
-          questions: [
-            {
-              prompt: 'Why does a dropped ball gain kinetic energy?',
-              answer: 'Gravity field does work on it',
-              explanation: 'Gravitational potential energy becomes kinetic.',
-            },
-            {
-              prompt: 'What happens to two magnets when you push them together against repulsion?',
-              answer: 'Energy is stored in the field',
-              explanation: 'You do work against the field, storing energy.',
-            },
+          name: 'Activity: How do bees pick up pollen in flowers?',
+          items: [
+            { label: 'Activity: How do bees pick up pollen in flowers?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:non-contact-interactions/x1baed5db7c1bb50b:activity-how-do-bees-pick-up-pollen-in-flowers/a/activity-how-do-bees-pick-up-pollen-in-flowers' },
           ],
         },
       ],
     },
     {
-      name: 'Physics: Energy',
-      description: 'Study kinetic and potential energy, transfers, and the principle of energy conservation.',
+      name: 'Physics - Energy',
       lessons: [
         {
-          name: 'Kinetic Energy',
-          description: 'Moving objects have kinetic energy proportional to mass and speed squared.',
-          questions: [
-            {
-              prompt: 'If speed doubles, what happens to kinetic energy?',
-              answer: 'It quadruples',
-              explanation: 'KE = (1/2)mv^2, and v^2 grows by a factor of 4.',
-            },
-            {
-              prompt: 'Which has more kinetic energy: a walking adult or a sprinting child of equal mass?',
-              answer: 'The sprinting child',
-              explanation: 'Higher speed means more kinetic energy.',
-            },
+          name: 'Kinetic energy',
+          items: [
+            { label: 'Kinetic energy', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:kinetic-energy/v/ms-kinetic-energy' },
+            { label: 'Understand: kinetic energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:kinetic-energy/e/understand-kinetic-energy', question: { prompt: 'A book on a high shelf has what kind of energy?', answer: 'Gravitational potential energy', explanation: 'It will convert to kinetic if it falls.' } },
+            { label: 'Apply: kinetic energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:kinetic-energy/e/apply-kineticenergy', question: { prompt: 'A book on a high shelf has what kind of energy?', answer: 'Gravitational potential energy', explanation: 'It will convert to kinetic if it falls.' } },
           ],
         },
         {
-          name: 'Potential Energy',
-          description: 'Stored energy depends on position or configuration.',
-          questions: [
-            {
-              prompt: 'Where does a roller coaster have the most gravitational potential energy?',
-              answer: 'At the highest point',
-              explanation: 'Higher position means greater potential energy.',
-            },
-            {
-              prompt: 'A stretched rubber band stores what kind of potential energy?',
-              answer: 'Elastic potential energy',
-              explanation: 'Elastic energy comes from stretching or compressing.',
-            },
+          name: 'Potential energy',
+          items: [
+            { label: 'Potential energy', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:potential-energy/v/ms-potential-energy' },
+            { label: 'Understand: potential energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:potential-energy/e/understand-potential-energy', question: { prompt: 'A book on a high shelf has what kind of energy?', answer: 'Gravitational potential energy', explanation: 'It will convert to kinetic if it falls.' } },
+            { label: 'Apply: potential energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:potential-energy/e/apply-potentialenergy', question: { prompt: 'A book on a high shelf has what kind of energy?', answer: 'Gravitational potential energy', explanation: 'It will convert to kinetic if it falls.' } },
           ],
         },
         {
-          name: 'Conservation of Energy',
-          description: 'Energy changes form but total energy stays the same.',
-          questions: [
-            {
-              prompt: 'As a pendulum swings down, what happens to its energy?',
-              answer: 'Potential becomes kinetic',
-              explanation: 'Energy converts between forms but total is constant.',
-            },
-            {
-              prompt: 'Why does a bouncing ball eventually stop?',
-              answer: 'Energy leaves as heat and sound',
-              explanation: 'Energy is still conserved; it transfers out of the ball.',
-            },
+          name: 'Conservation of energy',
+          items: [
+            { label: 'Conservation of energy', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:conservation-of-energy/v/ms-conservation-of-energy' },
+            { label: 'Understand: conservation of energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:conservation-of-energy/e/understand-changes-in-energy', question: { prompt: 'Define in one sentence: Understand: conservation of energy.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
+            { label: 'Apply: conservation of energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:conservation-of-energy/e/apply-changes-in-energy', question: { prompt: 'Define in one sentence: Apply: conservation of energy.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Energy Transfer',
-          description: 'Energy moves by conduction, convection, radiation, or waves.',
-          questions: [
-            {
-              prompt: 'How does the Sun transfer energy to Earth?',
-              answer: 'By radiation',
-              explanation: 'Light and infrared waves carry energy across space.',
-            },
-            {
-              prompt: 'Why does a metal spoon get hot in soup?',
-              answer: 'By conduction',
-              explanation: 'Heat transfers through the spoon by particle contact.',
-            },
-          ],
-        },
-        {
-          name: 'Efficiency and Thermal Energy',
-          description: 'Real systems lose some energy as heat.',
-          questions: [
-            {
-              prompt: 'Why are most machines less than 100 percent efficient?',
-              answer: 'Friction and heat loss reduce output',
-              explanation: 'Some energy always leaves as thermal energy.',
-            },
-            {
-              prompt: 'How can efficiency be improved in a machine?',
-              answer: 'Reduce friction (oil, better bearings)',
-              explanation: 'Less friction means less wasted heat.',
-            },
+          name: 'Activity: Why doesn\'t a basketball bounce forever?',
+          items: [
+            { label: 'Activity: Why doesn\'t a basketball bounce forever?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:energy/x1baed5db7c1bb50b:unit-3-phenomenon-based-activities/a/activity-why-doesn-t-a-basketball-bounce-forever' },
           ],
         },
       ],
     },
     {
-      name: 'Physics: Waves',
-      description: 'Learn wave properties and how sound, light, and electromagnetic waves carry information.',
+      name: 'Physics - Waves',
       lessons: [
         {
-          name: 'Wave Properties',
-          description: 'Waves have amplitude, wavelength, frequency, and speed.',
-          questions: [
-            {
-              prompt: 'What does a higher frequency wave sound like?',
-              answer: 'A higher pitch',
-              explanation: 'Frequency determines pitch for sound waves.',
-            },
-            {
-              prompt: 'How are wavelength and frequency related?',
-              answer: 'Inversely',
-              explanation: 'Higher frequency means shorter wavelength.',
-            },
+          name: 'Wave properties',
+          items: [
+            { label: 'Wave properties', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:wave-properties/v/wave-properties' },
+            { label: 'Understand: wave properties', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:wave-properties/e/understand-wave-properties', question: { prompt: 'Define in one sentence: Understand: wave properties.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
+            { label: 'Apply: wave properties', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:wave-properties/e/apply-wave-properties', question: { prompt: 'Define in one sentence: Apply: wave properties.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Transverse and Longitudinal Waves',
-          description: 'Transverse waves move sideways; longitudinal waves move in compressions.',
-          questions: [
-            {
-              prompt: 'What type of wave is sound?',
-              answer: 'Longitudinal',
-              explanation: 'Sound travels as compressions in a medium.',
-            },
-            {
-              prompt: 'Is a wave on a rope longitudinal or transverse?',
-              answer: 'Transverse',
-              explanation: 'The rope moves perpendicular to the wave direction.',
-            },
+          name: 'Sound waves',
+          items: [
+            { label: 'Sound waves', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:sound-waves/v/sound-waves' },
+            { label: 'Understand: sound waves', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:sound-waves/e/understand-sound-waves', question: { prompt: 'Through which medium does sound travel fastest?', answer: 'Solids (then liquids, then gases)', explanation: 'Tightly packed particles transmit vibrations quickly.' } },
+            { label: 'Human ear', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:sound-waves/v/human-ear-structure-working' },
           ],
         },
         {
-          name: 'Sound Waves',
-          description: 'Sound needs a medium and travels as pressure changes.',
-          questions: [
-            {
-              prompt: 'Why does sound travel faster in water than in air?',
-              answer: 'Water particles are closer together',
-              explanation: 'Denser medium transmits vibrations faster.',
-            },
-            {
-              prompt: 'What makes a sound louder?',
-              answer: 'Greater amplitude',
-              explanation: 'Amplitude controls sound intensity.',
-            },
+          name: 'Electromagnetic waves',
+          items: [
+            { label: 'The electromagnetic spectrum', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:electromagnetic-waves/v/the-electromagnetic-spectrum' },
+            { label: 'Electromagnetic waves and matter', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:electromagnetic-waves/v/electromagnetic-waves-and-matter' },
+            { label: 'Electromagnetic waves', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:electromagnetic-waves/a/electromagnetic-waves' },
+            { label: 'Understand: electromagnetic waves', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:electromagnetic-waves/e/understand-absorption-and-reflection', question: { prompt: 'What is the approximate speed of light in a vacuum?', answer: 'About 3 x 10^8 m/s (300,000 km/s)', explanation: 'Nothing with mass can travel faster.' } },
+            { label: 'Apply: electromagnetic waves', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:electromagnetic-waves/e/apply-absorption-and-reflection', question: { prompt: 'What is the approximate speed of light in a vacuum?', answer: 'About 3 x 10^8 m/s (300,000 km/s)', explanation: 'Nothing with mass can travel faster.' } },
+            { label: 'Human eye', type: 'video', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:electromagnetic-waves/v/structure-of-human-eye' },
           ],
         },
         {
-          name: 'Light and the EM Spectrum',
-          description: 'Light is an electromagnetic wave; many types exist beyond visible.',
-          questions: [
-            {
-              prompt: 'Name one type of electromagnetic wave besides visible light.',
-              answer: 'Radio (or ultraviolet, or X-ray)',
-              explanation: 'EM waves span from radio to gamma rays.',
-            },
-            {
-              prompt: 'Which has shorter wavelengths: ultraviolet or infrared?',
-              answer: 'Ultraviolet',
-              explanation: 'UV sits at higher frequency and shorter wavelength than infrared.',
-            },
-          ],
-        },
-        {
-          name: 'Digital Signals and Communication',
-          description: 'Waves can carry information in digital pulses.',
-          questions: [
-            {
-              prompt: 'Why are digital signals more reliable than analog ones over long distances?',
-              answer: 'They are less affected by noise',
-              explanation: 'On/off patterns are easier to recover.',
-            },
-            {
-              prompt: 'What waves do Wi-Fi devices use?',
-              answer: 'Radio waves',
-              explanation: 'Wi-Fi uses high-frequency radio signals.',
-            },
+          name: 'Activity: How can light interactions be used to create art?',
+          items: [
+            { label: 'Activity: How can light interactions be used to create art?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:waves/x1baed5db7c1bb50b:activity-how-can-light-interactions-be-used-to-create-art/a/activity-how-can-light-interactions-be-used-to-create-art' },
           ],
         },
       ],
     },
     {
-      name: 'Biology: Cells and Organisms',
-      description: 'Examine cell structure, levels of organization, and how body systems work together.',
+      name: 'Physics - Explore physics through simulations',
       lessons: [
         {
-          name: 'Cell Theory',
-          description: 'All living things are made of cells; cells come from cells.',
-          questions: [
-            {
-              prompt: 'What are the three main points of cell theory?',
-              answer: 'Cells are life units, all life is cells, cells come from cells',
-              explanation: 'These principles define cell theory.',
-            },
-            {
-              prompt: 'Are viruses considered alive under cell theory?',
-              answer: 'No',
-              explanation: 'Viruses are not cells and cannot reproduce alone.',
-            },
+          name: 'Introduction to simulation-based learning',
+          items: [
+            { label: 'Introduction to simulation-based learning', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:explore-physics-through-simulations/x1baed5db7c1bb50b:introduction-to-simulation-based-learning/a/introduction-to-simulation-based-learning' },
           ],
         },
         {
-          name: 'Prokaryotes vs Eukaryotes',
-          description: 'Eukaryotic cells have a nucleus; prokaryotes do not.',
-          questions: [
-            {
-              prompt: 'Which type of cell has a membrane-bound nucleus?',
-              answer: 'Eukaryotic',
-              explanation: 'Plants, animals, and fungi have eukaryotic cells.',
-            },
-            {
-              prompt: 'Name a prokaryotic organism.',
-              answer: 'A bacterium',
-              explanation: 'Bacteria are prokaryotic.',
-            },
-          ],
-        },
-        {
-          name: 'Organelles and Their Jobs',
-          description: 'Each organelle has a specific function in the cell.',
-          questions: [
-            {
-              prompt: 'What organelle produces energy in the cell?',
-              answer: 'Mitochondria',
-              explanation: 'Mitochondria convert glucose into ATP.',
-            },
-            {
-              prompt: 'What does the nucleus store?',
-              answer: 'Genetic information (DNA)',
-              explanation: 'The nucleus is the control center of the cell.',
-            },
-          ],
-        },
-        {
-          name: 'Levels of Organization',
-          description: 'Cells form tissues, organs, and systems.',
-          questions: [
-            {
-              prompt: 'Put these in order: cells, tissues, organs, systems.',
-              answer: 'Cells -> tissues -> organs -> systems',
-              explanation: 'Each level is made of the previous one.',
-            },
-            {
-              prompt: 'Is the heart an organ or a tissue?',
-              answer: 'An organ',
-              explanation: 'The heart contains multiple tissue types.',
-            },
-          ],
-        },
-        {
-          name: 'Body Systems Working Together',
-          description: 'Systems like circulatory and respiratory coordinate to keep the body alive.',
-          questions: [
-            {
-              prompt: 'Which system carries oxygen to cells?',
-              answer: 'Circulatory system',
-              explanation: 'Blood transports oxygen from lungs to tissues.',
-            },
-            {
-              prompt: 'Why must respiratory and circulatory systems work together?',
-              answer: 'Oxygen must be absorbed and then delivered',
-              explanation: 'Lungs absorb oxygen; blood delivers it.',
-            },
+          name: 'Explore conservation of energy through simulations',
+          items: [
+            { label: 'Conservation of energy', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:explore-physics-through-simulations/x1baed5db7c1bb50b:explore-conservation-of-energy-through-simulations/a/changes-in-energy' },
+            { label: 'PhET challenge: Conservation of energy', type: 'exercise', href: '/science/ms-physics/x1baed5db7c1bb50b:explore-physics-through-simulations/x1baed5db7c1bb50b:explore-conservation-of-energy-through-simulations/e/phet-simulation-exploring-conservation-of-energy', question: { prompt: 'Define in one sentence: PhET challenge: Conservation of energy.', answer: 'A short definition that names the physics quantity and its meaning.', explanation: 'Use the related video for help.' } },
           ],
         },
       ],
     },
     {
-      name: 'Biology: Matter and Energy in Organisms',
-      description: 'Trace how organisms take in matter and transform energy through photosynthesis and respiration.',
+      name: 'Physics - Teacher resources',
       lessons: [
         {
-          name: 'Photosynthesis',
-          description: 'Plants convert sunlight, water, and carbon dioxide into sugar and oxygen.',
-          questions: [
-            {
-              prompt: 'What gas is released during photosynthesis?',
-              answer: 'Oxygen',
-              explanation: 'Oxygen is a product of photosynthesis.',
-            },
-            {
-              prompt: 'What is the main energy source for photosynthesis?',
-              answer: 'Sunlight',
-              explanation: 'Light energy powers the chemical reaction.',
-            },
+          name: 'Unit guides',
+          items: [
+            { label: 'How to use our NGSS-aligned unit guides', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:unit-guides/a/how-to-use-our-ngss-aligned-unit-guides' },
+            { label: 'Middle school physics unit guides', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:unit-guides/a/middle-school-physics-unit-guides' },
           ],
         },
         {
-          name: 'Cellular Respiration',
-          description: 'Cells break down glucose to release usable energy.',
-          questions: [
-            {
-              prompt: 'What gas do animals breathe in for respiration?',
-              answer: 'Oxygen',
-              explanation: 'Oxygen is needed to release energy from glucose.',
-            },
-            {
-              prompt: 'What energy molecule is produced in respiration?',
-              answer: 'ATP',
-              explanation: 'ATP powers cellular processes.',
-            },
-          ],
-        },
-        {
-          name: 'Food as Energy and Matter',
-          description: 'Food supplies both chemical energy and building materials.',
-          questions: [
-            {
-              prompt: 'What do body cells build from proteins in food?',
-              answer: 'New proteins (and body tissues)',
-              explanation: 'Amino acids are reused to make structures.',
-            },
-            {
-              prompt: 'Why is glucose important to animals?',
-              answer: 'It provides energy for cells',
-              explanation: 'Glucose is broken down in respiration.',
-            },
-          ],
-        },
-        {
-          name: 'Matter Cycles in Organisms',
-          description: 'Atoms cycle through plants, animals, and decomposers.',
-          questions: [
-            {
-              prompt: 'Where do the carbon atoms in your body come from?',
-              answer: 'Food (from plants and animals)',
-              explanation: 'All carbon traces back through food chains.',
-            },
-            {
-              prompt: 'What role do decomposers play in the carbon cycle?',
-              answer: 'They return carbon to the air and soil',
-              explanation: 'Decomposers break down dead matter.',
-            },
-          ],
-        },
-        {
-          name: 'Energy Pyramids',
-          description: 'Only a small fraction of energy passes to the next trophic level.',
-          questions: [
-            {
-              prompt: 'What percent of energy typically passes up one level?',
-              answer: 'About 10 percent',
-              explanation: 'Most energy is lost as heat at each level.',
-            },
-            {
-              prompt: 'Why are there fewer top predators than producers?',
-              answer: 'Less energy is available at higher levels',
-              explanation: 'Energy pyramids narrow at the top.',
-            },
+          name: 'Hands-on physics activities',
+          items: [
+            { label: 'Introduction to hands-on science activities', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:hands-on-physics-activities/a/introduction-to-hands-on-science-activities' },
+            { label: 'Activity: How can a skydiver fall safely?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:hands-on-physics-activities/a/activity-how-can-a-skydiver-fall-safely' },
+            { label: 'Activity: How do bees pick up pollen in flowers?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:hands-on-physics-activities/a/activity-how-do-bees-pick-up-pollen-in-flowers' },
+            { label: 'Activity: Why doesn\'t a basketball bounce forever?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:hands-on-physics-activities/a/activity-why-doesn-t-a-basketball-bounce-forever' },
+            { label: 'Activity: How can light interactions be used to create art?', type: 'article', href: '/science/ms-physics/x1baed5db7c1bb50b:teacher-resources/x1baed5db7c1bb50b:hands-on-physics-activities/a/activity-how-can-light-interactions-be-used-to-create-art' },
           ],
         },
       ],
     },
     {
-      name: 'Biology: Interactions in Ecosystems',
-      description: 'Model energy flow, competition, symbiosis, and human impacts on ecosystems.',
+      name: 'Biology - Cells and organisms',
       lessons: [
         {
-          name: 'Populations and Communities',
-          description: 'A population is one species; a community is many species.',
-          questions: [
-            {
-              prompt: 'What makes up a population?',
-              answer: 'Members of the same species in one area',
-              explanation: 'Populations share a location and species.',
-            },
-            {
-              prompt: 'What limits how big a population can grow?',
-              answer: 'Resources like food, space, or water',
-              explanation: 'Carrying capacity is set by resources.',
-            },
+          name: 'Cells and organisms',
+          items: [
+            { label: 'Introduction to Middle school biology', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cells-organisms/v/introduction-to-middle-school-biology' },
+            { label: 'Cells and organisms', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cells-organisms/v/ms-cells-and-organisms' },
+            { label: 'Key points: Cells and organisms', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cells-organisms/a/cells-and-organisms' },
+            { label: 'Understand: Cells and organisms', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cells-organisms/e/understand-cells-and-organisms', question: { prompt: 'Briefly explain the main idea of: Understand: Cells and organisms.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Competition and Predation',
-          description: 'Organisms compete for resources or hunt one another.',
-          questions: [
-            {
-              prompt: 'What can happen if two species compete for the same food?',
-              answer: 'One may leave, adapt, or die out',
-              explanation: 'Competition shapes ecosystems.',
-            },
-            {
-              prompt: 'What is a predator-prey relationship?',
-              answer: 'One species eats another',
-              explanation: 'Predators hunt prey for energy.',
-            },
+          name: 'Cell parts and functions',
+          items: [
+            { label: 'Cell parts and their functions', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cell-parts-and-functions/v/cell-parts-and-their-functions' },
+            { label: 'Comparing animal and plant cells', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cell-parts-and-functions/v/comparing-animal-and-plant-cells' },
+            { label: 'Key points: Cell parts and functions', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cell-parts-and-functions/a/cell-parts-and-functions' },
+            { label: 'Understand: cell parts and functions', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cell-parts-and-functions/e/understand-cell-parts-and-functions', question: { prompt: 'Which organelle is called the powerhouse of the cell?', answer: 'Mitochondria', explanation: 'Mitochondria release energy from food during cellular respiration.' } },
+            { label: 'Apply: cell parts and functions', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:cell-parts-and-functions/e/apply-cell-parts-and-functions', question: { prompt: 'Which organelle is called the powerhouse of the cell?', answer: 'Mitochondria', explanation: 'Mitochondria release energy from food during cellular respiration.' } },
           ],
         },
         {
-          name: 'Symbiosis',
-          description: 'Symbiosis includes mutualism, commensalism, and parasitism.',
-          questions: [
-            {
-              prompt: 'Which symbiosis benefits both organisms?',
-              answer: 'Mutualism',
-              explanation: 'Both partners gain from mutualism.',
-            },
-            {
-              prompt: 'What is an example of parasitism?',
-              answer: 'A tick on a deer',
-              explanation: 'One organism benefits while the other is harmed.',
-            },
+          name: 'Activity: Why do plants wilt when they don\'t get enough water?',
+          items: [
+            { label: 'Activity: Why do plants wilt when they don\'t get enough water?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:activity-why-do-plants-wilt-when-they-don-t-get-enough-water/a/activity-why-do-plants-wilt-when-they-don-t-get-enough-water' },
           ],
         },
         {
-          name: 'Biodiversity',
-          description: 'High diversity makes ecosystems more stable.',
-          questions: [
-            {
-              prompt: 'Why is biodiversity important?',
-              answer: 'It helps ecosystems recover from change',
-              explanation: 'Diverse systems are resilient.',
-            },
-            {
-              prompt: 'Name a cause of biodiversity loss.',
-              answer: 'Habitat destruction (or pollution)',
-              explanation: 'Human activities shrink habitats.',
-            },
+          name: 'Organization in the human body',
+          items: [
+            { label: 'Organization in the human body', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:organization-in-the-human-body/v/ms-organization-in-the-human-body' },
+            { label: 'Key points: Organization in the human body', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:organization-in-the-human-body/a/organization-in-the-human-body' },
+            { label: 'Understand: Organization in the human body', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:organization-in-the-human-body/e/understand-organization-in-the-human-body', question: { prompt: 'Which organ pumps blood through the human body?', answer: 'The heart', explanation: 'It is the central organ of the circulatory system.' } },
           ],
         },
         {
-          name: 'Human Impacts',
-          description: 'People change ecosystems through pollution and land use.',
-          questions: [
-            {
-              prompt: 'How does plastic pollution affect ocean life?',
-              answer: 'Animals eat or get tangled in plastic',
-              explanation: 'Plastic harms wildlife and food chains.',
-            },
-            {
-              prompt: 'Name one way to reduce your impact on ecosystems.',
-              answer: 'Recycle, reduce waste, or use less energy',
-              explanation: 'Small actions reduce pollution.',
-            },
+          name: 'Sensory processing and the brain',
+          items: [
+            { label: 'Sensory processing and the brain', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:sensory-processing-and-the-brain/v/ms-sensory-processing-and-the-brain' },
+            { label: 'Key points: Sensory processing and the brain', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:sensory-processing-and-the-brain/a/sensory-processing-and-the-brain' },
+            { label: 'Understand: sensory processing and the brain', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:cells-and-organisms/x0c5bb03129646fd6:sensory-processing-and-the-brain/e/understand-sensory-processing-and-the-brain', question: { prompt: 'Briefly explain the main idea of: Understand: sensory processing and the brain.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
       ],
     },
     {
-      name: 'Biology: Genetics and Evolution',
-      description: 'Study inheritance, variation of traits, natural selection, and the tree of life.',
+      name: 'Biology - Organism growth and reproduction',
       lessons: [
         {
-          name: 'Genes and Inheritance',
-          description: 'Genes on chromosomes pass traits to offspring.',
-          questions: [
-            {
-              prompt: 'What molecule stores genetic information?',
-              answer: 'DNA',
-              explanation: 'DNA carries instructions for traits.',
-            },
-            {
-              prompt: 'How many chromosomes do human body cells have?',
-              answer: '46',
-              explanation: 'We inherit 23 pairs, one from each parent.',
-            },
+          name: 'Sexual and asexual reproduction',
+          items: [
+            { label: 'Sexual and asexual reproduction', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:sexual-and-asexual-reproduction/v/ms-sexual-and-asexual-reproduction' },
+            { label: 'Key points: Sexual and asexual reproduction', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:sexual-and-asexual-reproduction/a/sexual-and-asexual-reproduction' },
+            { label: 'Understand: Sexual and asexual reproduction', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:sexual-and-asexual-reproduction/e/understand-sexual-and-asexual-reproduction', question: { prompt: 'True or False: Sexual reproduction produces offspring genetically identical to the parents.', answer: 'False', explanation: 'Sexual reproduction mixes genes from two parents.' } },
           ],
         },
         {
-          name: 'Variation of Traits',
-          description: 'Mutations and sexual reproduction create variation.',
-          questions: [
-            {
-              prompt: 'How does sexual reproduction create variation?',
-              answer: 'It mixes genes from two parents',
-              explanation: 'Offspring get a unique combination.',
-            },
-            {
-              prompt: 'What is a mutation?',
-              answer: 'A change in DNA',
-              explanation: 'Mutations can create new traits.',
-            },
+          name: 'Animal behavior and offspring success',
+          items: [
+            { label: 'Animal behavior and offspring success', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:animal-behavior-and-offspring-success/v/ms-animal-behavior-and-offspring-success' },
+            { label: 'Apply: animal behavior and offspring success', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:animal-behavior-and-offspring-success/e/apply-animal-behavior-and-offspring-success', question: { prompt: 'Briefly explain the main idea of: Apply: animal behavior and offspring success.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Natural Selection',
-          description: 'Organisms with helpful traits survive and pass them on.',
-          questions: [
-            {
-              prompt: 'Why do fast rabbits survive longer when predators are fast?',
-              answer: 'They escape predation more often',
-              explanation: 'Helpful traits improve survival.',
-            },
-            {
-              prompt: 'Who proposed natural selection as a cause of evolution?',
-              answer: 'Charles Darwin',
-              explanation: 'Darwin observed and described natural selection.',
-            },
+          name: 'Plant reproductive success',
+          items: [
+            { label: 'Plant reproductive success', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:plant-reproductive-success/v/ms-plant-reproductive-success' },
+            { label: 'Key points: Plant reproductive success', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:plant-reproductive-success/a/plant-reproductive-success' },
+            { label: 'Understand: plant reproductive success', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:plant-reproductive-success/e/understand-plant-reproductive-success', question: { prompt: 'True or False: Sexual reproduction produces offspring genetically identical to the parents.', answer: 'False', explanation: 'Sexual reproduction mixes genes from two parents.' } },
+            { label: 'Apply: plant reproductive success', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:plant-reproductive-success/e/apply-plant-reproductive-success', question: { prompt: 'True or False: Sexual reproduction produces offspring genetically identical to the parents.', answer: 'False', explanation: 'Sexual reproduction mixes genes from two parents.' } },
           ],
         },
         {
-          name: 'Evidence for Evolution',
-          description: 'Fossils, DNA, and homologous structures support evolution.',
-          questions: [
-            {
-              prompt: 'Name one type of evidence for evolution.',
-              answer: 'Fossils (or DNA similarities, or homologous structures)',
-              explanation: 'Multiple lines support evolutionary theory.',
-            },
-            {
-              prompt: 'Why do human and whale forelimbs share similar bones?',
-              answer: 'They share a common ancestor',
-              explanation: 'Homologous structures indicate shared ancestry.',
-            },
+          name: 'Organism growth and the environment',
+          items: [
+            { label: 'Organism growth and the environment', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:organism-growth-and-the-environment/v/ms-organism-growth-and-the-environment' },
+            { label: 'Apply: organism growth and the environment', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:organism-growth-and-the-environment/e/apply-organism-growth-and-the-environment', question: { prompt: 'Briefly explain the main idea of: Apply: organism growth and the environment.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Adaptations',
-          description: 'Adaptations are traits that help survive in an environment.',
-          questions: [
-            {
-              prompt: 'Why do polar bears have thick fur?',
-              answer: 'To stay warm in the cold',
-              explanation: 'Fur is an adaptation to the Arctic.',
-            },
-            {
-              prompt: 'Name one adaptation of a cactus.',
-              answer: 'Spines (or thick stem, or deep roots)',
-              explanation: 'Adaptations help cacti survive dry climates.',
-            },
+          name: 'Activity: What causes harmful algae blooms?',
+          items: [
+            { label: 'Activity: What causes harmful algae blooms?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:organism-growth-and-reproduction/x0c5bb03129646fd6:activity-what-causes-harmful-algae-blooms/a/activty-what-causes-harmful-algae-blooms' },
           ],
         },
       ],
     },
     {
-      name: 'Chemistry: Atoms, Matter, and the Periodic Table',
-      description: 'Classify matter, understand atomic structure, and read the periodic table of elements.',
+      name: 'Biology - Matter and energy in organisms',
       lessons: [
         {
-          name: 'Atoms and Elements',
-          description: 'All matter is made of atoms; each element has unique atoms.',
-          questions: [
-            {
-              prompt: 'What subatomic particle has a positive charge?',
-              answer: 'Proton',
-              explanation: 'Protons sit in the nucleus.',
-            },
-            {
-              prompt: 'How many elements are on the periodic table (approximately)?',
-              answer: 'About 118',
-              explanation: 'The modern table has 118 confirmed elements.',
-            },
+          name: 'Photosynthesis in organisms',
+          items: [
+            { label: 'Photosynthesis in organisms', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:photosynthesis-in-organisms/v/ms-photosynthesis-in-organisms' },
+            { label: 'Key points: Photosynthesis in organisms', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:photosynthesis-in-organisms/a/photosynthesis-in-organisms' },
+            { label: 'Understand: photosynthesis in organisms', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:photosynthesis-in-organisms/e/understand-photosynthesis-in-organisms', question: { prompt: 'What two raw materials do plants use during photosynthesis?', answer: 'Carbon dioxide and water', explanation: 'Sunlight provides the energy that converts CO2 + water into glucose and oxygen.' } },
+            { label: 'Apply: photosynthesis in organisms', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:photosynthesis-in-organisms/e/apply-photosynthesis-in-organisms', question: { prompt: 'What two raw materials do plants use during photosynthesis?', answer: 'Carbon dioxide and water', explanation: 'Sunlight provides the energy that converts CO2 + water into glucose and oxygen.' } },
           ],
         },
         {
-          name: 'The Periodic Table',
-          description: 'Elements are arranged by atomic number and repeating properties.',
-          questions: [
-            {
-              prompt: 'What does the atomic number tell you?',
-              answer: 'The number of protons',
-              explanation: 'Atomic number equals proton count.',
-            },
-            {
-              prompt: 'Why are elements in the same column similar?',
-              answer: 'They have the same number of valence electrons',
-              explanation: 'Column (group) members share chemistry.',
-            },
+          name: 'Food and energy in organisms',
+          items: [
+            { label: 'Food and energy in organisms', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:food-and-energy-in-organisms/v/food-and-energy-in-organisms-ms' },
+            { label: 'Key points: Food and energy in organisms', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:food-and-energy-in-organisms/a/food-and-energy-in-organisms' },
+            { label: 'Cellular respiration', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:food-and-energy-in-organisms/v/cellular-respiration-ms' },
+            { label: 'Understand: food and energy in organisms', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:food-and-energy-in-organisms/e/understand-food-and-energy-in-organisms', question: { prompt: 'Briefly explain the main idea of: Understand: food and energy in organisms.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+            { label: 'Apply: food and energy in organisms', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:food-and-energy-in-organisms/e/apply-food-and-energy-in-organisms', question: { prompt: 'Briefly explain the main idea of: Apply: food and energy in organisms.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Compounds and Molecules',
-          description: 'Atoms combine into compounds with new properties.',
-          questions: [
-            {
-              prompt: 'What is the chemical formula for water?',
-              answer: 'H2O',
-              explanation: 'Two hydrogen atoms bond with one oxygen.',
-            },
-            {
-              prompt: 'Is table salt (NaCl) an element or a compound?',
-              answer: 'A compound',
-              explanation: 'NaCl has two different elements bonded.',
-            },
-          ],
-        },
-        {
-          name: 'Pure Substances and Mixtures',
-          description: 'Pure substances have one type; mixtures have multiple.',
-          questions: [
-            {
-              prompt: 'Is sugar dissolved in water a compound or a mixture?',
-              answer: 'A mixture (solution)',
-              explanation: 'The components can be separated.',
-            },
-            {
-              prompt: 'Give an example of a pure substance.',
-              answer: 'Gold (or water, or oxygen gas)',
-              explanation: 'These contain only one type of particle.',
-            },
-          ],
-        },
-        {
-          name: 'Scale of the Atom',
-          description: 'Atoms are extremely small but make up everything.',
-          questions: [
-            {
-              prompt: 'About how many atoms fit across a grain of sand?',
-              answer: 'Many billions',
-              explanation: 'Atoms are far smaller than the visible scale.',
-            },
-            {
-              prompt: 'Which is larger: an atom or a molecule of water?',
-              answer: 'A molecule',
-              explanation: 'Molecules contain multiple atoms.',
-            },
+          name: 'Activity: How can measuring cellular respiration help us reach a fitness goal?',
+          items: [
+            { label: 'Activity: How can measuring cellular respiration help us reach a fitness goal?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-organisms/x0c5bb03129646fd6:unit-3-phenomenon-based-activities/a/activity-how-can-measuring-cellular-respiration-help-us-reach-a-fitness-goal' },
           ],
         },
       ],
     },
     {
-      name: 'Chemistry: States of Matter and Chemical Reactions',
-      description: 'Investigate phase changes, properties of matter, and how atoms rearrange in reactions.',
+      name: 'Biology - Interactions in ecosystems',
       lessons: [
         {
-          name: 'States of Matter and Particles',
-          description: 'Particles move differently in solids, liquids, and gases.',
-          questions: [
-            {
-              prompt: 'How are particles arranged in a solid?',
-              answer: 'Tightly packed and vibrating in place',
-              explanation: 'Solids have fixed positions.',
-            },
-            {
-              prompt: 'How do gas particles behave differently from liquids?',
-              answer: 'They move freely and fill any container',
-              explanation: 'Gas particles have much more space between them.',
-            },
+          name: 'Populations, communities, and ecosystems',
+          items: [
+            { label: 'Populations, communities, and ecosystems', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:populations-communities-and-ecosystems/v/ms-populations-communities-and-ecosystems' },
+            { label: 'Apply: populations, communities, and ecosystems', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:populations-communities-and-ecosystems/e/apply-populations-communities-and-ecosystems', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
           ],
         },
         {
-          name: 'Phase Changes',
-          description: 'Energy causes matter to change between states.',
-          questions: [
-            {
-              prompt: 'What phase change happens when water vapor becomes liquid?',
-              answer: 'Condensation',
-              explanation: 'Condensation is gas turning to liquid.',
-            },
-            {
-              prompt: 'What happens to particle motion when a solid melts?',
-              answer: 'It increases',
-              explanation: 'Particles move more freely as they absorb heat.',
-            },
+          name: 'Resources and population growth',
+          items: [
+            { label: 'Resources and population growth', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:resources-and-population-growth/v/ms-resources-and-population-growth' },
+            { label: 'Key points: Resources and population growth', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:resources-and-population-growth/a/resources-and-population-growth' },
+            { label: 'Understand: Resources and population growth', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:resources-and-population-growth/e/understand-resources-and-population-growth', question: { prompt: 'Briefly explain the main idea of: Understand: Resources and population growth.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+            { label: 'Apply: Resources and population growth', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:resources-and-population-growth/e/apply-resources-and-population-growth', question: { prompt: 'Briefly explain the main idea of: Apply: Resources and population growth.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Chemical Reactions',
-          description: 'Atoms rearrange to form new substances.',
-          questions: [
-            {
-              prompt: 'What is a sign that a chemical reaction happened?',
-              answer: 'New color, gas, or heat',
-              explanation: 'Reactions often create visible changes.',
-            },
-            {
-              prompt: 'Is burning wood a physical or chemical change?',
-              answer: 'Chemical',
-              explanation: 'New substances form during combustion.',
-            },
+          name: 'Ecological interactions',
+          items: [
+            { label: 'Competition, predation, and mutualism', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:ecological-interactions/v/competition-predation-and-mutualism' },
+            { label: 'Competitive, predatory, and mutualistic interactions', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:ecological-interactions/a/competitive-predatory-and-mutualistic-interactions' },
+            { label: 'Understand: ecological interactions', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:ecological-interactions/e/understand-ecological-interactions', question: { prompt: 'Briefly explain the main idea of: Understand: ecological interactions.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+            { label: 'Apply: ecological interactions', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:ecological-interactions/e/apply-ecological-interactions', question: { prompt: 'Briefly explain the main idea of: Apply: ecological interactions.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Conservation of Mass',
-          description: 'In reactions, total mass stays the same.',
-          questions: [
-            {
-              prompt: 'If reactants weigh 20 g and products weigh 20 g, is mass conserved?',
-              answer: 'Yes',
-              explanation: 'Matter is not created or destroyed in reactions.',
-            },
-            {
-              prompt: 'Why must chemical equations be balanced?',
-              answer: 'To show conservation of atoms',
-              explanation: 'Equal atoms appear on both sides.',
-            },
-          ],
-        },
-        {
-          name: 'Endothermic vs Exothermic',
-          description: 'Reactions either absorb or release energy.',
-          questions: [
-            {
-              prompt: 'Is a hand warmer that heats up an endothermic or exothermic reaction?',
-              answer: 'Exothermic',
-              explanation: 'It releases heat.',
-            },
-            {
-              prompt: 'What is endothermic mean?',
-              answer: 'It absorbs energy',
-              explanation: 'Endothermic reactions take in heat.',
-            },
+          name: 'Activity: How do limited resources impact populations that live near us?',
+          items: [
+            { label: 'Activity: How do limited resources impact populations that live near us?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:interactions-in-ecosystems/x0c5bb03129646fd6:activity-how-do-limited-resources-impact-populations-that-live-near-us/a/activity-how-do-limited-resources-impact-populations-that-live-near-us' },
           ],
         },
       ],
     },
     {
-      name: 'Earth and Space: Earth in Space',
-      description: "Explore Earth's place in the solar system, galaxy, and the observable universe.",
+      name: 'Biology - Matter and energy in ecosystems',
       lessons: [
         {
-          name: 'The Solar System',
-          description: 'The Sun and planets orbit together in our solar system.',
-          questions: [
-            {
-              prompt: 'How many planets orbit the Sun?',
-              answer: 'Eight',
-              explanation: 'Mercury through Neptune, with Pluto a dwarf planet.',
-            },
-            {
-              prompt: 'Which planet is closest to the Sun?',
-              answer: 'Mercury',
-              explanation: 'Mercury orbits innermost.',
-            },
+          name: 'Photosynthesis in ecosystems',
+          items: [
+            { label: 'Photosynthesis in ecosystems', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:photosynthesis-in-ecosystems/v/photosynthesis-in-ecosystems-ms' },
+            { label: 'Understand: photosynthesis in ecosystems', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:photosynthesis-in-ecosystems/e/understand-photosynthesis-in-ecosystems', question: { prompt: 'What two raw materials do plants use during photosynthesis?', answer: 'Carbon dioxide and water', explanation: 'Sunlight provides the energy that converts CO2 + water into glucose and oxygen.' } },
           ],
         },
         {
-          name: 'Gravity and Orbits',
-          description: 'Gravity keeps planets and moons in orbit.',
-          questions: [
-            {
-              prompt: 'Why does the Moon orbit Earth?',
-              answer: "Earth's gravity pulls it",
-              explanation: 'Gravity provides the centripetal force.',
-            },
-            {
-              prompt: 'Why do outer planets take longer to orbit the Sun?',
-              answer: 'They travel a larger orbit at lower speed',
-              explanation: 'Greater distance means a longer year.',
-            },
+          name: 'Matter and energy in foodwebs',
+          items: [
+            { label: 'Matter and energy in food webs', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:matter-and-energy-in-foodwebs/v/matter-and-energy-in-food-webs-ms' },
+            { label: 'Worked example: Analyzing an ocean food web', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:matter-and-energy-in-foodwebs/v/worked-example-analyzing-an-ocean-food-web' },
+            { label: 'Worked example: Analyzing a generic food web', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:matter-and-energy-in-foodwebs/v/worked-example-analyzing-a-generic-food-web' },
+            { label: 'Understand: Matter and energy in food webs', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:matter-and-energy-in-foodwebs/e/understand-matter-and-energy-in-food-webs', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
+            { label: 'Apply: Matter and energy in food webs', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:matter-and-energy-in-foodwebs/e/apply-matter-and-energy-in-food-webs', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
           ],
         },
         {
-          name: 'Stars and Galaxies',
-          description: 'Stars form galaxies; the Sun is one star in the Milky Way.',
-          questions: [
-            {
-              prompt: 'What galaxy is our solar system in?',
-              answer: 'The Milky Way',
-              explanation: 'The Milky Way holds our Sun and billions of stars.',
-            },
-            {
-              prompt: 'Are all stars the same size as the Sun?',
-              answer: 'No',
-              explanation: 'Stars vary widely in size and brightness.',
-            },
-          ],
-        },
-        {
-          name: 'The Observable Universe',
-          description: 'The universe contains billions of galaxies.',
-          questions: [
-            {
-              prompt: 'Why can we only observe part of the universe?',
-              answer: 'Light from far objects has not yet reached us',
-              explanation: 'The observable universe is limited by light travel time.',
-            },
-            {
-              prompt: 'What unit measures huge distances in space?',
-              answer: 'Light-years',
-              explanation: 'One light-year is the distance light travels in a year.',
-            },
-          ],
-        },
-        {
-          name: 'Scale of the Universe',
-          description: 'Distances in space are vastly greater than on Earth.',
-          questions: [
-            {
-              prompt: 'How long does sunlight take to reach Earth?',
-              answer: 'About 8 minutes',
-              explanation: 'Light travels the Sun-Earth distance in 8 minutes.',
-            },
-            {
-              prompt: 'Is the Milky Way bigger than our solar system?',
-              answer: 'Yes, much bigger',
-              explanation: 'Galaxies contain billions of stellar systems.',
-            },
+          name: 'Activity: What happens when a food web is disturbed?',
+          items: [
+            { label: 'Activity: What happens when a food web is disturbed?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:matter-and-energy-in-ecosystems/x0c5bb03129646fd6:unit-5-phenomenon-based-activities/a/activity-what-happens-when-a-food-web-is-disturbed' },
           ],
         },
       ],
     },
     {
-      name: 'Earth and Space: Earth-Sun-Moon System',
-      description: 'Explain seasons, lunar phases, eclipses, and tides from orbital geometry.',
+      name: 'Biology - Ecosystems and biodiversity',
       lessons: [
         {
-          name: 'Seasons and Tilt',
-          description: "Earth's axial tilt causes seasonal temperature changes.",
-          questions: [
-            {
-              prompt: 'Why is it summer in the Northern Hemisphere in July?',
-              answer: 'The North Pole tilts toward the Sun',
-              explanation: 'Tilt gives more direct sunlight.',
-            },
-            {
-              prompt: 'What angle is Earth tilt?',
-              answer: 'About 23.5 degrees',
-              explanation: "Earth's axis is tilted 23.5 degrees.",
-            },
+          name: 'Ecosystem dynamics',
+          items: [
+            { label: 'Ecosystem dynamics: Clark\'s nutcrackers and the white bark pine', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:ecosystem-dynamics/v/ecosystem-dynamics-clarks-nutcrackers-and-the-white-bark-pine' },
+            { label: 'Ecosystem dynamics', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:ecosystem-dynamics/a/ecosystem-dynamics' },
+            { label: 'Understand: ecosystem dynamics', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:ecosystem-dynamics/e/understand-ecosystem-dynamics', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
+            { label: 'Apply: ecosystem dynamics', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:ecosystem-dynamics/e/apply-ecosystem-dynamics', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
           ],
         },
         {
-          name: 'Moon Phases',
-          description: 'Phases depend on the relative position of the Sun, Earth, and Moon.',
-          questions: [
-            {
-              prompt: 'How long is one full Moon phase cycle?',
-              answer: 'About 29.5 days',
-              explanation: "A lunar month is the Moon's synodic period.",
-            },
-            {
-              prompt: 'During which phase is the Moon between Earth and Sun?',
-              answer: 'New moon',
-              explanation: 'In a new moon, the far side faces us unlit.',
-            },
+          name: 'Biodiversity and ecosystem health',
+          items: [
+            { label: 'Biodiversity and ecosystem health: a Hawaiian Islands case study', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:biodiversity-and-ecosystem-health/v/biodiversity-and-ecosystem-health-a-hawaiian-islands-case-study' },
+            { label: 'Biodiversity and ecosystem health', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:biodiversity-and-ecosystem-health/a/biodiversity-and-ecosystem-health' },
+            { label: 'Understand: biodiversity and ecosystem health', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:biodiversity-and-ecosystem-health/e/understand-biodiversity-and-ecosystem-health', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
           ],
         },
         {
-          name: 'Eclipses',
-          description: 'Solar eclipses and lunar eclipses occur in specific alignments.',
-          questions: [
-            {
-              prompt: 'What happens during a solar eclipse?',
-              answer: 'The Moon blocks the Sun from Earth',
-              explanation: "The Moon casts a shadow on Earth's surface.",
-            },
-            {
-              prompt: 'When can a lunar eclipse occur?',
-              answer: 'During a full moon when Earth blocks the Sun',
-              explanation: "Earth's shadow falls on the Moon.",
-            },
+          name: 'Activity: What evidence can scientists use to tell if an ecosystem is healthy?',
+          items: [
+            { label: 'Activity: What evidence can scientists use to tell if an ecosystem is healthy?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:activity-what-evidence-can-scientists-use-to-tell-if-an-ecosystem-is-healthy/a/activity-what-evidence-can-scientists-use-to-tell-if-an-ecosystem-is-healthy' },
           ],
         },
         {
-          name: 'Tides',
-          description: 'The Moon and Sun gravity create ocean tides.',
-          questions: [
-            {
-              prompt: 'What primarily causes ocean tides?',
-              answer: "The Moon's gravity",
-              explanation: 'The Moon pulls oceans, creating bulges.',
-            },
-            {
-              prompt: 'How many high tides does a coast typically see each day?',
-              answer: 'About two',
-              explanation: 'Earth rotates through two tidal bulges daily.',
-            },
-          ],
-        },
-        {
-          name: 'Day Length and Latitude',
-          description: 'Day length varies by latitude and season.',
-          questions: [
-            {
-              prompt: 'Why does the Arctic have 24-hour daylight in summer?',
-              answer: 'The pole tilts toward the Sun continuously',
-              explanation: 'The Sun does not set at high latitudes in summer.',
-            },
-            {
-              prompt: 'Which place has nearly equal day and night year-round?',
-              answer: 'The equator',
-              explanation: 'Equatorial regions vary little in day length.',
-            },
+          name: 'Humans and ecosystems',
+          items: [
+            { label: 'Humans and ecosystems: how do vultures provide ecosystem services?', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:humans-and-ecosystems/v/humans-and-ecosystems-how-do-vultures-provide-ecosystem-services' },
+            { label: 'Humans and ecosystems', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:humans-and-ecosystems/a/humans-and-ecosystems' },
+            { label: 'Understand: humans and ecosystems', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:humans-and-ecosystems/e/understand-humans-and-ecosystems', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
+            { label: 'Apply: humans and ecosystems', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:ecosystems-and-biodiversity/x0c5bb03129646fd6:humans-and-ecosystems/e/apply-humans-and-ecosystems', question: { prompt: 'In a food chain, where does the energy originally come from?', answer: 'The Sun', explanation: 'Producers capture sunlight and pass that energy along when consumed.' } },
           ],
         },
       ],
     },
     {
-      name: 'Earth and Space: The Geosphere',
-      description: 'Study rocks, plate tectonics, the rock cycle, and geologic history of Earth.',
+      name: 'Biology - Inheritance and variation',
       lessons: [
         {
-          name: "Earth's Layers",
-          description: 'Earth has crust, mantle, outer core, and inner core.',
-          questions: [
-            {
-              prompt: 'Which layer of Earth is liquid?',
-              answer: 'The outer core',
-              explanation: 'The outer core is molten metal.',
-            },
-            {
-              prompt: 'What is the thinnest layer of Earth?',
-              answer: 'The crust',
-              explanation: 'The crust is a thin outer shell.',
-            },
+          name: 'Chromosomes',
+          items: [
+            { label: 'Chromosomes and genes', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:chromosomes/v/chromosomes-and-genes' },
+            { label: 'Chromosome pairs', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:chromosomes/v/chromosome-pairs' },
+            { label: 'Understand: chromosomes', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:chromosomes/e/understand-chromosomes', question: { prompt: 'Briefly explain the main idea of: Understand: chromosomes.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+            { label: 'Apply: chromosomes', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:chromosomes/e/apply-chromosomes', question: { prompt: 'Briefly explain the main idea of: Apply: chromosomes.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Plate Tectonics',
-          description: 'Earth crust is broken into plates that move slowly.',
-          questions: [
-            {
-              prompt: 'What happens when two plates collide at a convergent boundary?',
-              answer: 'Mountains form or one plate subducts',
-              explanation: 'Colliding plates build mountains or trenches.',
-            },
-            {
-              prompt: 'What type of boundary is the San Andreas Fault?',
-              answer: 'Transform',
-              explanation: 'Plates slide past each other at transforms.',
-            },
+          name: 'Genes, proteins, and traits',
+          items: [
+            { label: 'Genes, proteins, and traits', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:genes-proteins-and-traits/v/genes-proteins-and-traits' },
+            { label: 'Understand: genes, proteins, and traits', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:genes-proteins-and-traits/e/understand-genes-proteins-and-traits', question: { prompt: 'What molecule carries genetic information in living cells?', answer: 'DNA', explanation: 'DNA stores instructions for building proteins.' } },
           ],
         },
         {
-          name: 'The Rock Cycle',
-          description: 'Rocks change between igneous, sedimentary, and metamorphic.',
-          questions: [
-            {
-              prompt: 'What kind of rock forms from cooled magma?',
-              answer: 'Igneous',
-              explanation: 'Igneous rocks cool from molten rock.',
-            },
-            {
-              prompt: 'What process turns sediments into sedimentary rock?',
-              answer: 'Compaction and cementation',
-              explanation: 'Pressure and minerals glue particles together.',
-            },
+          name: 'Mutations',
+          items: [
+            { label: 'Mutations', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:mutations/v/mutations' },
+            { label: 'Apply: mutations', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:mutations/e/apply-mutations', question: { prompt: 'Briefly explain the main idea of: Apply: mutations.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Earthquakes and Volcanoes',
-          description: 'Plate motion causes quakes and volcanic activity.',
-          questions: [
-            {
-              prompt: 'What measures the size of an earthquake?',
-              answer: 'The magnitude (Richter scale)',
-              explanation: 'Magnitude rates the energy released.',
-            },
-            {
-              prompt: 'Why are volcanoes common near plate boundaries?',
-              answer: 'Magma rises where plates interact',
-              explanation: 'Subduction and rifts feed volcanoes.',
-            },
+          name: 'Activity: Why do some mutations cause genetic disorders?',
+          items: [
+            { label: 'Activity: Why do some mutations cause genetic disorders?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:unit-7-phenomenon-based-activities/a/activity-why-do-some-mutations-cause-genetic-disorders' },
           ],
         },
         {
-          name: 'Geologic Time',
-          description: 'Earth is billions of years old, recorded in rocks and fossils.',
-          questions: [
-            {
-              prompt: 'About how old is Earth?',
-              answer: '4.5 billion years',
-              explanation: 'Radioactive dating of rocks gives this age.',
-            },
-            {
-              prompt: 'What do fossils tell us?',
-              answer: 'About past life and environments',
-              explanation: 'Fossils record ancient species and conditions.',
-            },
+          name: 'Reproduction and genetic variation',
+          items: [
+            { label: 'Sexual reproduction and genetic variation', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/v/sexual-reproduction-and-genetic-variation' },
+            { label: 'Genetics vocabulary', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/v/genetics-vocabulary' },
+            { label: 'Worked examples: Punnett squares', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/v/worked-examples-punnett-squares' },
+            { label: 'Genetics vocabulary and Punnett squares', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/a/genetics-vocabulary-and-punnett-squares' },
+            { label: 'Understand: sexual reproduction and genetic variation', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/e/understand-sexual-reproduction-and-genetic-variation', question: { prompt: 'What molecule carries genetic information in living cells?', answer: 'DNA', explanation: 'DNA stores instructions for building proteins.' } },
+            { label: 'Apply: genetics vocabulary', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/e/apply-genetics-vocabulary', question: { prompt: 'What molecule carries genetic information in living cells?', answer: 'DNA', explanation: 'DNA stores instructions for building proteins.' } },
+            { label: 'Apply: Punnett squares', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:reproduction-and-genetic-variation/e/apply-punnett-squares', question: { prompt: 'Briefly explain the main idea of: Apply: Punnett squares.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+          ],
+        },
+        {
+          name: 'Activity: Why do puppies in the same litter look different?',
+          items: [
+            { label: 'Activity: Why do puppies in the same litter look different?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:inheritance-and-variation/x0c5bb03129646fd6:activity-why-do-puppies-in-the-same-litter-look-different/a/activity-why-do-puppies-in-the-same-litter-look-different' },
           ],
         },
       ],
     },
     {
-      name: 'Earth and Space: Earth and Society',
-      description: 'Evaluate natural resources, hazards, climate change, and human impact on the planet.',
+      name: 'Biology - Evolution',
       lessons: [
         {
-          name: 'Natural Resources',
-          description: 'Resources include water, minerals, soil, and energy sources.',
-          questions: [
-            {
-              prompt: 'What is a renewable resource?',
-              answer: 'One that replenishes naturally',
-              explanation: 'Wind and solar are renewable.',
-            },
-            {
-              prompt: 'Name a nonrenewable energy source.',
-              answer: 'Coal (or oil, or natural gas)',
-              explanation: 'Fossil fuels take millions of years to form.',
-            },
+          name: 'Evolution and common ancestry',
+          items: [
+            { label: 'Evolution', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evolution-and-common-ancestry/v/evolution' },
+            { label: 'Common ancestry and evolutionary trees', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evolution-and-common-ancestry/v/evolutionary-trees' },
+            { label: 'Understand: evolution and common ancestry', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evolution-and-common-ancestry/e/understand-evolution-and-common-ancestry', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
+            { label: 'Apply: evolutionary trees', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evolution-and-common-ancestry/e/apply-evolutionary-trees', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
           ],
         },
         {
-          name: 'Natural Hazards',
-          description: 'Floods, storms, and quakes threaten communities.',
-          questions: [
-            {
-              prompt: 'How can cities prepare for earthquakes?',
-              answer: 'Build flexible structures and warn residents',
-              explanation: 'Engineering reduces damage and deaths.',
-            },
-            {
-              prompt: 'What is the difference between weather and climate?',
-              answer: 'Weather is short term; climate is long term',
-              explanation: 'Climate averages decades of weather.',
-            },
+          name: 'The fossil record',
+          items: [
+            { label: 'Fossils', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:the-fossil-record/v/fossils' },
+            { label: 'Earth\'s fossil record', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:the-fossil-record/v/earth-s-fossil-record' },
+            { label: 'Understand: the fossil record', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:the-fossil-record/e/understand-the-fossil-record', question: { prompt: 'Briefly explain the main idea of: Understand: the fossil record.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+            { label: 'Apply: the fossil record', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:the-fossil-record/e/apply-the-fossil-record', question: { prompt: 'Briefly explain the main idea of: Apply: the fossil record.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
           ],
         },
         {
-          name: 'Climate Change',
-          description: 'Human greenhouse gas emissions warm the planet.',
-          questions: [
-            {
-              prompt: 'What gas is the main driver of recent climate change?',
-              answer: 'Carbon dioxide',
-              explanation: 'CO2 from burning fuels traps heat.',
-            },
-            {
-              prompt: 'What are two impacts of climate change?',
-              answer: 'Rising sea levels and more extreme weather',
-              explanation: 'Warming disrupts many Earth systems.',
-            },
+          name: 'Evidence of evolution: anatomy',
+          items: [
+            { label: 'Evidence of evolution: anatomy', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evidence-of-evolution-anatomy/v/evidence-of-evolution-anatomy' },
+            { label: 'Understand: anatomical evidence of evolution', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evidence-of-evolution-anatomy/e/understand-anatomical-evidence-of-evolution', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
+            { label: 'Apply: anatomical evidence of evolution', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evidence-of-evolution-anatomy/e/apply-anatomical-evidence-of-evolution', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
           ],
         },
         {
-          name: 'Human Impact',
-          description: 'Pollution, deforestation, and overuse change Earth systems.',
-          questions: [
-            {
-              prompt: 'How does deforestation affect the atmosphere?',
-              answer: 'It raises CO2 since trees absorb less',
-              explanation: 'Trees store carbon; removing them releases it.',
-            },
-            {
-              prompt: 'Name one way to reduce plastic pollution.',
-              answer: 'Use reusable bottles (or recycle)',
-              explanation: 'Less single-use plastic reduces waste.',
-            },
+          name: 'Activity: How can we use skeletons and fossils to understand whale evolution?',
+          items: [
+            { label: 'Activity: How can we use skeletons and fossils to understand whale evolution?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:activity-how-can-we-use-skeletons-and-fossils-to-understand-whale-evolution/a/activity-how-can-we-use-skeletons-and-fossils-to-understand-whale-evolution' },
           ],
         },
         {
-          name: 'Sustainability',
-          description: 'Sustainability balances resource use with preservation.',
-          questions: [
-            {
-              prompt: 'What does sustainable mean?',
-              answer: 'Able to continue without harm',
-              explanation: 'Sustainable practices protect future resources.',
-            },
-            {
-              prompt: 'Name a sustainable energy source.',
-              answer: 'Solar (or wind, or hydro)',
-              explanation: 'These renewable sources produce little pollution.',
-            },
+          name: 'Evidence of evolution: embryology',
+          items: [
+            { label: 'Evidence of evolution: embryology', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evidence-of-evolution-embryology/v/evidence-of-evolution-embryology' },
+            { label: 'Apply: embryology and evolution', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:evolution/x0c5bb03129646fd6:evidence-of-evolution-embryology/e/apply-embryology-and-evolution', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Biology - Natural and artificial selection',
+      lessons: [
+        {
+          name: 'Natural selection',
+          items: [
+            { label: 'Natural selection in peppered moths', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:natural-selection/v/natural-selection-in-peppered-moths' },
+            { label: 'Key points: Natural selection', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:natural-selection/a/natural-selection' },
+            { label: 'Understand: natural selection', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:natural-selection/e/understand-natural-selection-ms', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
+          ],
+        },
+        {
+          name: 'Adaptation and environmental change',
+          items: [
+            { label: 'Environmental change and adaptation in Galápagos finches', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:adaptation-and-environmental-change/v/environmental-change-and-adaptation-in-galapagos-finches' },
+            { label: 'Adaptation and environmental change', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:adaptation-and-environmental-change/a/adaptation-and-environmental-change' },
+            { label: 'PhET simulation: Explore natural selection', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:adaptation-and-environmental-change/a/phet-simulation-article-exploring-natural-selection' },
+            { label: 'Apply: adaptation and environmental change', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:adaptation-and-environmental-change/e/apply-adaptation-and-environmental-change', question: { prompt: 'Briefly explain the main idea of: Apply: adaptation and environmental change.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+          ],
+        },
+        {
+          name: 'Artificial selection',
+          items: [
+            { label: 'Artificial selection and domestication', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:artificial-selection/v/artificial-selection-and-domestication' },
+            { label: 'Key points: Artificial selection', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:artificial-selection/a/artificial-selection' },
+            { label: 'Understand: Artificial selection', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:natural-and-artificial-selection/x0c5bb03129646fd6:artificial-selection/e/understand-artificial-selection', question: { prompt: 'Briefly explain the main idea of: Understand: Artificial selection.', answer: 'A short answer that names the key concept and gives one supporting detail.', explanation: 'Use the lesson video as a guide.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Biology - Explore biology through simulations',
+      lessons: [
+        {
+          name: 'Introduction to simulation-based learning',
+          items: [
+            { label: 'Introduction to simulation-based exercises', type: 'video', href: '/science/ms-biology/x0c5bb03129646fd6:explore-biology-through-simulations-ms-bio/x0c5bb03129646fd6:introduction-to-simulation-based-learning/v/introduction-to-simulation-based-exercises' },
+            { label: 'Introduction to simulation-based learning', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:explore-biology-through-simulations-ms-bio/x0c5bb03129646fd6:introduction-to-simulation-based-learning/a/introduction-to-simulation-based-learning' },
+          ],
+        },
+        {
+          name: 'Explore natural selection through simulations',
+          items: [
+            { label: 'PhET simulation: Explore natural selection', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:explore-biology-through-simulations-ms-bio/x0c5bb03129646fd6:explore-natural-selection-through-simulations/a/phet-simulation-article-exploring-natural-selection' },
+            { label: 'PhET challenge: Natural selection', type: 'exercise', href: '/science/ms-biology/x0c5bb03129646fd6:explore-biology-through-simulations-ms-bio/x0c5bb03129646fd6:explore-natural-selection-through-simulations/e/phet-simulation-exploring-natural-selection-ms-bio', question: { prompt: 'Who proposed the theory of evolution by natural selection?', answer: 'Charles Darwin', explanation: 'Darwin published On the Origin of Species in 1859.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Biology - Teacher resources',
+      lessons: [
+        {
+          name: 'Unit guides',
+          items: [
+            { label: 'How to use our NGSS-aligned unit guides', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:unit-guides/a/how-to-use-our-ngss-aligned-unit-guides' },
+            { label: 'Middle school biology unit guides', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:unit-guides/a/ngss-ms-biology-unit-guides' },
+          ],
+        },
+        {
+          name: 'Hands-on biology activities',
+          items: [
+            { label: 'Introduction to hands-on science activities', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/introduction-to-hands-on-science-activities' },
+            { label: 'Activity: Why do plants wilt when they don\'t get enough water?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-why-do-plants-wilt-when-they-don-t-get-enough-water' },
+            { label: 'Activity: What causes harmful algae blooms?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activty-what-causes-harmful-algae-blooms' },
+            { label: 'Activity: How can measuring cellular respiration help us reach a fitness goal?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-how-can-measuring-cellular-respiration-help-us-reach-a-fitness-goal' },
+            { label: 'Activity: How do limited resources impact populations that live near us?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-how-do-limited-resources-impact-populations-that-live-near-us' },
+            { label: 'Activity: What happens when a food web is disturbed?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-what-happens-when-a-food-web-is-disturbed' },
+            { label: 'Activity: What evidence can scientists use to tell if an ecosystem is healthy?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-what-evidence-can-scientists-use-to-tell-if-an-ecosystem-is-healthy' },
+            { label: 'Activity: Why do some mutations cause genetic disorders?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-why-do-some-mutations-cause-genetic-disorders' },
+            { label: 'Activity: Why do puppies in the same litter look different?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-why-do-puppies-in-the-same-litter-look-different' },
+            { label: 'Activity: How can we use skeletons and fossils to understand whale evolution?', type: 'article', href: '/science/ms-biology/x0c5bb03129646fd6:teacher-resources/x0c5bb03129646fd6:hands-on-biology-activities/a/activity-how-can-we-use-skeletons-and-fossils-to-understand-whale-evolution' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Chemistry - Classifying matter',
+      lessons: [
+        {
+          name: 'Introduction to middle school chemistry',
+          items: [
+            { label: 'Introduction to middle school chemistry', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:intro-to-ms-chemistry/v/introduction-to-middle-school-chemistry' },
+          ],
+        },
+        {
+          name: 'Elements and atoms',
+          items: [
+            { label: 'Elements', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/v/elements' },
+            { label: 'Atoms', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/v/atoms' },
+            { label: 'Understand: elements and atoms', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/e/understand-elements-and-atoms', question: { prompt: 'What is the chemical symbol for sodium?', answer: 'Na', explanation: 'From its Latin name, natrium.' } },
+            { label: 'The periodic table', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/v/the-periodic-table' },
+            { label: 'Learn and try: Elements, atoms, and the periodic table', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/a/elements-atoms-and-the-periodic-table' },
+            { label: 'Understand: the periodic table', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/e/understand-the-periodic-table', question: { prompt: 'What does the atomic number of an element equal?', answer: 'The number of protons', explanation: 'It also equals electrons in a neutral atom.' } },
+            { label: 'Apply: the periodic table', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:elements-and-atoms/e/apply-periodic-table', question: { prompt: 'What does the atomic number of an element equal?', answer: 'The number of protons', explanation: 'It also equals electrons in a neutral atom.' } },
+          ],
+        },
+        {
+          name: 'Compounds',
+          items: [
+            { label: 'Compounds and chemical formulas', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:compounds/v/compounds-and-chemical-formulas' },
+            { label: 'Molecules, crystals, and diatomic elements', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:compounds/v/molecules-crystals-and-diatomic-elements' },
+            { label: 'Molecules, compounds, and chemical formulas', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:compounds/a/compounds-and-chemical-formulas' },
+            { label: 'Understand: compounds and chemical formulas', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:compounds/e/understand-compounds-and-chemical-formulas', question: { prompt: 'How many atoms total are in one molecule of water (H2O)?', answer: '3 atoms (2 hydrogen, 1 oxygen)', explanation: 'Subscripts in formulas count atoms.' } },
+            { label: 'Apply: compounds and chemical formulas', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:compounds/e/apply-compounds-and-chemical-formulas', question: { prompt: 'How many atoms total are in one molecule of water (H2O)?', answer: '3 atoms (2 hydrogen, 1 oxygen)', explanation: 'Subscripts in formulas count atoms.' } },
+          ],
+        },
+        {
+          name: 'Mixtures',
+          items: [
+            { label: 'Types of mixtures', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:mixtures/v/types-of-mixtures-ms' },
+            { label: 'Properties of homogeneous mixtures', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:mixtures/v/properties-of-homogeneous-mixtures' },
+            { label: 'Mixtures', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:mixtures/a/mixtures' },
+            { label: 'Understand: mixtures', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:mixtures/e/understand-mixtures', question: { prompt: 'In salt water, what is the solute and what is the solvent?', answer: 'Salt is the solute; water is the solvent.', explanation: 'The solute dissolves into the solvent.' } },
+            { label: 'Apply: mixtures', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:classifying-matter/xc370bc422b7f75fc:mixtures/e/apply-mixtures', question: { prompt: 'In salt water, what is the solute and what is the solvent?', answer: 'Salt is the solute; water is the solvent.', explanation: 'The solute dissolves into the solvent.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Chemistry - Physical properties of matter',
+      lessons: [
+        {
+          name: 'Intrinsic and extrinsic properties',
+          items: [
+            { label: 'Physical properties', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/v/physical-properties' },
+            { label: 'Understand: physical properties and changes', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/e/understand-physical-properties-extrinsic-intrinsic', question: { prompt: 'True or False: Melting ice is a chemical change.', answer: 'False', explanation: 'Melting changes state but not the substance, so it is physical.' } },
+            { label: 'Physical changes', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/v/physical-changes' },
+            { label: 'Learn and try: Physical properties and changes', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/a/physical-properties-and-changes' },
+            { label: 'Apply: physical properties and changes', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/e/apply-physical-properties-changes', question: { prompt: 'True or False: Melting ice is a chemical change.', answer: 'False', explanation: 'Melting changes state but not the substance, so it is physical.' } },
+            { label: 'Temperature and Celsius', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/v/temperature-and-celsius' },
+            { label: 'Temperature', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/a/temperature' },
+            { label: 'Understand: temperature', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:intrinsic-and-extrinsic-properties/e/understand-temperature', question: { prompt: 'True or False: Temperature measures the average kinetic energy of particles.', answer: 'True', explanation: 'Hotter substances have faster-moving particles.' } },
+          ],
+        },
+        {
+          name: 'States of matter and phase changes',
+          items: [
+            { label: 'States of matter', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:states-of-matter-and-phase-changes/v/states-of-matter-ms' },
+            { label: 'Phase changes', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:states-of-matter-and-phase-changes/v/phase-changes' },
+            { label: 'States of matter and phase changes', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:states-of-matter-and-phase-changes/a/states-of-matter-and-phase-changes' },
+            { label: 'Understand: states of matter', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:states-of-matter-and-phase-changes/e/understand-states-of-matter', question: { prompt: 'Name the three common states of matter.', answer: 'Solid, liquid, gas', explanation: 'Plasma is a fourth state.' } },
+            { label: 'Understand: phase changes', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:states-of-matter-and-phase-changes/e/understand-phase-changes', question: { prompt: 'On the pH scale, what number is neutral?', answer: '7', explanation: 'Below 7 is acidic, above 7 is basic.' } },
+            { label: 'Apply: phase changes', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:states-of-matter-and-phase-changes/e/apply-phase-changes', question: { prompt: 'On the pH scale, what number is neutral?', answer: '7', explanation: 'Below 7 is acidic, above 7 is basic.' } },
+          ],
+        },
+        {
+          name: 'Density',
+          items: [
+            { label: 'Density (conceptual)', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:density/v/density-conceptual' },
+            { label: 'Density equation', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:density/v/density-equation' },
+            { label: 'Density', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:density/a/density' },
+            { label: 'Understand: density', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:density/e/understand-density', question: { prompt: 'A 20 g object has a volume of 4 cm3. What is its density?', answer: '5 g/cm3', explanation: 'Density = mass / volume.' } },
+            { label: 'Apply: density', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:physical-properties-of-matter/xc370bc422b7f75fc:density/e/apply-density', question: { prompt: 'A 20 g object has a volume of 4 cm3. What is its density?', answer: '5 g/cm3', explanation: 'Density = mass / volume.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Chemistry - Chemical changes',
+      lessons: [
+        {
+          name: 'Chemical changes',
+          items: [
+            { label: 'Chemical changes', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-changes-ms/v/chemical-changes' },
+            { label: 'Learn and try: Chemical properties and changes', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-changes-ms/a/chemical-properties-and-changes' },
+            { label: 'Understand: chemical changes', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-changes-ms/e/understand-chemical-changes', question: { prompt: 'Give one sign that a chemical reaction has occurred.', answer: 'A new substance forms (e.g. gas, color change, temperature change)', explanation: 'These signal a different chemical identity.' } },
+            { label: 'Apply: chemical changes', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-changes-ms/e/apply-chemical-changes', question: { prompt: 'Give one sign that a chemical reaction has occurred.', answer: 'A new substance forms (e.g. gas, color change, temperature change)', explanation: 'These signal a different chemical identity.' } },
+          ],
+        },
+        {
+          name: 'Chemical reactions',
+          items: [
+            { label: 'Chemical reactions', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/v/chemical-reactions' },
+            { label: 'Chemical equations', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/v/chemical-equations' },
+            { label: 'Understand: chemical equations', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/e/understand-chemical-equations', question: { prompt: 'Give a one-sentence definition for: Understand: chemical equations.', answer: 'A short, clear definition naming the key idea.', explanation: 'Refer to the related video or article.' } },
+            { label: 'Apply: chemical equations', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/e/apply-chemical-equations', question: { prompt: 'Give a one-sentence definition for: Apply: chemical equations.', answer: 'A short, clear definition naming the key idea.', explanation: 'Refer to the related video or article.' } },
+            { label: 'Worked examples: Balancing chemical equations', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/v/worked-examples-balancing-chemical-equations' },
+            { label: 'Worked examples: Balancing more complex chemical equations', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/v/worked-examples-balancing-more-complex-chemical-equations' },
+            { label: 'Balancing chemical equations', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/a/balancing-chemical-equations' },
+            { label: 'Apply: balancing chemical equations', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:chemical-reactions/e/apply-balancing-chemical-equations', question: { prompt: 'Give a one-sentence definition for: Apply: balancing chemical equations.', answer: 'A short, clear definition naming the key idea.', explanation: 'Refer to the related video or article.' } },
+          ],
+        },
+        {
+          name: 'Energy changes in chemical reactions',
+          items: [
+            { label: 'Energy changes in chemical reactions (part 1)', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:energy-changes-in-chemical-reactions/v/energy-changes-in-chemical-reactions-part-1' },
+            { label: 'Energy changes in chemical reactions (part 2)', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:energy-changes-in-chemical-reactions/v/energy-changes-in-chemical-reactions-part-2' },
+            { label: 'Understand: energy changes in chemical reactions', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:energy-changes-in-chemical-reactions/e/understand-energy-changes-in-chemical-reactions', question: { prompt: 'Give one sign that a chemical reaction has occurred.', answer: 'A new substance forms (e.g. gas, color change, temperature change)', explanation: 'These signal a different chemical identity.' } },
+            { label: 'Apply: energy changes in chemical reactions', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:chemical-changes/xc370bc422b7f75fc:energy-changes-in-chemical-reactions/e/apply-energy-changes-in-chemical-reactions', question: { prompt: 'Give one sign that a chemical reaction has occurred.', answer: 'A new substance forms (e.g. gas, color change, temperature change)', explanation: 'These signal a different chemical identity.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Chemistry - Thermal energy and heat',
+      lessons: [
+        {
+          name: 'Temperature and heat',
+          items: [
+            { label: 'Thermal energy and heat transfer', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:thermal-energy-and-heat/xc370bc422b7f75fc:temperature-and-heat/v/thermal-energy-and-heat-transfer' },
+            { label: 'Apply: temperature and heat', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:thermal-energy-and-heat/xc370bc422b7f75fc:temperature-and-heat/e/apply-temperature-and-heat', question: { prompt: 'True or False: Temperature measures the average kinetic energy of particles.', answer: 'True', explanation: 'Hotter substances have faster-moving particles.' } },
+          ],
+        },
+        {
+          name: 'Heat capacity',
+          items: [
+            { label: 'Heat capacity', type: 'video', href: '/science/ms-chemistry/xc370bc422b7f75fc:thermal-energy-and-heat/xc370bc422b7f75fc:heat-capacity/v/heat-capacity-ms' },
+            { label: 'Understand: heat capacity', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:thermal-energy-and-heat/xc370bc422b7f75fc:heat-capacity/e/understand-heat-capacity-ms', question: { prompt: 'True or False: Temperature measures the average kinetic energy of particles.', answer: 'True', explanation: 'Hotter substances have faster-moving particles.' } },
+            { label: 'Apply: heat capacity', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:thermal-energy-and-heat/xc370bc422b7f75fc:heat-capacity/e/apply-heat-capacity-ms', question: { prompt: 'True or False: Temperature measures the average kinetic energy of particles.', answer: 'True', explanation: 'Hotter substances have faster-moving particles.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Chemistry - Explore chemistry through simulations',
+      lessons: [
+        {
+          name: 'Introduction to simulation-based learning',
+          items: [
+            { label: 'Introduction to simulation-based learning', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:explore-chemistry-through-simulations/xc370bc422b7f75fc:introduction-to-simulation-based-learning/a/introduction-to-simulation-based-learning' },
+          ],
+        },
+        {
+          name: 'Explore heat capacity through simulations',
+          items: [
+            { label: 'Heat capacity', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:explore-chemistry-through-simulations/xc370bc422b7f75fc:explore-heat-capacity-through-simulations/a/heat-capacity' },
+            { label: 'PhET challenge: Heat capacity', type: 'exercise', href: '/science/ms-chemistry/xc370bc422b7f75fc:explore-chemistry-through-simulations/xc370bc422b7f75fc:explore-heat-capacity-through-simulations/e/phet-challenge-heat-capacity', question: { prompt: 'On the pH scale, what number is neutral?', answer: '7', explanation: 'Below 7 is acidic, above 7 is basic.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Chemistry - Teacher resources',
+      lessons: [
+        {
+          name: 'Unit guides',
+          items: [
+            { label: 'How to use our NGSS-aligned unit guides', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:teacher-resources/xc370bc422b7f75fc:unit-guides/a/how-to-use-our-ngss-aligned-unit-guides' },
+            { label: 'Middle school chemistry unit guides', type: 'article', href: '/science/ms-chemistry/xc370bc422b7f75fc:teacher-resources/xc370bc422b7f75fc:unit-guides/a/middle-school-chemistry-unit-guides' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - Earth in space',
+      lessons: [
+        {
+          name: 'Earth\'s place in the universe',
+          items: [
+            { label: 'Introduction to Middle school Earth and space science', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:earths-place-in-the-universe/v/introduction-to-middle-school-earth-and-space-science' },
+            { label: 'Earth\'s place in the universe', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:earths-place-in-the-universe/v/earths-place-in-the-universe' },
+            { label: 'Earth’s place in the universe', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:earths-place-in-the-universe/a/earths-place-in-the-universe' },
+            { label: 'Understand: Earth\'s place in the universe', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:earths-place-in-the-universe/e/understand-earths-place-in-the-universe', question: { prompt: 'Which galaxy do we live in?', answer: 'The Milky Way', explanation: 'It is a spiral galaxy with hundreds of billions of stars.' } },
+          ],
+        },
+        {
+          name: 'Galaxies and gravity',
+          items: [
+            { label: 'Galaxies and gravity', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:galaxies-and-gravity/v/galaxies-and-gravity' },
+            { label: 'Understand: galaxies and gravity', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:galaxies-and-gravity/e/understand-galaxies-and-gravity', question: { prompt: 'Which galaxy do we live in?', answer: 'The Milky Way', explanation: 'It is a spiral galaxy with hundreds of billions of stars.' } },
+            { label: 'Apply: galaxies and gravity', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:galaxies-and-gravity/e/apply-galaxies-and-gravity', question: { prompt: 'Which galaxy do we live in?', answer: 'The Milky Way', explanation: 'It is a spiral galaxy with hundreds of billions of stars.' } },
+          ],
+        },
+        {
+          name: 'The solar system',
+          items: [
+            { label: 'The solar system', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:the-solar-system/v/the-solar-system-ms' },
+            { label: 'Understand: the solar system', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-in-space/x87d03b443efbea0a:the-solar-system/e/understand-the-solar-system', question: { prompt: 'How many planets are in our solar system?', answer: '8', explanation: 'Pluto was reclassified as a dwarf planet in 2006.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - The Earth-sun-moon system',
+      lessons: [
+        {
+          name: 'Seasons',
+          items: [
+            { label: 'Seasons', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:seasons/v/seasons-ms' },
+            { label: 'Understand: seasons', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:seasons/e/understand-seasons', question: { prompt: 'In one sentence, what is the main idea of: Understand: seasons?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+        {
+          name: 'The moon and its motions',
+          items: [
+            { label: 'Phases of the moon', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:the-moon-and-its-motions/v/phases-of-the-moon' },
+            { label: 'Lunar eclipses', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:the-moon-and-its-motions/v/lunar-eclipses' },
+            { label: 'The moon and its motions', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:the-moon-and-its-motions/a/the-moon-and-its-motions' },
+            { label: 'Understand: the moon and its motions', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:the-moon-and-its-motions/e/understand-the-moon-and-its-motions', question: { prompt: 'A solar eclipse occurs when which body is in the middle?', answer: 'The Moon (between Sun and Earth)', explanation: 'The Moon\'s shadow falls on Earth.' } },
+            { label: 'Apply: the moon and its motions', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:the-moon-and-its-motions/e/apply-the-moon-and-its-motions', question: { prompt: 'A solar eclipse occurs when which body is in the middle?', answer: 'The Moon (between Sun and Earth)', explanation: 'The Moon\'s shadow falls on Earth.' } },
+          ],
+        },
+        {
+          name: 'Solar eclipses',
+          items: [
+            { label: 'Solar eclipses', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:solar-eclipses/v/solar-eclipses' },
+            { label: 'Understand: solar eclipses', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:solar-eclipses/e/understand-solar-eclipses', question: { prompt: 'A solar eclipse occurs when which body is in the middle?', answer: 'The Moon (between Sun and Earth)', explanation: 'The Moon\'s shadow falls on Earth.' } },
+          ],
+        },
+        {
+          name: 'Activity: What happens during a solar or lunar eclipse?',
+          items: [
+            { label: 'Activity: What happens during a solar or lunar eclipse?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-earth-sun-moon-system/x87d03b443efbea0a:unit-2-phenomenon-based-activities/a/activity-what-happens-during-a-solar-or-lunar-eclipse' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - Weather and climate',
+      lessons: [
+        {
+          name: 'The water cycle',
+          items: [
+            { label: 'The water cycle', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:the-water-cycle/v/the-water-cycle-ms' },
+            { label: 'Understand: the water cycle', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:the-water-cycle/e/understand-the-water-cycle', question: { prompt: 'What is the process by which water vapor turns back into liquid water?', answer: 'Condensation', explanation: 'Evaporation is the reverse process.' } },
+          ],
+        },
+        {
+          name: 'Weather',
+          items: [
+            { label: 'Weather', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:weather/v/weather' },
+            { label: 'Understand: weather', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:weather/e/understand-weather', question: { prompt: 'In one sentence, what is the main idea of: Understand: weather?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+        {
+          name: 'Global winds and currents',
+          items: [
+            { label: 'Global winds and currents', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:global-winds-and-currents/v/global-winds-and-currents' },
+            { label: 'Understand: global winds and currents', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:global-winds-and-currents/e/understand-global-winds-and-currents', question: { prompt: 'In one sentence, what is the main idea of: Understand: global winds and currents?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+        {
+          name: 'Regional climates',
+          items: [
+            { label: 'Regional climates', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:regional-climates/v/regional-climates' },
+            { label: 'Apply: regional climates', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:weather-and-climate/x87d03b443efbea0a:regional-climates/e/apply-regional-climates', question: { prompt: 'In one sentence, what is the main idea of: Apply: regional climates?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - The geosphere',
+      lessons: [
+        {
+          name: 'The rock cycle',
+          items: [
+            { label: 'The rock cycle', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:the-rock-cycle/v/the-rock-cycle' },
+            { label: 'Understand: the rock cycle', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:the-rock-cycle/e/understand-the-rock-cycle', question: { prompt: 'Which type of rock forms from cooled magma or lava?', answer: 'Igneous', explanation: 'Sedimentary forms from compressed sediment; metamorphic forms under heat and pressure.' } },
+          ],
+        },
+        {
+          name: 'Fossils and rock layers',
+          items: [
+            { label: 'Fossils and rock layers', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:fossils-and-rock-layers/v/fossils-and-rock-layers' },
+            { label: 'Apply: fossils and rock layers', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:fossils-and-rock-layers/e/apply-fossils-and-rock-layers', question: { prompt: 'What can fossils tell scientists about Earth\'s past?', answer: 'What organisms lived and what environments existed long ago.', explanation: 'Fossils preserve ancient life or its traces in rock.' } },
+          ],
+        },
+        {
+          name: 'Plate tectonics',
+          items: [
+            { label: 'Introduction to plate tectonics', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:plate-tectonics/v/introduction-to-plate-tectonics' },
+            { label: 'Plate tectonics and the ocean floor', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:plate-tectonics/v/plate-tectonics-the-ocean-floor' },
+            { label: 'Understand: plate tectonics', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:plate-tectonics/e/understand-plate-tectonics', question: { prompt: 'What did Alfred Wegener call the ancient supercontinent?', answer: 'Pangaea', explanation: 'Pangaea broke apart over hundreds of millions of years into today\'s continents.' } },
+            { label: 'Apply: plate tectonics', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:plate-tectonics/e/apply-plate-tectonics', question: { prompt: 'What did Alfred Wegener call the ancient supercontinent?', answer: 'Pangaea', explanation: 'Pangaea broke apart over hundreds of millions of years into today\'s continents.' } },
+          ],
+        },
+        {
+          name: 'Weathering and erosion',
+          items: [
+            { label: 'Weathering and erosion', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:weathering-and-erosion/v/weathering-and-erosion' },
+            { label: 'Understand: weathering and erosion', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:weathering-and-erosion/e/understand-weathering-and-erosion', question: { prompt: 'In one sentence, what is the main idea of: Understand: weathering and erosion?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+        {
+          name: 'Activity: How does weathering affect natural landscapes over time?',
+          items: [
+            { label: 'Activity: How does weathering affect natural landscapes over time?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:the-geosphere/x87d03b443efbea0a:unit-4-phenomenon-based-activities/a/activity-how-does-weathering-affect-natural-landscapes-over-time' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - Earth and society',
+      lessons: [
+        {
+          name: 'Natural resources',
+          items: [
+            { label: 'Natural resources', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:natural-resources/v/natural-resources' },
+            { label: 'Understand: natural resources', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:natural-resources/e/understand-natural-resources', question: { prompt: 'Give one human activity that increases atmospheric CO2.', answer: 'Burning fossil fuels (coal, oil, natural gas)', explanation: 'Deforestation also reduces CO2 absorption.' } },
+          ],
+        },
+        {
+          name: 'Natural hazards',
+          items: [
+            { label: 'Natural hazards', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:natural-hazards/v/natural-hazards' },
+            { label: 'Apply: natural hazards', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:natural-hazards/e/apply-natural-hazards', question: { prompt: 'In one sentence, what is the main idea of: Apply: natural hazards?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+        {
+          name: 'Human impacts on the environment',
+          items: [
+            { label: 'Human impacts on the environment', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:human-impacts-on-the-environment/v/human-impacts-on-the-environment' },
+            { label: 'Apply: human impacts on the environment', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:human-impacts-on-the-environment/e/apply-human-impacts-on-the-environment', question: { prompt: 'Give one human activity that increases atmospheric CO2.', answer: 'Burning fossil fuels (coal, oil, natural gas)', explanation: 'Deforestation also reduces CO2 absorption.' } },
+          ],
+        },
+        {
+          name: 'Activity: How can we reduce our garbage footprint?',
+          items: [
+            { label: 'Activity: How can we reduce our garbage footprint?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:unit-5-phenomenon-based-activities/a/activity-how-can-we-reduce-our-garbage-footprint' },
+          ],
+        },
+        {
+          name: 'Earth\'s changing climate',
+          items: [
+            { label: 'Earth\'s changing climate', type: 'video', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:earths-changing-climate/v/earths-changing-climate' },
+            { label: 'PhET simulation: Explore climate change', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:earths-changing-climate/a/phet-simulation-article-exploring-climate-change' },
+            { label: 'Apply: Earth\'s changing climate', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:earths-changing-climate/e/apply-earths-changing-climate', question: { prompt: 'In one sentence, what is the main idea of: Apply: Earth\'s changing climate?', answer: 'A short summary naming the key Earth-science concept.', explanation: 'Use the related video or article for context.' } },
+          ],
+        },
+        {
+          name: 'Activity: How and why is Earth\'s climate changing?',
+          items: [
+            { label: 'Activity: How and why is Earth\'s climate changing?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:earth-and-society/x87d03b443efbea0a:activity-how-and-why-is-earth-s-climate-changing/a/activity-how-and-why-is-earth-s-climate-changing' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - Explore Earth and space science through simulations',
+      lessons: [
+        {
+          name: 'Introduction to simulation-based learning',
+          items: [
+            { label: 'Introduction to simulation-based learning', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:explore-earth-and-space-science-through-simulations-ms-ess/x87d03b443efbea0a:introduction-to-simulation-based-learning/a/introduction-to-simulation-based-learning' },
+          ],
+        },
+        {
+          name: 'Explore climate change through simulations',
+          items: [
+            { label: 'PhET simulation: Explore climate change', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:explore-earth-and-space-science-through-simulations-ms-ess/x87d03b443efbea0a:explore-climate-change-through-simulations/a/phet-simulation-article-exploring-climate-change' },
+            { label: 'PhET challenge: Climate change', type: 'exercise', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:explore-earth-and-space-science-through-simulations-ms-ess/x87d03b443efbea0a:explore-climate-change-through-simulations/e/phet-simulation-exploring-climate-change-ms-ess', question: { prompt: 'Name one greenhouse gas that traps heat in Earth\'s atmosphere.', answer: 'Carbon dioxide (or methane, water vapor)', explanation: 'These gases re-emit infrared radiation back toward Earth.' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'Earth and Space - Teacher resources',
+      lessons: [
+        {
+          name: 'Hands-on Earth and space science activities',
+          items: [
+            { label: 'Introduction to hands-on science activities', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:teacher-resources/x87d03b443efbea0a:hands-on-earth-space-sci-activities/a/introduction-to-hands-on-science-activities' },
+            { label: 'Activity: What happens during a solar or lunar eclipse?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:teacher-resources/x87d03b443efbea0a:hands-on-earth-space-sci-activities/a/activity-what-happens-during-a-solar-or-lunar-eclipse' },
+            { label: 'Activity: How does weathering affect natural landscapes over time?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:teacher-resources/x87d03b443efbea0a:hands-on-earth-space-sci-activities/a/activity-how-does-weathering-affect-natural-landscapes-over-time' },
+            { label: 'Activity: How can we reduce our garbage footprint?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:teacher-resources/x87d03b443efbea0a:hands-on-earth-space-sci-activities/a/activity-how-can-we-reduce-our-garbage-footprint' },
+            { label: 'Activity: How and why is Earth\'s climate changing?', type: 'article', href: '/science/middle-school-earth-and-space-science/x87d03b443efbea0a:teacher-resources/x87d03b443efbea0a:hands-on-earth-space-sci-activities/a/activity-how-and-why-is-earth-s-climate-changing' },
           ],
         },
       ],

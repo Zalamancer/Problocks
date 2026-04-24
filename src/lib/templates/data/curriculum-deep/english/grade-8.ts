@@ -7,282 +7,299 @@ export const GRADE_DATA: DeepGrade = {
   units: [
     {
       name: 'Funny Business',
-      description: "Read humorous fiction and essays to analyze tone, irony, and author's craft.",
       lessons: [
         {
-          name: 'Irony and humor',
-          description: 'Identify verbal, situational, and dramatic irony in comic texts.',
-          questions: [
-            { prompt: 'Fire station burns down. Irony type?', answer: 'Situational irony.', explanation: 'Opposite of expected outcome.' },
-            { prompt: '"Oh great, another flat tire," sighs the character. Irony?', answer: 'Verbal irony.', explanation: 'Says opposite of what is meant.' },
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Funny Business unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:building-knowledge/a/welcome-to-the-funny-business-unit' },
+            { label: 'Funny Business: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:building-knowledge/a/funny-business-unit-vocabulary' },
           ],
         },
         {
-          name: 'Tone in humor',
-          description: 'Describe comic tone: playful, sarcastic, self-deprecating.',
-          questions: [
-            { prompt: 'Essay mocks the author\'s own cooking. Tone?', answer: 'Self-deprecating.', explanation: 'Humor directed at self.' },
-            { prompt: '"Reading homework is the pinnacle of joy." Tone?', answer: 'Sarcastic.', explanation: 'Praise that clearly means opposite.' },
+          name: 'Close reading: drama',
+          items: [
+            { label: 'Citing evidence in literary analysis', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:close-reading/v/citing-evidence-in-literary-analysis-reading' },
+            { label: 'Making objective summaries of literary texts | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:close-reading/v/making-objective-summaries-of-literary-texts-reading' },
+            { label: 'The elements of a drama', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:close-reading/v/the-elements-of-a-drama-reading' },
+            { label: 'Changes in point of view and dramatic irony', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:close-reading/v/changes-in-pov-and-dramatic-irony-reading' },
+            { label: 'Introduction to A Midsummer Night\'s Dream', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:close-reading/a/introduction-to-a-midsummer-nights-dream' },
+            {
+              label: 'Funny Business: reading drama; A Midsummer Night\'s Dream 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:close-reading/e/funny-business-reading-drama-a-midsummer-night-s-dream-8',
+              question: {
+                prompt: 'Read: "She challenged the policy, citing data from three studies." What kind of argument is this?',
+                answer: 'Evidence-based',
+                explanation: 'Citing studies provides empirical support.',
+              },
+            },
           ],
         },
         {
-          name: "Author's craft",
-          description: 'Analyze word choice and exaggeration that create humor.',
-          questions: [
-            { prompt: '"I waited a thousand years at the DMV." Device?', answer: 'Hyperbole.', explanation: 'Extreme exaggeration.' },
-            { prompt: 'Author names dog "Einstein" because dog is clumsy. Device?', answer: 'Irony through naming.', explanation: 'Name contradicts behavior.' },
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'How can a text have two or more central ideas?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:untitled-71/v/two-or-more-main-ideas-reading' },
+            { label: 'Analyzing tone through word choice', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:untitled-71/v/analyzing-tone-through-word-choice-reading' },
+            { label: 'What is an argument?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:untitled-71/v/what-is-an-argument-reading' },
+            {
+              label: 'Funny Business: reading informational text; This Is Your Brain on Comedy 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:untitled-71/e/funny-business-reading-informational-text-this-is-your-brain-on-comedy-8',
+              question: {
+                prompt: 'Which word means "to refute or contradict"?',
+                answer: 'Disprove',
+                explanation: '"Disprove" means to show something is false.',
+              },
+            },
           ],
         },
         {
-          name: 'Theme in comic texts',
-          description: 'Find the serious idea beneath the humor.',
-          questions: [
-            { prompt: 'Story jokes about forgetting names; ends noting loneliness. Theme?', answer: 'Connection matters despite flaws.', explanation: 'Humor hides genuine insight.' },
-            { prompt: 'Satire mocks fashion; implies people chase approval. Theme?', answer: 'Conformity has social cost.', explanation: 'Mockery reveals truth.' },
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:applying-knowledge/v/figurative-language-reading' },
+            { label: 'Connotation', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:applying-knowledge/v/connotation-reading' },
+            {
+              label: 'Funny business: vocabulary; A Midsummer Night\'s Dream 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:applying-knowledge/e/funny-business-vocabulary-a-midsummer-night-s-dream-8',
+              question: {
+                prompt: 'In "The clock\'s hands crawled," what literary device is used?',
+                answer: 'Personification',
+                explanation: 'Clocks do not literally crawl.',
+              },
+            },
           ],
         },
         {
-          name: 'Vocabulary: tone words',
-          description: 'Learn words for describing attitude in comic writing.',
-          questions: [
-            { prompt: '"Droll" most nearly means?', answer: 'Dryly humorous.', explanation: 'Droll = quietly funny.' },
-            { prompt: '"Wry" smile suggests?', answer: 'Amused and ironic.', explanation: 'Wry conveys mild irony.' },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Crossing the Line',
-      description: 'Examine texts about boundaries, ethics, and choices to practice argument analysis.',
-      lessons: [
-        {
-          name: 'Identifying claims',
-          description: 'Locate the central claim in argumentative passages.',
-          questions: [
-            { prompt: 'Op-ed title: "Phones Harm Focus in Schools." Claim?', answer: 'Phones should be limited in schools.', explanation: 'Title states the argument.' },
-            { prompt: '"Self-driving cars must be regulated." Sentence type?', answer: 'Claim.', explanation: 'Statement of position.' },
+          name: 'Reading for understanding: fiction; Use What You Have',
+          items: [
+            { label: 'Developing themes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:reading-for-understanding/v/developing-themes-reading' },
+            {
+              label: 'Funny business: reading realistic fiction; Use What You Have 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:reading-for-understanding/e/funny-business-reading-realistic-fiction-use-what-you-have-8',
+              question: {
+                prompt: 'A flashback in a narrative is used to ___?',
+                answer: 'Show events from before the main timeline',
+                explanation: 'Flashbacks deepen backstory and motive.',
+              },
+            },
           ],
         },
         {
-          name: 'Reasoning and evidence',
-          description: 'Evaluate how reasons connect evidence to claims.',
-          questions: [
-            { prompt: 'Claim: "Curfews keep teens safe." Evidence: "Crime drops 20%." Strong?', answer: 'Yes, data supports claim.', explanation: 'Statistics reinforce reasoning.' },
-            { prompt: 'Claim: "Recycling helps planet." Weakest support?', answer: '"I recycle and feel good."', explanation: 'Anecdote lacks strength.' },
-          ],
-        },
-        {
-          name: 'Counterclaims',
-          description: 'Recognize how writers address opposing views.',
-          questions: [
-            { prompt: '"Some argue phones help learning, but studies show distraction." Author\'s move?', answer: 'Acknowledges and rebuts.', explanation: 'Concedes then counters.' },
-            { prompt: 'Why include a counterclaim?', answer: 'Shows fair consideration of opposition.', explanation: 'Strengthens credibility.' },
-          ],
-        },
-        {
-          name: 'Ethical reasoning',
-          description: 'Analyze moral choices characters face.',
-          questions: [
-            { prompt: 'Character returns lost cash despite need. Ethical stance?', answer: 'Honesty over benefit.', explanation: 'Shows values-driven choice.' },
-            { prompt: 'Friend asks student to share test answers. Crossing a line?', answer: 'Yes, academic dishonesty.', explanation: 'Violates ethics.' },
+          name: 'Reading for understanding: fiction; An Uncomfortable Bed',
+          items: [
+            { label: 'How point of view affects readers', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:reading-for-understanding-fiction-an-uncomfortable-bed/v/how-pov-affects-readers-reading' },
+            {
+              label: 'Funny business: reading realistic fiction; An Uncomfortable Bed 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-funny-business/xe1f784c7c84e84fc:reading-for-understanding-fiction-an-uncomfortable-bed/e/funny-business-reading-realistic-fiction-an-uncomfortable-bed-8',
+              question: {
+                prompt: 'Read: "The senator dodged the question with practiced ease." What is implied?',
+                answer: 'The senator is evasive',
+                explanation: '"Dodged" implies deliberate avoidance.',
+              },
+            },
           ],
         },
       ],
     },
     {
       name: 'Obscuring the Truth',
-      description: 'Evaluate how authors use evidence and rhetoric to shape or distort the truth.',
       lessons: [
         {
-          name: 'Rhetorical devices',
-          description: 'Identify logos, pathos, ethos, and loaded language.',
-          questions: [
-            { prompt: '"Think of the children!" Appeal?', answer: 'Pathos.', explanation: 'Emotional appeal.' },
-            { prompt: '"As a scientist, I know…" Appeal?', answer: 'Ethos.', explanation: 'Appeal to credibility.' },
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Obscuring the Truth unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:untitled-46/a/welcome-to-the-obscuring-the-truth-unit' },
+            { label: 'Obscuring the Truth: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:untitled-46/a/obscuring-the-truth-unit-vocabulary' },
           ],
         },
         {
-          name: 'Detecting bias',
-          description: 'Spot slant through word choice and selective evidence.',
-          questions: [
-            { prompt: 'Headline: "Radical Plan Threatens Schools." Biased word?', answer: 'Radical.', explanation: 'Loaded negative connotation.' },
-            { prompt: 'Article quotes only one side. Bias?', answer: 'One-sided reporting.', explanation: 'Lacks balance.' },
+          name: 'Close reading: informational text; Why Do We Lie?',
+          items: [
+            { label: 'How can a text have two or more central ideas?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-why-do-we-lie/v/two-or-more-main-ideas-reading' },
+            { label: 'Incorporating opposing viewpoints', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-why-do-we-lie/v/incorporating-opposing-viewpoints-reading' },
+            { label: 'What is an argument?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-why-do-we-lie/v/what-is-an-argument-reading' },
+            {
+              label: 'Obscuring the truth: reading informational text; Why Do We Lie? 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-why-do-we-lie/e/obscuring-the-truth--reading-informational-text--why-do-we-lie--8',
+              question: {
+                prompt: 'Which connotation is more negative?',
+                answer: 'Stubborn (vs. determined)',
+                explanation: '"Stubborn" carries a negative tone.',
+              },
+            },
           ],
         },
         {
-          name: 'Misleading evidence',
-          description: 'Recognize statistics or anecdotes that distort meaning.',
-          questions: [
-            { prompt: '"90% prefer our brand" — based on 10 employees. Problem?', answer: 'Biased, tiny sample.', explanation: 'Selection bias.' },
-            { prompt: 'Graph cut at y=95 exaggerates gap. Technique?', answer: 'Misleading scale.', explanation: 'Distorts visual.' },
+          name: 'Close reading: informational text; The Science of Lying',
+          items: [
+            { label: 'Connotation', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-the-science-of-lying/v/connotation-reading' },
+            { label: 'Part-to-whole relationships in text structure', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-the-science-of-lying/v/part-to-whole-relationships-in-text-structure-reading' },
+            { label: 'Quantitative information in texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-the-science-of-lying/v/quantitative-information-in-texts-reading' },
+            {
+              label: 'Obscuring the truth: reading informational text; The Science of Lying 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:close-reading-informational-text-the-science-of-lying/e/obscuring-the-truth--reading-informational-text--the-science-of-lying-8',
+              question: {
+                prompt: 'A rhetorical question is asked to ___?',
+                answer: 'Make a point, not get an answer',
+                explanation: 'Rhetorical questions persuade or emphasize.',
+              },
+            },
           ],
         },
         {
-          name: 'Evaluating sources',
-          description: 'Assess credibility and purpose of a source.',
-          questions: [
-            { prompt: 'A vape company funds a vaping safety study. Red flag?', answer: 'Conflict of interest.', explanation: 'Funder may bias results.' },
-            { prompt: 'Peer-reviewed journal article is most reliable because?', answer: 'Experts checked methods.', explanation: 'Peer review adds rigor.' },
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:untitled-48/v/figurative-language-reading' },
+            { label: 'Analyzing tone through word choice', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:untitled-48/v/analyzing-tone-through-word-choice-reading' },
+            {
+              label: 'Obscuring the truth: vocabulary; Why Do We Lie? 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:untitled-48/e/obscuring-the-truth--vocabulary--why-do-we-lie--8',
+              question: {
+                prompt: 'Read: "Despite the headline, the article offered no proof." What does this critique?',
+                answer: 'A misleading or unsupported headline',
+                explanation: 'The article fails to back its claim.',
+              },
+            },
           ],
         },
         {
-          name: 'Vocabulary: rhetoric words',
-          description: 'Learn terms for argumentative techniques.',
-          questions: [
-            { prompt: '"Propaganda" most nearly means?', answer: 'Biased persuasion.', explanation: 'Biased persuasive material.' },
-            { prompt: '"Euphemism" means?', answer: 'Mild substitute for harsh term.', explanation: 'Softens reality.' },
+          name: 'Reading for understanding: fiction; One Big Mess',
+          items: [
+            { label: 'Citing evidence in literary analysis', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-one-big-mess/v/citing-evidence-in-literary-analysis-reading' },
+            { label: 'Developing themes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-one-big-mess/v/developing-themes-reading' },
+            { label: 'Making objective summaries of literary texts | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-one-big-mess/v/making-objective-summaries-of-literary-texts-reading' },
+            {
+              label: 'Obscuring the truth: reading realistic fiction; One Big Mess 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-one-big-mess/e/obscuring-the-truth--reading-realistic-fiction--one-big-mess-8',
+              question: {
+                prompt: 'Which word fits: "The defense lawyer made a ___ argument with strong evidence."',
+                answer: 'Compelling',
+                explanation: '"Compelling" means powerfully persuasive.',
+              },
+            },
+          ],
+        },
+        {
+          name: 'Reading for understanding: fiction; The Open Window',
+          items: [
+            { label: 'Changes in point of view and dramatic irony', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-the-open-window/v/changes-in-pov-and-dramatic-irony-reading' },
+            { label: 'Different mediums and the tone of the text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-the-open-window/v/different-mediums-and-the-tone-of-the-text' },
+            {
+              label: 'Obscuring the truth: reading realistic fiction; The Open Window 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-obscuring-the-truth/xe1f784c7c84e84fc:reading-for-understanding-fiction-the-open-window/e/obscuring-the-truth--reading-realistic-fiction--the-open-window-8',
+              question: {
+                prompt: 'In a satire, the author often uses ___?',
+                answer: 'Irony and exaggeration to criticize',
+                explanation: 'Satire mocks to provoke reflection.',
+              },
+            },
           ],
         },
       ],
     },
     {
-      name: 'To Your Health',
-      description: 'Read health- and science-related nonfiction to build domain vocabulary and central-idea skills.',
+      name: 'Crossing the Line',
       lessons: [
         {
-          name: 'Central idea in science texts',
-          description: 'Find main scientific claim across a passage.',
-          questions: [
-            { prompt: 'Article covers sleep stages and teen brains. Central idea?', answer: 'Teens need adequate sleep for development.', explanation: 'Focus ties stages to teens.' },
-            { prompt: 'Text on nutrition stresses whole foods. Central idea?', answer: 'Whole foods support better health.', explanation: 'Emphasis repeats throughout.' },
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Crossing the Line unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:untitled-58/a/welcome-to-the-crossing-the-line-unit' },
+            { label: 'Crossing the Line: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:untitled-58/a/crossing-the-line-unit-vocabulary' },
           ],
         },
         {
-          name: 'Cause and effect',
-          description: 'Trace scientific chains in health articles.',
-          questions: [
-            { prompt: '"Stress raises cortisol, weakening immunity." Effect?', answer: 'Reduced immune function.', explanation: 'Follows from cortisol.' },
-            { prompt: 'Dehydration causes headaches. Solution implied?', answer: 'Drink water.', explanation: 'Removes cause.' },
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'How can a text have two or more central ideas?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-informational-text/v/two-or-more-main-ideas-reading' },
+            { label: 'Quantitative information in texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-informational-text/v/quantitative-information-in-texts-reading' },
+            { label: 'What is an argument?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-informational-text/v/what-is-an-argument-reading' },
+            {
+              label: 'Crossing the Line: reading informational text; Performance-Enhancing Drugs in Sports 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-informational-text/e/crossing-the-line-reading-informational-text-performance-enhancing-drugs-in-sports-8',
+              question: {
+                prompt: 'Read: "Her tone shifted from warm to icy in seconds." What does this reveal?',
+                answer: 'A change in attitude or feeling',
+                explanation: 'Tone shift signals emotional change.',
+              },
+            },
           ],
         },
         {
-          name: 'Domain vocabulary',
-          description: 'Learn science words used in health reading.',
-          questions: [
-            { prompt: '"Metabolism" refers to?', answer: 'Body\'s energy processing.', explanation: 'Chemical processes for energy.' },
-            { prompt: '"Immunity" means?', answer: 'Resistance to disease.', explanation: 'Body\'s defense capability.' },
+          name: 'Close reading: fiction',
+          items: [
+            { label: 'Citing evidence in literary analysis', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-realistic-fiction/v/citing-evidence-in-literary-analysis-reading' },
+            { label: 'Making objective summaries of literary texts | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-realistic-fiction/v/making-objective-summaries-of-literary-texts-reading' },
+            { label: 'Analyzing tone through word choice', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-realistic-fiction/v/analyzing-tone-through-word-choice-reading' },
+            { label: 'Changes in point of view and dramatic irony', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-realistic-fiction/v/changes-in-pov-and-dramatic-irony-reading' },
+            {
+              label: 'Crossing the Line: reading realistic fiction; Whatever It Takes 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:close-reading-realistic-fiction/e/crossing-the-line-reading-realistic-fiction-whatever-it-takes-8',
+              question: {
+                prompt: 'Which transition signals a counterclaim?',
+                answer: 'On the other hand',
+                explanation: 'It introduces an opposing view.',
+              },
+            },
           ],
         },
         {
-          name: 'Graphics and text features',
-          description: 'Interpret charts, captions, and sidebars.',
-          questions: [
-            { prompt: 'Caption: "Figure 1: Sleep by Age." Purpose?', answer: 'Explains the graphic.', explanation: 'Captions clarify visuals.' },
-            { prompt: 'Bar chart shows rising obesity. Purpose?', answer: 'Visualize trend.', explanation: 'Graphs show patterns.' },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Reading Informational Text',
-      description: 'Analyze central ideas, structure, and conflicting viewpoints across nonfiction texts.',
-      lessons: [
-        {
-          name: 'Central ideas and summary',
-          description: 'Summarize main points concisely.',
-          questions: [
-            { prompt: 'Article argues city parks boost wellness. 10-word summary?', answer: 'Urban parks provide physical, mental, and social health benefits.', explanation: 'Captures core claim.' },
-            { prompt: 'Essay lists drawbacks of social media. Summary?', answer: 'Social media can harm sleep and self-esteem.', explanation: 'Focus on harms.' },
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:applying-vocabulary-knowledge/v/figurative-language-reading' },
+            { label: 'Connotation', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:applying-vocabulary-knowledge/v/connotation-reading' },
+            {
+              label: 'Crossing the Line: vocabulary; Performance-Enhancing Drugs in Sports 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:applying-vocabulary-knowledge/e/crossing-the-line-vocabulary-performance-enhancing-drugs-in-sports-8',
+              question: {
+                prompt: 'The mood of a text is created by ___?',
+                answer: 'Word choice, imagery, and setting',
+                explanation: 'These elements shape the reader\'s feeling.',
+              },
+            },
           ],
         },
         {
-          name: 'Analyzing structure',
-          description: 'Identify problem-solution, comparison, and classification patterns.',
-          questions: [
-            { prompt: 'Text groups energy types by renewable status. Structure?', answer: 'Classification.', explanation: 'Organized by category.' },
-            { prompt: 'Essay notes pollution, then proposes filters. Structure?', answer: 'Problem-solution.', explanation: 'Issue then fix.' },
+          name: 'Reading for understanding: informational text',
+          items: [
+            { label: 'Part-to-whole relationships in text structure', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:reading-for-understanding-informational-text/v/part-to-whole-relationships-in-text-structure-reading' },
+            { label: 'Incorporating opposing viewpoints', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:reading-for-understanding-informational-text/v/incorporating-opposing-viewpoints-reading' },
+            {
+              label: 'Crossing the Line: reading informational text; The ACTN3 Gene 8',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:reading-for-understanding-informational-text/e/crossing-the-line-reading-informational-text-the-actn3-gene-8',
+              question: {
+                prompt: 'Read: "The novel\'s ending leaves readers with more questions than answers." What is this called?',
+                answer: 'An ambiguous ending',
+                explanation: 'Ambiguous endings invite interpretation.',
+              },
+            },
           ],
         },
         {
-          name: 'Conflicting viewpoints',
-          description: 'Compare opposing positions across texts.',
-          questions: [
-            { prompt: 'Text A favors zoos for conservation; Text B calls zoos cruel. Disagree on?', answer: 'Ethics of captivity.', explanation: 'Focus differs.' },
-            { prompt: 'How to resolve conflict?', answer: 'Evaluate evidence on both.', explanation: 'Use criteria.' },
-          ],
-        },
-        {
-          name: 'Purpose and perspective',
-          description: "Determine author's purpose and point of view.",
-          questions: [
-            { prompt: 'Op-ed calls for plastic ban. Purpose?', answer: 'Persuade.', explanation: 'Calls to action.' },
-            { prompt: 'Neutral news report. Purpose?', answer: 'Inform.', explanation: 'Factual reporting.' },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Reading Literature',
-      description: 'Analyze dialogue, plot, and modern adaptations of traditional stories.',
-      lessons: [
-        {
-          name: 'Dialogue and characterization',
-          description: 'Analyze how dialogue reveals character.',
-          questions: [
-            { prompt: '"Fine, whatever," he muttered. Character trait?', answer: 'Dismissive or frustrated.', explanation: 'Diction plus muttered.' },
-            { prompt: '"I will make this right." Trait?', answer: 'Determined.', explanation: 'Vow shows resolve.' },
-          ],
-        },
-        {
-          name: 'Plot complications',
-          description: 'Track rising action and turning points.',
-          questions: [
-            { prompt: 'Mid-story twist: hero\'s ally is a spy. Role?', answer: 'Turning point.', explanation: 'Changes plot direction.' },
-            { prompt: 'Final battle climax purpose?', answer: 'Peak tension.', explanation: 'Climax is highest point.' },
-          ],
-        },
-        {
-          name: 'Modern adaptations',
-          description: 'Compare a classic story with its retelling.',
-          questions: [
-            { prompt: 'Modern Cinderella sets tale in tech startup. Change?', answer: 'Setting updates; theme persists.', explanation: 'Adaptation keeps core theme.' },
-            { prompt: 'Retelling gives stepmother sympathetic past. Effect?', answer: 'Adds complexity.', explanation: 'Humanizes antagonist.' },
-          ],
-        },
-        {
-          name: 'Theme and symbolism',
-          description: 'Interpret recurring objects and ideas.',
-          questions: [
-            { prompt: 'Story repeatedly features a locked door. Symbol of?', answer: 'Secrets or barriers.', explanation: 'Locked = hidden.' },
-            { prompt: 'Character plants a tree after loss. Symbol?', answer: 'Renewal.', explanation: 'Growth after loss.' },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Vocabulary',
-      description: 'Determine meanings of grade-level words using context, word parts, and reference tools.',
-      lessons: [
-        {
-          name: 'Context clues',
-          description: 'Use sentence hints to decode unfamiliar words.',
-          questions: [
-            { prompt: '"The gregarious puppy greeted everyone." Meaning?', answer: 'Sociable.', explanation: 'Greeted everyone = friendly.' },
-            { prompt: '"He was taciturn, avoiding chats." Means?', answer: 'Quiet.', explanation: 'Avoids talking.' },
-          ],
-        },
-        {
-          name: 'Word parts',
-          description: 'Break words into prefix, root, suffix.',
-          questions: [
-            { prompt: '"Antibiotic" — anti- means?', answer: 'Against.', explanation: 'Anti- = against.' },
-            { prompt: '"Transport" — trans- means?', answer: 'Across.', explanation: 'Trans- = across.' },
-          ],
-        },
-        {
-          name: 'Figurative meanings',
-          description: 'Interpret idioms and figurative phrases.',
-          questions: [
-            { prompt: '"Bite the bullet" means?', answer: 'Face something hard.', explanation: 'Idiom for endurance.' },
-            { prompt: '"Cost an arm and a leg" means?', answer: 'Very expensive.', explanation: 'Hyperbolic idiom.' },
-          ],
-        },
-        {
-          name: 'Reference tools',
-          description: 'Use dictionaries and thesauruses effectively.',
-          questions: [
-            { prompt: 'Dictionary gives "advocate (v): to support." Best sentence?', answer: 'She advocates for cleaner parks.', explanation: 'Uses verb form.' },
-            { prompt: 'Thesaurus use for varied writing?', answer: 'Find synonyms.', explanation: 'Avoid repetition.' },
+          name: 'Reading for understanding: fiction',
+          items: [
+            { label: 'Developing themes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:reading-for-understanding-fiction/v/developing-themes-reading' },
+            { label: 'Sports, challenges, and punishments in ancient Greek culture', type: 'article', href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:reading-for-understanding-fiction/a/sports-challenges-and-punishments-in-ancient-greek-culture' },
+            {
+              label: 'Crossing the Line: reading creative fiction; The Race Official',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-8th-reading-vocab/xe1f784c7c84e84fc:cc-8th-crossing-the-line/xe1f784c7c84e84fc:reading-for-understanding-fiction/e/crossing-the-line-reading-creative-fiction',
+              question: {
+                prompt: 'Which word means "to summarize briefly"?',
+                answer: 'Synopsize',
+                explanation: '"Synopsize" means to give a synopsis.',
+              },
+            },
           ],
         },
       ],

@@ -7,85 +7,100 @@ export const GRADE_DATA: DeepGrade = {
   units: [
     {
       name: 'Pets',
-      description: 'Build reading stamina and vocabulary through fiction and informational texts about pets.',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Find the central point of a passage about pets.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Pets unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:building-knowledge/a/welcome-to-the-pets-unit' },
+            { label: 'Pets: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:building-knowledge/a/pets-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'Summarizing informational text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading/v/what-is-a-summary-reading-nonfiction-khan-academy' },
+            { label: 'What is a main idea? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading/v/what-is-a-main-idea-reading-khan-academy' },
+            { label: 'Finding connections between ideas within a passage', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading/v/finding-connections-between-ideas-reading' },
+            { label: 'Using text features to locate information | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading/v/using-text-features-to-locate-information-reading' },
             {
-              prompt: 'Dogs need walks, food, and love. Caring for a dog is a big job. What is the main idea?',
-              answer: 'Owning a dog takes work',
-              explanation: 'The passage lists caring tasks and calls it a big job.',
-            },
-            {
-              prompt: 'Cats clean themselves, sleep a lot, and love cozy spots. What is the main idea?',
-              answer: 'Cats have their own habits',
-              explanation: 'The details all describe cat behavior.',
+              label: 'Pets: reading informational text; Which Pet Is Right for You?',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading/e/pets--reading-informational-text--which-pet-is-right-for-you-3',
+              question: {
+                prompt: 'Read: "The crow grew thirsty. It dropped pebbles in a jug to raise the water." What does this fable teach?',
+                answer: 'Cleverness solves problems',
+                explanation: 'The crow uses thinking, not strength, to drink.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Use text clues to draw a conclusion.',
-          questions: [
+          name: 'Close reading: opinions',
+          items: [
+            { label: 'Making inferences in informational texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading-opinions/v/making-inferences-in-informational-texts-reading-khan-academy' },
+            { label: 'Evaluating a source\'s reasoning and evidence', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading-opinions/v/evaluating-a-sources-reasoning-and-evidence' },
+            { label: 'Reading more than one source on a topic', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading-opinions/v/reading-more-than-one-source-on-a-topic-reading-khan-academy' },
             {
-              prompt: 'Max thumped his tail every time Leo grabbed the leash. Why?',
-              answer: 'He was excited for a walk',
-              explanation: 'Tail thumping plus the leash signals excitement.',
-            },
-            {
-              prompt: 'Goldfish swim away and hide when the tank is tapped. What can you infer?',
-              answer: 'Tapping scares them',
-              explanation: 'Hiding is a common fear reaction.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Use context to learn new pet-related words.',
-          questions: [
-            {
-              prompt: '"The puppy was lethargic after playing, barely moving." What does lethargic mean?',
-              answer: 'Very tired',
-              explanation: '"Barely moving" hints at tiredness.',
-            },
-            {
-              prompt: '"Feed your hamster daily — consistency helps." What does consistency mean?',
-              answer: 'Doing it the same way regularly',
-              explanation: 'The sentence implies routine feeding.',
+              label: 'Pets: reading opinions; Dogs Are the Best / Cheers for Cats',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:close-reading-opinions/e/pets--reading-opinions--dogs-are-the-best-cheers-for-cats-3',
+              question: {
+                prompt: 'Which is a synonym for "ancient"?',
+                answer: 'Very old',
+                explanation: '"Ancient" means belonging to a very long time ago.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare two pet types.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:applying-knowledge/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:applying-knowledge/v/figurative-language-reading' },
             {
-              prompt: 'Dogs bark; cats meow. What is different?',
-              answer: 'The sounds they make',
-              explanation: 'Dogs and cats communicate differently.',
-            },
-            {
-              prompt: 'Both cats and dogs sleep a lot. What is the same?',
-              answer: 'They nap often',
-              explanation: 'Sleeping is a shared trait.',
+              label: 'Pets: vocabulary; Which Pet Is Right for You?',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:applying-knowledge/e/pets--vocabulary--which-pet-is-right-for-you-3',
+              question: {
+                prompt: 'Read: "Maya whispered the secret so Mom would not hear." Why did Maya whisper?',
+                answer: 'So Mom would not hear',
+                explanation: 'The sentence gives the purpose after "so".',
+              },
             },
           ],
         },
         {
-          name: 'Text Structure',
-          description: 'Identify the structure of a pet-care passage.',
-          questions: [
+          name: 'Reading for understanding: fiction',
+          items: [
+            { label: 'Characters\' thoughts and feelings | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding/v/characters-thoughts-and-feelings-reading' },
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding/v/character-actions-in-stories-reading' },
+            { label: 'What do pictures bring to a story? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding/v/what-do-pictures-bring-to-a-story-reading' },
             {
-              prompt: 'A passage gives steps to bathe a dog: first, wet fur; then, shampoo; finally, rinse. What structure?',
-              answer: 'Sequence/steps',
-              explanation: 'First, then, finally signal order.',
+              label: 'Pets: reading realistic fiction; A New Pet',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding/e/pets--reading-creative-fiction--a-new-pet-3',
+              question: {
+                prompt: 'A character who helps the main character is often called a ___?',
+                answer: 'Friend or ally',
+                explanation: 'Allies support the protagonist.',
+              },
             },
+          ],
+        },
+        {
+          name: 'Reading for understanding: poetry',
+          items: [
+            { label: 'The elements of a poem', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding-poetry/v/the-elements-of-a-poem-reading' },
+            { label: 'A story\'s point of view | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding-poetry/v/a-storys-point-of-view-reading' },
             {
-              prompt: 'A passage says "Cats purr because they are content." What structure?',
-              answer: 'Cause and effect',
-              explanation: '"Because" signals cause and effect.',
+              label: 'Pets: reading poetry; Dog Language',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-pets/xaf0c1b5d7010608e:reading-for-understanding-poetry/e/pets--reading-poetry--dog-language-3',
+              question: {
+                prompt: 'Which prefix means "not" in "unhappy"?',
+                answer: 'un-',
+                explanation: 'The prefix "un-" reverses meaning.',
+              },
             },
           ],
         },
@@ -93,85 +108,105 @@ export const GRADE_DATA: DeepGrade = {
     },
     {
       name: 'Homes',
-      description: 'Compare homes across cultures and habitats while practicing main idea and key details.',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Find the main idea in texts about homes.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Homes unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:untitled-79/a/welcome-to-the-homes-unit' },
+            { label: 'Homes: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:untitled-79/a/homes-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'Making inferences in informational texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-informational-text/v/making-inferences-in-informational-texts-reading-khan-academy' },
+            { label: 'What is a main idea? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-informational-text/v/what-is-a-main-idea-reading-khan-academy' },
+            { label: 'Relationships between scientific ideas in a text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-informational-text/v/relationships-between-scientific-ideas-in-a-text-reading' },
+            { label: 'Interpreting text features', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-informational-text/v/interpreting-text-features-reading' },
+            { label: 'Finding connections between ideas within a passage', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-informational-text/v/finding-connections-between-ideas-reading' },
             {
-              prompt: 'Igloos are made of snow. They keep out cold wind. People build them in the Arctic. What is the main idea?',
-              answer: 'Igloos are homes made for cold places',
-              explanation: 'Details explain how igloos fit the Arctic.',
-            },
-            {
-              prompt: 'Stilt houses sit on poles above water to avoid floods. What is the main idea?',
-              answer: 'Stilt houses protect against flooding',
-              explanation: 'Poles raise the house over water.',
+              label: 'Homes: reading informational text; Have Home, Will Travel',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-informational-text/e/homes-reading-informational-text-have-home-will-travel-3',
+              question: {
+                prompt: 'Read: "Lions hunt at night. Their eyes see well in the dark." What is the main idea?',
+                answer: 'Lions hunt at night using strong night vision',
+                explanation: 'Both sentences support the same point.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Infer why homes differ by place.',
-          questions: [
+          name: 'Close reading: fiction',
+          items: [
+            { label: 'Looking back at the text for evidence', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-fiction/v/looking-back-at-the-text-for-evidence' },
+            { label: 'Messages and morals | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-fiction/v/messages-and-morals-reading' },
+            { label: 'Summarizing stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-fiction/v/summarizing-stories-reading-khan-academy' },
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-fiction/v/character-actions-in-stories-reading' },
+            { label: 'What do pictures bring to a story? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-fiction/v/what-do-pictures-bring-to-a-story-reading' },
             {
-              prompt: 'Desert homes have thick walls and few windows. Why?',
-              answer: 'To stay cool inside',
-              explanation: 'Thick walls and small windows block heat.',
-            },
-            {
-              prompt: 'Homes in rainy places have steep roofs. Why?',
-              answer: 'So rain runs off',
-              explanation: 'Steep slopes drain water quickly.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Figure out home-related words from clues.',
-          questions: [
-            {
-              prompt: '"The dwelling was small but cozy." What does dwelling mean?',
-              answer: 'A place to live',
-              explanation: 'Context shows dwelling = home.',
-            },
-            {
-              prompt: '"The nomads traveled with portable tents." What does portable mean?',
-              answer: 'Easy to carry',
-              explanation: 'Traveling requires movable items.',
+              label: 'Homes: reading realistic fiction; A New Home',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:close-reading-fiction/e/homes-reading-realistic-fiction-a-new-home-3',
+              question: {
+                prompt: 'A story\'s most exciting moment is called the ___?',
+                answer: 'Climax',
+                explanation: 'The climax is the turning point of the plot.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare homes from different cultures.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:applying-vocabulary-knowledge/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:applying-vocabulary-knowledge/v/figurative-language-reading' },
+            { label: 'What are affixes? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:applying-vocabulary-knowledge/v/what-are-affixes-reading' },
             {
-              prompt: 'Igloos use snow; adobe houses use clay. What differs?',
-              answer: 'The building material',
-              explanation: 'Materials depend on local resources.',
-            },
-            {
-              prompt: 'All homes shelter people. What is the same?',
-              answer: 'Their purpose — shelter',
-              explanation: 'Every home provides protection.',
+              label: 'Homes: vocabulary; Have Home, Will Travel',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:applying-vocabulary-knowledge/e/homes-vocabulary-have-home-will-travel-3',
+              question: {
+                prompt: 'Which word best fits: "She was so ___ she fell asleep at her desk."',
+                answer: 'Tired',
+                explanation: 'Falling asleep shows tiredness.',
+              },
             },
           ],
         },
         {
-          name: 'Text Structure',
-          description: 'Use descriptions and headings to organize facts.',
-          questions: [
+          name: 'Reading for understanding: informational text',
+          items: [
+            { label: 'Summarizing informational text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-informational-text/v/what-is-a-summary-reading-nonfiction-khan-academy' },
+            { label: 'What language shows cause and effect? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-informational-text/v/cause-and-effect-reading' },
             {
-              prompt: 'A heading "Homes Around the World" and a map — what structure?',
-              answer: 'Description by location',
-              explanation: 'The map organizes homes by place.',
+              label: 'Homes: reading informational text; Under One Roof',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-informational-text/e/homes-reading-informational-text-under-one-roof-3',
+              question: {
+                prompt: 'Read: "The campfire crackled and the marshmallows turned gold." What sense words are used?',
+                answer: 'Sound and sight',
+                explanation: '"Crackled" is sound, "gold" is sight.',
+              },
             },
+          ],
+        },
+        {
+          name: 'Reading for understanding: fiction',
+          items: [
+            { label: 'Making inferences in literary texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-fiction/v/making-inferences-in-literary-texts-reading' },
+            { label: 'Understanding theme', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-fiction/v/understanding-theme-reading' },
+            { label: 'The elements of a story', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-fiction/v/the-elements-of-a-story-reading' },
+            { label: 'Reading (and comparing) multiple books | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-fiction/v/reading-and-comparing-multiple-books' },
             {
-              prompt: 'A chart lists homes and their climates. What structure?',
-              answer: 'Description with categories',
-              explanation: 'Charts group related facts.',
+              label: 'Homes: reading realistic fiction; Feels Like Home',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-homes/xaf0c1b5d7010608e:reading-for-understanding-fiction/e/homes-reading-realistic-fiction-finding-a-way-home-3',
+              question: {
+                prompt: 'In informational text, a heading helps you ___?',
+                answer: 'Find what a section is about',
+                explanation: 'Headings label sections so readers locate ideas.',
+              },
             },
           ],
         },
@@ -179,171 +214,102 @@ export const GRADE_DATA: DeepGrade = {
     },
     {
       name: 'Extreme Environments',
-      description: 'Read about survival in harsh places and practice inference, cause and effect, and academic vocabulary.',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Find what a passage about extreme places is mostly about.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Extreme Environments unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-building-knowledge/a/welcome-to-the-extreme-environments-unit' },
+            { label: 'Extreme Environments: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-building-knowledge/a/extreme-environments-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'Summarizing informational text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-informational/v/what-is-a-summary-reading-nonfiction-khan-academy' },
+            { label: 'What language shows cause and effect? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-informational/v/cause-and-effect-reading' },
+            { label: 'Interpreting text features', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-informational/v/interpreting-text-features-reading' },
+            { label: 'Finding connections between ideas within a passage', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-informational/v/finding-connections-between-ideas-reading' },
             {
-              prompt: 'Deep-sea creatures glow to find food in the dark. What is the main idea?',
-              answer: 'Glowing helps creatures survive in dark water',
-              explanation: 'Glowing = adaptation for dark habitat.',
-            },
-            {
-              prompt: 'Camels store fat in humps to survive desert heat. What is the main idea?',
-              answer: 'Camels are built for deserts',
-              explanation: 'Their body design fits harsh deserts.',
+              label: 'Extreme Environments: reading informational text; Extreme Weather around the World',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-informational/e/extreme-environments-reading-informational-text-extreme-weather-around-the-world-3',
+              question: {
+                prompt: 'What does the suffix "-less" mean in "fearless"?',
+                answer: 'Without',
+                explanation: '"-less" means "without".',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Infer how animals adapt to extreme places.',
-          questions: [
+          name: 'Close reading: fiction',
+          items: [
+            { label: 'Summarizing stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-fiction/v/summarizing-stories-reading-khan-academy' },
+            { label: 'Understanding theme', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-fiction/v/understanding-theme-reading' },
+            { label: 'Characters\' thoughts and feelings | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-fiction/v/characters-thoughts-and-feelings-reading' },
+            { label: 'A story\'s point of view | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-fiction/v/a-storys-point-of-view-reading' },
+            { label: 'Reading (and comparing) multiple books | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-fiction/v/reading-and-comparing-multiple-books' },
             {
-              prompt: 'Polar bears have thick fur and fat. Why?',
-              answer: 'To stay warm in cold places',
-              explanation: 'Fur and fat insulate against cold.',
-            },
-            {
-              prompt: 'Cactuses have spines instead of leaves. Why?',
-              answer: 'To save water',
-              explanation: 'Spines reduce water loss.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Learn survival vocabulary from clues.',
-          questions: [
-            {
-              prompt: '"The frog is nocturnal — it is active only at night." What does nocturnal mean?',
-              answer: 'Active at night',
-              explanation: 'Definition given right in the sentence.',
-            },
-            {
-              prompt: '"To hibernate, bears sleep through winter." What does hibernate mean?',
-              answer: 'Sleep through winter',
-              explanation: 'Context defines it.',
+              label: 'Extreme Environments: reading realistic fiction; The Adventures of Fisher',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-close-reading-fiction/e/extreme-environments-reading-realistic-fiction-the-adventures-of-fisher-3',
+              question: {
+                prompt: 'Read: "Grandpa snored loudly. Books shook on the shelf." Pick a hyperbole clue.',
+                answer: 'Books shook on the shelf',
+                explanation: 'It exaggerates how loud the snore is.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare survival in two extreme environments.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-vocabulary/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-vocabulary/v/figurative-language-reading' },
+            { label: 'What are affixes? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-vocabulary/v/what-are-affixes-reading' },
             {
-              prompt: 'Polar bears live in ice; fennec foxes live in desert. What differs?',
-              answer: 'Their climate',
-              explanation: 'Climates shape the species.',
-            },
-            {
-              prompt: 'Both polar bears and fennec foxes have adapted coats. What is the same?',
-              answer: 'Adaptation helps each survive',
-              explanation: 'Both rely on body changes to survive.',
-            },
-          ],
-        },
-        {
-          name: 'Text Structure',
-          description: 'Identify cause-and-effect and problem-solution.',
-          questions: [
-            {
-              prompt: 'Little food on mountains — climbers get weak. What structure?',
-              answer: 'Cause and effect',
-              explanation: 'Low food causes weakness.',
-            },
-            {
-              prompt: 'People bring oxygen tanks to climb Everest. What structure?',
-              answer: 'Problem and solution',
-              explanation: 'Tanks solve the thin-air problem.',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Vocabulary Acquisition and Use',
-      description: 'Learn word parts, figurative language, and shades of meaning for grade 3 words.',
-      lessons: [
-        {
-          name: 'Prefixes and Suffixes',
-          description: 'Use word parts to figure out meanings.',
-          questions: [
-            {
-              prompt: 'What does "preheat" mean?',
-              answer: 'Heat before',
-              explanation: '"Pre-" means before.',
-            },
-            {
-              prompt: 'What does "careful" mean?',
-              answer: 'Full of care',
-              explanation: '"-ful" means "full of."',
+              label: 'Extreme Environments: vocabulary; Extreme Weather around the World',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-vocabulary/e/extreme-environments-vocabulary-extreme-weather-around-the-world-3',
+              question: {
+                prompt: 'A made-up story with talking animals is called a ___?',
+                answer: 'Fable',
+                explanation: 'Fables use animals to teach lessons.',
+              },
             },
           ],
         },
         {
-          name: 'Greek and Latin Roots',
-          description: 'Learn common roots like "tele" and "port."',
-          questions: [
+          name: 'Reading for understanding: informational text; Antarctica',
+          items: [
+            { label: 'What is a main idea? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-reading-for-understanding-informational-antarctica/v/what-is-a-main-idea-reading-khan-academy' },
+            { label: 'Relationships between scientific ideas in a text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-reading-for-understanding-informational-antarctica/v/relationships-between-scientific-ideas-in-a-text-reading' },
             {
-              prompt: '"Tele" means "far." What does "telephone" mean?',
-              answer: 'Sound from far away',
-              explanation: 'Phone = sound; tele = far.',
-            },
-            {
-              prompt: '"Port" means "carry." What does "portable" mean?',
-              answer: 'Able to be carried',
-              explanation: 'Port + able = carryable.',
-            },
-          ],
-        },
-        {
-          name: 'Figurative Language',
-          description: 'Recognize similes and metaphors.',
-          questions: [
-            {
-              prompt: '"Her smile was as bright as the sun." What kind of phrase?',
-              answer: 'Simile',
-              explanation: 'Similes use "like" or "as."',
-            },
-            {
-              prompt: '"The classroom was a zoo." What does it mean?',
-              answer: 'It was loud and wild',
-              explanation: 'Metaphor compares without "like."',
+              label: 'Extreme Environments: reading informational text; What Is Antarctica?',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-reading-for-understanding-informational-antarctica/e/extreme-environments-reading-informational-text-what-is-antarctica-3',
+              question: {
+                prompt: 'Read: "Lee tossed the ball. Spot ran to fetch it." What is Spot most likely?',
+                answer: 'A dog',
+                explanation: 'Fetching is a typical dog action.',
+              },
             },
           ],
         },
         {
-          name: 'Shades of Meaning',
-          description: 'Notice small differences between similar words.',
-          questions: [
+          name: 'Reading for understanding: informational text; The Arctic Circle',
+          items: [
+            { label: 'Using text features to locate information | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-reading-for-understanding-informational-arctic-circle/v/using-text-features-to-locate-information-reading' },
+            { label: 'Reading more than one source on a topic', type: 'video', href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-reading-for-understanding-informational-arctic-circle/v/reading-more-than-one-source-on-a-topic-reading-khan-academy' },
             {
-              prompt: 'Which is stronger: angry or furious?',
-              answer: 'Furious',
-              explanation: '"Furious" is more intense than "angry."',
-            },
-            {
-              prompt: 'Which is gentler: giggle or roar?',
-              answer: 'Giggle',
-              explanation: 'Giggles are soft; roars are loud.',
-            },
-          ],
-        },
-        {
-          name: 'Reference Tools',
-          description: 'Use a dictionary or glossary.',
-          questions: [
-            {
-              prompt: 'Where do you look up a word\'s definition?',
-              answer: 'A dictionary',
-              explanation: 'Dictionaries list meanings.',
-            },
-            {
-              prompt: 'A glossary in a science book has what?',
-              answer: 'Definitions of key words in that book',
-              explanation: 'Glossaries give book-specific terms.',
+              label: 'Extreme Environments: reading informational text; The Arctic Circle',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-3rd-reading-vocab/xaf0c1b5d7010608e:cc-3rd-extreme-environments/xaf0c1b5d7010608e:extreme-environments-reading-for-understanding-informational-arctic-circle/e/extreme-environments-reading-informational-text-the-arctic-circle-3',
+              question: {
+                prompt: 'What does "context clue" mean?',
+                answer: 'Words around an unknown word that hint at its meaning',
+                explanation: 'Context clues help you figure out new vocabulary.',
+              },
             },
           ],
         },

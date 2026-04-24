@@ -4,15 +4,25 @@ export type PracticeQuestion = {
   explanation?: string;
 };
 
+export type KhanItemType = 'exercise' | 'video' | 'article';
+
+export type KhanItem = {
+  label: string;
+  type: KhanItemType;
+  href: string;
+  question?: PracticeQuestion;
+};
+
 export type DeepLesson = {
   name: string;
-  description: string;
-  questions: PracticeQuestion[];
+  description?: string;
+  items?: KhanItem[];
+  questions?: PracticeQuestion[];
 };
 
 export type DeepUnit = {
   name: string;
-  description: string;
+  description?: string;
   lessons: DeepLesson[];
 };
 

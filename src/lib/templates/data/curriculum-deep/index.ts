@@ -6,14 +6,14 @@ import { GRADE_DATA as MATH_2 }                      from './math/grade-2';
 import { GRADE_DATA as MATH_3 }                      from './math/grade-3';
 import { GRADE_DATA as MATH_4 }                      from './math/grade-4';
 import { GRADE_DATA as MATH_5 }                      from './math/grade-5';
-import { GRADE_6 as MATH_6 }                         from './math/grade-6';
-import { GRADE_7 as MATH_7 }                         from './math/grade-7';
-import { GRADE_8 as MATH_8 }                         from './math/grade-8';
-import { ALGEBRA_1 as MATH_ALG1 }                    from './math/algebra-1';
-import { GEOMETRY as MATH_GEO }                      from './math/geometry';
-import { ALGEBRA_2 as MATH_ALG2 }                    from './math/algebra-2';
-import { PRECALCULUS as MATH_PRECALC }               from './math/precalculus';
-import { AP_CALCULUS_AB as MATH_AP_CALC }            from './math/ap-calculus-ab';
+import { GRADE_DATA as MATH_6 }                      from './math/grade-6';
+import { GRADE_DATA as MATH_7 }                      from './math/grade-7';
+import { GRADE_DATA as MATH_8 }                      from './math/grade-8';
+import { GRADE_DATA as MATH_ALG1 }                   from './math/algebra-1';
+import { GRADE_DATA as MATH_GEO }                    from './math/geometry';
+import { GRADE_DATA as MATH_ALG2 }                   from './math/algebra-2';
+import { GRADE_DATA as MATH_PRECALC }                from './math/precalculus';
+import { GRADE_DATA as MATH_AP_CALC }                from './math/ap-calculus-ab';
 
 import { GRADE_DATA as SCI_K2 }                      from './science/k-2';
 import { GRADE_DATA as SCI_35 }                      from './science/3-5';
@@ -56,16 +56,21 @@ export function findDeepGrade(subjectId: string, gradeKey: string): DeepGrade | 
   return list.find((g) => g.grade === gradeKey);
 }
 
-export function countDeep(list: DeepGrade[]): { units: number; lessons: number; questions: number } {
-  let units = 0, lessons = 0, questions = 0;
+export function countDeep(list: DeepGrade[]): { units: number; lessons: number; items: number; questions: number } {
+  let units = 0, lessons = 0, items = 0, questions = 0;
   for (const grade of list) {
     for (const unit of grade.units) {
       units++;
       for (const lesson of unit.lessons) {
         lessons++;
-        questions += lesson.questions.length;
+        const lessonItems = lesson.items ?? [];
+        items += lessonItems.length;
+        for (const item of lessonItems) {
+          if (item.question) questions++;
+        }
+        questions += lesson.questions?.length ?? 0;
       }
     }
   }
-  return { units, lessons, questions };
+  return { units, lessons, items, questions };
 }

@@ -7,171 +7,101 @@ export const GRADE_DATA: DeepGrade = {
   units: [
     {
       name: 'Imaginative Worlds',
-      description: 'Analyze fantasy and science fiction passages to practice theme, point of view, and figurative language.',
       lessons: [
         {
-          name: 'Main Idea and Theme',
-          description: 'Find theme in fantasy and sci-fi texts.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Imaginative Worlds unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:building-knowledge/a/welcome-to-the-imaginative-worlds-unit' },
+            { label: 'Imaginative Worlds: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:building-knowledge/a/imaginative-worlds-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: fiction',
+          items: [
+            { label: 'Making objective summaries of literary texts | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading/v/making-objective-summaries-of-literary-texts-reading' },
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading/v/character-actions-in-stories-reading' },
+            { label: 'How point of view affects readers', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading/v/how-pov-affects-readers-reading' },
+            { label: 'What do pictures bring to a story? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading/v/what-do-pictures-bring-to-a-story-reading' },
             {
-              prompt: 'In a story, travelers cross a magical bridge only if they trust each other. What is the theme?',
-              answer: 'Trust builds bridges',
-              explanation: 'The magic requires trust to pass.',
-            },
-            {
-              prompt: 'A lonely robot learns to feel by helping humans. What is the theme?',
-              answer: 'Connection changes us',
-              explanation: 'The robot grows through relationships.',
+              label: 'Imaginative Worlds: reading creative fiction; Peter Pan 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading/e/imaginative-worlds--reading-creative-fiction--peter-pan-5',
+              question: {
+                prompt: 'Read: "Rosa volunteered every Saturday at the shelter." What can you infer about Rosa?',
+                answer: 'She is caring or generous',
+                explanation: 'Volunteering regularly shows compassion.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Use clues to uncover unstated ideas.',
-          questions: [
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'Making inferences in informational texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading-informational-text/v/making-inferences-in-informational-texts-reading-khan-academy' },
+            { label: 'What is a main idea? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading-informational-text/v/what-is-a-main-idea-reading-khan-academy' },
+            { label: 'How do writers use examples to get their points across?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading-informational-text/v/using-examples-reading' },
+            { label: 'Analyzing an author\'s purpose', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading-informational-text/v/analyzing-an-author-s-purpose-reading' },
+            { label: 'Reading multiple accounts of the same topic | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading-informational-text/v/reading-multiple-accounts-of-the-same-topic' },
             {
-              prompt: 'Mira hid the glowing stone beneath her cloak when the stranger arrived. Why?',
-              answer: 'She did not trust him',
-              explanation: 'Hiding signals caution.',
-            },
-            {
-              prompt: 'The spaceship\'s lights flickered, and alarms wailed. What can you infer?',
-              answer: 'Something is wrong',
-              explanation: 'Flickering + alarms signal danger.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Decode imaginative vocabulary from context.',
-          questions: [
-            {
-              prompt: '"The forest was ominous, its shadows hiding unknown dangers." What does ominous mean?',
-              answer: 'Threatening',
-              explanation: '"Unknown dangers" hint at threat.',
-            },
-            {
-              prompt: '"The alien spoke in an incomprehensible tongue — no one understood." What does incomprehensible mean?',
-              answer: 'Impossible to understand',
-              explanation: '"No one understood" defines it.',
+              label: 'Imaginative Worlds: reading informational text; Peter Pan through the Ages 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:close-reading-informational-text/e/imaginative-worlds--reading-informational-text--peter-pan-through-the-ages-5',
+              question: {
+                prompt: 'Which word means "to make better"?',
+                answer: 'Improve',
+                explanation: '"Improve" means to enhance or upgrade.',
+              },
             },
           ],
         },
         {
-          name: 'Point of View',
-          description: 'Identify whose perspective tells the story.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Making inferences in literary texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:applying-knowledge/v/making-inferences-in-literary-texts-reading' },
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:applying-knowledge/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'Figurative language', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:applying-knowledge/v/figurative-language-reading' },
             {
-              prompt: '"I stepped onto the strange planet." What point of view?',
-              answer: 'First person',
-              explanation: '"I" signals first person.',
-            },
-            {
-              prompt: '"She wondered if the spell would work." What point of view?',
-              answer: 'Third person',
-              explanation: '"She" signals third person.',
-            },
-          ],
-        },
-        {
-          name: 'Figurative Language',
-          description: 'Recognize metaphors and personification.',
-          questions: [
-            {
-              prompt: '"The wind whispered secrets." What is this?',
-              answer: 'Personification',
-              explanation: 'Wind is given human actions.',
-            },
-            {
-              prompt: '"Her courage was a shield." What is this?',
-              answer: 'Metaphor',
-              explanation: 'Direct comparison without "like."',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Inventing Progress',
-      description: 'Read about inventors and their impact while building vocabulary around innovation and cause-effect.',
-      lessons: [
-        {
-          name: 'Main Idea',
-          description: 'Find the central idea in biographies.',
-          questions: [
-            {
-              prompt: 'Thomas Edison failed thousands of times before inventing the light bulb. What is the main idea?',
-              answer: 'Persistence led to invention',
-              explanation: 'His failures led to success.',
-            },
-            {
-              prompt: 'Marie Curie studied radioactivity despite barriers for women in science. What is the main idea?',
-              answer: 'Determination overcame obstacles',
-              explanation: 'She pushed past limits.',
+              label: 'Imaginative Worlds: vocabulary; Peter Pan 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:applying-knowledge/e/imaginative-worlds--vocabulary--peter-pan-5',
+              question: {
+                prompt: 'A story\'s narrator who knows all characters\' thoughts uses what point of view?',
+                answer: 'Third-person omniscient',
+                explanation: 'Omniscient narrators know everything.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Infer inventor motivations and results.',
-          questions: [
+          name: 'Reading for understanding: fiction; The Boy in the Painting',
+          items: [
+            { label: 'Developing themes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:reading-for-understanding-creative-fiction-the-boy-in-the-painting/v/developing-themes-reading' },
             {
-              prompt: 'Alexander Graham Bell built a device so his deaf mother could communicate. What can you infer?',
-              answer: 'He cared about helping others',
-              explanation: 'Helping his mother shows care.',
-            },
-            {
-              prompt: 'After the telephone, people could talk across the country. What can you infer?',
-              answer: 'Communication became faster',
-              explanation: 'Distance shrank with telephones.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Learn innovation words.',
-          questions: [
-            {
-              prompt: '"The invention was revolutionary — it changed everything." What does revolutionary mean?',
-              answer: 'Greatly changing',
-              explanation: '"Changed everything" defines it.',
-            },
-            {
-              prompt: '"She collaborated with engineers — working together." What does collaborated mean?',
-              answer: 'Worked together',
-              explanation: 'The definition is given.',
+              label: 'Imaginative Worlds: reading creative fiction; The Boy in the Painting 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:reading-for-understanding-creative-fiction-the-boy-in-the-painting/e/imaginative-worlds--reading-creative-fiction--the-boy-in-the-painting-5',
+              question: {
+                prompt: 'Read: "The drought turned the field to dust." What does "drought" mean?',
+                answer: 'A long period without rain',
+                explanation: 'Lack of rain dries fields to dust.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare two inventors.',
-          questions: [
+          name: 'Reading for understanding: fiction; The Dawning',
+          items: [
+            { label: 'Character change', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:reading-for-understanding/v/character-change-reading' },
+            { label: 'Reading within and across genres | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:reading-for-understanding/v/reading-within-and-across-genres-reading' },
             {
-              prompt: 'Edison worked alone; Tesla worked in teams. What differs?',
-              answer: 'Their work style',
-              explanation: 'Solo versus team approach.',
-            },
-            {
-              prompt: 'Both created electrical inventions. What is the same?',
-              answer: 'Their field — electricity',
-              explanation: 'Both advanced electricity.',
-            },
-          ],
-        },
-        {
-          name: 'Text Structure',
-          description: 'Identify cause and effect.',
-          questions: [
-            {
-              prompt: '"Because of the cotton gin, cotton production soared." What structure?',
-              answer: 'Cause and effect',
-              explanation: '"Because" signals cause/effect.',
-            },
-            {
-              prompt: '"Air travel led to global business growth." What structure?',
-              answer: 'Cause and effect',
-              explanation: '"Led to" signals cause/effect.',
+              label: 'Imaginative Worlds: reading creative fiction; The Dawning 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-imaginative-worlds/x798e47233e450b09:reading-for-understanding/e/imaginative-worlds--reading-creative-fiction--the-dawning-5',
+              question: {
+                prompt: 'Which is the main idea of: "Bees pollinate plants. Without bees, many crops would fail."?',
+                answer: 'Bees are essential to crops through pollination',
+                explanation: 'Both sentences support this larger point.',
+              },
             },
           ],
         },
@@ -179,257 +109,208 @@ export const GRADE_DATA: DeepGrade = {
     },
     {
       name: 'Athletes in Action',
-      description: 'Study biographies and informational texts about athletes to practice summarizing and evidence.',
       lessons: [
         {
-          name: 'Summarizing',
-          description: 'Summarize an athlete biography.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Athletes in Action unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:untitled-70/a/welcome-to-the-athletes-in-action-unit' },
+            { label: 'Athletes in Action: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:untitled-70/a/athletes-in-action-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text; Title IX',
+          items: [
+            { label: 'Making inferences in informational texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-title-ix/v/making-inferences-in-informational-texts-reading-khan-academy' },
+            { label: 'How can a text have two or more central ideas?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-title-ix/v/two-or-more-main-ideas-reading' },
+            { label: 'How do writers use examples to get their points across?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-title-ix/v/using-examples-reading' },
+            { label: 'Quantitative information in texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-title-ix/v/quantitative-information-in-texts-reading' },
             {
-              prompt: 'Serena Williams won dozens of titles after years of daily practice. Summarize.',
-              answer: 'Williams\' hard work led to many wins',
-              explanation: 'A summary captures the main point briefly.',
-            },
-            {
-              prompt: 'Jesse Owens won 4 gold medals in 1936. Summarize.',
-              answer: 'Owens earned 4 Olympic golds in 1936',
-              explanation: 'Key fact stated concisely.',
+              label: 'Athletes in Action: reading informational text; The Godmother of Title IX 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-title-ix/e/athletes-in-action-reading-informational-text-the-godmother-of-title-ix-5',
+              question: {
+                prompt: 'In "She was a lion in the courtroom," what figure of speech is used?',
+                answer: 'Metaphor',
+                explanation: 'Metaphors compare without using "like" or "as".',
+              },
             },
           ],
         },
         {
-          name: 'Text Evidence',
-          description: 'Support claims with quotes or details.',
-          questions: [
+          name: 'Close reading: informational text; Fast and Female',
+          items: [
+            { label: 'Reading multiple accounts of the same topic | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-fast-and-female/v/reading-multiple-accounts-of-the-same-topic' },
+            { label: 'Reading more than one source on a topic', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-fast-and-female/v/reading-more-than-one-source-on-a-topic-reading-khan-academy' },
             {
-              prompt: '"Usain Bolt ran the 100m in 9.58 seconds." What evidence shows his speed?',
-              answer: 'The 9.58-second time',
-              explanation: 'A specific time is evidence.',
-            },
-            {
-              prompt: 'A passage says Simone Biles has more medals than any other gymnast. What claim is supported?',
-              answer: 'She is among the greatest gymnasts',
-              explanation: 'Medal count supports the claim.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Learn sports vocabulary.',
-          questions: [
-            {
-              prompt: '"Her endurance allowed her to run for hours." What does endurance mean?',
-              answer: 'Ability to keep going',
-              explanation: 'Running for hours shows endurance.',
-            },
-            {
-              prompt: '"He was unrivaled — no one could beat him." What does unrivaled mean?',
-              answer: 'Having no equal',
-              explanation: '"No one could beat him" defines it.',
+              label: 'Athletes in Action: reading informational text; Fast and Female 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:close-reading-informational-text-fast-and-female/e/athletes-in-action-reading-informational-text-fast-and-female-5',
+              question: {
+                prompt: 'Read: "The graph shows ice cream sales rose in summer." Why might that be?',
+                answer: 'Hot weather makes people want cold treats',
+                explanation: 'Inferring from cause and effect.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare two athletes.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:applying-vocabulary-knowledge/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'Latin and Greek roots and affixes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:applying-vocabulary-knowledge/v/latin-and-greek-roots-and-affixes-reading' },
+            { label: 'Connotation', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:applying-vocabulary-knowledge/v/connotation-reading' },
             {
-              prompt: 'One runs marathons; one sprints. What differs?',
-              answer: 'Race distance',
-              explanation: 'Marathons are long; sprints are short.',
-            },
-            {
-              prompt: 'Both train daily. What is the same?',
-              answer: 'Both commit to daily practice',
-              explanation: 'Practice is shared.',
+              label: 'Athletes in Action: vocabulary The Godmother of Title IX 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:applying-vocabulary-knowledge/e/athletes-in-action-vocabulary-the-godmother-of-title-ix-5',
+              question: {
+                prompt: 'Which prefix in "predict" means "before"?',
+                answer: 'pre-',
+                explanation: '"Pre-" means before; "predict" means to say beforehand.',
+              },
             },
           ],
         },
         {
-          name: 'Author\'s Purpose',
-          description: 'Identify why the author wrote the text.',
-          questions: [
+          name: 'Reading for understanding: informational text',
+          items: [
+            { label: 'Creating objective summaries', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-informational-text/v/creating-objective-summaries-reading-khan-academy' },
+            { label: 'What is an argument?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-informational-text/v/what-is-an-argument-reading' },
+            { label: 'Evaluating a source\'s reasoning and evidence', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-informational-text/v/evaluating-a-sources-reasoning-and-evidence' },
             {
-              prompt: 'A biography celebrating an athlete\'s achievements. Why written?',
-              answer: 'To inspire readers',
-              explanation: 'Celebrating achievements inspires.',
+              label: 'Athletes in Action: reading informational text; Muhammad Ali 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-informational-text/e/athletes-in-action-reading-informational-text-muhammad-ali-5',
+              question: {
+                prompt: 'A text that argues for a viewpoint is called a ___?',
+                answer: 'Persuasive or argumentative text',
+                explanation: 'These texts try to convince the reader.',
+              },
             },
+          ],
+        },
+        {
+          name: 'Reading for understanding: poetry',
+          items: [
+            { label: 'Developing themes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-poetry/v/developing-themes-reading' },
+            { label: 'The elements of a poem', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-poetry/v/the-elements-of-a-poem-reading' },
+            { label: 'How point of view affects readers', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-poetry/v/how-pov-affects-readers-reading' },
+            { label: 'Different mediums and the tone of the text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-poetry/v/different-mediums-and-the-tone-of-the-text' },
             {
-              prompt: 'An article lists stats about NBA teams. Why written?',
-              answer: 'To inform',
-              explanation: 'Stats inform.',
+              label: 'Athletes in Action: reading poetry; The Coach 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-athletes-in-action/x798e47233e450b09:reading-for-understanding-poetry/e/athletes-in-action-reading-poetry-the-coach-5',
+              question: {
+                prompt: 'Read: "Eli stared at the letter for a long moment." What does this suggest?',
+                answer: 'The letter contains important news',
+                explanation: 'Long stares suggest emotional reaction.',
+              },
             },
           ],
         },
       ],
     },
     {
-      name: 'Life on the Edge',
-      description: 'Read narratives and nonfiction about extreme environments to build inference and domain vocabulary.',
+      name: 'Inventing Progress',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Find main ideas in survival texts.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Inventing Progress unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-building-knowledge/a/welcome-to-the-inventing-progress-unit' },
+            { label: 'Inventing Progress: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-building-knowledge/a/inventing-progress-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'Creating objective summaries', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-close-reading-informational/v/creating-objective-summaries-reading-khan-academy' },
+            { label: 'How can a text have two or more central ideas?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-close-reading-informational/v/two-or-more-main-ideas-reading' },
+            { label: 'How do writers use examples to get their points across?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-close-reading-informational/v/using-examples-reading' },
+            { label: 'Interpreting text features', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-close-reading-informational/v/interpreting-text-features-reading' },
             {
-              prompt: 'Mountain climbers use oxygen tanks because air is thin. What is the main idea?',
-              answer: 'High altitudes need extra oxygen',
-              explanation: 'Thin air causes this need.',
-            },
-            {
-              prompt: 'Antarctic researchers live in insulated stations. What is the main idea?',
-              answer: 'Cold climates require special homes',
-              explanation: 'Insulation fights extreme cold.',
+              label: 'Inventing Progress: reading informational text; Discovering the Process of Invention 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:inventing-progress-close-reading-informational/e/inventing-progress-reading-informational-text-discovering-the-process-of-invention-5',
+              question: {
+                prompt: 'Which word is closest in meaning to "reluctant"?',
+                answer: 'Hesitant',
+                explanation: '"Reluctant" means unwilling or hesitant.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Infer challenges of extreme environments.',
-          questions: [
+          name: 'Close reading: argumentative text',
+          items: [
+            { label: 'The structures of informational texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:close-reading-argumentative-text/v/the-structures-of-informational-texts-reading' },
+            { label: 'Analyzing an author\'s purpose', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:close-reading-argumentative-text/v/analyzing-an-author-s-purpose-reading' },
+            { label: 'What is an argument?', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:close-reading-argumentative-text/v/what-is-an-argument-reading' },
+            { label: 'Evaluating a source\'s reasoning and evidence', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:close-reading-argumentative-text/v/evaluating-a-sources-reasoning-and-evidence' },
+            { label: 'Reading more than one source on a topic', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:close-reading-argumentative-text/v/reading-more-than-one-source-on-a-topic-reading-khan-academy' },
             {
-              prompt: 'Divers shiver as they surface from deep water. What can you infer?',
-              answer: 'Deep water is cold',
-              explanation: 'Shivering signals cold.',
-            },
-            {
-              prompt: 'The team carries triple the normal food on the ice trek. Why?',
-              answer: 'They will burn more energy',
-              explanation: 'Cold and effort burn calories.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Learn survival-related words.',
-          questions: [
-            {
-              prompt: '"The summit was perilous — one wrong step could be fatal." What does perilous mean?',
-              answer: 'Dangerous',
-              explanation: '"Fatal step" hints at danger.',
-            },
-            {
-              prompt: '"They had to acclimate to the altitude over days." What does acclimate mean?',
-              answer: 'Adjust to',
-              explanation: 'Adjusting slowly = acclimating.',
+              label: 'Inventing Progress: reading informational text; Competition and Collaboration 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:close-reading-argumentative-text/e/inventing-progress-reading-informational-text-competition-and-collaboration-5',
+              question: {
+                prompt: 'A summary should include ___?',
+                answer: 'The main idea and key supporting details',
+                explanation: 'Summaries focus on the essentials.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare two extreme places.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:untitled-99/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'Latin and Greek roots and affixes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:untitled-99/v/latin-and-greek-roots-and-affixes-reading' },
+            { label: 'Connotation', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:untitled-99/v/connotation-reading' },
             {
-              prompt: 'Deserts are hot and dry; tundras are cold and dry. What differs?',
-              answer: 'Temperature',
-              explanation: 'Both are dry, but temperature varies.',
-            },
-            {
-              prompt: 'Both have sparse plants. What is the same?',
-              answer: 'Limited plant life',
-              explanation: 'Harshness limits plants.',
-            },
-          ],
-        },
-        {
-          name: 'Text Structure',
-          description: 'Identify problem-and-solution structure.',
-          questions: [
-            {
-              prompt: '"Thin air (problem) — climbers bring oxygen (solution)." What structure?',
-              answer: 'Problem and solution',
-              explanation: 'Explicit problem + fix.',
-            },
-            {
-              prompt: '"To protect from sun, researchers wear UV suits." What structure?',
-              answer: 'Problem and solution',
-              explanation: 'Suits solve UV problem.',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'The Stories We Tell',
-      description: 'Compare how cultures share stories and traditions across fiction and nonfiction texts.',
-      lessons: [
-        {
-          name: 'Main Idea and Theme',
-          description: 'Find the main idea in cultural stories.',
-          questions: [
-            {
-              prompt: 'Many cultures tell trickster tales to teach kids wisdom. What is the main idea?',
-              answer: 'Tricksters teach lessons',
-              explanation: 'Stories with tricksters carry morals.',
-            },
-            {
-              prompt: 'A family passes down a grandmother\'s recipe for generations. What theme?',
-              answer: 'Traditions connect families',
-              explanation: 'Shared recipes bond generations.',
+              label: 'Inventing Progress: vocabulary; Discovering the Process of Invention 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:untitled-99/e/inventing-progress-vocabulary-discovering-the-process-of-invention-5',
+              question: {
+                prompt: 'Read: "Trees provide oxygen and shade." This sentence is best described as ___?',
+                answer: 'A factual statement',
+                explanation: 'It states verifiable information.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Infer cultural meanings from stories.',
-          questions: [
+          name: 'Reading for understanding: fiction; The Ingenuity Fair',
+          items: [
+            { label: 'Making inferences in literary texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-the-ingenuity-fair/v/making-inferences-in-literary-texts-reading' },
+            { label: 'Making objective summaries of literary texts | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-the-ingenuity-fair/v/making-objective-summaries-of-literary-texts-reading' },
+            { label: 'The elements of a story', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-the-ingenuity-fair/v/the-elements-of-a-story-reading' },
+            { label: 'How point of view affects readers', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-the-ingenuity-fair/v/how-pov-affects-readers-reading' },
             {
-              prompt: 'An elder tells a story only during full moons. What can you infer?',
-              answer: 'The story has cultural significance',
-              explanation: 'Timing shows special value.',
-            },
-            {
-              prompt: 'A character shares bread with a poor stranger and is rewarded. What value?',
-              answer: 'Kindness is valued',
-              explanation: 'Rewarding kindness teaches a lesson.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Learn culture-related words.',
-          questions: [
-            {
-              prompt: '"The oral tradition — stories told aloud for ages — kept history alive." What does oral mean?',
-              answer: 'Spoken, not written',
-              explanation: '"Told aloud" defines it.',
-            },
-            {
-              prompt: '"The custom was ancestral — passed down by ancestors." What does ancestral mean?',
-              answer: 'From ancestors',
-              explanation: 'The definition is in the sentence.',
+              label: 'Inventing Progress: reading realistic fiction; The Ingenuity Fair 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-the-ingenuity-fair/e/inventing-progress-reading-realistic-fiction-the-ingenuity-fair-5',
+              question: {
+                prompt: 'Which word completes: "Despite the storm, the team ___ to play."',
+                answer: 'Decided',
+                explanation: '"Decided" fits a determined choice despite obstacles.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare stories from different cultures.',
-          questions: [
+          name: 'Reading for understanding: fiction; Robots and Turtles',
+          items: [
+            { label: 'Developing themes', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-robots-rivals/v/developing-themes-reading' },
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-robots-rivals/v/character-actions-in-stories-reading' },
+            { label: 'Reading within and across genres | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-robots-rivals/v/reading-within-and-across-genres-reading' },
             {
-              prompt: 'One culture tells flood stories with heroes; another with gods. What differs?',
-              answer: 'Who saves the day',
-              explanation: 'The role players vary.',
-            },
-            {
-              prompt: 'Both flood tales explain how life restarted. What is the same?',
-              answer: 'Theme of renewal',
-              explanation: 'Rebirth is shared.',
-            },
-          ],
-        },
-        {
-          name: 'Text Structure',
-          description: 'Identify description and sequence in stories.',
-          questions: [
-            {
-              prompt: 'A legend gives a hero\'s journey from birth to old age. What structure?',
-              answer: 'Chronological',
-              explanation: 'Tracking life events shows sequence.',
-            },
-            {
-              prompt: 'A passage describes festival foods. What structure?',
-              answer: 'Description',
-              explanation: 'Listing features is description.',
+              label: 'Inventing Progress: reading realistic fiction; Robots and Turtles 5',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-5th-reading-vocab/x798e47233e450b09:cc-5th-inventing-progress/x798e47233e450b09:reading-for-understanding-fiction-robots-rivals/e/inventing-progress-reading-realistic-fiction-robots-and-rivals-5',
+              question: {
+                prompt: 'In poetry, alliteration is the repetition of ___?',
+                answer: 'Initial consonant sounds',
+                explanation: '"Silly Sally swam" repeats the "s" sound.',
+              },
             },
           ],
         },

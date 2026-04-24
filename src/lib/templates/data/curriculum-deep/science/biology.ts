@@ -6,377 +6,527 @@ export const GRADE_DATA: DeepGrade = {
   sourceUrl: 'https://www.khanacademy.org/science/high-school-biology',
   units: [
     {
+      name: 'Biology foundations',
+      lessons: [
+        {
+          name: 'Biology and the scientific method',
+          items: [
+            { label: 'Biology overview', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/v/overview-of-biology' },
+            { label: 'Preparing to study biology', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/a/preparing-to-study-biology-article' },
+            { label: 'What is life?', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/a/what-is-life' },
+            { label: 'The scientific method', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/v/the-scientific-method' },
+            { label: 'Data to justify experimental claims examples', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/v/data-to-justify-experimental-claims-examples' },
+            { label: 'Scientific method and data analysis', type: 'exercise', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/e/hs-scientific-method-and-experimental-design', question: { prompt: 'Explain in 1-2 sentences the central idea of: Scientific method and data analysis.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+            { label: 'Introduction to experimental design', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/v/introduction-to-experimental-design' },
+            { label: 'Controlled experiments', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/a/experiments-and-observations' },
+            { label: 'Biology and the scientific method review', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/a/hs-biology-and-the-scientific-method-review' },
+            { label: 'Experimental design and bias', type: 'exercise', href: '/science/high-school-biology/hs-biology-foundations/hs-biology-and-the-scientific-method/e/hs-experimental-design-and-bias', question: { prompt: 'Explain in 1-2 sentences the central idea of: Experimental design and bias.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'Important molecules for biology',
+          items: [
+            { label: 'Elements and atoms', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/v/elements-and-atoms' },
+            { label: 'Introduction to carbohydrates', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/v/introduction-to-carbohydrates' },
+            { label: 'Introduction to proteins and amino acids', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/v/introduction-to-proteins-and-amino-acids' },
+            { label: 'Introduction to lipids', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/v/introduction-to-lipids' },
+            { label: 'Introduction to nucleic acids and nucleotides', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/v/introduction-to-nucleic-acids-and-nucleotides' },
+            { label: 'Introduction to vitamins and minerals', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/v/introduction-to-vitamins-and-minerals' },
+            { label: 'Biological macromolecules review', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/a/hs-biological-macromolecules-review' },
+            { label: 'Biological macromolecules', type: 'exercise', href: '/science/high-school-biology/hs-biology-foundations/hs-biological-macromolecules/e/biological-macromolecules', question: { prompt: 'Explain in 1-2 sentences the central idea of: Biological macromolecules.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'Water and life',
+          items: [
+            { label: 'Hydrogen bonding in water', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-water-and-life/v/hydrogen-bonding-in-water' },
+            { label: 'Water as a solvent', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-water-and-life/v/water-as-a-solvent' },
+            { label: 'Lesson summary: Water and life', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-water-and-life/a/hs-water-and-life-review' },
+            { label: 'Water and life', type: 'exercise', href: '/science/high-school-biology/hs-biology-foundations/hs-water-and-life/e/water-and-life', question: { prompt: 'Explain in 1-2 sentences the central idea of: Water and life.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'pH, acids, and bases',
+          items: [
+            { label: 'Introduction to pH', type: 'video', href: '/science/high-school-biology/hs-biology-foundations/hs-ph-acids-and-bases/v/introduction-to-ph' },
+            { label: 'pH, acids, and bases review', type: 'article', href: '/science/high-school-biology/hs-biology-foundations/hs-ph-acids-and-bases/a/hs-ph-acids-and-bases-review' },
+            { label: 'pH, acids, and bases', type: 'exercise', href: '/science/high-school-biology/hs-biology-foundations/hs-ph-acids-and-bases/e/ph', question: { prompt: 'Explain in 1-2 sentences the central idea of: pH, acids, and bases.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+      ],
+    },
+    {
       name: 'Cells',
-      description: 'Investigate cell theory, organelles, membranes, and how cells carry out processes.',
       lessons: [
         {
-          name: 'Cell Theory and Discovery',
-          description: 'Learn the three principles of cell theory and key historical discoveries.',
-          questions: [
-            { prompt: 'State all three principles of cell theory.', answer: 'All living things are made of cells; cells are the basic unit of life; all cells come from pre-existing cells.', explanation: 'These three tenets form the foundation of modern biology.' },
-            { prompt: 'Which scientist first observed and named "cells" in cork?', answer: 'Robert Hooke', explanation: 'Hooke used a compound microscope in 1665 and saw empty chambers resembling monastery cells.' },
+          name: 'Introduction to cells',
+          items: [
+            { label: 'Scale of cells', type: 'video', href: '/science/high-school-biology/hs-cells/hs-introduction-to-cells/v/scale-of-cells' },
+            { label: 'Cell theory', type: 'video', href: '/science/high-school-biology/hs-cells/hs-introduction-to-cells/v/cell-theory' },
+            { label: 'Microscopy', type: 'article', href: '/science/high-school-biology/hs-cells/hs-introduction-to-cells/a/microscopy' },
+            { label: 'Introduction to cells review', type: 'article', href: '/science/high-school-biology/hs-cells/hs-introduction-to-cells/a/hs-intro-to-cells-review' },
+            { label: 'Intro to cells', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-introduction-to-cells/e/intro-to-cells', question: { prompt: 'Explain in 1-2 sentences the central idea of: Intro to cells.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Prokaryotic vs Eukaryotic Cells',
-          description: 'Compare structure and complexity of bacterial and animal/plant cells.',
-          questions: [
-            { prompt: 'Name two structural features found in eukaryotes but not prokaryotes.', answer: 'Membrane-bound nucleus and membrane-bound organelles such as mitochondria.', explanation: 'Prokaryotes lack any internal membrane-bound compartments.' },
-            { prompt: 'Which domain of life contains only prokaryotes?', answer: 'Bacteria and Archaea', explanation: 'Eukarya is the only domain with eukaryotic cells.' },
+          name: 'Basic cell structures',
+          items: [
+            { label: 'Introduction to the cell', type: 'video', href: '/science/high-school-biology/hs-cells/hs-basic-cell-structures/v/introduction-to-the-cell' },
+            { label: 'Introduction to cilia, flagella and pseudopodia', type: 'video', href: '/science/high-school-biology/hs-cells/hs-basic-cell-structures/v/introduction-to-cilia-flagella-and-pseudopodia' },
+            { label: 'Basic cell structures review', type: 'article', href: '/science/high-school-biology/hs-cells/hs-basic-cell-structures/a/hs-basic-cell-structures-review' },
+            { label: 'Identifying cell structures', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-basic-cell-structures/e/identifying-cell-structures', question: { prompt: 'Explain in 1-2 sentences the central idea of: Identifying cell structures.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+            { label: 'Basic cell structures', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-basic-cell-structures/e/cell-structures', question: { prompt: 'Explain in 1-2 sentences the central idea of: Basic cell structures.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Organelles and Their Functions',
-          description: 'Match each major organelle to the job it performs inside the cell.',
-          questions: [
-            { prompt: 'Which organelle produces most of a cell\'s ATP?', answer: 'Mitochondrion', explanation: 'The inner membrane hosts the electron transport chain and ATP synthase.' },
-            { prompt: 'What is the primary function of the rough endoplasmic reticulum?', answer: 'Protein synthesis and modification', explanation: 'Ribosomes on its surface translate proteins destined for membranes or secretion.' },
+          name: 'The cell membrane',
+          items: [
+            { label: 'Fluid mosaic model of cell membranes', type: 'video', href: '/science/high-school-biology/hs-cells/hs-the-cell-membrane/v/fluid-mosaic-model-of-cell-membranes' },
+            { label: 'Structure of the plasma membrane', type: 'article', href: '/science/high-school-biology/hs-cells/hs-the-cell-membrane/a/structure-of-the-plasma-membrane' },
+            { label: 'The cell membrane review', type: 'article', href: '/science/high-school-biology/hs-cells/hs-the-cell-membrane/a/hs-the-cell-membrane-review' },
+            { label: 'The cell membrane', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-the-cell-membrane/e/cell-membrane-and-homeostasis', question: { prompt: 'Define osmosis.', answer: 'The diffusion of water across a selectively permeable membrane from high to low water concentration.', explanation: 'It is passive, requiring no energy.' } },
           ],
         },
         {
-          name: 'Cell Membrane Structure',
-          description: 'Describe the fluid mosaic model and how it controls what enters and exits.',
-          questions: [
-            { prompt: 'What two molecules form the basic bilayer of the plasma membrane?', answer: 'Phospholipids', explanation: 'Phospholipids arrange in a bilayer with hydrophilic heads outside and hydrophobic tails inside.' },
-            { prompt: 'Why is the membrane called a "fluid mosaic"?', answer: 'Lipids and proteins move laterally within the bilayer, forming a mosaic-like pattern.', explanation: 'The model was proposed by Singer and Nicolson in 1972.' },
+          name: 'Eukaryotic cell structures',
+          items: [
+            { label: 'Organelles in eukaryotic cells', type: 'video', href: '/science/high-school-biology/hs-cells/hs-eukaryotic-cell-structures/v/organelles-in-eukaryotic-cells' },
+            { label: 'Eukaryotic cell structures review', type: 'article', href: '/science/high-school-biology/hs-cells/hs-eukaryotic-cell-structures/a/hs-eukaryotic-cell-structures-review' },
+            { label: 'Identifying eukaryotic cell structures', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-eukaryotic-cell-structures/e/identifying-eukaryotic-cell-structures', question: { prompt: 'Which organelle synthesizes ATP through oxidative phosphorylation?', answer: 'Mitochondria', explanation: 'The inner-membrane electron transport chain drives ATP synthase.' } },
+            { label: 'Eukaryotic cell structures', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-eukaryotic-cell-structures/e/hs-eukaryotic-cell-structures', question: { prompt: 'Which organelle synthesizes ATP through oxidative phosphorylation?', answer: 'Mitochondria', explanation: 'The inner-membrane electron transport chain drives ATP synthase.' } },
           ],
         },
         {
-          name: 'Levels of Biological Organization',
-          description: 'Order biological structures from atoms to the biosphere.',
-          questions: [
-            { prompt: 'Put in order smallest to largest: tissue, organ, cell, organ system.', answer: 'Cell, tissue, organ, organ system.', explanation: 'Cells group into tissues, tissues into organs, and organs into organ systems.' },
-            { prompt: 'Which level includes all populations of all species in an area?', answer: 'Community', explanation: 'A community plus its abiotic environment makes an ecosystem.' },
+          name: 'Prokaryotes and eukaryotes',
+          items: [
+            { label: 'Prokaryotic and eukaryotic cells', type: 'video', href: '/science/high-school-biology/hs-cells/hs-prokaryotes-and-eukaryotes/v/prokaryotic-and-eukaryotic-cells' },
+            { label: 'Prokaryotic cells', type: 'article', href: '/science/high-school-biology/hs-cells/hs-prokaryotes-and-eukaryotes/a/prokaryotic-cells' },
+            { label: 'Intro to eukaryotic cells', type: 'article', href: '/science/high-school-biology/hs-cells/hs-prokaryotes-and-eukaryotes/a/intro-to-eukaryotic-cells' },
+            { label: 'Mitochondria and chloroplasts', type: 'article', href: '/science/high-school-biology/hs-cells/hs-prokaryotes-and-eukaryotes/a/chloroplasts-and-mitochondria' },
+            { label: 'Prokaryotes and eukaryotes review', type: 'article', href: '/science/high-school-biology/hs-cells/hs-prokaryotes-and-eukaryotes/a/hs-prokaryotes-and-eukaryotes-review' },
+            { label: 'Prokaryotes and eukaryotes', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-prokaryotes-and-eukaryotes/e/prokaryotes-and-eukaryotes', question: { prompt: 'Explain in 1-2 sentences the central idea of: Prokaryotes and eukaryotes.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'Plant vs animal cells',
+          items: [
+            { label: 'Overview of animal and plant cells', type: 'video', href: '/science/high-school-biology/hs-cells/hs-plant-vs-animal-cells/v/overview-of-animal-and-plant-cells' },
+            { label: 'Plant vs animal cells review', type: 'article', href: '/science/high-school-biology/hs-cells/hs-plant-vs-animal-cells/a/hs-plant-vs-animal-cells-review' },
+            { label: 'Plant vs animal cells', type: 'exercise', href: '/science/high-school-biology/hs-cells/hs-plant-vs-animal-cells/e/plant-vs-animal-cells', question: { prompt: 'Which tissue carries sugars from leaves to other parts of a plant?', answer: 'Phloem', explanation: 'Xylem moves water and minerals upward.' } },
           ],
         },
       ],
     },
     {
-      name: 'Energy and Transport in Cells',
-      description: 'Study photosynthesis, cellular respiration, and how cells move materials in and out.',
+      name: 'Energy and transport',
       lessons: [
         {
-          name: 'Photosynthesis Overview',
-          description: 'Trace how plants convert light energy into chemical energy stored in glucose.',
-          questions: [
-            { prompt: 'Write the balanced overall equation for photosynthesis.', answer: '6CO2 + 6H2O -> C6H12O6 + 6O2', explanation: 'Six carbon dioxide and six water yield one glucose and six oxygen using light energy.' },
-            { prompt: 'In which organelle does photosynthesis occur?', answer: 'Chloroplast', explanation: 'Light reactions happen in thylakoids and the Calvin cycle in the stroma.' },
+          name: 'Introduction to metabolism',
+          items: [
+            { label: 'Introduction to metabolism: Anabolism and catabolism', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-introduction-to-metabolism/v/introduction-to-metabolism-anabolism-and-catabolism' },
+            { label: 'Overview of metabolism', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-introduction-to-metabolism/a/overview-of-metabolism' },
+            { label: 'ATP: Adenosine triphosphate', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-introduction-to-metabolism/v/adenosine-triphosphate' },
+            { label: 'Introduction to metabolism review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-introduction-to-metabolism/a/hs-introduction-to-metabolism-review' },
+            { label: 'Introduction to metabolism', type: 'exercise', href: '/science/high-school-biology/hs-energy-and-transport/hs-introduction-to-metabolism/e/introduction-to-metabolism', question: { prompt: 'How does an enzyme speed up a reaction?', answer: 'By lowering its activation energy.', explanation: 'Enzymes do not change the equilibrium, only the rate.' } },
           ],
         },
         {
-          name: 'Cellular Respiration',
-          description: 'Follow glucose through glycolysis, the Krebs cycle, and the electron transport chain.',
-          questions: [
-            { prompt: 'How many net ATP molecules does aerobic respiration typically yield per glucose?', answer: 'About 30-32 ATP', explanation: 'Newer textbooks cite ~30-32 accounting for the cost of shuttling NADH.' },
-            { prompt: 'Where does the Krebs cycle take place inside the cell?', answer: 'Mitochondrial matrix', explanation: 'Pyruvate is converted to acetyl-CoA and enters the cycle in the matrix.' },
+          name: 'Enzymes',
+          items: [
+            { label: 'Introduction to kinetics', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-enzymes/v/introduction-to-kinetics' },
+            { label: 'Activation energy', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-enzymes/a/activation-energy' },
+            { label: 'Enzymes', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-enzymes/v/enzymes' },
+            { label: 'Enzymes review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-enzymes/a/hs-enzymes-review' },
           ],
         },
         {
-          name: 'Passive Transport',
-          description: 'Explore diffusion, osmosis, and facilitated diffusion across membranes.',
-          questions: [
-            { prompt: 'A cell placed in hypertonic solution will do what?', answer: 'Lose water and shrink (crenate or plasmolyze).', explanation: 'Water moves from high to low water concentration, leaving the cell.' },
-            { prompt: 'Does passive transport require ATP?', answer: 'No', explanation: 'Movement follows the concentration gradient and requires no cellular energy.' },
+          name: 'Passive and active transport',
+          items: [
+            { label: 'Introduction to passive and active transport', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/v/introduction-to-passive-and-active-transport' },
+            { label: 'Diffusion - Introduction', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/v/diffusion-video' },
+            { label: 'Concentration gradients', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/v/concentration-gradients' },
+            { label: 'Passive transport review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/a/hs-passive-transport-review' },
+            { label: 'Passive transport', type: 'exercise', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/e/hs-passive-transport', question: { prompt: 'Define osmosis.', answer: 'The diffusion of water across a selectively permeable membrane from high to low water concentration.', explanation: 'It is passive, requiring no energy.' } },
+            { label: 'Sodium potassium pump', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/v/sodium-potassium-pump-video' },
+            { label: 'Active transport review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/a/hs-active-transport-review' },
+            { label: 'Active transport', type: 'exercise', href: '/science/high-school-biology/hs-energy-and-transport/hs-passive-and-active-transport/e/hs-active-transport', question: { prompt: 'Define osmosis.', answer: 'The diffusion of water across a selectively permeable membrane from high to low water concentration.', explanation: 'It is passive, requiring no energy.' } },
           ],
         },
         {
-          name: 'Active Transport',
-          description: 'Examine pumps, endocytosis, and exocytosis that move molecules against gradients.',
-          questions: [
-            { prompt: 'What is pumped by the sodium-potassium pump and in which direction?', answer: '3 Na+ out, 2 K+ in per ATP hydrolyzed.', explanation: 'This creates an electrochemical gradient essential for nerve signaling.' },
-            { prompt: 'Which process engulfs large particles into the cell?', answer: 'Phagocytosis', explanation: 'A form of endocytosis in which the membrane wraps around solid material.' },
+          name: 'Osmosis and tonicity',
+          items: [
+            { label: 'Osmosis', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-osmosis-and-tonicity/v/osmosis' },
+            { label: 'Hypotonic, isotonic, and hypertonic solutions (tonicity)', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-osmosis-and-tonicity/v/hypotonic-isotonic-and-hypertonic-solutions-tonicity' },
+            { label: 'Osmosis and tonicity review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-osmosis-and-tonicity/a/hs-osmosis-and-tonicity-review' },
+            { label: 'Osmosis and tonicity', type: 'exercise', href: '/science/high-school-biology/hs-energy-and-transport/hs-osmosis-and-tonicity/e/osmosis', question: { prompt: 'Define osmosis.', answer: 'The diffusion of water across a selectively permeable membrane from high to low water concentration.', explanation: 'It is passive, requiring no energy.' } },
           ],
         },
         {
-          name: 'Enzymes and Metabolism',
-          description: 'Understand activation energy, active sites, and factors affecting enzyme activity.',
-          questions: [
-            { prompt: 'What do enzymes lower so reactions can occur faster?', answer: 'Activation energy', explanation: 'Enzymes stabilize the transition state, reducing the energy barrier.' },
-            { prompt: 'Will heating an enzyme to 80 C typically increase or decrease its activity? Why?', answer: 'Decrease - high heat denatures the protein and destroys its active site.', explanation: 'Denaturation breaks the 3D shape needed for substrate binding.' },
+          name: 'Photosynthesis',
+          items: [
+            { label: 'Breaking down photosynthesis stages', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-photosynthesis/v/breaking-down-photosynthesis-stages' },
+            { label: 'Photosynthesis review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-photosynthesis/a/hs-photosynthesis-review' },
+            { label: 'Photosynthesis', type: 'exercise', href: '/science/high-school-biology/hs-energy-and-transport/hs-photosynthesis/e/hs-photosynthesis', question: { prompt: 'Write the overall chemical equation for photosynthesis.', answer: '6 CO2 + 6 H2O -> C6H12O6 + 6 O2 (with light energy)', explanation: 'It captures light energy as glucose.' } },
+          ],
+        },
+        {
+          name: 'Cellular respiration',
+          items: [
+            { label: 'Cellular respiration introduction', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-cellular-respiration/v/introduction-to-cellular-respiration' },
+            { label: 'Lactic acid fermentation', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-cellular-respiration/v/lactic-acid-fermentation' },
+            { label: 'Alcohol or ethanol fermentation', type: 'video', href: '/science/high-school-biology/hs-energy-and-transport/hs-cellular-respiration/v/alcohol-or-ethanol-fermentation' },
+            { label: 'Cellular respiration review', type: 'article', href: '/science/high-school-biology/hs-energy-and-transport/hs-cellular-respiration/a/hs-cellular-respiration-review' },
+            { label: 'Cellular respiration', type: 'exercise', href: '/science/high-school-biology/hs-energy-and-transport/hs-cellular-respiration/e/hs-cellular-respiration', question: { prompt: 'Roughly how many ATP does aerobic respiration of one glucose typically yield?', answer: 'About 30 to 32 ATP', explanation: 'Glycolysis (~2), Krebs (~2), and oxidative phosphorylation (~26 to 28).' } },
           ],
         },
       ],
     },
     {
-      name: 'Reproduction and Cell Division',
-      description: 'Examine mitosis, meiosis, and how sexual reproduction produces genetic variation.',
+      name: 'Reproduction and cell division',
       lessons: [
         {
-          name: 'The Cell Cycle',
-          description: 'Identify phases of interphase and checkpoints that regulate division.',
-          questions: [
-            { prompt: 'What occurs during the S phase of interphase?', answer: 'DNA replication', explanation: 'Each chromosome is duplicated into two sister chromatids.' },
-            { prompt: 'Name the three main checkpoints of the cell cycle.', answer: 'G1, G2, and M (spindle) checkpoints.', explanation: 'These ensure DNA integrity and proper spindle attachment.' },
+          name: 'Types of reproduction',
+          items: [
+            { label: 'Asexual and sexual reproduction', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-types-of-reproduction/v/asexual-and-sexual-reproduction' },
+            { label: 'Types of reproduction review', type: 'article', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-types-of-reproduction/a/hs-types-of-reproduction-review' },
+            { label: 'Types of reproduction', type: 'exercise', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-types-of-reproduction/e/types-of-reproduction', question: { prompt: 'Explain in 1-2 sentences the central idea of: Types of reproduction.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Mitosis Phases',
-          description: 'Walk through prophase, metaphase, anaphase, telophase, and cytokinesis.',
-          questions: [
-            { prompt: 'During which phase do sister chromatids separate?', answer: 'Anaphase', explanation: 'Microtubules pull chromatids toward opposite poles.' },
-            { prompt: 'A human body cell enters mitosis with 46 chromosomes. Each daughter cell has how many?', answer: '46', explanation: 'Mitosis produces two genetically identical diploid daughter cells.' },
+          name: 'Chromosome structure and numbers',
+          items: [
+            { label: 'Chromosomes', type: 'article', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-chromosome-structure-and-numbers/a/dna-and-chromosomes-article' },
+            { label: 'Chromosomes, chromatids and chromatin', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-chromosome-structure-and-numbers/v/chromosomes-chromatids-chromatin-etc' },
+            { label: 'Chromosome structure and numbers review', type: 'article', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-chromosome-structure-and-numbers/a/hs-chromosome-structure-and-numbers-review' },
           ],
         },
         {
-          name: 'Meiosis and Gamete Formation',
-          description: 'Compare meiosis I and II and how they produce haploid gametes.',
-          questions: [
-            { prompt: 'How many daughter cells result from one cell going through meiosis?', answer: 'Four haploid cells', explanation: 'Two sequential divisions yield four genetically unique gametes.' },
-            { prompt: 'A human gamete contains how many chromosomes?', answer: '23', explanation: 'Haploid (n) = half of the diploid number 46.' },
+          name: 'The cell cycle and mitosis',
+          items: [
+            { label: 'Interphase', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-the-cell-cycle-and-mitosis/v/interphase' },
+            { label: 'Mitosis', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-the-cell-cycle-and-mitosis/v/mitosis' },
+            { label: 'Cancer', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-the-cell-cycle-and-mitosis/v/cancer' },
+            { label: 'The cell cycle and mitosis review', type: 'article', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-the-cell-cycle-and-mitosis/a/hs-the-cell-cycle-and-mitosis-review' },
+            { label: 'The cell cycle and mitosis', type: 'exercise', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-the-cell-cycle-and-mitosis/e/hs-the-cell-cycle-and-mitosis', question: { prompt: 'Name the four phases of mitosis in order.', answer: 'Prophase, metaphase, anaphase, telophase.', explanation: 'Cytokinesis follows to split the cell.' } },
           ],
         },
         {
-          name: 'Sources of Genetic Variation',
-          description: 'Explore crossing over, independent assortment, and random fertilization.',
-          questions: [
-            { prompt: 'During which meiotic phase does crossing over occur?', answer: 'Prophase I', explanation: 'Homologous chromosomes pair up and exchange segments at chiasmata.' },
-            { prompt: 'Roughly how many unique gamete combinations can humans make from independent assortment alone?', answer: '2^23 ≈ 8.4 million', explanation: 'Each of 23 chromosome pairs can orient two ways.' },
+          name: 'Meiosis',
+          items: [
+            { label: 'Chromosomal crossover in meiosis I', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-meiosis/v/chromosomal-crossover-in-meiosis-i' },
+            { label: 'Phases of meiosis I', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-meiosis/v/phases-of-meiosis-i' },
+            { label: 'Phases of meiosis II', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-meiosis/v/phases-of-meiosis-ii' },
+            { label: 'Comparing mitosis and meiosis', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-meiosis/v/comparing-mitosis-and-meiosis' },
+            { label: 'Meiosis review', type: 'article', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-meiosis/a/hs-meiosis-review' },
+            { label: 'Meiosis', type: 'exercise', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-meiosis/e/hs-meiosis', question: { prompt: 'How does meiosis create genetic variation?', answer: 'Through independent assortment and crossing over (recombination).', explanation: 'Both occur during meiosis I.' } },
           ],
         },
         {
-          name: 'Asexual vs Sexual Reproduction',
-          description: 'Weigh trade-offs between speed, variation, and adaptability.',
-          questions: [
-            { prompt: 'Give one advantage of asexual reproduction over sexual reproduction.', answer: 'Faster and does not require a mate.', explanation: 'All energy goes to offspring production instead of finding partners.' },
-            { prompt: 'Why is sexual reproduction favored in changing environments?', answer: 'It creates genetic variation, improving survival chances.', explanation: 'Variation provides raw material for natural selection.' },
+          name: 'Fertilization and development',
+          items: [
+            { label: 'Human fertilization and early development', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-fertilization-and-development/v/human-fertilization-and-early-development' },
+            { label: 'Apoptosis', type: 'video', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-fertilization-and-development/v/apoptosis' },
+            { label: 'Fertilization and development review', type: 'article', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-fertilization-and-development/a/hs-fertilization-and-development-review' },
+            { label: 'Fertilization and development', type: 'exercise', href: '/science/high-school-biology/hs-reproduction-and-cell-division/hs-fertilization-and-development/e/hs-fertilization-and-development', question: { prompt: 'Explain in 1-2 sentences the central idea of: Fertilization and development.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
       ],
     },
     {
-      name: 'Classical Genetics',
-      description: 'Apply Mendel\'s laws, Punnett squares, and pedigrees to predict inherited traits.',
+      name: 'Classical genetics',
       lessons: [
         {
-          name: 'Mendel\'s Laws',
-          description: 'Study segregation and independent assortment discovered with pea plants.',
-          questions: [
-            { prompt: 'State Mendel\'s Law of Segregation.', answer: 'Each parent passes only one of its two alleles to each offspring.', explanation: 'Alleles separate during gamete formation.' },
-            { prompt: 'What does the Law of Independent Assortment state?', answer: 'Alleles of different genes assort independently during gamete formation.', explanation: 'Only applies to genes on different chromosomes (or far apart on the same).' },
+          name: 'Introduction to heredity',
+          items: [
+            { label: 'Introduction to heredity', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/v/introduction-to-heredity' },
+            { label: 'Alleles and genes', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/v/alleles-and-genes' },
+            { label: 'Worked example: Punnett squares', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/v/punnett-square-fun' },
+            { label: 'Mendel and his peas', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/a/mendel-and-his-peas' },
+            { label: 'The law of segregation', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/a/the-law-of-segregation' },
+            { label: 'The law of independent assortment', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/a/the-law-of-independent-assortment' },
+            { label: 'Probabilities in genetics', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/a/probabilities-in-genetics' },
+            { label: 'Introduction to heredity review', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/a/hs-introduction-to-heredity-review' },
+            { label: 'Punnett squares and probability', type: 'exercise', href: '/science/high-school-biology/hs-classical-genetics/hs-introduction-to-heredity/e/hs-punnett-squares', question: { prompt: 'Cross Pp x Pp. What is the phenotype ratio for a complete-dominance trait?', answer: '3 dominant : 1 recessive', explanation: 'Genotype ratio is 1 PP : 2 Pp : 1 pp.' } },
           ],
         },
         {
-          name: 'Punnett Squares',
-          description: 'Use grid diagrams to predict offspring genotypes and phenotypes.',
-          questions: [
-            { prompt: 'What ratio of offspring results from crossing Tt x Tt?', answer: '1 TT : 2 Tt : 1 tt (or 3:1 dominant:recessive phenotypes).', explanation: 'The classic monohybrid cross ratio.' },
-            { prompt: 'Cross TT x tt. What percent of offspring are heterozygous?', answer: '100%', explanation: 'All offspring inherit one T and one t allele.' },
+          name: 'Non-Mendelian inheritance',
+          items: [
+            { label: 'Co-dominance and incomplete dominance', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/v/co-dominance-and-incomplete-dominance' },
+            { label: 'Multiple alleles, incomplete dominance, and codominance', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/a/multiple-alleles-incomplete-dominance-and-codominance' },
+            { label: 'Pleiotropy and lethal alleles', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/a/pleiotropy-lethal-alleles-and-sex-linkage' },
+            { label: 'Polygenic inheritance and environmental effects', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/a/polygenic-inheritance-and-environmental-effects' },
+            { label: 'Non-Mendelian inheritance review', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/a/hs-non-mendelian-inheritance-review' },
+            { label: 'Non-Mendelian inheritance', type: 'exercise', href: '/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/e/hs-non-mendelian-inheritance', question: { prompt: 'Cross Pp x Pp. What is the phenotype ratio for a complete-dominance trait?', answer: '3 dominant : 1 recessive', explanation: 'Genotype ratio is 1 PP : 2 Pp : 1 pp.' } },
           ],
         },
         {
-          name: 'Incomplete Dominance and Codominance',
-          description: 'Explore exceptions to simple dominance patterns.',
-          questions: [
-            { prompt: 'Red (RR) x White (WW) snapdragons produce pink flowers. What inheritance pattern is this?', answer: 'Incomplete dominance', explanation: 'The heterozygote shows a blended intermediate phenotype.' },
-            { prompt: 'In human blood type AB, both A and B antigens appear. What is this called?', answer: 'Codominance', explanation: 'Both alleles are fully expressed in the heterozygote.' },
-          ],
-        },
-        {
-          name: 'Sex-Linked Inheritance',
-          description: 'Track genes on the X chromosome, such as colorblindness and hemophilia.',
-          questions: [
-            { prompt: 'Why are males more likely to express X-linked recessive disorders?', answer: 'They have only one X chromosome, so a single recessive allele is expressed.', explanation: 'Females need two recessive alleles to be affected.' },
-            { prompt: 'A carrier mother (X^C X^c) and unaffected father (X^C Y) have a son. What is the chance he is colorblind?', answer: '50%', explanation: 'Sons inherit X from mother; half of her X chromosomes carry the recessive allele.' },
+          name: 'Sex linkage',
+          items: [
+            { label: 'Worked example: Punnett square for sex-linked recessive trait', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-sex-linkage/v/example-punnet-square-for-sex-linked-recessive-trait' },
+            { label: 'X-linked inheritance', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-sex-linkage/a/sex-linkage-sex-determination-and-x-inactivation' },
+            { label: 'X-inactivation', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-sex-linkage/a/x-inactivation' },
+            { label: 'Sex linkage review', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-sex-linkage/a/hs-sex-linkage-review' },
+            { label: 'Sex linkage', type: 'exercise', href: '/science/high-school-biology/hs-classical-genetics/hs-sex-linkage/e/hs-sex-linkage', question: { prompt: 'Explain in 1-2 sentences the central idea of: Sex linkage.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
           name: 'Pedigrees',
-          description: 'Interpret family trees to determine inheritance patterns.',
-          questions: [
-            { prompt: 'If a trait appears in every generation and affects both sexes equally, what pattern is likely?', answer: 'Autosomal dominant', explanation: 'No skipping of generations and equal sex distribution suggests dominant autosomal.' },
-            { prompt: 'Two unaffected parents have an affected child. What inheritance pattern does this suggest?', answer: 'Recessive (both parents carriers)', explanation: 'Recessive traits skip generations when carriers mate.' },
+          items: [
+            { label: 'Pedigrees', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-pedigrees/v/pedigrees' },
+            { label: 'Pedigree for determining probability of exhibiting sex linked recessive trait', type: 'video', href: '/science/high-school-biology/hs-classical-genetics/hs-pedigrees/v/pedigree-for-determining-probability-of-exhibiting-sex-linked-recessive-trait' },
+            { label: 'Pedigrees review', type: 'article', href: '/science/high-school-biology/hs-classical-genetics/hs-pedigrees/a/hs-pedigrees-review' },
           ],
         },
       ],
     },
     {
-      name: 'Molecular Genetics',
-      description: 'Explore DNA structure, replication, transcription, translation, and gene regulation.',
+      name: 'Molecular genetics',
       lessons: [
         {
-          name: 'DNA Structure',
-          description: 'Identify bases, the double helix, and base-pairing rules.',
-          questions: [
-            { prompt: 'Which base pairs with adenine in DNA?', answer: 'Thymine', explanation: 'A-T forms two hydrogen bonds; G-C forms three.' },
-            { prompt: 'What are the two directions of DNA strands called?', answer: 'Antiparallel (5\' to 3\' and 3\' to 5\')', explanation: 'One strand runs 5\' to 3\', the complementary strand runs the opposite direction.' },
+          name: 'DNA structure and replication',
+          items: [
+            { label: 'Discovery of the structure of DNA', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/a/discovery-of-the-structure-of-dna' },
+            { label: 'DNA', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/v/dna-deoxyribonucleic-acid' },
+            { label: 'Molecular structure of DNA', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/v/molecular-structure-of-dna' },
+            { label: 'Antiparallel structure of DNA strands', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/v/antiparallel-structure-of-dna-strands' },
+            { label: 'Leading and lagging strands in DNA replication', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/v/leading-and-lagging-strands-in-dna-replication' },
+            { label: 'DNA proofreading and repair', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/a/dna-proofreading-and-repair' },
+            { label: 'DNA structure and replication review', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/a/hs-dna-structure-and-replication-review' },
+            { label: 'DNA structure and replication', type: 'exercise', href: '/science/high-school-biology/hs-molecular-genetics/hs-discovery-and-structure-of-dna/e/hs-discovery-and-structure-of-dna', question: { prompt: 'In which direction is a new DNA strand always synthesized?', answer: '5\\\' to 3\\\'', explanation: 'DNA polymerase only adds nucleotides to a 3\\\' OH.' } },
           ],
         },
         {
-          name: 'DNA Replication',
-          description: 'Examine semi-conservative copying by helicase, polymerase, and ligase.',
-          questions: [
-            { prompt: 'Why is DNA replication called "semi-conservative"?', answer: 'Each new DNA molecule contains one original and one new strand.', explanation: 'Demonstrated by Meselson and Stahl in 1958.' },
-            { prompt: 'What enzyme unwinds the double helix?', answer: 'Helicase', explanation: 'Helicase breaks hydrogen bonds between base pairs.' },
+          name: 'RNA and protein synthesis',
+          items: [
+            { label: 'Molecular structure of RNA', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/v/molecular-structure-of-rna' },
+            { label: 'DNA replication and RNA transcription and translation', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/v/rna-transcription-and-translation' },
+            { label: 'Intro to gene expression (central dogma)', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/a/intro-to-gene-expression-central-dogma' },
+            { label: 'The genetic code', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/a/the-genetic-code' },
+            { label: 'Impact of mutations on translation into amino acids', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/v/impact-of-mutations-on-translation-into-amino-acids' },
+            { label: 'RNA and protein synthesis review', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/a/hs-rna-and-protein-synthesis-review' },
+            { label: 'Transcription and translation', type: 'exercise', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/e/hs-rna-and-protein-synthesis', question: { prompt: 'In which direction is a new DNA strand always synthesized?', answer: '5\\\' to 3\\\'', explanation: 'DNA polymerase only adds nucleotides to a 3\\\' OH.' } },
+            { label: 'Codons and mutations', type: 'exercise', href: '/science/high-school-biology/hs-molecular-genetics/hs-rna-and-protein-synthesis/e/hs-mutations', question: { prompt: 'Explain in 1-2 sentences the central idea of: Codons and mutations.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Transcription',
-          description: 'Convert DNA code into mRNA inside the nucleus.',
-          questions: [
-            { prompt: 'Which enzyme carries out transcription?', answer: 'RNA polymerase', explanation: 'It reads template DNA 3\' to 5\' and builds RNA 5\' to 3\'.' },
-            { prompt: 'In RNA, uracil pairs with which DNA base?', answer: 'Adenine', explanation: 'RNA uses U instead of T in DNA.' },
-          ],
-        },
-        {
-          name: 'Translation',
-          description: 'Assemble amino acids into proteins at the ribosome using codons.',
-          questions: [
-            { prompt: 'How many nucleotides make up one codon?', answer: '3', explanation: 'Each triplet codes for one amino acid (or stop signal).' },
-            { prompt: 'What molecule carries amino acids to the ribosome?', answer: 'tRNA (transfer RNA)', explanation: 'Each tRNA has an anticodon that pairs with the mRNA codon.' },
-          ],
-        },
-        {
-          name: 'Mutations and Gene Regulation',
-          description: 'Classify mutations and introduce how cells switch genes on and off.',
-          questions: [
-            { prompt: 'What type of mutation replaces a single nucleotide?', answer: 'Point (substitution) mutation', explanation: 'Can be silent, missense, or nonsense.' },
-            { prompt: 'In the lac operon, what represses transcription when lactose is absent?', answer: 'The lac repressor protein bound to the operator.', explanation: 'Lactose inactivates the repressor, turning the genes on.' },
+          name: 'Biotechnology',
+          items: [
+            { label: 'Introduction to genetic engineering', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/v/introduction-to-genetic-engineering' },
+            { label: 'Polymerase chain reaction (PCR)', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/v/the-polymerase-chain-reaction-pcr' },
+            { label: 'Gel electrophoresis', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/v/gel-electrophoresis-dna' },
+            { label: 'DNA cloning and recombinant DNA', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/v/dna-cloning-and-recombinant-dna' },
+            { label: 'DNA sequencing', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/a/dna-sequencing' },
+            { label: 'Can we clone extinct dinosaurs from DNA preserved in their fossils?', type: 'video', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/v/clone-dinosaurs' },
+            { label: 'Biotechnology review', type: 'article', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/a/hs-biotechnology-review' },
+            { label: 'Biotechnology', type: 'exercise', href: '/science/high-school-biology/hs-molecular-genetics/hs-biotechnology/e/hs-biotechnology', question: { prompt: 'Explain in 1-2 sentences the central idea of: Biotechnology.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
       ],
     },
     {
       name: 'Evolution',
-      description: 'Study natural selection, speciation, and evidence for common ancestry.',
       lessons: [
         {
-          name: 'Natural Selection',
-          description: 'Identify the four conditions needed for selection to occur.',
-          questions: [
-            { prompt: 'Name Darwin\'s four requirements for natural selection.', answer: 'Variation, heritability, differential reproduction, and competition for resources.', explanation: 'Together they cause adaptive change over generations.' },
-            { prompt: 'Does natural selection act on the individual or the population?', answer: 'Individuals are selected, but populations evolve.', explanation: 'Allele frequencies in the gene pool shift over time.' },
+          name: 'Evolution and natural selection',
+          items: [
+            { label: 'Introduction to evolution and natural selection', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evolution-and-natural-selection/v/introduction-to-evolution-and-natural-selection' },
+            { label: 'Ape clarification', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evolution-and-natural-selection/v/ape-clarification' },
+            { label: 'Natural selection and the owl butterfly', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evolution-and-natural-selection/v/natural-selection-and-the-owl-butterfly' },
+            { label: 'Variation in a species', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evolution-and-natural-selection/v/variation-in-a-species' },
+            { label: 'Evolution and natural selection review', type: 'article', href: '/science/high-school-biology/hs-evolution/hs-evolution-and-natural-selection/a/hs-evolution-and-natural-selection-review' },
+            { label: 'Evolution and natural selection', type: 'exercise', href: '/science/high-school-biology/hs-evolution/hs-evolution-and-natural-selection/e/hs-evolution-and-natural-selection', question: { prompt: 'Define fitness in evolutionary biology.', answer: 'Reproductive success: an individual\'s ability to survive and pass on genes.', explanation: 'It is not just strength or speed.' } },
           ],
         },
         {
-          name: 'Evidence for Evolution',
-          description: 'Review fossils, anatomy, embryology, and molecular biology evidence.',
-          questions: [
-            { prompt: 'What do homologous structures suggest about species?', answer: 'Common ancestry', explanation: 'Similar structure despite different function (e.g., bat wing and human arm).' },
-            { prompt: 'Give one molecular line of evidence for evolution.', answer: 'Shared DNA sequences or universal genetic code among all life.', explanation: 'All organisms share the same 4 bases and 20 amino acids.' },
+          name: 'Evidence of evolution',
+          items: [
+            { label: 'Evidence for evolution', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/v/evidence-for-evolution' },
+            { label: 'Fossils: rocking the Earth', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/v/fossils-rocking-the-earth' },
+            { label: 'Human evolution overview', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/v/human-evolution-overview' },
+            { label: 'DNA spells evolution', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/v/dna-spells-evolution' },
+            { label: 'Biogeography: where life lives', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/v/biogeography-where-life-lives' },
+            { label: 'Molecular evidence for evolutionary relationships examples', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/v/molecular-evidence-for-evolutionary-relationships-examples' },
+            { label: 'Evidence of evolution review', type: 'article', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/a/hs-evidence-of-evolution-review' },
+            { label: 'Evidence of evolution', type: 'exercise', href: '/science/high-school-biology/hs-evolution/hs-evidence-of-evolution/e/hs-evidence-of-evolution', question: { prompt: 'Define fitness in evolutionary biology.', answer: 'Reproductive success: an individual\'s ability to survive and pass on genes.', explanation: 'It is not just strength or speed.' } },
           ],
         },
         {
-          name: 'Speciation',
-          description: 'Explore how reproductive isolation creates new species.',
-          questions: [
-            { prompt: 'What is the biological species concept?', answer: 'Organisms that can interbreed and produce fertile offspring.', explanation: 'It does not apply well to asexual organisms.' },
-            { prompt: 'Name one form of reproductive isolation.', answer: 'Geographic, temporal, behavioral, or mechanical isolation.', explanation: 'Any barrier preventing gene flow between populations.' },
-          ],
-        },
-        {
-          name: 'Hardy-Weinberg Equilibrium',
-          description: 'Use p + q = 1 and p^2 + 2pq + q^2 = 1 to calculate allele frequencies.',
-          questions: [
-            { prompt: 'If q = 0.3, what is the frequency of homozygous dominant (p^2)?', answer: '0.49', explanation: 'p = 0.7, so p^2 = 0.49.' },
-            { prompt: 'Name one Hardy-Weinberg assumption.', answer: 'No mutation, random mating, large population, no migration, no selection.', explanation: 'If any assumption fails, allele frequencies change.' },
-          ],
-        },
-        {
-          name: 'Human Evolution',
-          description: 'Trace the hominin lineage from early primates to Homo sapiens.',
-          questions: [
-            { prompt: 'What species preceded Homo sapiens and coexisted in Europe?', answer: 'Homo neanderthalensis (Neanderthals)', explanation: 'They went extinct ~40,000 years ago but interbred with H. sapiens.' },
-            { prompt: 'About how old are the oldest Homo sapiens fossils?', answer: 'About 300,000 years', explanation: 'Discovered at Jebel Irhoud, Morocco.' },
+          name: 'Phylogeny',
+          items: [
+            { label: 'Taxonomy and the tree of life', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/taxonomy-and-the-tree-of-life' },
+            { label: 'Species', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/species' },
+            { label: 'Biodiversity and natural selection', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/biodiversity-and-natural-selection-two' },
+            { label: 'Genetic variation, gene flow, and new species', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/genetic-variation-gene-flow-and-new-species' },
+            { label: 'Discovering the tree of life', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/discovering-the-tree-of-life' },
+            { label: 'Phylogenetic trees', type: 'article', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/a/phylogenetic-trees' },
+            { label: 'Understanding and building phylogenetic trees', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/understanding-and-building-phylogenetic-trees-or-cladograms' },
+            { label: 'How do we know which kinds of dinosaurs were most closely related?', type: 'video', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/v/related-dinosaurs' },
+            { label: 'Phylogeny review', type: 'article', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/a/hs-phylogeny-review' },
+            { label: 'Phylogeny', type: 'exercise', href: '/science/high-school-biology/hs-evolution/hs-phylogeny/e/hs-phylogeny', question: { prompt: 'On a phylogenetic tree, what does a node represent?', answer: 'A common ancestor of the lineages branching from it.', explanation: 'Nodes mark divergence events.' } },
           ],
         },
       ],
     },
     {
-      name: 'Human Body Systems',
-      description: 'Tour major organ systems and how they maintain homeostasis.',
+      name: 'Human body systems',
       lessons: [
         {
-          name: 'Circulatory System',
-          description: 'Trace blood flow through the heart, arteries, capillaries, and veins.',
-          questions: [
-            { prompt: 'How many chambers does the human heart have?', answer: '4 (two atria and two ventricles)', explanation: 'Right side pumps to lungs; left side pumps to body.' },
-            { prompt: 'Which blood vessels carry oxygen-poor blood to the lungs?', answer: 'Pulmonary arteries', explanation: 'Unusual because most arteries carry oxygen-rich blood.' },
+          name: 'Body structure and homeostasis',
+          items: [
+            { label: 'Homeostasis', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-body-structure-and-homeostasis/v/homeostasis' },
+            { label: 'Tissues, organs, & organ systems', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-body-structure-and-homeostasis/a/tissues-organs-organ-systems' },
+            { label: 'Body structure and homeostasis review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-body-structure-and-homeostasis/a/hs-body-structure-and-homeostasis-review' },
+            { label: 'Body structure and homeostasis', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-body-structure-and-homeostasis/e/hs-body-structure-and-homeostasis', question: { prompt: 'Explain in 1-2 sentences the central idea of: Body structure and homeostasis.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Respiratory System',
-          description: 'Study gas exchange across alveoli and the mechanics of breathing.',
-          questions: [
-            { prompt: 'Where does gas exchange occur in the lungs?', answer: 'Alveoli', explanation: 'Tiny air sacs surrounded by capillaries allow oxygen and CO2 diffusion.' },
-            { prompt: 'Which muscle contracts to cause inhalation?', answer: 'Diaphragm', explanation: 'Its contraction lowers pressure, pulling air in.' },
+          name: 'The circulatory and respiratory systems',
+          items: [
+            { label: 'Meet the heart!', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/v/meet-the-heart' },
+            { label: 'Circulatory system and the heart', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/v/circulatory-system-and-the-heart' },
+            { label: 'The circulatory system review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/a/hs-the-circulatory-system-review' },
+            { label: 'Meet the lungs!', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/v/meet-the-lungs' },
+            { label: 'The lungs and pulmonary system', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/v/the-lungs-and-pulmonary-system' },
+            { label: 'The respiratory system review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/a/hs-the-respiratory-system-review' },
+            { label: 'The circulatory and respiratory systems', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-the-circulatory-and-respiratory-systems/e/hs-the-circulatory-and-respiratory-systems', question: { prompt: 'Explain in 1-2 sentences the central idea of: The circulatory and respiratory systems.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Nervous System',
-          description: 'Compare central and peripheral divisions and how neurons signal.',
-          questions: [
-            { prompt: 'What is the resting membrane potential of a typical neuron?', answer: 'About -70 mV', explanation: 'Maintained by the Na+/K+ pump and K+ leak channels.' },
-            { prompt: 'Name the gap between neurons.', answer: 'Synapse', explanation: 'Neurotransmitters cross it to pass the signal.' },
+          name: 'The musculoskeletal system',
+          items: [
+            { label: 'Skeletal structure and function', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/v/skeletal-structure-and-function' },
+            { label: 'Cartilage', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/v/cartilage' },
+            { label: 'Ligaments, tendons, and joints', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/v/ligaments-tendons-and-joints' },
+            { label: 'Three types of muscle', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/v/three-types-of-muscle' },
+            { label: 'Anatomy of a skeletal muscle cell', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/v/anatomy-of-a-muscle-cell-1' },
+            { label: 'LeBron Asks: What muscles do we use when shooting a basket?', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/v/lebron-asks-what-muscles-do-we-use-when-shooting-a-basket' },
+            { label: 'The musculoskeletal system review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/a/hs-the-musculoskeletal-system-review' },
+            { label: 'The musculoskeletal system', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-the-musculoskeletal-system/e/hs-the-musculoskeletal-system', question: { prompt: 'Explain in 1-2 sentences the central idea of: The musculoskeletal system.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Digestive System',
-          description: 'Follow food from mouth to intestines and how nutrients are absorbed.',
-          questions: [
-            { prompt: 'Where does most nutrient absorption occur?', answer: 'Small intestine', explanation: 'Villi and microvilli massively increase surface area.' },
-            { prompt: 'What enzyme in saliva begins carbohydrate digestion?', answer: 'Amylase', explanation: 'It breaks starch into maltose.' },
+          name: 'The digestive and excretory systems',
+          items: [
+            { label: 'Meet the gastrointestinal tract!', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-digestive-and-excretory-systems/v/meet-the-gastrointestinal-tract' },
+            { label: 'Kidney function and anatomy', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-digestive-and-excretory-systems/v/how-do-our-kidneys-work' },
+            { label: 'Urination', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-digestive-and-excretory-systems/v/urination' },
+            { label: 'The digestive and excretory systems review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-digestive-and-excretory-systems/a/hs-the-digestive-and-excretory-systems-review' },
+            { label: 'The digestive and excretory systems', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-the-digestive-and-excretory-systems/e/hs-the-digestive-and-excretory-systems', question: { prompt: 'Explain in 1-2 sentences the central idea of: The digestive and excretory systems.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Immune System',
-          description: 'Distinguish innate and adaptive immunity and vaccine function.',
-          questions: [
-            { prompt: 'Which cells directly kill virus-infected or cancer cells?', answer: 'Cytotoxic T cells (CD8+)', explanation: 'They release perforin and granzymes to induce apoptosis.' },
-            { prompt: 'How do vaccines produce long-term immunity?', answer: 'By creating memory B and T cells against an antigen.', explanation: 'Memory cells respond rapidly during later real infections.' },
+          name: 'The nervous and endocrine systems',
+          items: [
+            { label: 'Structure of the nervous system', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-nervous-and-endocrine-systems/v/structure-of-the-nervous-system' },
+            { label: 'Anatomy of a neuron', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-nervous-and-endocrine-systems/v/anatomy-of-a-neuron' },
+            { label: 'Intro to the endocrine system', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-nervous-and-endocrine-systems/v/intro-to-the-endocrine-system' },
+            { label: 'The nervous and endocrine systems review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-nervous-and-endocrine-systems/a/hs-the-nervous-and-endocrine-systems-review' },
+            { label: 'The nervous and endocrine systems', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-the-nervous-and-endocrine-systems/e/hs-the-nervous-and-endocrine-systems', question: { prompt: 'Across a synapse, what kind of signal carries information?', answer: 'A chemical signal (neurotransmitters).', explanation: 'The action potential is electrical only within the neuron.' } },
           ],
         },
         {
-          name: 'Homeostasis',
-          description: 'Explore feedback loops that regulate temperature, glucose, and water.',
-          questions: [
-            { prompt: 'Which hormone lowers blood glucose levels?', answer: 'Insulin', explanation: 'Secreted by pancreatic beta cells after eating.' },
-            { prompt: 'Is human body temperature regulated by positive or negative feedback?', answer: 'Negative feedback', explanation: 'Deviations trigger responses that return values to normal.' },
+          name: 'The reproductive system',
+          items: [
+            { label: 'Welcome to the reproductive system', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-reproductive-system/v/welcome-to-the-reproductive-system' },
+            { label: 'Egg, sperm, and fertilization', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-reproductive-system/v/egg-sperm-and-fertilization' },
+            { label: 'The reproductive system review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-reproductive-system/a/hs-the-reproductive-system-review' },
+            { label: 'The reproductive system', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-the-reproductive-system/e/hs-the-reproductive-system', question: { prompt: 'Explain in 1-2 sentences the central idea of: The reproductive system.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'The immune system',
+          items: [
+            { label: 'Types of immune responses: Innate and adaptive, humoral vs. cell-mediated', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/v/types-of-immune-responses-innate-and-adaptive-humoral-vs-cell-mediated' },
+            { label: 'Role of phagocytes in innate or nonspecific immunity', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/v/role-of-phagocytes-in-innate-or-nonspecific-immunity' },
+            { label: 'Self vs. non-self immunity', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/v/self-versus-non-self' },
+            { label: 'Intro to viruses', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/a/intro-to-viruses' },
+            { label: 'Viral replication: lytic vs lysogenic', type: 'video', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/v/viral-replicaiton-lytic-vs-lysogenic' },
+            { label: 'The immune system review', type: 'article', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/a/hs-the-immune-system-review' },
+            { label: 'The immune system', type: 'exercise', href: '/science/high-school-biology/hs-human-body-systems/hs-the-immune-system/e/hs-the-immune-system', question: { prompt: 'What is the role of B cells in adaptive immunity?', answer: 'They produce antibodies against specific antigens.', explanation: 'T cells handle the cell-mediated branch.' } },
           ],
         },
       ],
     },
     {
       name: 'Ecology',
-      description: 'Examine populations, communities, ecosystems, cycles, and biodiversity.',
       lessons: [
         {
-          name: 'Population Ecology',
-          description: 'Model growth curves, carrying capacity, and limiting factors.',
-          questions: [
-            { prompt: 'What type of growth shows a J-shaped curve?', answer: 'Exponential growth', explanation: 'Occurs in ideal, unlimited-resource conditions.' },
-            { prompt: 'What letter represents carrying capacity?', answer: 'K', explanation: 'Maximum population size an environment can sustainably support.' },
+          name: 'Introduction to ecology',
+          items: [
+            { label: 'Ecology introduction', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-introduction-to-ecology/v/ecology-introduction' },
+            { label: 'Ecosystems and biomes', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-introduction-to-ecology/v/ecosystems-and-biomes' },
+            { label: 'Ecological levels: from individuals to ecosystems', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-introduction-to-ecology/a/ecological-levels-from-individuals-to-ecosystems' },
+            { label: 'Introduction to ecology review', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-introduction-to-ecology/a/hs-introduction-to-ecology-review' },
+            { label: 'Introduction to ecology', type: 'exercise', href: '/science/high-school-biology/hs-ecology/hs-introduction-to-ecology/e/hs-introduction-to-ecology', question: { prompt: 'Which level is broader: a community or an ecosystem?', answer: 'An ecosystem (community + abiotic environment).', explanation: 'Community is just the living organisms.' } },
           ],
         },
         {
-          name: 'Community Interactions',
-          description: 'Classify symbiosis, predation, and competition among species.',
-          questions: [
-            { prompt: 'A tick on a dog is an example of which symbiotic relationship?', answer: 'Parasitism', explanation: 'One benefits (+) while the other is harmed (-).' },
-            { prompt: 'Both organisms benefit in which relationship?', answer: 'Mutualism (+/+)', explanation: 'Example: bees and flowers.' },
+          name: 'Population ecology',
+          items: [
+            { label: 'Population size, density, & dispersal', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-population-ecology/a/population-size-density-and-dispersal' },
+            { label: 'Exponential and logistic growth in populations', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-population-ecology/v/exponential-and-logistic-growth-in-populations' },
+            { label: 'Population regulation', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-population-ecology/v/density-dependent-and-density-independent-population-regulation' },
+            { label: 'Population ecology review', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-population-ecology/a/hs-population-ecology-review' },
+            { label: 'Population ecology', type: 'exercise', href: '/science/high-school-biology/hs-ecology/hs-population-ecology/e/hs-population-ecology', question: { prompt: 'Which level is broader: a community or an ecosystem?', answer: 'An ecosystem (community + abiotic environment).', explanation: 'Community is just the living organisms.' } },
           ],
         },
         {
-          name: 'Energy Flow and Food Webs',
-          description: 'Apply the 10 percent rule across trophic levels.',
-          questions: [
-            { prompt: 'If primary producers store 10,000 kcal, about how much reaches secondary consumers?', answer: '100 kcal', explanation: '10% transfer across each of two levels: 10,000 -> 1,000 -> 100.' },
-            { prompt: 'What role do decomposers play in an ecosystem?', answer: 'Recycle nutrients by breaking down dead matter.', explanation: 'Bacteria and fungi return nitrogen, phosphorus, and carbon to soil.' },
+          name: 'Community ecology',
+          items: [
+            { label: 'Ecosystem biodiversity', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/v/ecosystem-biodiversity' },
+            { label: 'Ecosystems and ecological networks', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/v/biodiversity-ecosystems-and-ecological-networks' },
+            { label: 'Community structure', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/a/community-structure' },
+            { label: 'Introduced species and biodiversity', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/v/introduced-species-and-biodiversity' },
+            { label: 'Ecological succession', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/v/ecological-succession' },
+            { label: 'Community ecology review', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/a/hs-community-ecology-review' },
+            { label: 'Community ecology', type: 'exercise', href: '/science/high-school-biology/hs-ecology/hs-community-ecology/e/hs-community-ecology', question: { prompt: 'Which level is broader: a community or an ecosystem?', answer: 'An ecosystem (community + abiotic environment).', explanation: 'Community is just the living organisms.' } },
           ],
         },
         {
-          name: 'Biogeochemical Cycles',
-          description: 'Trace the water, carbon, and nitrogen cycles through ecosystems.',
-          questions: [
-            { prompt: 'Which process converts atmospheric N2 to a usable form for plants?', answer: 'Nitrogen fixation (by bacteria)', explanation: 'Rhizobium bacteria in legume roots are a major source.' },
-            { prompt: 'Name the largest reservoir of carbon on Earth.', answer: 'Oceans (or sedimentary rocks)', explanation: 'Oceans hold about 50x more CO2 than the atmosphere.' },
+          name: 'Ecological relationships',
+          items: [
+            { label: 'Interactions between populations', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-ecological-relationships/v/interactions-between-populations' },
+            { label: 'Ecological interactions', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-ecological-relationships/a/ecological-interactions' },
+            { label: 'Predator-prey cycles', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-ecological-relationships/v/predator-prey-cycle' },
+            { label: 'Ecological relationships review', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-ecological-relationships/a/hs-ecological-relationships-review' },
+            { label: 'Ecological relationships', type: 'exercise', href: '/science/high-school-biology/hs-ecology/hs-ecological-relationships/e/hs-ecological-relationships', question: { prompt: 'Explain in 1-2 sentences the central idea of: Ecological relationships.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
           ],
         },
         {
-          name: 'Biodiversity and Conservation',
-          description: 'Understand species richness, ecosystem services, and conservation strategies.',
-          questions: [
-            { prompt: 'Name two major threats to biodiversity.', answer: 'Habitat loss, climate change, pollution, invasive species, overexploitation.', explanation: 'Often remembered by the acronym HIPPO.' },
-            { prompt: 'What is a keystone species?', answer: 'A species whose removal causes major change in its ecosystem.', explanation: 'Example: sea otters controlling urchin populations.' },
+          name: 'Trophic levels',
+          items: [
+            { label: 'Flow of energy and matter through ecosystems', type: 'video', href: '/science/high-school-biology/hs-ecology/trophic-levels/v/flow-of-energy-and-matter-through-ecosystems' },
+            { label: 'Food chains & food webs', type: 'article', href: '/science/high-school-biology/hs-ecology/trophic-levels/a/food-chains-and-food-webs-article' },
+            { label: 'Example identifying roles in a food web', type: 'video', href: '/science/high-school-biology/hs-ecology/trophic-levels/v/example-identifying-roles-in-a-food-web' },
+            { label: 'Energy flow and primary productivity', type: 'article', href: '/science/high-school-biology/hs-ecology/trophic-levels/a/energy-flow-and-primary-productivity' },
+            { label: 'Trophic levels review', type: 'article', href: '/science/high-school-biology/hs-ecology/trophic-levels/a/hs-trophic-levels-review' },
+            { label: 'Trophic levels', type: 'exercise', href: '/science/high-school-biology/hs-ecology/trophic-levels/e/hs-trophic-levels', question: { prompt: 'Explain in 1-2 sentences the central idea of: Trophic levels.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'Biogeochemical cycles',
+          items: [
+            { label: 'Biogeochemical cycles overview', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-biogeochemical-cycles/v/biogeochemical-cycles' },
+            { label: 'The water cycle', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-biogeochemical-cycles/v/the-water-cycle' },
+            { label: 'The carbon cycle', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-biogeochemical-cycles/v/carbon-cycle' },
+            { label: 'The nitrogen cycle', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-biogeochemical-cycles/v/nitrogen-cycle' },
+            { label: 'Biogeochemical cycles review', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-biogeochemical-cycles/a/hs-biogeochemical-cycles-review' },
+            { label: 'Biogeochemical cycles', type: 'exercise', href: '/science/high-school-biology/hs-ecology/hs-biogeochemical-cycles/e/hs-biogeochemical-cycles', question: { prompt: 'Explain in 1-2 sentences the central idea of: Biogeochemical cycles.', answer: 'A clear sentence naming the concept and one supporting fact.', explanation: 'Use the related video for help.' } },
+          ],
+        },
+        {
+          name: 'Human impact on ecosystems',
+          items: [
+            { label: 'Human activities that threaten biodiversity', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/human-activities-that-threaten-biodiversity' },
+            { label: 'What is a biodiversity hotspot?', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/biodiversity-hotspot' },
+            { label: 'Conservation and the race to save biodiversity', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/conservation-and-the-race-to-save-biodiversity' },
+            { label: 'Introduced species and biodiversity', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/introduced-species-and-biodiversity' },
+            { label: 'How does climate change affect biodiversity?', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/how-does-climate-change-affect-biodiversity' },
+            { label: 'Protecting biodiversity: the power of the individual', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/protecting-biodiversity-the-power-of-the-individual' },
+            { label: 'Protecting biodiversity: local and global policies', type: 'video', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/v/protecting-biodiversity-local-and-global-policies' },
+            { label: 'Human impact on ecosystems review', type: 'article', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/a/hs-human-impact-on-ecosystems-review' },
+            { label: 'Human impact on ecosystems', type: 'exercise', href: '/science/high-school-biology/hs-ecology/hs-human-impact-on-ecosystems/e/hs-human-impact-on-ecosystems', question: { prompt: 'Which level is broader: a community or an ecosystem?', answer: 'An ecosystem (community + abiotic environment).', explanation: 'Community is just the living organisms.' } },
           ],
         },
       ],

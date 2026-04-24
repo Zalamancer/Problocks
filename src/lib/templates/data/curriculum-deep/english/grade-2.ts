@@ -7,85 +7,99 @@ export const GRADE_DATA: DeepGrade = {
   units: [
     {
       name: 'Fairy Tales Retold',
-      description: 'Read and compare classic fairy tales and modern retellings to build vocabulary and story analysis skills.',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Find what a fairy tale is mostly about.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Fairy Tales Retold unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:building-knowledge/a/welcome-to-the-fairy-tales-retold-unit' },
+            { label: 'Fairy Tales Retold: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:building-knowledge/a/fairy-tales-retold-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: fiction; Little Red Riding Hood',
+          items: [
+            { label: 'Looking back at the text for evidence', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading-little-red-riding-hood/v/looking-back-at-the-text-for-evidence' },
+            { label: 'Messages and morals | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading-little-red-riding-hood/v/messages-and-morals-reading' },
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading-little-red-riding-hood/v/character-actions-in-stories-reading' },
+            { label: 'What do pictures bring to a story? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading-little-red-riding-hood/v/what-do-pictures-bring-to-a-story-reading' },
             {
-              prompt: 'Cinderella is kind even when her stepsisters are mean. She ends up happy. What is the main idea?',
-              answer: 'Kindness is rewarded',
-              explanation: 'The tale centers on Cinderella\'s kindness leading to happiness.',
-            },
-            {
-              prompt: 'A modern "Three Little Pigs" shows the pigs building strong houses together. What is the main idea?',
-              answer: 'Teamwork keeps you safe',
-              explanation: 'The pigs cooperate instead of working alone.',
+              label: 'Fairy Tales Retold: reading creative fiction; Little Red Riding Hood',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading-little-red-riding-hood/e/fairy-tales-retold--reading-creating-fiction--little-red-riding-hood-2',
+              question: {
+                prompt: 'Sam saw three red apples on the table. He ate one. How many apples are left?',
+                answer: 'Two',
+                explanation: 'Three minus one apple eaten leaves two apples.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Use clues to figure out what the author does not say directly.',
-          questions: [
+          name: 'Close reading: fiction; Granny the Hero',
+          items: [
+            { label: 'Summarizing stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading/v/summarizing-stories-reading-khan-academy' },
+            { label: 'Characters\' thoughts and feelings | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading/v/characters-thoughts-and-feelings-reading' },
+            { label: 'A story\'s point of view | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading/v/a-storys-point-of-view-reading' },
+            { label: 'Reading (and comparing) multiple books | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading/v/reading-and-comparing-multiple-books' },
             {
-              prompt: 'The wolf grinned and hid behind a tree near Grandma\'s house. What will he probably do?',
-              answer: 'Try to trick someone',
-              explanation: 'Grinning and hiding are clues of sneaky plans.',
-            },
-            {
-              prompt: 'The giant sniffed loudly and looked around the room. How does he feel?',
-              answer: 'He thinks someone is hiding',
-              explanation: 'Sniffing and looking around suggest suspicion.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Use story clues to figure out new words.',
-          questions: [
-            {
-              prompt: '"The prince was valiant — he faced the dragon with no fear." What does valiant mean?',
-              answer: 'Brave',
-              explanation: 'Facing a dragon with no fear shows bravery.',
-            },
-            {
-              prompt: '"The old witch cackled, a raspy laugh that made birds fly away." What does cackled mean?',
-              answer: 'Laughed in a harsh way',
-              explanation: 'The clue is "raspy laugh."',
+              label: 'Fairy Tales Retold: reading creative fiction; Granny the Hero',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:close-reading/e/fairy-tales-retold--reading-creative-fiction--granny-the-hero-2',
+              question: {
+                prompt: 'Lina found a tiny seed in the garden. She planted it. What might happen next?',
+                answer: 'A plant could grow',
+                explanation: 'Seeds grow into plants when planted.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare the classic tale with a retelling.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:applying-knowledge/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'What are affixes? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:applying-knowledge/v/what-are-affixes-reading' },
             {
-              prompt: 'Classic: the wolf is mean. Retelling: the wolf just wants friends. What is different?',
-              answer: 'The wolf\'s goal',
-              explanation: 'The retelling changes the wolf\'s motive.',
-            },
-            {
-              prompt: 'In both versions of "Little Red," Red visits Grandma. What is the same?',
-              answer: 'The visit to Grandma',
-              explanation: 'Core plot remains across versions.',
+              label: 'Fairy Tales Retold: vocabulary; Little Red Riding Hood',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:applying-knowledge/e/fairy-tales-retold--vocabulary--little-red-riding-hood-2',
+              question: {
+                prompt: 'Read: "Tom liked rainy days because puddles were fun to splash." Why does Tom like rain?',
+                answer: 'Puddles are fun to splash',
+                explanation: 'The sentence states the reason directly after "because".',
+              },
             },
           ],
         },
         {
-          name: 'Text Structure',
-          description: 'Recognize the beginning, middle, and end of a story.',
-          questions: [
+          name: 'Reading for understanding: drama',
+          items: [
+            { label: 'Making inferences in literary texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:reading-for-understanding/v/making-inferences-in-literary-texts-reading' },
+            { label: 'The elements of a drama', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:reading-for-understanding/v/the-elements-of-a-drama-reading' },
             {
-              prompt: '"Once upon a time…" usually begins what part of a story?',
-              answer: 'The beginning',
-              explanation: '"Once upon a time" opens fairy tales.',
+              label: 'Fairy Tales Retold: reading drama; Tom Thumb',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:reading-for-understanding/e/fairy-tales-retold--reading-drama--tom-thumb-2',
+              question: {
+                prompt: 'Which word is a synonym for "happy"?',
+                answer: 'Glad',
+                explanation: '"Glad" means the same as "happy".',
+              },
             },
+          ],
+        },
+        {
+          name: 'Reading for understanding: poetry and drama',
+          items: [
+            { label: 'The elements of a poem', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:reading-for-understanding-drama-and-poetry/v/the-elements-of-a-poem-reading' },
             {
-              prompt: '"They lived happily ever after." Which part is this?',
-              answer: 'The end',
-              explanation: 'This phrase closes fairy tales.',
+              label: 'Fairy Tales Retold: reading drama and poetry; Tom Thumb and Thumbelina',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-fairy-tales-retold/xfb4fc0bf01437792:reading-for-understanding-drama-and-poetry/e/fairy-tales-retold--reading-drama-and-poetry--tom-thumb-and-thumbelina-2',
+              question: {
+                prompt: 'The word "unkind" has the prefix "un-". What does "unkind" mean?',
+                answer: 'Not kind',
+                explanation: 'The prefix "un-" means "not".',
+              },
             },
           ],
         },
@@ -93,85 +107,100 @@ export const GRADE_DATA: DeepGrade = {
     },
     {
       name: 'The Moon',
-      description: 'Read informational texts about the Moon while practicing key details and nonfiction vocabulary.',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Find the central point of a nonfiction passage.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to this unit about the moon!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:untitled-63/a/welcome-to-this-unit-about-the-moon' },
+            { label: 'The Moon: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:untitled-63/a/the-moon-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'What is a main idea? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-informational-text/v/what-is-a-main-idea-reading-khan-academy' },
+            { label: 'Relationships between scientific ideas in a text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-informational-text/v/relationships-between-scientific-ideas-in-a-text-reading' },
+            { label: 'Interpreting text features', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-informational-text/v/interpreting-text-features-reading' },
+            { label: 'Finding connections between ideas within a passage', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-informational-text/v/finding-connections-between-ideas-reading' },
             {
-              prompt: 'The Moon has no air. Astronauts wear suits to breathe on the Moon. What is the main idea?',
-              answer: 'People need special suits on the Moon',
-              explanation: 'Because there is no air, astronauts need suits.',
-            },
-            {
-              prompt: 'The Moon moves around Earth every 27 days. What is the passage about?',
-              answer: 'How the Moon orbits Earth',
-              explanation: 'The passage gives a key fact about orbit.',
+              label: 'The Moon: reading informational text; All About the Moon',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-informational-text/e/the-moon-reading-informational-text-all-about-the-moon-2',
+              question: {
+                prompt: 'Read: "Mia hugged her dog and smiled." How is Mia feeling?',
+                answer: 'Happy',
+                explanation: 'Hugging and smiling show happy feelings.',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Use facts to make a smart guess.',
-          questions: [
+          name: 'Close reading: fiction',
+          items: [
+            { label: 'Messages and morals | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-fiction/v/messages-and-morals-reading' },
+            { label: 'Characters\' thoughts and feelings | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-fiction/v/characters-thoughts-and-feelings-reading' },
+            { label: 'The elements of a story', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-fiction/v/the-elements-of-a-story-reading' },
+            { label: 'A story\'s point of view | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-fiction/v/a-storys-point-of-view-reading' },
             {
-              prompt: 'There is no wind on the Moon. Footprints stay for years. Why?',
-              answer: 'Nothing blows them away',
-              explanation: 'Without wind, marks are not erased.',
-            },
-            {
-              prompt: 'The Moon has craters. What likely caused them?',
-              answer: 'Space rocks crashing into it',
-              explanation: 'Impacts form craters on rocky bodies.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Learn science words through clues.',
-          questions: [
-            {
-              prompt: '"The Moon has many craters, which are bowl-shaped holes." What does crater mean?',
-              answer: 'A bowl-shaped hole',
-              explanation: 'The definition follows the word.',
-            },
-            {
-              prompt: '"The Moon orbits Earth, or travels around it." What does orbit mean?',
-              answer: 'Travel around',
-              explanation: 'The sentence defines orbit.',
+              label: 'The Moon: reading creative fiction; Milo and the Moon',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:close-reading-fiction/e/the-moon-reading-creative-fiction-milo-and-the-moon-2',
+              question: {
+                prompt: 'In a story, the place where events happen is called the ___?',
+                answer: 'Setting',
+                explanation: 'The setting is the place and time of a story.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare the Moon with Earth.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:applying-vocabulary-knowledge/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'What are affixes? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:applying-vocabulary-knowledge/v/what-are-affixes-reading' },
             {
-              prompt: 'Earth has air; the Moon does not. What is the difference?',
-              answer: 'Earth has air and the Moon does not',
-              explanation: 'The key difference is presence of air.',
-            },
-            {
-              prompt: 'Both Earth and the Moon are round. What is the same?',
-              answer: 'Their shape',
-              explanation: 'Both are spheres.',
+              label: 'The Moon: vocabulary; All About the Moon',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:applying-vocabulary-knowledge/e/the-moon-vocabulary-all-about-the-moon-2',
+              question: {
+                prompt: 'Read: "Ben dropped his cone. Ice cream splattered on the ground." What is the problem?',
+                answer: 'Ben dropped his ice cream',
+                explanation: 'The cone fell, spilling the ice cream.',
+              },
             },
           ],
         },
         {
-          name: 'Text Structure',
-          description: 'Use headings and captions to find information.',
-          questions: [
+          name: 'Reading for understanding: poetry',
+          items: [
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:reading-for-understanding-poetry/v/character-actions-in-stories-reading' },
+            { label: 'The elements of a poem', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:reading-for-understanding-poetry/v/the-elements-of-a-poem-reading' },
             {
-              prompt: 'A section heading says "Moon Phases." What will it explain?',
-              answer: 'How the Moon looks different over time',
-              explanation: 'Phases describe changes in appearance.',
+              label: 'The Moon: reading poetry; The Beautiful, Mysterious Moon',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:reading-for-understanding-poetry/e/the-moon-reading-poetry-the-beautiful-mysterious-moon-2',
+              question: {
+                prompt: 'Which word means the opposite of "big"?',
+                answer: 'Small',
+                explanation: '"Small" is the antonym of "big".',
+              },
             },
+          ],
+        },
+        {
+          name: 'Reading for understanding: informational text',
+          items: [
+            { label: 'Using text features to locate information | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:reading-for-understanding-informational-text/v/using-text-features-to-locate-information-reading' },
+            { label: 'Reading more than one source on a topic', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:reading-for-understanding-informational-text/v/reading-more-than-one-source-on-a-topic-reading-khan-academy' },
             {
-              prompt: 'A caption says "Astronaut on the Moon, 1969." What is being shown?',
-              answer: 'An astronaut standing on the Moon',
-              explanation: 'Captions name the photo content.',
+              label: 'The Moon: reading informational text; Effects of the Moon',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-the-moon/xfb4fc0bf01437792:reading-for-understanding-informational-text/e/the-moon-reading-informational-text-effects-of-the-moon-2',
+              question: {
+                prompt: 'A poem often has lines that ___?',
+                answer: 'Rhyme',
+                explanation: 'Rhyming endings are a common feature of poems.',
+              },
             },
           ],
         },
@@ -179,257 +208,100 @@ export const GRADE_DATA: DeepGrade = {
     },
     {
       name: 'Rural, Suburban, Urban',
-      description: 'Compare life in different kinds of communities through paired fiction and nonfiction passages.',
       lessons: [
         {
-          name: 'Main Idea',
-          description: 'Identify what a passage about community is mostly about.',
-          questions: [
+          name: 'Building knowledge',
+          items: [
+            { label: 'Welcome to the Rural, Suburban, Urban unit!', type: 'article', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-building-knowledge/a/welcome-to-the-rural-suburban-urban-unit' },
+            { label: 'Rural, Suburban, Urban: unit vocabulary', type: 'article', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-building-knowledge/a/rural-suburban-urban-unit-vocabulary' },
+          ],
+        },
+        {
+          name: 'Close reading: informational text',
+          items: [
+            { label: 'What is a main idea? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-informational/v/what-is-a-main-idea-reading-khan-academy' },
+            { label: 'Relationships between scientific ideas in a text', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-informational/v/relationships-between-scientific-ideas-in-a-text-reading' },
+            { label: 'Using text features to locate information | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-informational/v/using-text-features-to-locate-information-reading' },
+            { label: 'Reading more than one source on a topic', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-informational/v/reading-more-than-one-source-on-a-topic-reading-khan-academy' },
             {
-              prompt: 'Rural towns have big farms and few people. What is the main idea?',
-              answer: 'Rural life has open space and fewer people',
-              explanation: 'Farms and few people describe rural.',
-            },
-            {
-              prompt: 'Cities have tall buildings and busy streets. What is the main idea?',
-              answer: 'Cities are busy and crowded',
-              explanation: '"Tall buildings" and "busy streets" describe cities.',
+              label: 'Rural, Suburban, Urban: reading informational text; Communities and Changes',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-informational/e/rural-suburban-urban-reading-informational-text-communities-and-changes-2',
+              question: {
+                prompt: 'Read: "The frog leaped to a lily pad." Who leaped?',
+                answer: 'The frog',
+                explanation: 'The subject of the sentence is "the frog".',
+              },
             },
           ],
         },
         {
-          name: 'Inference',
-          description: 'Use details to figure out where a story happens.',
-          questions: [
+          name: 'Close reading: fiction',
+          items: [
+            { label: 'Looking back at the text for evidence', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-fiction/v/looking-back-at-the-text-for-evidence' },
+            { label: 'Messages and morals | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-fiction/v/messages-and-morals-reading' },
+            { label: 'Character actions in stories | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-fiction/v/character-actions-in-stories-reading' },
+            { label: 'What do pictures bring to a story? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-fiction/v/what-do-pictures-bring-to-a-story-reading' },
             {
-              prompt: 'Mia hears roosters crow and sees a tractor nearby. Where is she?',
-              answer: 'A rural area',
-              explanation: 'Roosters and tractors are rural clues.',
-            },
-            {
-              prompt: 'Sam rides a subway to a tall school. Where does he live?',
-              answer: 'A city',
-              explanation: 'Subways and tall schools suggest urban life.',
-            },
-          ],
-        },
-        {
-          name: 'Vocabulary in Context',
-          description: 'Use sentence clues to learn community words.',
-          questions: [
-            {
-              prompt: '"A suburb is a place between city and country." What is a suburb?',
-              answer: 'A place between city and country',
-              explanation: 'The definition appears in the sentence.',
-            },
-            {
-              prompt: '"The rural road had no traffic — just cows." What does rural mean?',
-              answer: 'Country-like',
-              explanation: 'Cows and no traffic show rural setting.',
+              label: 'Rural, Suburban, Urban: reading creative fiction; The Little Yellow House',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-close-reading-fiction/e/rural-suburban-urban-reading-creative-fiction-the-little-yellow-house-2',
+              question: {
+                prompt: 'What kind of book gives you facts about real things?',
+                answer: 'Informational text',
+                explanation: 'Informational texts share real facts.',
+              },
             },
           ],
         },
         {
-          name: 'Compare & Contrast',
-          description: 'Compare rural, suburban, and urban life.',
-          questions: [
+          name: 'Applying vocabulary knowledge',
+          items: [
+            { label: 'Using context clues to figure out new words', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-vocabulary/v/using-context-clues-to-figure-out-new-words-reading' },
+            { label: 'What are affixes? | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-vocabulary/v/what-are-affixes-reading' },
             {
-              prompt: 'Cities have subways; farms have tractors. What is the difference?',
-              answer: 'How people travel and work',
-              explanation: 'Transportation and work tools differ.',
-            },
-            {
-              prompt: 'All three communities have schools. What is the same?',
-              answer: 'Schools',
-              explanation: 'Schools exist in every community.',
-            },
-          ],
-        },
-        {
-          name: 'Text Structure',
-          description: 'Read a compare-and-contrast passage.',
-          questions: [
-            {
-              prompt: 'A passage has headings "Rural," "Suburban," "Urban." What structure is used?',
-              answer: 'Compare and contrast',
-              explanation: 'Multiple sections show comparisons.',
-            },
-            {
-              prompt: 'Words like "however" and "both" signal what?',
-              answer: 'Comparison',
-              explanation: 'These signal compare/contrast.',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Vocabulary Acquisition and Use',
-      description: 'Use context clues, prefixes, suffixes, and roots to learn new grade-level words.',
-      lessons: [
-        {
-          name: 'Context Clues',
-          description: 'Use the sentence to figure out a word\'s meaning.',
-          questions: [
-            {
-              prompt: '"The hike was grueling, and we all felt worn out." What does grueling mean?',
-              answer: 'Very tiring',
-              explanation: '"Worn out" hints the hike was tiring.',
-            },
-            {
-              prompt: '"The dog was timid — he hid behind a chair when guests came." What does timid mean?',
-              answer: 'Shy',
-              explanation: 'Hiding shows shyness.',
+              label: 'Rural, Suburban, Urban: vocabulary; Communities and Changes',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-vocabulary/e/rural-suburban-urban-vocabulary-communities-and-changes-2',
+              question: {
+                prompt: 'Read: "Pia walked slowly because her bag was heavy." Why did Pia walk slowly?',
+                answer: 'Her bag was heavy',
+                explanation: 'The word "because" gives the reason.',
+              },
             },
           ],
         },
         {
-          name: 'Prefixes',
-          description: 'Add "un-" and "re-" to change meaning.',
-          questions: [
+          name: 'Reading for understanding: informational text',
+          items: [
+            { label: 'Making inferences in informational texts', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-reading-for-understanding-informational/v/making-inferences-in-informational-texts-reading-khan-academy' },
+            { label: 'Finding connections between ideas within a passage', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-reading-for-understanding-informational/v/finding-connections-between-ideas-reading' },
             {
-              prompt: 'What does "unhappy" mean?',
-              answer: 'Not happy',
-              explanation: '"Un-" means "not."',
-            },
-            {
-              prompt: 'What does "redo" mean?',
-              answer: 'Do again',
-              explanation: '"Re-" means "again."',
-            },
-          ],
-        },
-        {
-          name: 'Suffixes',
-          description: 'Add "-ful" and "-less" to change meaning.',
-          questions: [
-            {
-              prompt: 'What does "helpful" mean?',
-              answer: 'Full of help',
-              explanation: '"-ful" means "full of."',
-            },
-            {
-              prompt: 'What does "hopeless" mean?',
-              answer: 'Without hope',
-              explanation: '"-less" means "without."',
+              label: 'Rural, Suburban, Urban: reading informational text; Urban and Rural Communities',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-reading-for-understanding-informational/e/rural-suburban-urban-reading-informational-text-urban-and-rural-communities-2',
+              question: {
+                prompt: 'Which word means a tale told to teach a lesson?',
+                answer: 'Fable',
+                explanation: 'A fable is a short story with a moral.',
+              },
             },
           ],
         },
         {
-          name: 'Synonyms and Antonyms',
-          description: 'Find words with similar or opposite meanings.',
-          questions: [
+          name: 'Reading for understanding: fiction',
+          items: [
+            { label: 'The elements of a story', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-reading-for-understanding-fiction/v/the-elements-of-a-story-reading' },
+            { label: 'A story\'s point of view | Reading', type: 'video', href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-reading-for-understanding-fiction/v/a-storys-point-of-view-reading' },
             {
-              prompt: 'Which is a synonym for "big"? (a) large (b) small',
-              answer: '(a) large',
-              explanation: 'Synonyms mean the same.',
-            },
-            {
-              prompt: 'What is an antonym for "happy"?',
-              answer: 'Sad',
-              explanation: 'Antonyms mean the opposite.',
-            },
-          ],
-        },
-        {
-          name: 'Shades of Meaning',
-          description: 'Notice small differences between similar words.',
-          questions: [
-            {
-              prompt: 'Which is stronger: warm or hot?',
-              answer: 'Hot',
-              explanation: 'Hot is a stronger form of warm.',
-            },
-            {
-              prompt: 'Which is softer: shout or whisper?',
-              answer: 'Whisper',
-              explanation: 'Whispers are quiet.',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'Reading: Foundational Skills',
-      description: 'Strengthen phonics, decoding, and fluency through short connected texts.',
-      lessons: [
-        {
-          name: 'Vowel Teams',
-          description: 'Decode words with vowel teams like ai, ea, oa.',
-          questions: [
-            {
-              prompt: 'Read the word: "train." What vowel team is in it?',
-              answer: 'ai',
-              explanation: '"ai" makes the long /a/ sound.',
-            },
-            {
-              prompt: 'What sound does "oa" make in "boat"?',
-              answer: 'Long /o/',
-              explanation: '"oa" often sounds like long O.',
-            },
-          ],
-        },
-        {
-          name: 'R-controlled Vowels',
-          description: 'Decode words with ar, er, ir, or, ur.',
-          questions: [
-            {
-              prompt: 'Read: "star." What vowel sound is in it?',
-              answer: '/ar/',
-              explanation: '"ar" makes a special r-controlled sound.',
-            },
-            {
-              prompt: 'Which word has /er/? (a) her (b) hat',
-              answer: '(a) her',
-              explanation: '"Her" uses the r-controlled vowel.',
-            },
-          ],
-        },
-        {
-          name: 'Two-Syllable Words',
-          description: 'Break longer words into syllables.',
-          questions: [
-            {
-              prompt: 'How many syllables in "rabbit"?',
-              answer: '2',
-              explanation: '"rab-bit" has two parts.',
-            },
-            {
-              prompt: 'Clap the word "basket." How many claps?',
-              answer: '2',
-              explanation: '"bas-ket" has two syllables.',
-            },
-          ],
-        },
-        {
-          name: 'Irregular Words',
-          description: 'Read common words that don\'t follow rules.',
-          questions: [
-            {
-              prompt: 'Read: "said." Do you pronounce the letters as you\'d expect?',
-              answer: 'No',
-              explanation: '"Said" sounds like "sed."',
-            },
-            {
-              prompt: 'Which word is a sight word? (a) was (b) cat',
-              answer: '(a) was',
-              explanation: '"Was" is irregular and memorized.',
-            },
-          ],
-        },
-        {
-          name: 'Fluency',
-          description: 'Read with appropriate rate and expression.',
-          questions: [
-            {
-              prompt: 'What should you do at a comma?',
-              answer: 'Pause briefly',
-              explanation: 'Commas signal a short pause.',
-            },
-            {
-              prompt: 'How should a question sound at the end?',
-              answer: 'Voice goes up',
-              explanation: 'Rising tone signals questions.',
+              label: 'Rural, Suburban, Urban: reading realistic fiction; The City Cousin and the Country Cousin',
+              type: 'exercise',
+              href: 'https://www.khanacademy.org/ela/cc-2nd-reading-vocab/xfb4fc0bf01437792:cc-2nd-rural-suburban-urban/xfb4fc0bf01437792:rural-suburban-urban-reading-for-understanding-fiction/e/rural-suburban-urban-reading-realistic-fiction-the-city-cousin-and-the-country-cousin-2',
+              question: {
+                prompt: 'In a play, who tells what to do and where to stand?',
+                answer: 'Stage directions',
+                explanation: 'Stage directions guide the actors.',
+              },
             },
           ],
         },

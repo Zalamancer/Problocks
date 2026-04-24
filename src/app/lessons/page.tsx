@@ -126,7 +126,12 @@ const GradeOverviewCard = ({
 }) => {
   const deep = findDeepGrade(subject.id, grade.grade);
   const lessons = deep ? deep.units.reduce((s, u) => s + u.lessons.length, 0) : 0;
-  const questions = deep ? deep.units.reduce((s, u) => s + u.lessons.reduce((a, l) => a + l.questions.length, 0), 0) : 0;
+  const items = deep ? deep.units.reduce((s, u) => s + u.lessons.reduce((a, l) => a + (l.items?.length ?? 0), 0), 0) : 0;
+  const questions = deep ? deep.units.reduce((s, u) => s + u.lessons.reduce((a, l) => {
+    const fromItems = (l.items ?? []).reduce((n, it) => n + (it.question ? 1 : 0), 0);
+    const legacy = l.questions?.length ?? 0;
+    return a + fromItems + legacy;
+  }, 0), 0) : 0;
   return (
     <Block tone="paper" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <button
@@ -155,7 +160,7 @@ const GradeOverviewCard = ({
       </button>
       <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ fontSize: 12, color: 'var(--pbs-ink-soft)' }}>
-          {lessons} lessons · {questions} practice questions
+          {lessons} lessons · {items} items · {questions} questions
         </div>
         <div style={{ fontSize: 13, color: 'var(--pbs-ink)', marginTop: 4, lineHeight: 1.45 }}>
           {grade.units.slice(0, 4).map((u) => u.name).join(' · ')}

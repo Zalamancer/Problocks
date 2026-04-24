@@ -111,7 +111,32 @@ export const StudentApp = () => {
           members: 0,
         }));
         setClasses(mapped);
-        setAssigned([]);
+        // Real-mode assignments aren't backed by a DB table yet. As a
+        // shortcut for onboarding, surface the Cart-on-an-Incline
+        // homework whenever the student is enrolled in a "Tutorial"
+        // class (created by /api/dev/seed-tutorial). Real assignment
+        // persistence will replace this hardcoded card later.
+        const tutorial = mapped.find((c) => c.name.toLowerCase() === 'tutorial');
+        if (tutorial) {
+          setAssigned([
+            {
+              id: 'tutorial-cart-on-incline',
+              title: 'Cart on an Incline (AP FRQ)',
+              classId: tutorial.id,
+              subject: tutorial.subject,
+              tone: 'sky',
+              icon: 'bolt',
+              due: 'Tutorial homework',
+              minutes: 25,
+              questions: 12,
+              kind: 'Homework',
+              status: 'new',
+              href: '/homework/physics-1/cart-on-incline',
+            },
+          ]);
+        } else {
+          setAssigned([]);
+        }
         setUseRealData(true);
         // Show dashboard even if there's no Supabase session — the NextAuth
         // session from /join is enough to identify the student.

@@ -321,6 +321,14 @@ deli/diner; Car Tycoon: garage/chrome). Keep it short — 1 line per entry.
   - **Restaurant / diner**: a plot with 4–6 tables (one short cube as
     table top + 4 thin cubes as legs) inside a fenced area, a counter
     using the shop-stall recipe, a kitchen area at the back.
+  - **Park / plaza**: the Pokopia look — a central fountain, a
+    winding dirt trail (15–40 dirt patches ~1u apart), 6–10 stone
+    columns flanking the trail, 10–20 lamp posts along the path, a
+    dense mix of 20+ tree-random trees clustered in groves, bushes
+    and flowers scattered, 4–8 gift boxes near benches and a
+    character near the fountain. The trail connects a fountain to
+    a building (house). Keep z between −20 and +20, x between −20
+    and +20; density matters more than spread.
 
 ## Composition tips (to produce worlds that read well)
 
@@ -333,7 +341,14 @@ deli/diner; Car Tycoon: garage/chrome). Keep it short — 1 line per entry.
   60..90), mixing oak and pine, with occasional bushes + flowers.
 - For a village: 3-8 houses roughly along a "main street", each with
   its own small plot (fence, mailbox, a tree or two, flowers).
-- Paths made of stepping stones — 10-30 stones spaced ~2u apart.
+- Paths — prefer the 'dirt' prefab (flat 1.5u orange disc) for winding
+  organic trails; scatter 15–50 patches ~0.9u apart and jitter x/z by
+  ±0.3u so the trail reads hand-painted. Reserve 'path-stone' for
+  stepping-stone accents (10–30 stones 2u apart).
+- Plaza props — lamppost / stone-column / fountain / gift-box are for
+  Pokopia-flavoured park scenes. Place lamp posts every 4–5u along
+  dirt paths; stone columns flank gates or frame a fountain; fountains
+  anchor plaza centers; gift boxes cluster in 2–5s by benches / shops.
 - One character per scene unless the user asks for more — the Play mode
   follows the first character it finds.
 - Flowers in small patches of 3-6 near doors and paths.

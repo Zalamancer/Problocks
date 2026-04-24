@@ -26,18 +26,22 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 // ---- performance mode ------------------------------------------------
 
 /**
- * Global perf mode. 'high' is the normal chunky-pastel look; 'low' swaps
- * every helper to the lowest-poly variant that still reads as the same
- * shape — flat-sided cubes (8v), icosahedron spheres (12v/20t), 5-sided
- * cylinders, 4-sided cones. Drops prefab vertex counts ~10-20× on a
- * Celeron Chromebook where a plot with dozens of trees is otherwise
- * unusable.
+ * Global perf mode.
+ *   'high'    — default chunky-pastel look (rounded boxes, UV spheres).
+ *   'low'     — minimal-vert versions that still read as their shape:
+ *               flat cubes, 12v icosahedra, 5-sided cylinders, 4-sided
+ *               pyramid cones. ~10× vertex drop.
+ *   'extreme' — everything becomes a BoxGeometry (8v). Sphere →
+ *               2r-side cube; cylinder → 2r × h × 2r prism; cone →
+ *               same prism (tapering comes from per-prefab scale);
+ *               capsule / torus → bounding-box cube. Minecraft /
+ *               voxel silhouette at the lowest possible cost.
  *
- * Cache keys include the mode (`lp:` prefix) so the two variants can
+ * Cache keys include the mode (`lp:` / `xl:` prefix) so variants can
  * coexist, but we also invalidate the map on mode flip so ram doesn't
- * grow with both sets held in memory.
+ * grow with every variant held in memory.
  */
-export type GeometryPerfMode = 'high' | 'low';
+export type GeometryPerfMode = 'high' | 'low' | 'extreme';
 let PERF_MODE: GeometryPerfMode = 'high';
 
 export function getGeometryPerfMode(): GeometryPerfMode {
@@ -65,7 +69,10 @@ type BG = THREE.BufferGeometry;
 const geoCache = new Map<string, BG>();
 
 function cached<T extends BG>(key: string, build: () => T): T {
-  const fullKey = PERF_MODE === 'low' ? `lp:${key}` : key;
+  const prefix =
+    PERF_MODE === 'extreme' ? 'xl:' :
+    PERF_MODE === 'low'     ? 'lp:' : '';
+  const fullKey = `${prefix}${key}`;
   const hit = geoCache.get(fullKey);
   if (hit) return hit as T;
   const geo = build();
@@ -108,9 +115,9 @@ export function kidBox(opts: KidBoxOptions = {}): BG {
   const w = opts.width ?? 1;
   const h = opts.height ?? 1;
   const d = opts.depth ?? 1;
-  // Low-perf: flat-sided 8-vertex cube. The inverted-hull outline softens
-  // the corners so the missing bevel is invisible at orbit distance.
-  if (PERF_MODE === 'low') {
+  // Low & extreme: flat-sided 8-vertex cube. The inverted-hull outline
+  // softens the corners so the missing bevel is invisible at orbit.
+  if (PERF_MODE === 'low' || PERF_MODE === 'extreme') {
     return cached(`rb-flat:${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d));
   }
   const r = clamp(opts.radius ?? 0.15, 0, Math.min(w, h, d) * 0.49);
@@ -145,6 +152,14 @@ export function kidSimpleBox(
  * reads as a chunky pentagon whether or not the ridge itself is beveled.
  */
 export function kidTriPrism(width: number, height: number, depth: number): BG {
+  // Extreme: pitched roof → flat-topped slab. House ends up looking
+  // like a minecraft-style hip-roofed cube; still reads as "house".
+  if (PERF_MODE === 'extreme') {
+    return cached(
+      `prism-cube:${width}:${height}:${depth}`,
+      () => new THREE.BoxGeometry(width, height, depth),
+    );
+  }
   return cached(`prism:${width}:${height}:${depth}`, () => {
     const w = width / 2;
     const d = depth / 2;
@@ -199,6 +214,12 @@ export interface KidSphereOptions {
  */
 export function kidSphere(opts: KidSphereOptions = {}): THREE.BufferGeometry {
   const r = opts.radius ?? 0.5;
+  // Extreme: sphere → cube of diameter 2r. Cloud becomes 5 cubes, bush
+  // becomes 4 cubes, tree canopy becomes stacked cubes — minecraft-y.
+  if (PERF_MODE === 'extreme') {
+    const s = r * 2;
+    return cached(`sph-cube:${r}`, () => new THREE.BoxGeometry(s, s, s));
+  }
   // Low-perf: 20-triangle icosahedron. 12 verts vs 99 for the default UV
   // sphere — reads as a faceted ball which matches the low-poly / voxel
   // aesthetic users opt into when they turn this mode on.
@@ -228,6 +249,13 @@ export function kidCylinder(opts: KidCylinderOptions = {}): THREE.BufferGeometry
   const rt = opts.radiusTop ?? 0.5;
   const rb = opts.radiusBottom ?? 0.5;
   const h  = opts.height ?? 1;
+  // Extreme: cylinder → square prism. Tree trunks read as voxel-style
+  // wood columns. Width is max of top/bottom radius so tapered columns
+  // don't unexpectedly shrink.
+  if (PERF_MODE === 'extreme') {
+    const s = Math.max(rt, rb) * 2;
+    return cached(`cyl-cube:${rt}:${rb}:${h}`, () => new THREE.BoxGeometry(s, h, s));
+  }
   // Low-perf: 5 radial segments, 1 height segment, closed. Still reads
   // as round at a glance, at ~1/3 the vert count of the default 12.
   if (PERF_MODE === 'low') {
@@ -254,6 +282,12 @@ export function kidCone(opts: {
 } = {}): THREE.BufferGeometry {
   const r = opts.radius ?? 0.5;
   const h = opts.height ?? 1;
+  // Extreme: cone → flat-topped prism. Each pine-tree tier is already
+  // scaled differently, so the stack still reads as a stepped tower.
+  if (PERF_MODE === 'extreme') {
+    const s = r * 2;
+    return cached(`cone-cube:${r}:${h}`, () => new THREE.BoxGeometry(s, h, s));
+  }
   // Low-perf: 4 radial segments — a pyramid. Cheapest cone that still
   // reads as pointed (3 would read as a wedge, not a cone).
   if (PERF_MODE === 'low') {
@@ -273,6 +307,12 @@ export function kidCapsule(opts: {
 } = {}): THREE.BufferGeometry {
   const r = opts.radius ?? 0.3;
   const L = opts.length ?? 1;
+  if (PERF_MODE === 'extreme') {
+    // Capsule → rectangular prism enclosing the capsule: 2r wide/deep,
+    // L + 2r tall (cap hemispheres contribute r each end).
+    const s = r * 2;
+    return cached(`cap-cube:${r}:${L}`, () => new THREE.BoxGeometry(s, L + 2 * r, s));
+  }
   if (PERF_MODE === 'low') {
     return cached(`cap-low:${r}:${L}`, () => new THREE.CapsuleGeometry(r, L, 1, 6));
   }
@@ -291,6 +331,14 @@ export function kidTorus(opts: {
 } = {}): THREE.BufferGeometry {
   const r  = opts.radius ?? 0.5;
   const tr = opts.tubeRadius ?? 0.15;
+  if (PERF_MODE === 'extreme') {
+    // Torus → flat slab bounding box. Not a great representation, but
+    // the ring-shaped prefab slot is rare and users already opted into
+    // "everything becomes a cube".
+    const outer = (r + tr) * 2;
+    const thick = tr * 2;
+    return cached(`torus-cube:${r}:${tr}`, () => new THREE.BoxGeometry(outer, thick, outer));
+  }
   if (PERF_MODE === 'low') {
     return cached(`torus-low:${r}:${tr}`, () => new THREE.TorusGeometry(r, tr, 4, 8));
   }

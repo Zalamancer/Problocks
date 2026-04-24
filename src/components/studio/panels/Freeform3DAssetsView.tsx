@@ -225,15 +225,17 @@ export function Freeform3DAssetsView() {
         {/* Performance mode is also always visible. Low swaps rounded
             boxes for 8v cubes, UV spheres for 12v icosahedra, 12-sided
             cylinders for 5-sided stubs — drops plot vertex counts ~10×
-            for kids on Celeron Chromebooks. Changing it rebuilds both
-            the thumbnails AND any already-placed prefabs in the scene. */}
+            for kids on Celeron Chromebooks. Extreme turns every helper
+            into a BoxGeometry for a minecraft-voxel look. Changing it
+            rebuilds both the thumbnails AND any already-placed prefabs. */}
         <PanelSelect
           label="Performance"
           value={performanceMode}
           onChange={(v) => setPerformanceMode(v as typeof performanceMode)}
           options={[
-            { value: 'high', label: 'High — detailed' },
-            { value: 'low',  label: 'Low — minimal verts' },
+            { value: 'high',    label: 'High — detailed' },
+            { value: 'low',     label: 'Low — minimal verts' },
+            { value: 'extreme', label: 'Extreme — cubes only' },
           ]}
         />
 

@@ -383,6 +383,9 @@ export function FreeformView3D() {
     const raycaster = new THREE.Raycaster();
     let isDown = false;
     let lastPaint: THREE.Vector3 | null = null;
+    // Track the previous paint position during a stroke so path mode
+    // can compute the drag direction and lay tiles perpendicular to it.
+    let prevPathPos: THREE.Vector3 | null = null;
 
     function pointToWorld(e: PointerEvent): THREE.Vector3 | null {
       const rect = canvas!.getBoundingClientRect();
@@ -401,21 +404,57 @@ export function FreeformView3D() {
       const b = state.brush;
       if (!b.kind) return;
       const placed: THREE.Vector3[] = [];
-      for (let i = 0; i < b.density; i++) {
-        // Try several candidate positions so min-spacing can reject
-        // heavy clumps without starving the brush stroke.
-        let candidate: THREE.Vector3 | null = null;
-        for (let tries = 0; tries < 8; tries++) {
-          const angle = Math.random() * Math.PI * 2;
-          const dist = Math.sqrt(Math.random()) * b.radius;
-          const c = new THREE.Vector3(
-            center.x + Math.cos(angle) * dist,
+
+      // In path mode, build `density` candidates on a line perpendicular
+      // to the drag direction. Width = radius * 2. This gives a wide
+      // continuous trail when the user drags, instead of radial scatter.
+      const pathCandidates: THREE.Vector3[] = [];
+      if (b.mode === 'path') {
+        // Default direction: +X until we have a real drag vector.
+        let dx = 1, dz = 0;
+        if (prevPathPos) {
+          dx = center.x - prevPathPos.x;
+          dz = center.z - prevPathPos.z;
+          const len = Math.hypot(dx, dz);
+          if (len > 0.0001) { dx /= len; dz /= len; }
+          else { dx = 1; dz = 0; }
+        }
+        // Perpendicular to drag direction (rotate 90° in XZ plane).
+        const px = -dz, pz = dx;
+        const n = Math.max(1, b.density);
+        const totalWidth = b.radius * 2;
+        for (let i = 0; i < n; i++) {
+          const t = n === 1 ? 0 : (i / (n - 1)) - 0.5; // -0.5..0.5
+          const offset = t * totalWidth;
+          pathCandidates.push(new THREE.Vector3(
+            center.x + px * offset,
             0,
-            center.z + Math.sin(angle) * dist,
-          );
-          if (b.minSpacing > 0 && placed.some((p) => p.distanceTo(c) < b.minSpacing)) continue;
-          candidate = c;
-          break;
+            center.z + pz * offset,
+          ));
+        }
+        prevPathPos = center.clone();
+      }
+
+      const iterations = b.mode === 'path' ? pathCandidates.length : b.density;
+      for (let i = 0; i < iterations; i++) {
+        let candidate: THREE.Vector3 | null = null;
+        if (b.mode === 'path') {
+          candidate = pathCandidates[i];
+        } else {
+          // Scatter mode — try several candidate positions so min-spacing
+          // can reject heavy clumps without starving the brush stroke.
+          for (let tries = 0; tries < 8; tries++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.sqrt(Math.random()) * b.radius;
+            const c = new THREE.Vector3(
+              center.x + Math.cos(angle) * dist,
+              0,
+              center.z + Math.sin(angle) * dist,
+            );
+            if (b.minSpacing > 0 && placed.some((p) => p.distanceTo(c) < b.minSpacing)) continue;
+            candidate = c;
+            break;
+          }
         }
         if (!candidate) continue;
         placed.push(candidate);
@@ -451,7 +490,12 @@ export function FreeformView3D() {
 
     function tryPaint(point: THREE.Vector3): void {
       const b = useFreeform3D.getState().brush;
-      const step = Math.max(0.1, b.radius * 0.5);
+      // Scatter: step = half-radius so strokes don't over-stack the
+      // radial scatter. Path: step = minSpacing (or a small default) so
+      // tiles butt up along the trail for a continuous trail read.
+      const step = b.mode === 'path'
+        ? Math.max(0.25, b.minSpacing || 0.5)
+        : Math.max(0.1, b.radius * 0.5);
       if (lastPaint && lastPaint.distanceTo(point) < step) return;
       lastPaint = point.clone();
       paintAt(point);
@@ -474,6 +518,7 @@ export function FreeformView3D() {
       if (!pt) return;
       isDown = true;
       lastPaint = null;
+      prevPathPos = null;
       tryPaint(pt);
       e.preventDefault();
       e.stopPropagation();
@@ -481,6 +526,7 @@ export function FreeformView3D() {
     const onPointerUp = () => {
       isDown = false;
       lastPaint = null;
+      prevPathPos = null;
     };
     const onPointerLeave = () => {
       ring.visible = false;

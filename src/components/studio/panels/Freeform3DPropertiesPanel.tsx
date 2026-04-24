@@ -178,15 +178,35 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
         )}
       </div>
 
+      <PanelSection title="Mode" collapsible defaultOpen>
+        <PanelSelect
+          label="Brush mode"
+          value={brush.mode}
+          onChange={(v) => setBrushField('mode', v as typeof brush.mode)}
+          options={[
+            { value: 'scatter', label: 'Scatter (radial spread)' },
+            { value: 'path',    label: 'Path (drag a trail)' },
+          ]}
+        />
+        <div
+          className="px-1 text-[11px] leading-snug"
+          style={{ color: 'var(--pb-ink-muted)' }}
+        >
+          {brush.mode === 'path'
+            ? 'Hold left mouse and drag across the ground. Tiles spread perpendicular to your drag direction.'
+            : 'Click or drag to scatter tiles in a circle around the cursor.'}
+        </div>
+      </PanelSection>
+
       <PanelSection title="Coverage" collapsible defaultOpen>
         <PanelSlider
-          label="Density"
+          label={brush.mode === 'path' ? 'Tiles across' : 'Density'}
           value={brush.density}
           onChange={(v) => setBrushField('density', v)}
           min={1} max={20} step={1}
         />
         <PanelSlider
-          label="Radius"
+          label={brush.mode === 'path' ? 'Path half-width' : 'Radius'}
           value={brush.radius}
           onChange={(v) => setBrushField('radius', v)}
           min={0} max={6} step={0.1}
@@ -194,7 +214,7 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
           suffix="u"
         />
         <PanelSlider
-          label="Min spacing"
+          label={brush.mode === 'path' ? 'Along-track step' : 'Min spacing'}
           value={brush.minSpacing}
           onChange={(v) => setBrushField('minSpacing', v)}
           min={0} max={2} step={0.05}

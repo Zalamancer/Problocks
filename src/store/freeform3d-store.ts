@@ -79,9 +79,16 @@ export interface BrushSettings {
   enabled: boolean;
   /** Prefab kind the brush paints. '' when the user hasn't picked yet. */
   kind: string;
-  /** How many objects to scatter per click / paint tick. 1–20. */
+  /** Scatter = random spread in a radius (forest / meadow painting).
+      Path = drag a continuous trail with tiles perpendicular to the
+      motion direction (dirt paths / cobblestone roads). */
+  mode: 'scatter' | 'path';
+  /** How many objects to scatter per click / paint tick. 1–20.
+      In 'path' mode this is the number of tiles across the path
+      width (1 = single tile line; 3–5 = wide road). */
   density: number;
-  /** Scatter radius around the click point, in world units (XZ jitter). */
+  /** Scatter radius around the click point, in world units (XZ jitter).
+      In 'path' mode this is the half-width of the painted trail. */
   radius: number;
   /** Randomize Y rotation (0..2π) — most natural for trees/rocks/flowers. */
   randomRotY: boolean;
@@ -101,13 +108,15 @@ export interface BrushSettings {
   /** 50/50 chance of negating X scale per spawn — horizontal flip. */
   randomFlip: boolean;
   /** Minimum distance between spawned objects in one click (prevents
-      heavy stacking). 0 disables the check. */
+      heavy stacking). 0 disables the check. In 'path' mode this also
+      controls along-track tile spacing during a drag. */
   minSpacing: number;
 }
 
 export const DEFAULT_BRUSH: BrushSettings = {
   enabled: false,
   kind: '',
+  mode: 'scatter',
   density: 3,
   radius: 1.5,
   randomRotY: true,

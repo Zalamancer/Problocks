@@ -232,100 +232,157 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const RAND_LEAF_COLORS = [
-  PALETTE.mint,
-  PALETTE.sage,
-  PALETTE.flowerBush,
-  '#a8d58a',
-  '#b9d97a',
-  '#8ac082',
-  '#c7e0a6',
-  '#7eb870',
-];
+// Leaf/trunk palettes — each style evokes a different mood.
+const PAL_GREEN  = [PALETTE.mint, PALETTE.sage, PALETTE.flowerBush, '#a8d58a', '#8ac082', '#c7e0a6', '#7eb870', '#9fc98b'];
+const PAL_AUTUMN = ['#e8a355', '#d97757', '#c44536', '#e8c355', '#f0a058', '#b84d2a', '#d9883a', '#e0a02b'];
+const PAL_CHERRY = ['#f2b6c6', '#eaa0b4', '#f7d0dc', '#ffc1d1', '#d98a9e', '#f5c8d5', '#ffa8c0'];
+const PAL_FANTASY = ['#9d7ae8', '#b58cff', '#6ec5c9', '#e48be8', '#7cb5f0', '#d090ff', '#8defc7'];
+const PAL_WOOD_BROWN = [PALETTE.woodDark, PALETTE.woodShadow, PALETTE.woodLight];
+const PAL_WOOD_BIRCH = ['#ece7d3', '#d6d1bb', '#c4bfa5'];
+const PAL_FRUIT = ['#d94545', '#c73e3e', '#e06464']; // cherry / apple reds
+const PAL_FRUIT_CITRUS = ['#f0b040', '#e8a020', '#ffb858'];
 
-const RAND_TRUNK_COLORS = [
-  PALETTE.woodDark,
-  PALETTE.woodShadow,
-  PALETTE.woodLight,
-];
+type TreeStyle = 'green' | 'autumn' | 'cherry' | 'fantasy' | 'birch' | 'dead';
+type CanopyShape = 'round' | 'stacked' | 'cone' | 'cluster' | 'umbrella' | 'tall';
+
+function paletteFor(style: TreeStyle): string[] {
+  if (style === 'autumn')  return PAL_AUTUMN;
+  if (style === 'cherry')  return PAL_CHERRY;
+  if (style === 'fantasy') return PAL_FANTASY;
+  // birch defaults to green leaves with an autumn-turn chance handled at call site
+  return PAL_GREEN;
+}
 
 /**
  * Random tree — each spawn gets a unique integer seed (stored in
- * props.seed by the store) that drives archetype, trunk dimensions,
- * canopy shape, and colour. Four archetypes:
- *   0 — single big canopy sphere (round tree)
- *   1 — oak-like stacked blobs (2 leaf + 1 accent)
- *   2 — pine-like stacked cone tiers (3–4 tiers)
- *   3 — bushy cluster of sphere blobs on a short trunk
- * The seed is persisted in SceneObject.props so saving / undo / reload
- * all keep the exact same tree. No seed → fallback stable value so the
- * tree still renders.
+ * props.seed by the store) that drives every parameter. The seed is
+ * persisted in SceneObject.props so save / undo / reload keep the
+ * exact same tree. Variety axes:
+ *
+ *   Style (color / mood):  green · autumn · cherry · fantasy · birch · dead
+ *   Canopy shape:          round · stacked · cone · cluster · umbrella · tall
+ *   Trunks:                1 (usual) · 2 (fork) · 3 (cluster)
+ *   Sizes:                 trunk 0.6–2.2 tall, canopy radius 0.6–1.5
+ *   Extras:                Berries / fruit scattered on ~20% of live trees
+ *
+ * Style × shape × trunkCount × sizes gives hundreds of plausible trees
+ * from a single seed, so repeated clicks on the palette tile feel
+ * genuinely varied instead of four-archetype déjà vu.
  */
 export function treeRandom({ color, props }: BuildOptions): THREE.Object3D {
   const seed = ((props?.seed as number | undefined) ?? 0) || 1;
   const rng = mulberry32(seed);
   const pick = <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length)];
 
-  const archetype = Math.floor(rng() * 4);
-  const trunkH = 0.7 + rng() * 1.1;
-  const trunkR = 0.18 + rng() * 0.14;
-  const trunkColor = pick(RAND_TRUNK_COLORS);
-  const leafBase = color ?? pick(RAND_LEAF_COLORS);
-  const leafAccent = pick(RAND_LEAF_COLORS);
+  // ---- style (color mood) --------------------------------------------
+  const styleRoll = rng();
+  const style: TreeStyle =
+    styleRoll < 0.40 ? 'green'   :
+    styleRoll < 0.60 ? 'autumn'  :
+    styleRoll < 0.75 ? 'cherry'  :
+    styleRoll < 0.87 ? 'fantasy' :
+    styleRoll < 0.95 ? 'birch'   : 'dead';
+
+  const leafPalette = paletteFor(style);
+  const woodPalette = style === 'birch' ? PAL_WOOD_BIRCH
+                    : style === 'fantasy' ? [...PAL_WOOD_BROWN, '#3b2d4f'] // dark purple bark option
+                    : PAL_WOOD_BROWN;
+
+  // ---- trunk(s) ------------------------------------------------------
+  const trunkRoll = rng();
+  const trunkCount: 1 | 2 | 3 = trunkRoll < 0.10 ? 3 : trunkRoll < 0.24 ? 2 : 1;
+  const trunkH = 0.6 + rng() * 1.6;                    // 0.6–2.2
+  const mainTrunkR = 0.15 + rng() * 0.20;              // 0.15–0.35
+  const perTrunkR = mainTrunkR * (trunkCount === 3 ? 0.7 : trunkCount === 2 ? 0.82 : 1.0);
+  const trunkColor = pick(woodPalette);
 
   const g = new THREE.Group();
 
-  const trunk = new THREE.Mesh(
-    kidCylinder({ radiusTop: trunkR * 0.85, radiusBottom: trunkR, height: trunkH }),
-    toonMaterial({ color: trunkColor }),
-  );
-  trunk.position.y = trunkH / 2;
-  trunk.castShadow = true; trunk.receiveShadow = true;
-  g.add(trunk);
+  for (let t = 0; t < trunkCount; t++) {
+    const tAngle = trunkCount > 1 ? (t / trunkCount) * Math.PI * 2 + rng() * 0.3 : 0;
+    const tRad   = trunkCount > 1 ? 0.12 + rng() * 0.1 : 0;
+    const trunk = new THREE.Mesh(
+      kidCylinder({ radiusTop: perTrunkR * 0.85, radiusBottom: perTrunkR, height: trunkH }),
+      toonMaterial({ color: trunkColor }),
+    );
+    trunk.position.set(Math.cos(tAngle) * tRad, trunkH / 2, Math.sin(tAngle) * tRad);
+    trunk.castShadow = true; trunk.receiveShadow = true;
+    g.add(trunk);
+  }
 
-  if (archetype === 0) {
-    // Single round canopy.
-    const r = 0.8 + rng() * 0.5;
+  // Dead trees get bare branches instead of a canopy and return early.
+  if (style === 'dead') {
+    const branchCount = 2 + Math.floor(rng() * 4);        // 2–5
+    for (let i = 0; i < branchCount; i++) {
+      const a = rng() * Math.PI * 2;
+      const len = 0.4 + rng() * 0.5;
+      const height = trunkH * (0.5 + rng() * 0.45);
+      const branchR = perTrunkR * (0.35 + rng() * 0.25);
+      const branch = new THREE.Mesh(
+        kidCylinder({ radiusTop: branchR * 0.7, radiusBottom: branchR, height: len }),
+        toonMaterial({ color: trunkColor }),
+      );
+      // Rotate the cylinder so it lies ~horizontal (tilted up 30°) and offset
+      // from the trunk to read as a limb.
+      branch.position.set(
+        Math.cos(a) * (perTrunkR + len * 0.45),
+        height,
+        Math.sin(a) * (perTrunkR + len * 0.45),
+      );
+      branch.rotation.set(0, -a, Math.PI / 2 - 0.5);
+      branch.castShadow = true;
+      g.add(branch);
+    }
+    addOutlinesToTree(g);
+    return g;
+  }
+
+  // ---- canopy --------------------------------------------------------
+  const shapes: CanopyShape[] = ['round', 'stacked', 'cone', 'cluster', 'umbrella', 'tall'];
+  const shape = pick(shapes);
+  // `color` is the user's explicit override from the inspector; when set
+  // it clobbers the seeded pick so recolouring works as expected.
+  const leafBase   = color ?? pick(leafPalette);
+  const leafAccent = pick(leafPalette);
+
+  if (shape === 'round') {
+    const r = 0.7 + rng() * 0.5;
     const ball = new THREE.Mesh(
       kidSphere({ radius: r, detail: 1 }),
       toonMaterial({ color: leafBase }),
     );
-    ball.position.y = trunkH + r * 0.7;
+    ball.position.y = trunkH + r * 0.65;
     ball.castShadow = true; ball.receiveShadow = true;
     g.add(ball);
-  } else if (archetype === 1) {
-    // Oak-like stacked blobs.
+  } else if (shape === 'stacked') {
     const BASE = 0.85 + rng() * 0.3;
     const baseY = trunkH + BASE * 0.4;
     const sphereGeo = kidSphere({ radius: BASE, detail: 1 });
-    const topScale = 0.55 + rng() * 0.2;
     const leafXs: InstanceTransform[] = [
       { position: [0, baseY, 0], scale: 1 },
-      { position: [0, baseY + BASE * 0.8, 0], scale: topScale },
+      { position: [0, baseY + BASE * 0.8, 0], scale: 0.55 + rng() * 0.25 },
     ];
     const accentXs: InstanceTransform[] = [
       {
-        position: [(rng() - 0.5) * 0.4, baseY + BASE * 0.45, (rng() - 0.5) * 0.4],
-        scale: 0.5 + rng() * 0.2,
+        position: [(rng() - 0.5) * 0.45, baseY + BASE * 0.45, (rng() - 0.5) * 0.45],
+        scale: 0.5 + rng() * 0.25,
       },
     ];
-    const leafM = kidInstanced(sphereGeo, toonMaterial({ color: leafBase }), leafXs);
+    const leafM   = kidInstanced(sphereGeo, toonMaterial({ color: leafBase   }), leafXs);
     const accentM = kidInstanced(sphereGeo, toonMaterial({ color: leafAccent }), accentXs);
-    leafM.castShadow = true; leafM.receiveShadow = true;
-    accentM.castShadow = true; accentM.receiveShadow = true;
-    g.add(leafM); g.add(accentM);
-  } else if (archetype === 2) {
-    // Pine-like stacked cone tiers.
-    const tierCount = 3 + Math.floor(rng() * 2);
-    const BASE_R = 0.75 + rng() * 0.35;
-    const BASE_H = 0.7 + rng() * 0.3;
+    leafM.castShadow = true; accentM.castShadow = true;
+    g.add(leafM, accentM);
+  } else if (shape === 'cone') {
+    const tierCount = 3 + Math.floor(rng() * 3);          // 3–5
+    const BASE_R = 0.70 + rng() * 0.40;
+    const BASE_H = 0.60 + rng() * 0.40;
     const tiers: InstanceTransform[] = [];
     let y = trunkH;
     for (let i = 0; i < tierCount; i++) {
-      const s = Math.max(0.3, 1 - i * (0.2 + rng() * 0.08));
+      const s = Math.max(0.28, 1 - i * (0.18 + rng() * 0.10));
       const tierH = BASE_H * s;
       tiers.push({ position: [0, y + tierH / 2, 0], scale: [s, s, s] });
-      y += tierH * 0.6;
+      y += tierH * 0.55;
     }
     const canopy = kidInstanced(
       kidCone({ radius: BASE_R, height: BASE_H }),
@@ -334,30 +391,80 @@ export function treeRandom({ color, props }: BuildOptions): THREE.Object3D {
     );
     canopy.castShadow = true; canopy.receiveShadow = true;
     g.add(canopy);
-  } else {
-    // Bushy cluster — 3–6 sphere blobs arranged in a short canopy.
-    const count = 3 + Math.floor(rng() * 4);
-    const baseR = 0.5;
+  } else if (shape === 'cluster') {
+    const count = 4 + Math.floor(rng() * 5);              // 4–8 blobs
     const xs: InstanceTransform[] = [];
     for (let i = 0; i < count; i++) {
       const a = rng() * Math.PI * 2;
-      const radial = 0.25 + rng() * 0.3;
+      const radial = 0.20 + rng() * 0.5;
       xs.push({
-        position: [
-          Math.cos(a) * radial,
-          trunkH + 0.25 + rng() * 0.5,
-          Math.sin(a) * radial,
-        ],
-        scale: 0.7 + rng() * 0.5,
+        position: [Math.cos(a) * radial, trunkH + 0.20 + rng() * 0.7, Math.sin(a) * radial],
+        scale: 0.55 + rng() * 0.55,
       });
     }
     const blobs = kidInstanced(
-      kidSphere({ radius: baseR, detail: 1 }),
+      kidSphere({ radius: 0.5, detail: 1 }),
       toonMaterial({ color: leafBase }),
       xs,
     );
     blobs.castShadow = true; blobs.receiveShadow = true;
     g.add(blobs);
+  } else if (shape === 'umbrella') {
+    // Wide squashed canopy — palm-ish / maple umbrella feel.
+    const r = 0.95 + rng() * 0.55;
+    const ball = new THREE.Mesh(
+      kidSphere({ radius: r, detail: 1 }),
+      toonMaterial({ color: leafBase }),
+    );
+    ball.position.y = trunkH + r * 0.25;
+    ball.scale.set(1, 0.4 + rng() * 0.15, 1);
+    ball.castShadow = true; ball.receiveShadow = true;
+    g.add(ball);
+  } else {
+    // Tall — elongated columnar canopy (cypress / poplar).
+    const r = 0.45 + rng() * 0.3;
+    const h = 1.2 + rng() * 1.0;
+    const stretched = new THREE.Mesh(
+      kidSphere({ radius: r, detail: 1 }),
+      toonMaterial({ color: leafBase }),
+    );
+    stretched.position.y = trunkH + h * 0.45;
+    stretched.scale.set(1, h / (r * 2), 1);
+    stretched.castShadow = true; stretched.receiveShadow = true;
+    g.add(stretched);
+  }
+
+  // ---- optional fruits / berries ------------------------------------
+  const fruitRoll = rng();
+  const wantsFruit =
+    (style === 'cherry'  && fruitRoll < 0.55) ||
+    (style === 'autumn'  && fruitRoll < 0.35) ||
+    (style === 'green'   && fruitRoll < 0.15) ||
+    (style === 'fantasy' && fruitRoll < 0.25);
+  if (wantsFruit) {
+    const fruitPalette = style === 'fantasy'
+      ? PAL_FANTASY
+      : style === 'autumn' && rng() < 0.5
+        ? PAL_FRUIT_CITRUS
+        : PAL_FRUIT;
+    const fruitColor = pick(fruitPalette);
+    const fruitCount = 5 + Math.floor(rng() * 8);         // 5–12
+    const fruitR = 0.055 + rng() * 0.04;
+    const fxs: InstanceTransform[] = [];
+    for (let i = 0; i < fruitCount; i++) {
+      const a = rng() * Math.PI * 2;
+      const radial = 0.35 + rng() * 0.6;
+      fxs.push({
+        position: [Math.cos(a) * radial, trunkH + 0.5 + rng() * 0.9, Math.sin(a) * radial],
+        scale: 1,
+      });
+    }
+    const fruits = kidInstanced(
+      kidSphere({ radius: fruitR, detail: 0 }),
+      toonMaterial({ color: fruitColor }),
+      fxs,
+    );
+    g.add(fruits);
   }
 
   addOutlinesToTree(g);

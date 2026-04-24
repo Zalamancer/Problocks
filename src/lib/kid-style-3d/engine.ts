@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PALETTE, groundMaterial } from './materials';
+import { animateRoot } from './animations';
 
 export interface KidEngineOptions {
   canvas: HTMLCanvasElement;
@@ -209,12 +210,31 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
       : null;
   observer?.observe(canvas);
 
+  // --- pointer tracking for head-follow animations ---
+  const pointer = new THREE.Vector2();
+  let pointerActive = false;
+  function onPointerMove(e: PointerEvent) {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    pointerActive = true;
+  }
+  function onPointerLeave() { pointerActive = false; }
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerleave', onPointerLeave);
+
   // --- render loop ---
+  const clock = new THREE.Clock();
   let rafId = 0;
   let running = false;
   function tick() {
     if (!running) return;
     controls.update();
+    animateRoot(root, {
+      time: clock.getElapsedTime(),
+      pointer: pointerActive ? pointer : null,
+      camera,
+    });
     renderer.render(scene, camera);
     rafId = requestAnimationFrame(tick);
   }
@@ -231,6 +251,8 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
 
   function dispose() {
     stop();
+    canvas.removeEventListener('pointermove', onPointerMove);
+    canvas.removeEventListener('pointerleave', onPointerLeave);
     observer?.disconnect();
     controls.dispose();
     scene.traverse((obj) => {

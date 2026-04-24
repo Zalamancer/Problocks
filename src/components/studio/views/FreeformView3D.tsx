@@ -87,13 +87,23 @@ export function FreeformView3D() {
   /* ---- seed scene once if empty ---- */
   useEffect(() => {
     if (useFreeform3D.getState().scene.objects.length > 0) return;
-    // Three-object starter scene so the viewport doesn't look empty on first
-    // open; users can delete or replace at will. Positions mirror the old
-    // hardcoded seedStarterScene we removed from engine.ts.
-    addPrefab('rounded-box', [-2, 0, 0]);
-    addPrefab('sphere', [0, 0, 0]);
-    addPrefab('cylinder', [2.2, 0, 0]);
-    // Clear the "post-seeding" selection so the three outlines are the same.
+    // Adopt-Me starter plot: house in back, character out front, two
+    // corner trees, a mailbox at the gate, a balloon, and a bench off to
+    // the side. Reads as "a plot you own" the instant the viewport loads,
+    // instead of three abstract primitives floating in a field.
+    addPrefab('house',     [0, 0, -5]);
+    addPrefab('tree-oak',  [-7, 0, 5]);
+    addPrefab('tree-pine', [7, 0, -7]);
+    addPrefab('character', [2.5, 0, 3.5]);
+    addPrefab('mailbox',   [-4, 0, 8]);
+    addPrefab('balloon',   [-3.4, 0, 8]);
+    addPrefab('bench',     [5.5, 0, 4.5]);
+    addPrefab('flower',    [-1.4, 0, 6]);
+    addPrefab('flower',    [ 1.4, 0, 6]);
+    addPrefab('flower',    [-1.4, 0, 4]);
+    addPrefab('flower',    [ 1.4, 0, 4]);
+    // Clear the post-seeding selection so the starter scene reads as a
+    // neutral plot, not "one thing highlighted".
     useFreeform3D.getState().select(null);
   }, [addPrefab]);
 

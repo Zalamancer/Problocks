@@ -114,6 +114,20 @@ export function getPrefabStats(kind: string): SceneStats | null {
   return statsCache.get(kind) ?? null;
 }
 
+/** Warm the cache for a list of kinds without having to mount a
+    <PrefabThumbnail/> for each. Used by the Assets panel so sort-by-tris
+    and tris-range filters can operate on a complete data set instead of
+    "whatever has rendered so far". Returns a Promise that settles once
+    every kind has been rendered at least once. */
+export function ensurePrefabStats(kinds: string[]): Promise<void> {
+  return Promise.all(
+    kinds.map((k) => {
+      if (statsCache.has(k)) return Promise.resolve();
+      return renderPrefab(k, 160).then(() => void 0).catch(() => void 0);
+    }),
+  ).then(() => void 0);
+}
+
 function renderPrefab(kind: string, size: number): Promise<string> {
   const cached = cache.get(kind);
   if (cached) return Promise.resolve(cached);

@@ -11,7 +11,41 @@ import {
 } from '@/lib/kid-style-3d/prefabs';
 import { getSpawnPosition } from '@/lib/kid-style-3d/spawn-target';
 import { useFreeform3D } from '@/store/freeform3d-store';
-import { PrefabThumbnail, getPrefabStats } from '@/components/studio/PrefabThumbnail';
+import {
+  PrefabThumbnail,
+  getPrefabStats,
+  ensurePrefabStats,
+} from '@/components/studio/PrefabThumbnail';
+
+type SortKey = 'name-asc' | 'name-desc' | 'tris-asc' | 'tris-desc' | 'verts-asc' | 'verts-desc';
+type TrisRangeKey = 'any' | 'low' | 'med' | 'high' | 'vhigh' | 'extreme';
+type VertsRangeKey = 'any' | 'low' | 'med' | 'high' | 'extreme';
+
+const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
+  { value: 'name-asc',  label: 'Name (A → Z)' },
+  { value: 'name-desc', label: 'Name (Z → A)' },
+  { value: 'tris-asc',  label: 'Tris (low → high)' },
+  { value: 'tris-desc', label: 'Tris (high → low)' },
+  { value: 'verts-asc', label: 'Verts (low → high)' },
+  { value: 'verts-desc', label: 'Verts (high → low)' },
+];
+
+const TRIS_RANGES: Record<TrisRangeKey, { label: string; min: number; max: number } | null> = {
+  any: null,
+  low:     { label: '≤ 100 (low-poly)', min: 0, max: 100 },
+  med:     { label: '100 – 500',        min: 100, max: 500 },
+  high:    { label: '500 – 1K',         min: 500, max: 1000 },
+  vhigh:   { label: '1K – 2K',          min: 1000, max: 2000 },
+  extreme: { label: '> 2K (high-poly)', min: 2000, max: Infinity },
+};
+
+const VERTS_RANGES: Record<VertsRangeKey, { label: string; min: number; max: number } | null> = {
+  any: null,
+  low:     { label: '≤ 100',    min: 0, max: 100 },
+  med:     { label: '100 – 500', min: 100, max: 500 },
+  high:    { label: '500 – 1K',  min: 500, max: 1000 },
+  extreme: { label: '> 1K',     min: 1000, max: Infinity },
+};
 
 /**
  * Assets view for the 3D Freeform game system. Replaces the old bottom-
@@ -37,6 +71,10 @@ export function Freeform3DAssetsView() {
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [category, setCategory] = useState<'all' | PrefabCategory['id']>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sort, setSort] = useState<SortKey>('name-asc');
+  const [trisRange, setTrisRange] = useState<TrisRangeKey>('any');
+  const [vertsRange, setVertsRange] = useState<VertsRangeKey>('any');
 
   // activeStyle is persisted in the freeform3d-store because the AI
   // agent also reads it to decide which prefabs to offer — keeping a
@@ -45,20 +83,77 @@ export function Freeform3DAssetsView() {
   const setActiveStyle = useFreeform3D((s) => s.setActiveStyle);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
 
-  const hasActiveFilters = category !== 'all';
+  const hasActiveFilters =
+    category !== 'all' ||
+    viewMode !== 'grid' ||
+    sort !== 'name-asc' ||
+    trisRange !== 'any' ||
+    vertsRange !== 'any';
 
   const prefabs = useMemo(() => getPrefabsForStyle(activeStyle), [activeStyle]);
 
+  // Warm the stats cache so sort-by-tris and tris-range filters have
+  // something to work with before the user has scrolled through every
+  // tile. `statsTick` bumps once per-prefab as stats land, triggering
+  // a re-render so filters pick them up; see comment on ticker below.
+  const [statsTick, setStatsTick] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void ensurePrefabStats(prefabs.map((p) => p.kind)).then(() => {
+      if (!cancelled) setStatsTick((t) => t + 1);
+    });
+    // Intermediate ticks — the ensure-all Promise only resolves after the
+    // LAST kind renders, but the user may be looking at results while
+    // earlier kinds have stats. A cheap interval for ~3 seconds catches
+    // anything in-flight without running forever.
+    let elapsed = 0;
+    const id = window.setInterval(() => {
+      elapsed += 500;
+      setStatsTick((t) => t + 1);
+      if (elapsed >= 3000) window.clearInterval(id);
+    }, 500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [prefabs]);
+
   const q = search.trim().toLowerCase();
-  const filtered = useMemo(
-    () =>
-      prefabs.filter((p) => {
-        if (category !== 'all' && p.category !== category) return false;
-        if (q && !p.label.toLowerCase().includes(q) && !p.kind.includes(q)) return false;
-        return true;
-      }),
-    [prefabs, category, q],
-  );
+
+  const filtered = useMemo(() => {
+    const tr = TRIS_RANGES[trisRange];
+    const vr = VERTS_RANGES[vertsRange];
+    return prefabs.filter((p) => {
+      if (category !== 'all' && p.category !== category) return false;
+      if (q && !p.label.toLowerCase().includes(q) && !p.kind.includes(q)) return false;
+      // Stat-based filters apply only when the cache has data for this
+      // kind. While stats are loading the filter is permissive; once
+      // statsTick increments (see ticker above) this re-evaluates.
+      if (tr || vr) {
+        const stats = getPrefabStats(p.kind);
+        if (stats) {
+          if (tr && (stats.triangles < tr.min || stats.triangles >= tr.max)) return false;
+          if (vr && (stats.vertices < vr.min || stats.vertices >= vr.max)) return false;
+        }
+      }
+      return true;
+    });
+  }, [prefabs, category, q, trisRange, vertsRange, statsTick]);
+
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    const tris = (k: string) => getPrefabStats(k)?.triangles ?? Number.POSITIVE_INFINITY;
+    const verts = (k: string) => getPrefabStats(k)?.vertices ?? Number.POSITIVE_INFINITY;
+    switch (sort) {
+      case 'name-asc':  copy.sort((a, b) => a.label.localeCompare(b.label)); break;
+      case 'name-desc': copy.sort((a, b) => b.label.localeCompare(a.label)); break;
+      case 'tris-asc':  copy.sort((a, b) => tris(a.kind) - tris(b.kind)); break;
+      case 'tris-desc': copy.sort((a, b) => tris(b.kind) - tris(a.kind)); break;
+      case 'verts-asc': copy.sort((a, b) => verts(a.kind) - verts(b.kind)); break;
+      case 'verts-desc': copy.sort((a, b) => verts(b.kind) - verts(a.kind)); break;
+    }
+    return copy;
+  }, [filtered, sort, statsTick]);
 
   // Count prefabs in each category for the dropdown label.
   const catCounts = useMemo(() => {
@@ -127,32 +222,77 @@ export function Freeform3DAssetsView() {
         />
 
         {filtersOpen && (
-          <PanelSelect
-            label="Category"
-            value={category}
-            onChange={(v) => setCategory(v as typeof category)}
-            options={[
-              { value: 'all', label: `All (${prefabs.length})` },
-              ...PREFAB_CATEGORIES.map((c) => ({
-                value: c.id,
-                label: `${c.label} (${catCounts[c.id] || 0})`,
-              })),
-            ]}
-          />
+          <>
+            <PanelSelect
+              label="View"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as typeof viewMode)}
+              options={[
+                { value: 'grid', label: 'Grid' },
+                { value: 'list', label: 'List' },
+              ]}
+            />
+            <PanelSelect
+              label="Sort by"
+              value={sort}
+              onChange={(v) => setSort(v as SortKey)}
+              options={SORT_OPTIONS}
+            />
+            <PanelSelect
+              label="Category"
+              value={category}
+              onChange={(v) => setCategory(v as typeof category)}
+              options={[
+                { value: 'all', label: `All (${prefabs.length})` },
+                ...PREFAB_CATEGORIES.map((c) => ({
+                  value: c.id,
+                  label: `${c.label} (${catCounts[c.id] || 0})`,
+                })),
+              ]}
+            />
+            <PanelSelect
+              label="Tris"
+              value={trisRange}
+              onChange={(v) => setTrisRange(v as TrisRangeKey)}
+              options={(Object.entries(TRIS_RANGES) as Array<[TrisRangeKey, typeof TRIS_RANGES[TrisRangeKey]]>).map(
+                ([k, v]) => ({ value: k, label: v ? v.label : 'Any' }),
+              )}
+            />
+            <PanelSelect
+              label="Verts"
+              value={vertsRange}
+              onChange={(v) => setVertsRange(v as VertsRangeKey)}
+              options={(Object.entries(VERTS_RANGES) as Array<[VertsRangeKey, typeof VERTS_RANGES[VertsRangeKey]]>).map(
+                ([k, v]) => ({ value: k, label: v ? v.label : 'Any' }),
+              )}
+            />
+          </>
         )}
       </div>
 
-      {/* Prefab tile grid — same card style as other views */}
+      {/* Prefab list/grid — same card style as other views */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
               {q || hasActiveFilters ? 'No matching prefabs' : 'No prefabs in this style'}
             </p>
           </div>
+        ) : viewMode === 'list' ? (
+          <div className="flex flex-col gap-0.5">
+            {sorted.map((p) => (
+              <PrefabRow
+                key={p.kind}
+                kind={p.kind}
+                label={p.label}
+                category={p.category}
+                onSpawn={() => handleSpawn(p.kind)}
+              />
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-1.5">
-            {filtered.map((p) => (
+            {sorted.map((p) => (
               <PrefabCard
                 key={p.kind}
                 kind={p.kind}
@@ -321,4 +461,85 @@ function trisColor(tris: number): string {
   if (tris <= 1000) return 'text-yellow-400';
   if (tris <= 2000) return 'text-orange-400';
   return 'text-red-400';
+}
+
+/** Compact list-view row matching the medieval Models view — swatch
+    + label + live tris count. Clicking still spawns. */
+function PrefabRow({
+  kind,
+  label,
+  category,
+  onSpawn,
+}: {
+  kind: string;
+  label: string;
+  category: PrefabCategory['id'];
+  onSpawn: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (getPrefabStats(kind)) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 200);
+    const stop = window.setTimeout(() => window.clearInterval(id), 2000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+  }, [kind, tick]);
+  const stats = getPrefabStats(kind);
+  return (
+    <button
+      type="button"
+      onClick={onSpawn}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="w-full text-left flex items-center gap-2"
+      style={{
+        padding: '9px 11px',
+        borderRadius: 10,
+        background: hover ? 'var(--pb-cream-2)' : 'transparent',
+        border: hover ? '1.5px solid var(--pb-ink)' : '1.5px solid transparent',
+        boxShadow: hover ? '0 2px 0 var(--pb-ink)' : 'none',
+        cursor: 'pointer',
+        transition: 'background 120ms ease',
+      }}
+      title={`${label} — click to add`}
+    >
+      <span
+        className="shrink-0"
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 6,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          overflow: 'hidden',
+        }}
+      >
+        <PrefabThumbnail kind={kind} fluid />
+      </span>
+      <span className="flex-1 truncate" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--pb-ink)' }}>
+        {label}
+      </span>
+      <span
+        className="shrink-0"
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: 0.3,
+          color: 'var(--pb-ink-muted)',
+        }}
+      >
+        {category.slice(0, 4)}
+      </span>
+      <span
+        className={`shrink-0 text-[10px] ${stats ? trisColor(stats.triangles) : ''}`}
+        style={{ fontFamily: 'DM Mono, monospace' }}
+      >
+        {stats ? formatCount(stats.triangles) : '…'}
+      </span>
+    </button>
+  );
 }

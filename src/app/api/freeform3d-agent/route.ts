@@ -220,6 +220,108 @@ Keep emitting addPrefab lines until the ask is fulfilled; the client
 applies each action as it streams, so long outputs show a world filling
 in live. Do not truncate the list for brevity — list every prefab.
 
+## Game genre templates — cue off the user's wording
+
+If the user asks for a specific game type ("build me a tycoon", "make a
+racetrack", "build a parkour obby", "farm game", etc.), treat it as a
+high-level ask and build the full template below. DO NOT emit fewer than
+~30 actions for any of these — the world must feel complete.
+
+All templates are expressed in the **Roblox-cube style** (see
+docs/three-kid-style/06-roblox-cube-style.md). Use the 'rounded-box'
+prefab as a generic cube — it's a 1.5u unit cube that sits with its
+bottom on the ground (the base mesh offsets y=0.75 internally, so
+position.y describes the bottom of the box after any scale).
+
+**Scale formula** — to build a cube of dimensions [dx, dy, dz]:
+    scale = [dx / 1.5, dy / 1.5, dz / 1.5]
+    position.y = the desired bottom-of-cube height (usually 0)
+
+Examples:
+    4u × 3u × 0.2u wall → scale=[2.667, 2.0, 0.133]
+    0.2 × 2.5 × 0.2 pillar → scale=[0.133, 1.667, 0.133]
+    40 × 0.5 × 40 baseplate → scale=[26.67, 0.333, 26.67]
+
+### Tycoon template
+
+Classic Roblox tycoon: claim a plot, buy shops with conveyors, spawn
+pets/products, collect money, buy upgrades. Build all of this:
+
+  1. **Baseplate** (1 cube): 40×0.5×40 grass, centered at origin.
+       addPrefab rounded-box pos=[0,0,0] scale=[26.67,0.33,26.67] color="#8fcc8f"
+
+  2. **Starter podium** (1 cube): small raised platform for the player
+     to stand on at the entrance.
+       addPrefab rounded-box pos=[0,0.5,-12] scale=[2.67,0.33,2.67] color="#c4b4a0"
+
+  3. **3–5 shop stalls** (5 cubes each), lined up along one edge
+     facing the plot, ~6–7u apart. Shop stall at (sx, sz):
+       leftPillar:  pos=[sx-1.3,0,sz]     scale=[0.13,1.67,0.13] color="#8b5c3b"
+       rightPillar: pos=[sx+1.3,0,sz]     scale=[0.13,1.67,0.13] color="#8b5c3b"
+       desk:        pos=[sx,1,sz]         scale=[1.87,0.07,0.53] color="#d4a86a"
+       sunshade:    pos=[sx,2.6,sz+0.3]   scale=[2.0,0.05,1.2]   rotation=[0.39,0,0] color=<roofColor>
+       tile:        pos=[sx,0,sz]         scale=[2.0,0.04,1.33]  color="#b0a080"
+     Vary roofColor per shop ("#c44536", "#e8a355", "#7ab0d8", "#9d7ae8").
+
+  4. **Pet spawners** (each pet is ~12 cubes), placed in a row behind
+     the shops, 3u apart. Pet at (px, pz), bodyColor = the pet's tint:
+       body:   pos=[px,0.25,pz]          scale=[0.73,0.47,0.47] color=<bodyColor>
+       head:   pos=[px,0.55,pz+0.45]     scale=[0.47,0.4,0.4]   color=<bodyColor>
+       earL:   pos=[px-0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]  color=<bodyColor>
+       earR:   pos=[px+0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]  color=<bodyColor>
+       eyeL:   pos=[px-0.12,0.75,pz+0.65] scale=[0.09,0.09,0.03] color="#ffffff"
+       eyeR:   pos=[px+0.12,0.75,pz+0.65] scale=[0.09,0.09,0.03] color="#ffffff"
+       pupilL: pos=[px-0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#1a1a1a"
+       pupilR: pos=[px+0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#1a1a1a"
+       leg1:   pos=[px-0.25,0,pz-0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg2:   pos=[px+0.25,0,pz-0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg3:   pos=[px-0.25,0,pz+0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg4:   pos=[px+0.25,0,pz+0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
+     Give each pet a different bodyColor and a different name.
+
+  5. **Upgrade board** in the plot centre — 1 post + 1 sign cube:
+       post: pos=[0,0,6] scale=[0.07,1.67,0.07] color="#6b3e32"
+       sign: pos=[0,2,6] scale=[0.93,0.6,0.07]  color="#d4a86a"
+
+  6. **Fence around the plot edge** (optional, ~12 fence prefabs)
+     on each of the 4 sides: addPrefab kind=fence at ~12u out, rotated
+     along the fence run. Use the fence prefab (not rounded-box) — it
+     scatters pickets automatically.
+
+After all ACTION lines, emit a final narration block with the tycoon's
+design metadata so the user sees what they just got. Format:
+
+  ## <Theme> Tycoon
+
+  **Shops** (N):
+    1. <Shop name> — sells <product>. Base $<cost>
+    2. ...
+
+  **Pets** (M):
+    1. <Pet name> — <bodyColor>, earns $<income>/s
+    2. ...
+
+  **Upgrades** (5–8):
+    - <Upgrade name> — $<cost>. <effect>
+
+Pick names that fit the theme (Pet Tycoon: fluffy/mythic; Food Tycoon:
+deli/diner; Car Tycoon: garage/chrome). Keep it short — 1 line per entry.
+
+### Other genres — quick templates
+
+  - **Parkour / obby**: 20+ small cube platforms (0.8×0.2×0.8) stepped
+    upward, gaps of ~0.8u, spiralling around a central pillar. End
+    platform taller with a flag (tall thin cube). No shops/pets.
+  - **Racetrack**: one long baseplate, 10–20 path-stone prefabs
+    forming a loop, a few fence segments as barriers, starter podium
+    + finish-line cube.
+  - **Farm**: baseplate tiled with path-stone rows for crops,
+    2–3 shop stalls as barns, flowers in rows, scattered trees on
+    the plot edge.
+  - **Restaurant / diner**: a plot with 4–6 tables (one short cube as
+    table top + 4 thin cubes as legs) inside a fenced area, a counter
+    using the shop-stall recipe, a kitchen area at the back.
+
 ## Composition tips (to produce worlds that read well)
 
 - Think in a top-down grid before placing. Sketch districts in your

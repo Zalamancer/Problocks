@@ -86,6 +86,51 @@ export function kidSimpleBox(
   return cached(`box:${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d)) as THREE.BoxGeometry;
 }
 
+/**
+ * Pitched-roof triangular prism. 6 unique verts / 18 position verts /
+ * 8 triangles — a fraction of what ExtrudeGeometry with bevels spits
+ * out. The base sits on y=0; peak is centred on x=0 at the top.
+ *
+ * Intentionally no bevels or rounded edges: the inverted-hull outline
+ * softens the silhouette, and at studio orbit distance the pitched roof
+ * reads as a chunky pentagon whether or not the ridge itself is beveled.
+ */
+export function kidTriPrism(width: number, height: number, depth: number): BG {
+  return cached(`prism:${width}:${height}:${depth}`, () => {
+    const w = width / 2;
+    const d = depth / 2;
+    const h = height;
+    const g = new THREE.BufferGeometry();
+    // 6 vertices — two triangles (front/back) connected by 3 rectangles.
+    // Laid out so +Y is up, +Z is front, matching kidBox conventions.
+    const positions = new Float32Array([
+      // back triangle (z = -d): left, right, peak
+      -w, 0, -d,
+       w, 0, -d,
+       0, h, -d,
+      // front triangle (z = +d): left, right, peak
+      -w, 0,  d,
+       w, 0,  d,
+       0, h,  d,
+    ]);
+    const indices = new Uint16Array([
+      // triangular caps
+      0, 2, 1,   // back (CCW from outside)
+      3, 4, 5,   // front
+      // bottom rectangle
+      0, 1, 4,   0, 4, 3,
+      // left slope
+      0, 3, 5,   0, 5, 2,
+      // right slope
+      1, 2, 5,   1, 5, 4,
+    ]);
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    g.setIndex(new THREE.BufferAttribute(indices, 1));
+    g.computeVertexNormals();
+    return g;
+  });
+}
+
 // ---- sphere -----------------------------------------------------------
 
 export interface KidSphereOptions {

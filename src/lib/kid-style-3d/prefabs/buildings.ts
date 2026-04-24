@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE, toonMaterial } from '../materials';
-import { kidBox, kidSimpleBox, kidSphere, kidCylinder, kidCone } from '../geometry';
+import { kidBox, kidSimpleBox, kidTriPrism, kidSphere, kidCylinder, kidCone } from '../geometry';
 import { addOutline, addOutlinesToTree } from '../outlines';
 import type { BuildOptions } from './types';
 
@@ -8,24 +8,24 @@ function buildWindow(): THREE.Object3D {
   const g = new THREE.Group();
   const w = 0.7, h = 0.6;
   const frame = new THREE.Mesh(
-    kidBox({ width: w + 0.1, height: h + 0.1, depth: 0.08, radius: 0.02 }),
+    kidSimpleBox({ width: w + 0.1, height: h + 0.1, depth: 0.08 }),
     toonMaterial({ color: PALETTE.paper }),
   );
   g.add(frame);
   const glass = new THREE.Mesh(
-    kidBox({ width: w, height: h, depth: 0.05, radius: 0.02 }),
+    kidSimpleBox({ width: w, height: h, depth: 0.05 }),
     toonMaterial({ color: PALETTE.windowGlass }),
   );
   glass.position.z = 0.04;
   g.add(glass);
   const hBar = new THREE.Mesh(
-    kidBox({ width: w + 0.04, height: 0.04, depth: 0.04, radius: 0.01 }),
+    kidSimpleBox({ width: w + 0.04, height: 0.04, depth: 0.04 }),
     toonMaterial({ color: PALETTE.paper }),
   );
   hBar.position.z = 0.07;
   g.add(hBar);
   const vBar = new THREE.Mesh(
-    kidBox({ width: 0.04, height: h + 0.04, depth: 0.04, radius: 0.01 }),
+    kidSimpleBox({ width: 0.04, height: h + 0.04, depth: 0.04 }),
     toonMaterial({ color: PALETTE.paper }),
   );
   vBar.position.z = 0.07;
@@ -44,14 +44,19 @@ export function house({ color, props }: BuildOptions): THREE.Object3D {
   const foundationColor = (props?.foundationColor as string) ?? PALETTE.foundation;
   const trimColor       = (props?.trimColor as string)       ?? PALETTE.wallTrim;
 
+  // Foundation / trim / ridge / chimney / chimneyTop / door are all
+  // either thin slabs or small blocks where the bevel is invisible at
+  // studio orbit distance. Switched to cached BoxGeometry (24v).
   const foundation = new THREE.Mesh(
-    kidBox({ width: W + 0.15, height: 0.3, depth: D + 0.15, radius: 0.08 }),
+    kidSimpleBox({ width: W + 0.15, height: 0.3, depth: D + 0.15 }),
     toonMaterial({ color: foundationColor }),
   );
   foundation.position.y = 0.15;
   foundation.castShadow = true; foundation.receiveShadow = true;
   g.add(foundation);
 
+  // Walls stay rounded — this is the chunky silhouette the whole style
+  // hinges on and it's the largest single mesh on the house.
   const walls = new THREE.Mesh(
     kidBox({ width: W, height: H, depth: D, radius: 0.12 }),
     toonMaterial({ color: wallColor }),
@@ -61,56 +66,55 @@ export function house({ color, props }: BuildOptions): THREE.Object3D {
   g.add(walls);
 
   const trim = new THREE.Mesh(
-    kidBox({ width: W + 0.08, height: 0.12, depth: D + 0.08, radius: 0.04 }),
+    kidSimpleBox({ width: W + 0.08, height: 0.12, depth: D + 0.08 }),
     toonMaterial({ color: trimColor }),
   );
   trim.position.y = 0.3 + H - 0.08;
   trim.castShadow = true;
   g.add(trim);
 
-  const shape = new THREE.Shape();
-  shape.moveTo(-(W + 0.3) / 2, 0);
-  shape.lineTo( (W + 0.3) / 2, 0);
-  shape.lineTo(0, ROOF_H);
-  shape.closePath();
-  const roofGeo = new THREE.ExtrudeGeometry(shape, {
-    depth: D + 0.25, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3, curveSegments: 4,
-  });
-  roofGeo.translate(0, 0, -(D + 0.25) / 2);
-  const roof = new THREE.Mesh(roofGeo, toonMaterial({ color: roofColor }));
+  // Pitched roof — swapped ExtrudeGeometry(bevelSegments:3, curveSegments:4)
+  // for a raw cached triangular prism. 18 position verts per roof, shared
+  // across every house in the plot. The old version was building a fresh
+  // geometry per house with hundreds of verts on the bevels — invisible
+  // under toon shading + outlines.
+  const roof = new THREE.Mesh(
+    kidTriPrism(W + 0.3, ROOF_H, D + 0.25),
+    toonMaterial({ color: roofColor }),
+  );
   roof.position.y = 0.3 + H;
   roof.castShadow = true; roof.receiveShadow = true;
   g.add(roof);
 
   const ridge = new THREE.Mesh(
-    kidBox({ width: 0.12, height: 0.08, depth: D + 0.25, radius: 0.03 }),
+    kidSimpleBox({ width: 0.12, height: 0.08, depth: D + 0.25 }),
     toonMaterial({ color: PALETTE.roofRidge }),
   );
   ridge.position.y = 0.3 + H + ROOF_H + 0.02;
   g.add(ridge);
 
   const chimney = new THREE.Mesh(
-    kidBox({ width: 0.38, height: 1.0, depth: 0.38, radius: 0.05 }),
+    kidSimpleBox({ width: 0.38, height: 1.0, depth: 0.38 }),
     toonMaterial({ color: PALETTE.chimney }),
   );
   chimney.position.set(-0.85, 0.3 + H + 0.55, -0.3);
   chimney.castShadow = true;
   g.add(chimney);
   const chimneyTop = new THREE.Mesh(
-    kidBox({ width: 0.46, height: 0.1, depth: 0.46, radius: 0.03 }),
+    kidSimpleBox({ width: 0.46, height: 0.1, depth: 0.46 }),
     toonMaterial({ color: PALETTE.chimneyTop }),
   );
   chimneyTop.position.set(-0.85, 0.3 + H + 1.08, -0.3);
   g.add(chimneyTop);
 
   const doorFrame = new THREE.Mesh(
-    kidBox({ width: 0.65, height: 1.2, depth: 0.08, radius: 0.03 }),
+    kidSimpleBox({ width: 0.65, height: 1.2, depth: 0.08 }),
     toonMaterial({ color: PALETTE.woodShadow }),
   );
   doorFrame.position.set(0, 0.3 + 0.6, D / 2 + 0.02);
   g.add(doorFrame);
   const door = new THREE.Mesh(
-    kidBox({ width: 0.55, height: 1.1, depth: 0.08, radius: 0.03 }),
+    kidSimpleBox({ width: 0.55, height: 1.1, depth: 0.08 }),
     toonMaterial({ color: doorColor }),
   );
   door.position.set(0, 0.3 + 0.55, D / 2 + 0.06);

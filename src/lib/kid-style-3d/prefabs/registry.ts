@@ -65,6 +65,10 @@ export interface PrefabDef {
   kind: PrefabKind;
   label: string;
   category: PrefabCategory['id'];
+  /** Which visual kit this prefab belongs to. All current entries ship
+      in the original 'chunky-pastel' kit; alternate kits register here
+      when they're added. */
+  style: PrefabStyleId;
   /** Default color applied when no per-instance color is set. */
   defaultColor: string;
   /** Emoji for the palette tile — cheap but readable thumbnail. */
@@ -74,36 +78,36 @@ export interface PrefabDef {
 }
 
 export const PREFABS: PrefabDef[] = [
-  // --- Primitives ---
-  { kind: 'rounded-box', label: 'Cube',     category: 'primitives', defaultColor: PALETTE.coral,     icon: '⬛' },
-  { kind: 'sphere',      label: 'Sphere',   category: 'primitives', defaultColor: PALETTE.butter,    icon: '⚪' },
-  { kind: 'cylinder',    label: 'Cylinder', category: 'primitives', defaultColor: PALETTE.mint,      icon: '🧪' },
-  { kind: 'cone',        label: 'Cone',     category: 'primitives', defaultColor: PALETTE.flowerPink, icon: '🔺' },
+  // --- Primitives (chunky-pastel) ---
+  { kind: 'rounded-box', label: 'Cube',     category: 'primitives', style: 'chunky-pastel', defaultColor: PALETTE.coral,     icon: '⬛' },
+  { kind: 'sphere',      label: 'Sphere',   category: 'primitives', style: 'chunky-pastel', defaultColor: PALETTE.butter,    icon: '⚪' },
+  { kind: 'cylinder',    label: 'Cylinder', category: 'primitives', style: 'chunky-pastel', defaultColor: PALETTE.mint,      icon: '🧪' },
+  { kind: 'cone',        label: 'Cone',     category: 'primitives', style: 'chunky-pastel', defaultColor: PALETTE.flowerPink, icon: '🔺' },
 
-  // --- Nature ---
+  // --- Nature (chunky-pastel) ---
   {
-    kind: 'tree-oak', label: 'Oak Tree', category: 'nature',
+    kind: 'tree-oak', label: 'Oak Tree', category: 'nature', style: 'chunky-pastel',
     defaultColor: PALETTE.mint, icon: '🌳',
     props: [
       { kind: 'color', key: 'trunkColor', label: 'Trunk', defaultValue: PALETTE.woodDark },
     ],
   },
   {
-    kind: 'tree-pine', label: 'Pine Tree', category: 'nature',
+    kind: 'tree-pine', label: 'Pine Tree', category: 'nature', style: 'chunky-pastel',
     defaultColor: PALETTE.sage, icon: '🌲',
     props: [
       { kind: 'color', key: 'trunkColor', label: 'Trunk', defaultValue: PALETTE.woodShadow },
     ],
   },
-  { kind: 'bush',     label: 'Bush',     category: 'nature', defaultColor: PALETTE.flowerBush, icon: '🌿' },
-  { kind: 'mushroom', label: 'Mushroom', category: 'nature', defaultColor: PALETTE.flowerPink, icon: '🍄' },
-  { kind: 'rock',     label: 'Rock',     category: 'nature', defaultColor: '#b8b8b2',           icon: '🪨' },
-  { kind: 'flower',   label: 'Flower',   category: 'nature', defaultColor: PALETTE.butter,     icon: '🌼' },
-  { kind: 'cloud',    label: 'Cloud',    category: 'nature', defaultColor: '#f9fafc',           icon: '☁️' },
+  { kind: 'bush',     label: 'Bush',     category: 'nature', style: 'chunky-pastel', defaultColor: PALETTE.flowerBush, icon: '🌿' },
+  { kind: 'mushroom', label: 'Mushroom', category: 'nature', style: 'chunky-pastel', defaultColor: PALETTE.flowerPink, icon: '🍄' },
+  { kind: 'rock',     label: 'Rock',     category: 'nature', style: 'chunky-pastel', defaultColor: '#b8b8b2',           icon: '🪨' },
+  { kind: 'flower',   label: 'Flower',   category: 'nature', style: 'chunky-pastel', defaultColor: PALETTE.butter,     icon: '🌼' },
+  { kind: 'cloud',    label: 'Cloud',    category: 'nature', style: 'chunky-pastel', defaultColor: '#f9fafc',           icon: '☁️' },
 
-  // --- Buildings ---
+  // --- Buildings (chunky-pastel) ---
   {
-    kind: 'house', label: 'House', category: 'buildings',
+    kind: 'house', label: 'House', category: 'buildings', style: 'chunky-pastel',
     defaultColor: PALETTE.ivory, icon: '🏠',
     props: [
       { kind: 'color', key: 'roofColor',       label: 'Roof',       defaultValue: PALETTE.roof },
@@ -113,21 +117,21 @@ export const PREFABS: PrefabDef[] = [
     ],
   },
   {
-    kind: 'fence', label: 'Fence', category: 'buildings',
+    kind: 'fence', label: 'Fence', category: 'buildings', style: 'chunky-pastel',
     defaultColor: PALETTE.fence, icon: '🚧',
     props: [
       { kind: 'number', key: 'length', label: 'Length', defaultValue: 3, min: 1, max: 12, step: 0.25, suffix: 'u' },
     ],
   },
-  { kind: 'gate-post',  label: 'Gate Post',       category: 'buildings', defaultColor: PALETTE.fence,     icon: '📮' },
-  { kind: 'path-stone', label: 'Stepping Stone',  category: 'buildings', defaultColor: PALETTE.stone,     icon: '⬜' },
-  { kind: 'mailbox',    label: 'Mailbox',         category: 'buildings', defaultColor: '#7ab0d8',         icon: '📪' },
-  { kind: 'bench',      label: 'Bench',           category: 'buildings', defaultColor: PALETTE.woodLight, icon: '🪑' },
-  { kind: 'balloon',    label: 'Balloon',         category: 'buildings', defaultColor: PALETTE.balloonPink, icon: '🎈' },
+  { kind: 'gate-post',  label: 'Gate Post',       category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.fence,     icon: '📮' },
+  { kind: 'path-stone', label: 'Stepping Stone',  category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.stone,     icon: '⬜' },
+  { kind: 'mailbox',    label: 'Mailbox',         category: 'buildings', style: 'chunky-pastel', defaultColor: '#7ab0d8',         icon: '📪' },
+  { kind: 'bench',      label: 'Bench',           category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.woodLight, icon: '🪑' },
+  { kind: 'balloon',    label: 'Balloon',         category: 'buildings', style: 'chunky-pastel', defaultColor: PALETTE.balloonPink, icon: '🎈' },
 
-  // --- Characters ---
+  // --- Characters (chunky-pastel) ---
   {
-    kind: 'character', label: 'Character', category: 'characters',
+    kind: 'character', label: 'Character', category: 'characters', style: 'chunky-pastel',
     defaultColor: PALETTE.shirt, icon: '🙂',
     props: [
       { kind: 'color', key: 'pantsColor', label: 'Pants', defaultValue: PALETTE.pants },
@@ -140,4 +144,10 @@ export const PREFABS: PrefabDef[] = [
 
 export function getPrefabDef(kind: string): PrefabDef | undefined {
   return PREFABS.find((p) => p.kind === kind);
+}
+
+/** Returns only the prefabs available in the given style — used by both
+    the Assets panel filter and the AI agent prompt. */
+export function getPrefabsForStyle(style: PrefabStyleId): PrefabDef[] {
+  return PREFABS.filter((p) => p.style === style);
 }

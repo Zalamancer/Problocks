@@ -9,6 +9,8 @@ import { ChatAssetPicker } from './ChatAssetPicker';
 import { useAIBuildModeStore } from '@/store/ai-library-store';
 import { useStudio } from '@/store/studio-store';
 import { usePartStudio } from '@/store/part-studio-store';
+import { useFreeform3D } from '@/store/freeform3d-store';
+import type { Vec3 } from '@/lib/kid-style-3d/scene-schema';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -63,6 +65,47 @@ type StudioAction =
   | { type: 'setSelectedPiece'; kind: PieceKind; asset: string }
   | { type: 'setFloorAsset'; asset: string }
   | { type: 'setWallAsset'; asset: string };
+
+/**
+ * Actions emitted by the /api/freeform3d-agent route. Separate from
+ * StudioAction because the two agents target different stores — the
+ * freeform3d agent speaks in prefab kinds + [x,y,z] tuples, the legacy
+ * studio agent speaks in grid tiles + {x,y,z} objects.
+ */
+type Freeform3DAction =
+  | {
+      type: 'addPrefab';
+      kind: string;
+      position?: Vec3;
+      rotation?: Vec3;
+      scale?: Vec3;
+      color?: string;
+      props?: Record<string, unknown>;
+    }
+  | {
+      type: 'updatePrefab';
+      id: string;
+      position?: Vec3;
+      rotation?: Vec3;
+      scale?: Vec3;
+      color?: string;
+      props?: Record<string, unknown>;
+    }
+  | { type: 'removePrefab'; id: string }
+  | { type: 'clearScene' };
+
+function shortDescribeFreeform3D(a: Freeform3DAction): string {
+  switch (a.type) {
+    case 'addPrefab':
+      return `➕ ${a.kind}${a.color ? ` ${a.color}` : ''}`;
+    case 'updatePrefab':
+      return `✏️ Update ${a.id}`;
+    case 'removePrefab':
+      return `🗑️ Remove ${a.id}`;
+    case 'clearScene':
+      return '🧹 Clear scene';
+  }
+}
 
 function shortDescribe(a: StudioAction): string {
   switch (a.type) {
@@ -124,6 +167,11 @@ export function ChatPanel() {
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
   const setPartsActiveTab = useStudio((s) => s.setPartsActiveTab);
   const setDraftPrompt = usePartStudio((s) => s.setDraftPrompt);
+
+  // 3D Freeform chat routes to /api/freeform3d-agent instead of
+  // /api/studio-agent so the model speaks in prefab kinds rather than
+  // grid tiles. The routing decision is a simple equality check below.
+  const gameSystem = useStudio((s) => s.gameSystem);
 
   // Scene/building store actions (stable references)
   const addPart = useSceneStore((s) => s.addPart);
@@ -250,6 +298,42 @@ export function ChatPanel() {
     ],
   );
 
+  /**
+   * Apply one action from the /api/freeform3d-agent stream. Reads the
+   * freeform3d-store at call time instead of subscribing so this
+   * callback never re-renders the chat when the 3D scene changes.
+   */
+  const applyFreeform3DAction = useCallback((action: Freeform3DAction) => {
+    const s = useFreeform3D.getState();
+    switch (action.type) {
+      case 'addPrefab':
+        s.addPrefabFull(action.kind, {
+          position: action.position,
+          rotation: action.rotation,
+          scale: action.scale,
+          color: action.color,
+          props: action.props,
+        });
+        break;
+      case 'updatePrefab': {
+        const patch: Record<string, unknown> = {};
+        if (action.position) patch.position = action.position;
+        if (action.rotation) patch.rotation = action.rotation;
+        if (action.scale) patch.scale = action.scale;
+        if (action.color) patch.color = action.color;
+        if (action.props) patch.props = action.props;
+        s.updateObject(action.id, patch as never);
+        break;
+      }
+      case 'removePrefab':
+        s.removeObject(action.id);
+        break;
+      case 'clearScene':
+        s.clearScene();
+        break;
+    }
+  }, []);
+
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
@@ -267,28 +351,54 @@ export function ChatPanel() {
       return;
     }
 
-    // Snapshot current scene + building state + build-mode for the agent
-    const sceneState = useSceneStore.getState();
-    const b = useBuildingStore.getState();
-    const mode = useAIBuildModeStore.getState().mode;
-    const snapshot = {
-      parts: sceneState.sceneObjects.map((p) => ({
-        id: p.id,
-        name: p.name,
-        partType: p.partType,
-        position: p.position,
-        color: p.color,
-        scale: p.scale,
-      })),
-      floors: Object.keys(b.floors),
-      walls: Object.keys(b.walls),
-      roofs: Object.keys(b.roofs),
-      corners: Object.keys(b.corners),
-      stairs: Object.keys(b.stairs),
-      gridSize: b.gridSize,
-      selectedPiece: b.selectedPiece,
-      buildMode: mode,
-    };
+    // Two back-ends: the 3D Freeform agent (prefab scene) and the legacy
+    // studio agent (free parts + grid tiles). Both emit line-delimited
+    // ACTION events over the same SSE shape, so only the endpoint, the
+    // snapshot payload, and the apply function differ.
+    const isFreeform3D = gameSystem === '3d-freeform';
+
+    let endpoint: string;
+    let snapshot: unknown;
+
+    if (isFreeform3D) {
+      const f3d = useFreeform3D.getState();
+      snapshot = {
+        activeStyle: f3d.activeStyle,
+        objects: f3d.scene.objects.map((o) => ({
+          id: o.id,
+          kind: o.kind,
+          position: o.position,
+          rotation: o.rotation,
+          scale: o.scale,
+          color: o.color,
+          props: o.props,
+        })),
+      };
+      endpoint = '/api/freeform3d-agent';
+    } else {
+      const sceneState = useSceneStore.getState();
+      const b = useBuildingStore.getState();
+      const mode = useAIBuildModeStore.getState().mode;
+      snapshot = {
+        parts: sceneState.sceneObjects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          partType: p.partType,
+          position: p.position,
+          color: p.color,
+          scale: p.scale,
+        })),
+        floors: Object.keys(b.floors),
+        walls: Object.keys(b.walls),
+        roofs: Object.keys(b.roofs),
+        corners: Object.keys(b.corners),
+        stairs: Object.keys(b.stairs),
+        gridSize: b.gridSize,
+        selectedPiece: b.selectedPiece,
+        buildMode: mode,
+      };
+      endpoint = '/api/studio-agent';
+    }
 
     const next: Message[] = [...messages, { role: 'user', content: trimmed }];
     setMessages([...next, { role: 'assistant', content: '' }]);
@@ -298,7 +408,7 @@ export function ChatPanel() {
 
     try {
       abortRef.current = new AbortController();
-      const res = await fetch('/api/studio-agent', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next, scene: snapshot }),
@@ -343,9 +453,15 @@ export function ChatPanel() {
             }
 
             if (parsed.action) {
-              const action = parsed.action as StudioAction;
-              applyAction(action);
-              setStatuses((prev) => [...prev, shortDescribe(action)]);
+              if (isFreeform3D) {
+                const action = parsed.action as Freeform3DAction;
+                applyFreeform3DAction(action);
+                setStatuses((prev) => [...prev, shortDescribeFreeform3D(action)]);
+              } else {
+                const action = parsed.action as StudioAction;
+                applyAction(action);
+                setStatuses((prev) => [...prev, shortDescribe(action)]);
+              }
             }
 
             if (parsed.text) {
@@ -381,7 +497,18 @@ export function ChatPanel() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, messages, applyAction, chatMode, setDraftPrompt, setRightPanelGroup, setPartsActiveTab]);
+  }, [
+    input,
+    streaming,
+    messages,
+    applyAction,
+    applyFreeform3DAction,
+    chatMode,
+    gameSystem,
+    setDraftPrompt,
+    setRightPanelGroup,
+    setPartsActiveTab,
+  ]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();

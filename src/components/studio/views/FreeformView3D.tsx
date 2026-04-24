@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import {
   createKidEngine,
@@ -15,9 +15,9 @@ import {
 } from '@/lib/kid-style-3d';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { useSceneStore } from '@/store/scene-store';
-import { PrefabPalette } from './freeform3d/PrefabPalette';
 import { TopToolbar } from './freeform3d/TopToolbar';
 import { setSelectionHighlight } from './freeform3d/selection-outline';
+import { setSpawnTargetProvider } from '@/lib/kid-style-3d/spawn-target';
 
 /**
  * 3D Freeform viewport. Mounts a kid-style Three.js engine and keeps its
@@ -26,14 +26,14 @@ import { setSelectionHighlight } from './freeform3d/selection-outline';
  * and the engine reacts.
  *
  * UX for now:
- *   - Bottom-centre PrefabPalette: click a tile to add a prefab at origin
+ *   - Prefab placement lives in the left Assets panel (Freeform3DAssetsView);
+ *     clicks spawn near the current orbit target via setSpawnTargetProvider
  *   - Top-right TopToolbar: undo/redo/duplicate/delete/clear
  *   - Click on a prefab in the scene to select it (accent outline)
  *   - Click on the ground (or empty space) to deselect
  *   - Keyboard: Delete = remove selected, Cmd/Ctrl+Z = undo, +Shift = redo
  *
- * Future stages: transform gizmo, property inspector, save/load, AI
- * scene generation from Claude.
+ * Future stages: AI scene generation, richer prop inspector, save/load.
  */
 export function FreeformView3D() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -50,6 +50,10 @@ export function FreeformView3D() {
   const updateObject = useFreeform3D((s) => s.updateObject);
   const undo = useFreeform3D((s) => s.undo);
   const redo = useFreeform3D((s) => s.redo);
+  // Silence "declared but unused" — addPrefab is retained as a store
+  // action for the left-panel Assets view; the viewport doesn't spawn
+  // directly anymore but other features (drag-drop, paste) will.
+  void addPrefab;
 
   // Studio-wide Play toggle lives in scene-store. We react to it here to
   // enter/exit freeform 3D play mode (WASD + follow camera).
@@ -93,6 +97,16 @@ export function FreeformView3D() {
     };
   }, [updateObject]);
 
+  /* ---- expose orbit target so Assets panel can spawn near camera ---- */
+  useEffect(() => {
+    setSpawnTargetProvider(() => {
+      const t = engineRef.current?.controls.target;
+      if (!t) return [0, 0, 0];
+      return [t.x, t.y, t.z];
+    });
+    return () => setSpawnTargetProvider(null);
+  }, []);
+
   /* ---- seed scene once if empty ---- */
   useEffect(() => {
     if (useFreeform3D.getState().scene.objects.length > 0) return;
@@ -115,23 +129,6 @@ export function FreeformView3D() {
     // neutral plot, not "one thing highlighted".
     useFreeform3D.getState().select(null);
   }, [addPrefab]);
-
-  /* ---- spawn helper: adds a prefab near the orbit target with a small
-         random offset so successive clicks don't stack at the origin ---- */
-  const spawnAtTarget = useCallback(
-    (kind: string) => {
-      const engine = engineRef.current;
-      const target = engine?.controls.target ?? new THREE.Vector3(0, 0, 0);
-      const jitter = 1.5;
-      const pos: [number, number, number] = [
-        target.x + (Math.random() - 0.5) * jitter,
-        0,
-        target.z + (Math.random() - 0.5) * jitter,
-      ];
-      addPrefab(kind, pos);
-    },
-    [addPrefab],
-  );
 
   /* ---- sync store → engine ---- */
   useEffect(() => {
@@ -316,7 +313,6 @@ export function FreeformView3D() {
         className="block w-full h-full"
         style={{ outline: 'none', cursor: 'default', touchAction: 'none' }}
       />
-      {!isPlaying && <PrefabPalette onAdd={spawnAtTarget} />}
       {!isPlaying && <TopToolbar />}
       {isPlaying ? <PlayHud cameraMode={cameraMode} /> : <HintBadge />}
     </div>

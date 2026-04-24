@@ -16,7 +16,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SceneObject, SceneJson, Vec3 } from '@/lib/kid-style-3d/scene-schema';
 import { EMPTY_SCENE, makeSceneObject } from '@/lib/kid-style-3d/scene-schema';
-import { getPrefabDef } from '@/lib/kid-style-3d/prefabs';
+import { getPrefabDef, DEFAULT_PREFAB_STYLE, type PrefabStyleId } from '@/lib/kid-style-3d/prefabs';
 
 const HISTORY_LIMIT = 50;
 
@@ -41,12 +41,20 @@ interface Freeform3DState {
   cameraMode: CameraMode;
   setCameraMode: (m: CameraMode) => void;
 
+  /** Active prefab kit — drives the Assets panel filter AND the AI
+      agent (only prefabs in this style are offered to the model). */
+  activeStyle: PrefabStyleId;
+  setActiveStyle: (s: PrefabStyleId) => void;
+
   // Selection ------------------------------------------------------------
   select: (id: string | null) => void;
 
   // Object CRUD ----------------------------------------------------------
   /** Insert a prefab at a position. Color + props default to the prefab def. */
   addPrefab: (kind: string, position?: Vec3) => string;
+  /** AI-facing variant: lets the agent set position/rotation/scale/color/props
+      in one shot. Same history semantics as addPrefab. */
+  addPrefabFull: (kind: string, patch?: Partial<SceneObject>) => string;
   removeObject: (id: string) => void;
   duplicateObject: (id: string) => string | null;
   updateObject: (id: string, patch: Partial<SceneObject>) => void;
@@ -92,6 +100,9 @@ export const useFreeform3D = create<Freeform3DState>()(
       cameraMode: 'third',
       setCameraMode: (m) => set({ cameraMode: m }),
 
+      activeStyle: DEFAULT_PREFAB_STYLE,
+      setActiveStyle: (s) => set({ activeStyle: s }),
+
       select: (id) => set({ selectedId: id }),
 
       addPrefab: (kind, position = [0, 0, 0]) => {
@@ -105,6 +116,23 @@ export const useFreeform3D = create<Freeform3DState>()(
         set((s) => ({
           scene: { ...s.scene, objects: [...s.scene.objects, obj] },
           selectedId: obj.id,
+          redoStack: [],
+        }));
+        return obj.id;
+      },
+
+      addPrefabFull: (kind, patch) => {
+        const def = getPrefabDef(kind);
+        if (!def) return '';
+        const obj = makeSceneObject(kind, {
+          color: def.defaultColor,
+          ...patch,
+        });
+        pushHistory(set, get);
+        set((s) => ({
+          scene: { ...s.scene, objects: [...s.scene.objects, obj] },
+          // AI bulk-spawns shouldn't pull the inspector open on the last
+          // item — leave selection where the user left it.
           redoStack: [],
         }));
         return obj.id;
@@ -314,6 +342,7 @@ export const useFreeform3D = create<Freeform3DState>()(
         savedScenes: s.savedScenes,
         currentSceneName: s.currentSceneName,
         cameraMode: s.cameraMode,
+        activeStyle: s.activeStyle,
       }),
     },
   ),

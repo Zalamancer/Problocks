@@ -11,6 +11,7 @@ import { useStudio } from '@/store/studio-store';
 import { usePartStudio } from '@/store/part-studio-store';
 import { useFreeform } from '@/store/freeform-store';
 import { Trash2 } from 'lucide-react';
+import { Freeform3DAssetsView } from './Freeform3DAssetsView';
 
 interface AssetInfo {
   name: string;
@@ -117,6 +118,14 @@ export function AssetsPanel() {
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <PartsView />
+      </div>
+    );
+  }
+
+  if (gameSystem === '3d-freeform') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <Freeform3DAssetsView />
       </div>
     );
   }

@@ -23,21 +23,65 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
+// ---- performance mode ------------------------------------------------
+
+/**
+ * Global perf mode. 'high' is the normal chunky-pastel look; 'low' swaps
+ * every helper to the lowest-poly variant that still reads as the same
+ * shape — flat-sided cubes (8v), icosahedron spheres (12v/20t), 5-sided
+ * cylinders, 4-sided cones. Drops prefab vertex counts ~10-20× on a
+ * Celeron Chromebook where a plot with dozens of trees is otherwise
+ * unusable.
+ *
+ * Cache keys include the mode (`lp:` prefix) so the two variants can
+ * coexist, but we also invalidate the map on mode flip so ram doesn't
+ * grow with both sets held in memory.
+ */
+export type GeometryPerfMode = 'high' | 'low';
+let PERF_MODE: GeometryPerfMode = 'high';
+
+export function getGeometryPerfMode(): GeometryPerfMode {
+  return PERF_MODE;
+}
+
+/**
+ * Set the perf mode. Returns true if the mode actually changed. When it
+ * does, invalidates the shared cache (drops map entries but does NOT
+ * dispose geometries — existing meshes still reference them and dispose
+ * would tear their GPU buffers out mid-render). Callers are expected to
+ * force a scene re-hydrate so new meshes get built against the new mode;
+ * the old geometries then become unreferenced and GC reclaims them.
+ */
+export function setGeometryPerfMode(mode: GeometryPerfMode): boolean {
+  if (PERF_MODE === mode) return false;
+  PERF_MODE = mode;
+  invalidateKidGeometryCache();
+  return true;
+}
+
 // ---- geometry cache --------------------------------------------------
 
 type BG = THREE.BufferGeometry;
 const geoCache = new Map<string, BG>();
 
 function cached<T extends BG>(key: string, build: () => T): T {
-  const hit = geoCache.get(key);
+  const fullKey = PERF_MODE === 'low' ? `lp:${key}` : key;
+  const hit = geoCache.get(fullKey);
   if (hit) return hit as T;
   const geo = build();
   (geo.userData as { __cached?: boolean }).__cached = true;
-  geoCache.set(key, geo);
+  geoCache.set(fullKey, geo);
   return geo;
 }
 
-/** For tests / hot-reload — not exported from the barrel. */
+/** Drop cache entries without disposing. Live meshes keep their refs so
+    rendering stays intact until the scene is re-hydrated. */
+export function invalidateKidGeometryCache(): void {
+  geoCache.clear();
+}
+
+/** For tests / hot-reload — not exported from the barrel. Disposes as
+    well as dropping, so only safe when no meshes still point at these. */
 export function _clearKidGeometryCache(): void {
   for (const g of geoCache.values()) g.dispose();
   geoCache.clear();
@@ -64,6 +108,11 @@ export function kidBox(opts: KidBoxOptions = {}): BG {
   const w = opts.width ?? 1;
   const h = opts.height ?? 1;
   const d = opts.depth ?? 1;
+  // Low-perf: flat-sided 8-vertex cube. The inverted-hull outline softens
+  // the corners so the missing bevel is invisible at orbit distance.
+  if (PERF_MODE === 'low') {
+    return cached(`rb-flat:${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d));
+  }
   const r = clamp(opts.radius ?? 0.15, 0, Math.min(w, h, d) * 0.49);
   const seg = opts.segments ?? 2;
   return cached(`rb:${w}:${h}:${d}:${r}:${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r));
@@ -148,8 +197,14 @@ export interface KidSphereOptions {
  * 16×12 at the kid-style camera distance but carries ~4× the vertex
  * weight.
  */
-export function kidSphere(opts: KidSphereOptions = {}): THREE.SphereGeometry {
+export function kidSphere(opts: KidSphereOptions = {}): THREE.BufferGeometry {
   const r = opts.radius ?? 0.5;
+  // Low-perf: 20-triangle icosahedron. 12 verts vs 99 for the default UV
+  // sphere — reads as a faceted ball which matches the low-poly / voxel
+  // aesthetic users opt into when they turn this mode on.
+  if (PERF_MODE === 'low') {
+    return cached(`sph-ico:${r}`, () => new THREE.IcosahedronGeometry(r, 0));
+  }
   const d = opts.detail ?? 1;
   const seg = d >= 2 ? 24 : d >= 1 ? 16 : 10;
   const hSeg = Math.max(4, Math.round(seg * 0.75));
@@ -169,10 +224,18 @@ export interface KidCylinderOptions {
 
 /** Default 12 radial segments (was 32). 12 is where a toon-shaded
     cylinder stops reading as faceted at the studio's orbit distance. */
-export function kidCylinder(opts: KidCylinderOptions = {}): THREE.CylinderGeometry {
+export function kidCylinder(opts: KidCylinderOptions = {}): THREE.BufferGeometry {
   const rt = opts.radiusTop ?? 0.5;
   const rb = opts.radiusBottom ?? 0.5;
   const h  = opts.height ?? 1;
+  // Low-perf: 5 radial segments, 1 height segment, closed. Still reads
+  // as round at a glance, at ~1/3 the vert count of the default 12.
+  if (PERF_MODE === 'low') {
+    return cached(
+      `cyl-low:${rt}:${rb}:${h}`,
+      () => new THREE.CylinderGeometry(rt, rb, h, 5, 1, false),
+    );
+  }
   const radial = opts.radialSegments ?? 12;
   const hSeg   = opts.heightSegments ?? 1;
   const open   = opts.openEnded ?? false;
@@ -188,9 +251,14 @@ export function kidCone(opts: {
   radius?: number;
   height?: number;
   radialSegments?: number;
-} = {}): THREE.ConeGeometry {
+} = {}): THREE.BufferGeometry {
   const r = opts.radius ?? 0.5;
   const h = opts.height ?? 1;
+  // Low-perf: 4 radial segments — a pyramid. Cheapest cone that still
+  // reads as pointed (3 would read as a wedge, not a cone).
+  if (PERF_MODE === 'low') {
+    return cached(`cone-low:${r}:${h}`, () => new THREE.ConeGeometry(r, h, 4));
+  }
   const radial = opts.radialSegments ?? 12;
   return cached(`cone:${r}:${h}:${radial}`, () => new THREE.ConeGeometry(r, h, radial)) as THREE.ConeGeometry;
 }
@@ -202,9 +270,12 @@ export function kidCapsule(opts: {
   length?: number;
   capSegments?: number;
   radialSegments?: number;
-} = {}): THREE.CapsuleGeometry {
+} = {}): THREE.BufferGeometry {
   const r = opts.radius ?? 0.3;
   const L = opts.length ?? 1;
+  if (PERF_MODE === 'low') {
+    return cached(`cap-low:${r}:${L}`, () => new THREE.CapsuleGeometry(r, L, 1, 6));
+  }
   const cap = opts.capSegments ?? 3;
   const radial = opts.radialSegments ?? 12;
   return cached(`cap:${r}:${L}:${cap}:${radial}`, () => new THREE.CapsuleGeometry(r, L, cap, radial)) as THREE.CapsuleGeometry;
@@ -217,9 +288,12 @@ export function kidTorus(opts: {
   tubeRadius?: number;
   radialSegments?: number;
   tubularSegments?: number;
-} = {}): THREE.TorusGeometry {
+} = {}): THREE.BufferGeometry {
   const r  = opts.radius ?? 0.5;
   const tr = opts.tubeRadius ?? 0.15;
+  if (PERF_MODE === 'low') {
+    return cached(`torus-low:${r}:${tr}`, () => new THREE.TorusGeometry(r, tr, 4, 8));
+  }
   const radial   = opts.radialSegments ?? 8;
   const tubular  = opts.tubularSegments ?? 16;
   return cached(

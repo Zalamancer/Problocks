@@ -81,6 +81,8 @@ export function Freeform3DAssetsView() {
   // single source of truth avoids "panel shows X, AI generates Y".
   const activeStyle = useFreeform3D((s) => s.activeStyle);
   const setActiveStyle = useFreeform3D((s) => s.setActiveStyle);
+  const performanceMode = useFreeform3D((s) => s.performanceMode);
+  const setPerformanceMode = useFreeform3D((s) => s.setPerformanceMode);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
 
   const hasActiveFilters =
@@ -219,6 +221,20 @@ export function Freeform3DAssetsView() {
           value={activeStyle}
           onChange={(v) => setActiveStyle(v as typeof activeStyle)}
           options={PREFAB_STYLES.map((s) => ({ value: s.id, label: s.label }))}
+        />
+        {/* Performance mode is also always visible. Low swaps rounded
+            boxes for 8v cubes, UV spheres for 12v icosahedra, 12-sided
+            cylinders for 5-sided stubs — drops plot vertex counts ~10×
+            for kids on Celeron Chromebooks. Changing it rebuilds both
+            the thumbnails AND any already-placed prefabs in the scene. */}
+        <PanelSelect
+          label="Performance"
+          value={performanceMode}
+          onChange={(v) => setPerformanceMode(v as typeof performanceMode)}
+          options={[
+            { value: 'high', label: 'High — detailed' },
+            { value: 'low',  label: 'Low — minimal verts' },
+          ]}
         />
 
         {filtersOpen && (

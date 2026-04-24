@@ -48,6 +48,7 @@ export function FreeformView3D() {
   const selectedId = useFreeform3D((s) => s.selectedId);
   const cameraMode = useFreeform3D((s) => s.cameraMode);
   const world = useFreeform3D((s) => s.world);
+  const geomRev = useFreeform3D((s) => s.geomRev);
   const select = useFreeform3D((s) => s.select);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
   const removeObject = useFreeform3D((s) => s.removeObject);
@@ -154,6 +155,28 @@ export function FreeformView3D() {
     applyWorld(engine, world);
     setStats(collectStats(engine.root));
   }, [objects, selectedId, world]);
+
+  /* ---- perf mode flip: force every hydrated object to rebuild ---- */
+  useEffect(() => {
+    // geomRev starts at 0 and only bumps on user action, so we can use
+    // it as the dependency directly. On first mount (rev 0) there are
+    // no children yet so the loop is a no-op anyway.
+    if (geomRev === 0) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    // Marking __sceneKind as stale makes applySceneToRoot treat every
+    // existing child as kind-changed and rebuild them against the new
+    // geometry. disposeTree in hydrate.ts skips cached geometries, so
+    // the old (already-invalidated) cache entries stay alive long
+    // enough for GC to reclaim them after the last reference drops.
+    for (const child of engine.root.children) {
+      child.userData.__sceneKind = '__stale__';
+    }
+    applySceneToRoot(engine.root, useFreeform3D.getState().scene.objects);
+    setSelectionHighlight(engine.root, useFreeform3D.getState().selectedId);
+    applyWorld(engine, useFreeform3D.getState().world);
+    setStats(collectStats(engine.root));
+  }, [geomRev]);
 
   /* ---- sync world settings (brightness/time/etc) without depending on scene ---- */
   useEffect(() => {

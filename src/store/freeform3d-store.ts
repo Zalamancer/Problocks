@@ -17,6 +17,8 @@ import { persist } from 'zustand/middleware';
 import type { SceneObject, SceneJson, Vec3 } from '@/lib/kid-style-3d/scene-schema';
 import { EMPTY_SCENE, makeSceneObject } from '@/lib/kid-style-3d/scene-schema';
 import { getPrefabDef, DEFAULT_PREFAB_STYLE, type PrefabStyleId } from '@/lib/kid-style-3d/prefabs';
+import { setGeometryPerfMode, type GeometryPerfMode } from '@/lib/kid-style-3d/geometry';
+import { clearPrefabThumbnailCache } from '@/components/studio/PrefabThumbnail';
 
 const HISTORY_LIMIT = 50;
 
@@ -78,6 +80,18 @@ interface Freeform3DState {
       agent (only prefabs in this style are offered to the model). */
   activeStyle: PrefabStyleId;
   setActiveStyle: (s: PrefabStyleId) => void;
+
+  /** Geometry complexity. 'low' swaps every prefab's rounded-box for an
+      8-vert cube, UV sphere for a 12-vert icosahedron, 12-segment
+      cylinder for a 5-sided stub, etc. Drops plot vertex counts ~10×
+      for users on low-end Chromebooks. Bumps `geomRev` so the viewport
+      can force a scene re-hydrate against the new geometries. */
+  performanceMode: GeometryPerfMode;
+  setPerformanceMode: (m: GeometryPerfMode) => void;
+  /** Monotonic counter bumped whenever performanceMode flips. The
+      viewport subscribes to this and marks every hydrated child as
+      needing a kind-rebuild on the next hydrate pass. */
+  geomRev: number;
 
   /** World ambience/diagnostic settings. */
   world: WorldSettings;
@@ -151,6 +165,22 @@ export const useFreeform3D = create<Freeform3DState>()(
 
       activeStyle: DEFAULT_PREFAB_STYLE,
       setActiveStyle: (s) => set({ activeStyle: s }),
+
+      performanceMode: 'high',
+      geomRev: 0,
+      setPerformanceMode: (m) => {
+        if (get().performanceMode === m) return;
+        // Flip the module-level flag FIRST so any subsequent build call
+        // picks up the new mode. Clears the geometry cache as a side
+        // effect (entries only, no dispose).
+        const changed = setGeometryPerfMode(m);
+        if (!changed) return;
+        // Drop all thumbnail dataURLs + stats so tiles re-render with
+        // the new geometry; pending promises are left alone (worst case
+        // they resolve against cleared state and just get overwritten).
+        try { clearPrefabThumbnailCache(); } catch { /* ssr / no-op */ }
+        set((s) => ({ performanceMode: m, geomRev: s.geomRev + 1 }));
+      },
 
       world: DEFAULT_WORLD,
       setWorldField: (k, v) =>
@@ -406,6 +436,7 @@ export const useFreeform3D = create<Freeform3DState>()(
         cameraMode: s.cameraMode,
         activeStyle: s.activeStyle,
         world: s.world,
+        performanceMode: s.performanceMode,
       }),
       // Normalize any persisted scene on rehydrate so objects authored
       // before a schema field existed (rotation, scale, anchored, etc.)
@@ -425,6 +456,11 @@ export const useFreeform3D = create<Freeform3DState>()(
         // World was introduced after the initial persisted shape; fill in
         // defaults for scenes saved before it existed.
         state.world = { ...DEFAULT_WORLD, ...(state.world ?? {}) };
+        // Apply persisted perf mode to the geometry module so first
+        // builds (thumbnails, starter scene) use the right variant.
+        if (state.performanceMode) {
+          setGeometryPerfMode(state.performanceMode);
+        }
       },
     },
   ),

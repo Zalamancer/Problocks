@@ -107,6 +107,26 @@ const cache = new Map<string, string>();
 const pending = new Map<string, Promise<string>>();
 const statsCache = new Map<string, SceneStats>();
 
+/** Bumped whenever the cache is invalidated. Mounted tiles subscribe to
+    this (via the custom event + a local version counter) and re-fetch
+    their dataURL so the UI reflects the new geometry immediately. */
+const CACHE_INVALIDATED_EVENT = 'prefab-thumbnail-cache-invalidated';
+
+/** Clear every dataURL + stats entry. Used when the freeform3d store
+    flips performance mode — thumbnails need to re-render against the
+    newly-configured geometry. Safe to call from any module; no-op on
+    the server. */
+export function clearPrefabThumbnailCache(): void {
+  cache.clear();
+  statsCache.clear();
+  // Pending promises resolve into the cleared cache and get overwritten
+  // on the next read — no explicit cancellation needed.
+  pending.clear();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(CACHE_INVALIDATED_EVENT));
+  }
+}
+
 /** Synchronous getter — returns null if the prefab hasn't rendered yet.
     Callers that care about "definitely has stats" should subscribe to
     the PrefabThumbnail render (which writes both caches together). */
@@ -207,7 +227,19 @@ export interface PrefabThumbnailProps {
 
 export function PrefabThumbnail({ kind, size = 160, fluid = false }: PrefabThumbnailProps) {
   const [src, setSrc] = useState<string | null>(() => cache.get(kind) ?? null);
+  const [invalidationTick, setInvalidationTick] = useState(0);
   const mounted = useRef(true);
+
+  // Cache invalidation (perf-mode flip): reset src to null so the next
+  // effect pass kicks off a fresh render against the new geometry.
+  useEffect(() => {
+    function onInvalidate() {
+      setSrc(null);
+      setInvalidationTick((t) => t + 1);
+    }
+    window.addEventListener(CACHE_INVALIDATED_EVENT, onInvalidate);
+    return () => window.removeEventListener(CACHE_INVALIDATED_EVENT, onInvalidate);
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
@@ -227,7 +259,7 @@ export function PrefabThumbnail({ kind, size = 160, fluid = false }: PrefabThumb
       },
     );
     return () => { mounted.current = false; };
-  }, [kind, size]);
+  }, [kind, size, invalidationTick]);
 
   if (!src) {
     return (

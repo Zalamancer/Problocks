@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE, toonMaterial } from '../materials';
-import { kidBox, kidSimpleBox, kidSphere } from '../geometry';
+import { kidSimpleBox, kidSphere } from '../geometry';
 import { addOutlinesToTree } from '../outlines';
 import type { BuildOptions } from './types';
 
@@ -28,9 +28,14 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
   body.name = 'char-body';
   g.add(body);
 
-  // Torso
+  // Character is built out of flat-sided cubes in the Robloxian style —
+  // the inverted-hull outline gives every piece a soft silhouette for
+  // free, so RoundedBox bevels were invisible AND expensive. Every body
+  // part below is a 24-vert cached BoxGeometry, shared across every
+  // character in the scene.
+
   const torso = new THREE.Mesh(
-    kidBox({ width: 0.95, height: 1.15, depth: 0.5, radius: 0.08 }),
+    kidSimpleBox({ width: 0.95, height: 1.15, depth: 0.5 }),
     toonMaterial({ color: shirt }),
   );
   torso.position.y = 1.2;
@@ -40,7 +45,7 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
   // Legs + shoes
   for (const side of [-1, 1]) {
     const leg = new THREE.Mesh(
-      kidBox({ width: 0.4, height: 0.95, depth: 0.4, radius: 0.06 }),
+      kidSimpleBox({ width: 0.4, height: 0.95, depth: 0.4 }),
       toonMaterial({ color: pants }),
     );
     leg.position.set(side * 0.23, 0.48, 0);
@@ -48,7 +53,7 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
     body.add(leg);
 
     const shoe = new THREE.Mesh(
-      kidBox({ width: 0.44, height: 0.14, depth: 0.5, radius: 0.04 }),
+      kidSimpleBox({ width: 0.44, height: 0.14, depth: 0.5 }),
       toonMaterial({ color: shoes }),
     );
     shoe.position.set(side * 0.23, 0.07, 0.04);
@@ -67,13 +72,16 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
     body.add(pivot);
 
     const arm = new THREE.Mesh(
-      kidBox({ width: 0.32, height: 1.0, depth: 0.32, radius: 0.05 }),
+      kidSimpleBox({ width: 0.32, height: 1.0, depth: 0.32 }),
       toonMaterial({ color: shirt }),
     );
     arm.position.y = -0.45;
     arm.castShadow = true;
     pivot.add(arm);
 
+    // Hands stay spherical (detail=0 = 10×8 ≈ 99v, cached across both
+    // hands and across every character). The sphere shape matters here —
+    // a cube hand looks weirdly prosthetic next to the sphere blush.
     const hand = new THREE.Mesh(
       kidSphere({ radius: 0.18, detail: 0 }),
       toonMaterial({ color: skin }),
@@ -91,14 +99,14 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
   body.add(headGroup);
 
   const head = new THREE.Mesh(
-    kidBox({ width: 0.78, height: 0.78, depth: 0.62, radius: 0.12 }),
+    kidSimpleBox({ width: 0.78, height: 0.78, depth: 0.62 }),
     toonMaterial({ color: skin }),
   );
   head.castShadow = true; head.receiveShadow = true;
   headGroup.add(head);
 
   const hairCap = new THREE.Mesh(
-    kidBox({ width: 0.82, height: 0.34, depth: 0.66, radius: 0.12 }),
+    kidSimpleBox({ width: 0.82, height: 0.34, depth: 0.66 }),
     toonMaterial({ color: hair }),
   );
   hairCap.position.y = 0.3;
@@ -106,7 +114,7 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
   headGroup.add(hairCap);
 
   const fringe = new THREE.Mesh(
-    kidBox({ width: 0.82, height: 0.18, depth: 0.3, radius: 0.06 }),
+    kidSimpleBox({ width: 0.82, height: 0.18, depth: 0.3 }),
     toonMaterial({ color: hair }),
   );
   fringe.position.set(0, 0.22, 0.22);
@@ -125,13 +133,14 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
     headGroup.add(eye);
   }
 
-  // Smile — half-torus
+  // Smile — tiny flat mouth bar. The prior half-torus was 153 verts per
+  // character; a thin cube is 24, cached across every character, and
+  // reads as a Roblox-style line mouth at studio orbit distance.
   const smile = new THREE.Mesh(
-    new THREE.TorusGeometry(0.1, 0.022, 8, 16, Math.PI),
+    kidSimpleBox({ width: 0.22, height: 0.04, depth: 0.02 }),
     toonMaterial({ color: PALETTE.face }),
   );
   smile.position.set(0, -0.18, faceZ);
-  smile.rotation.z = Math.PI;
   headGroup.add(smile);
 
   // Cheek blush

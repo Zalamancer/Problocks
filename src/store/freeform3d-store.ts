@@ -76,16 +76,27 @@ interface Freeform3DState {
   redo: () => void;
 }
 
-function snapshot(objects: SceneObject[]): SceneObject[] {
-  // Shallow clone is fine — SceneObject values are primitives + tuples +
-  // small records. A deep clone would be wasteful.
-  return objects.map((o) => ({
+/** Coerce a tuple that may be partially undefined into a complete Vec3. */
+function vec3(t: Vec3 | undefined, fallback: Vec3): Vec3 {
+  return [t?.[0] ?? fallback[0], t?.[1] ?? fallback[1], t?.[2] ?? fallback[2]];
+}
+
+/** Clone + fill any missing transform fields with the identity values.
+    Used for persist rehydration, undo/redo snapshots, duplicate, and
+    AI-driven addPrefabFull — anywhere a SceneObject might arrive with
+    partial transforms. */
+function normalize(o: SceneObject): SceneObject {
+  return {
     ...o,
-    position: [...o.position] as Vec3,
-    rotation: [...o.rotation] as Vec3,
-    scale: [...o.scale] as Vec3,
+    position: vec3(o.position, [0, 0, 0]),
+    rotation: vec3(o.rotation, [0, 0, 0]),
+    scale:    vec3(o.scale,    [1, 1, 1]),
     props: o.props ? { ...o.props } : undefined,
-  }));
+  };
+}
+
+function snapshot(objects: SceneObject[]): SceneObject[] {
+  return objects.map(normalize);
 }
 
 export const useFreeform3D = create<Freeform3DState>()(
@@ -124,10 +135,18 @@ export const useFreeform3D = create<Freeform3DState>()(
       addPrefabFull: (kind, patch) => {
         const def = getPrefabDef(kind);
         if (!def) return '';
-        const obj = makeSceneObject(kind, {
+        // Strip explicit-undefined fields out of patch so they don't
+        // overwrite makeSceneObject's identity defaults with `undefined`.
+        const cleanPatch: Partial<SceneObject> = {};
+        if (patch) {
+          for (const k of Object.keys(patch) as (keyof SceneObject)[]) {
+            if (patch[k] !== undefined) (cleanPatch as Record<string, unknown>)[k] = patch[k];
+          }
+        }
+        const obj = normalize(makeSceneObject(kind, {
           color: def.defaultColor,
-          ...patch,
-        });
+          ...cleanPatch,
+        }));
         pushHistory(set, get);
         set((s) => ({
           scene: { ...s.scene, objects: [...s.scene.objects, obj] },
@@ -151,11 +170,11 @@ export const useFreeform3D = create<Freeform3DState>()(
         const src = get().scene.objects.find((o) => o.id === id);
         if (!src) return null;
         pushHistory(set, get);
+        const safeSrc = normalize(src);
         const clone: SceneObject = {
-          ...src,
-          id: makeSceneObject(src.kind).id,
-          position: [src.position[0] + 1, src.position[1], src.position[2] + 1],
-          props: src.props ? { ...src.props } : undefined,
+          ...safeSrc,
+          id: makeSceneObject(safeSrc.kind).id,
+          position: [safeSrc.position[0] + 1, safeSrc.position[1], safeSrc.position[2] + 1],
         };
         set((s) => ({
           scene: { ...s.scene, objects: [...s.scene.objects, clone] },
@@ -344,6 +363,22 @@ export const useFreeform3D = create<Freeform3DState>()(
         cameraMode: s.cameraMode,
         activeStyle: s.activeStyle,
       }),
+      // Normalize any persisted scene on rehydrate so objects authored
+      // before a schema field existed (rotation, scale, anchored, etc.)
+      // don't crash downstream consumers.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (state.scene?.objects) {
+          state.scene = { ...state.scene, objects: state.scene.objects.map(normalize) };
+        }
+        if (state.savedScenes) {
+          const fixed: Record<string, SceneJson> = {};
+          for (const [name, sc] of Object.entries(state.savedScenes)) {
+            fixed[name] = { ...sc, objects: (sc.objects ?? []).map(normalize) };
+          }
+          state.savedScenes = fixed;
+        }
+      },
     },
   ),
 );

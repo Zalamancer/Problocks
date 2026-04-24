@@ -23,12 +23,15 @@ export const PALETTE = {
   coral: '#ff7aa0',        // Adopt-Me pink (shirts, cheeks, flowers, hearts)
   mint: '#88cc5a',         // tree canopy, accent greens
   butter: '#ffd070',       // flowers, door knob, coins
-  sky: '#a8dcff',          // sky background
-  fogFar: '#b8e4ff',       // horizon fog tint — mostly-sky with a whisper of haze
+  sky: '#5cb4f0',          // sky background — vivid Pokopia blue (was #a8dcff pastel)
+  skyTop: '#2e8fd9',       // gradient top — deeper blue for the dome zenith
+  skyHorizon: '#bfe6ff',   // gradient bottom — soft hazy blue near the horizon
+  cloud: '#ffffff',        // cloud white — pure so the toon shading reads the bands
+  fogFar: '#bfe6ff',       // horizon fog tint — matches skyHorizon so trees fade into haze
 
   // Environmental
-  grass: '#7ecc5a',        // plot grass — saturated bright green
-  grassDark: '#5aa040',    // surrounding land outside the plot
+  grass: '#6ac557',        // plot grass — saturated candy green (was #7ecc5a, too yellow)
+  grassDark: '#4ea340',    // surrounding land outside the plot
   groundFog: '#2f3a2a',    // dead shadowed ground (unused on outdoor scenes)
 
   // Neutrals — warm paper / warm ink / stone / curb

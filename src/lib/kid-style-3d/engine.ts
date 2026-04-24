@@ -10,9 +10,9 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { PALETTE, groundMaterial } from './materials';
+import { PALETTE, groundMaterial, toonMaterial } from './materials';
 import { animateRoot } from './animations';
-import { isCachedGeometry } from './geometry';
+import { isCachedGeometry, kidSphere, kidInstanced, type InstanceTransform } from './geometry';
 
 export interface KidEngineOptions {
   canvas: HTMLCanvasElement;
@@ -86,12 +86,14 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
 
   // --- scene ---
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(PALETTE.sky);
-  // Nearer fog start so the plot feels enclosed, further end so you can
-  // still see distant trees / clouds. Far colour shifted toward fogFar
-  // (a hair whiter than the sky) so the horizon reads as atmosphere, not
-  // a hard clip.
-  scene.fog = new THREE.Fog(PALETTE.fogFar, 30, 85);
+  // Vertical sky gradient (Pokopia look): deeper blue at zenith, hazy
+  // near the horizon so trees fade into sky instead of clipping against
+  // a flat wall of colour. Generated as a 2×256 CanvasTexture; cheaper
+  // than a skybox sphere and still lets `scene.fog` paint the horizon.
+  scene.background = createSkyGradient();
+  // Fog pushed further out so vivid palette reads at full saturation
+  // near the character and only softens at the perimeter.
+  scene.fog = new THREE.Fog(PALETTE.fogFar, 45, 110);
 
   // --- camera ---
   // 42° FOV + further-back position is the Adopt-Me/Roblox plot
@@ -161,6 +163,13 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   ground.receiveShadow = quality.shadows;
   ground.name = 'ground';
   scene.add(ground);
+
+  // --- ambient clouds ---
+  // Chunky low-poly cumulus blobs ringing the plot at sky altitude.
+  // Static, non-shadow-casting; purpose is purely to hint at depth in
+  // the sky gradient and break up the flat blue.
+  const clouds = makeAmbientClouds();
+  scene.add(clouds);
 
   // --- root container for user objects ---
   const root = new THREE.Group();
@@ -291,4 +300,74 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     raycastGround,
     setPerFrame: (cb) => { perFrameCb = cb; },
   };
+}
+
+// ---- sky gradient --------------------------------------------------
+// 2×256 vertical gradient from PALETTE.skyTop (zenith) down to
+// PALETTE.skyHorizon. Used as `scene.background`; Three renders it as
+// a flat 2D quad behind everything so horizon always reads sky-coloured
+// even when the camera looks level. Cheaper than a skybox sphere.
+function createSkyGradient(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, PALETTE.skyTop);
+  grad.addColorStop(0.65, PALETTE.sky);
+  grad.addColorStop(1, PALETTE.skyHorizon);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 2, 256);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ---- ambient clouds ------------------------------------------------
+// Chunky cumulus clusters ringing the plot at sky altitude. Each cloud
+// is a handful of sphere blobs at slightly offset positions, batched as
+// one InstancedMesh per cloud so the whole ring is ~8 draw calls. Not
+// shadow-casters — shadows on the ground would look weird at this
+// altitude and distance.
+function makeAmbientClouds(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'ambient-clouds';
+
+  // 8 clouds spaced around the plot at radius 50, altitudes 14-22.
+  // Fixed positions (deterministic) so the scene reads the same on
+  // every reload. Sizes vary 1.0 - 2.4 for silhouette variety.
+  const spots: Array<{ x: number; y: number; z: number; s: number }> = [
+    { x:  45, y: 16, z: -22, s: 2.2 },
+    { x:  28, y: 20, z:  42, s: 1.6 },
+    { x: -12, y: 18, z:  48, s: 2.0 },
+    { x: -44, y: 22, z:  10, s: 2.4 },
+    { x: -38, y: 15, z: -30, s: 1.4 },
+    { x:  -8, y: 19, z: -46, s: 1.8 },
+    { x:  22, y: 14, z: -40, s: 1.2 },
+    { x:  50, y: 21, z:  18, s: 2.0 },
+  ];
+
+  // One cumulus = five overlapping sphere blobs (hero + 4 satellites).
+  const blobs: InstanceTransform[] = [
+    { position: [ 0.0,  0.0,  0.0 ], scale: 1.0 },
+    { position: [ 1.1, -0.15, 0.1 ], scale: 0.75 },
+    { position: [-1.1,  0.0, -0.1 ], scale: 0.8  },
+    { position: [ 0.5,  0.35, 0.2 ], scale: 0.65 },
+    { position: [-0.4,  0.3, -0.2 ], scale: 0.55 },
+  ];
+
+  const sphereGeo = kidSphere({ radius: 1, detail: 0 });
+  const mat = toonMaterial({ color: PALETTE.cloud });
+
+  for (const spot of spots) {
+    const cloud = kidInstanced(sphereGeo, mat, blobs);
+    cloud.position.set(spot.x, spot.y, spot.z);
+    cloud.scale.setScalar(spot.s);
+    cloud.castShadow = false;
+    cloud.receiveShadow = false;
+    g.add(cloud);
+  }
+
+  return g;
 }

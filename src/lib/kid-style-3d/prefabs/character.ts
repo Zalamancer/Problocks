@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE, toonMaterial } from '../materials';
-import { kidBox, kidSphere } from '../geometry';
+import { kidBox, kidSimpleBox, kidSphere } from '../geometry';
 import { addOutlinesToTree } from '../outlines';
 import type { BuildOptions } from './types';
 
@@ -112,11 +112,13 @@ export function character({ color, props }: BuildOptions): THREE.Object3D {
   fringe.position.set(0, 0.22, 0.22);
   headGroup.add(fringe);
 
-  // Eyes (tall rounded boxes, pressed onto the front face)
+  // Eyes — tiny flat-sided boxes pressed onto the front face. At this
+  // scale (9cm × 16cm × 4cm) the bevel wasn't visible anyway, and the
+  // outline gives them a rounded silhouette for free.
   const faceZ = 0.32;
   for (const x of [-0.18, 0.18]) {
     const eye = new THREE.Mesh(
-      kidBox({ width: 0.09, height: 0.16, depth: 0.04, radius: 0.025 }),
+      kidSimpleBox({ width: 0.09, height: 0.16, depth: 0.04 }),
       toonMaterial({ color: PALETTE.face }),
     );
     eye.position.set(x, 0.02, faceZ);

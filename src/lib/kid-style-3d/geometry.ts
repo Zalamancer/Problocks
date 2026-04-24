@@ -69,6 +69,23 @@ export function kidBox(opts: KidBoxOptions = {}): BG {
   return cached(`rb:${w}:${h}:${d}:${r}:${seg}`, () => new RoundedBoxGeometry(w, h, d, seg, r));
 }
 
+/**
+ * Raw flat-sided box — 24 position verts, indexed. ~6× cheaper than
+ * kidBox (RoundedBox seg=2 ≈ 150 verts). Use for any box small enough or
+ * far enough that the bevel wouldn't be visible under toon shading:
+ * fence pickets, rails, small trim pieces, debris blocks. Under the
+ * inverted-hull outline the silhouette reads as clean even without a
+ * bevel, because the outline itself softens the edge.
+ */
+export function kidSimpleBox(
+  opts: { width?: number; height?: number; depth?: number } = {},
+): THREE.BoxGeometry {
+  const w = opts.width ?? 1;
+  const h = opts.height ?? 1;
+  const d = opts.depth ?? 1;
+  return cached(`box:${w}:${h}:${d}`, () => new THREE.BoxGeometry(w, h, d)) as THREE.BoxGeometry;
+}
+
 // ---- sphere -----------------------------------------------------------
 
 export interface KidSphereOptions {

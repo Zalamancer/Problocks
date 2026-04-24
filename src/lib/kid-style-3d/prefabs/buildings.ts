@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE, toonMaterial } from '../materials';
-import { kidBox, kidSphere, kidCylinder, kidCone } from '../geometry';
+import { kidBox, kidSimpleBox, kidSphere, kidCylinder, kidCone } from '../geometry';
 import { addOutline, addOutlinesToTree } from '../outlines';
 import type { BuildOptions } from './types';
 
@@ -142,7 +142,14 @@ export function house({ color, props }: BuildOptions): THREE.Object3D {
 
 /**
  * Picket fence run — length parameterized via props.length (1–12u).
- * Pointed-top pickets + two horizontal rails + outlines on each part.
+ *
+ * Each picket is a flat-sided cube (kidSimpleBox, ~24 position verts)
+ * with a small cube rotated 45° as the pointed cap, instead of a
+ * kidCone. The cone was ~15 verts per cap; a rotated cube is 24 but
+ * shares its geometry across every picket in the scene via the cache,
+ * so in practice a 27-picket fence costs ONE 24-vert cube + ONE cap
+ * cube + two rail cubes, not 100+ unique geometries. Outlines soften
+ * the edge so the pickets still read as chunky kid-style pickets.
  */
 export function fence({ color, props }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
@@ -154,24 +161,27 @@ export function fence({ color, props }: BuildOptions): THREE.Object3D {
   for (let i = 0; i <= picketCount; i++) {
     const x = -length / 2 + i * spacing;
     const picket = new THREE.Mesh(
-      kidBox({ width: 0.1, height: 0.7, depth: 0.08, radius: 0.03 }),
+      kidSimpleBox({ width: 0.1, height: 0.7, depth: 0.08 }),
       toonMaterial({ color: c }),
     );
     picket.position.set(x, 0.4, 0);
     picket.castShadow = true;
     g.add(picket);
+    // 45°-rotated cube as a pointed cap — cheaper than a cone and shares
+    // its cached cube geometry with every other picket cap on the plot.
     const top = new THREE.Mesh(
-      kidCone({ radius: 0.09, height: 0.14 }),
+      kidSimpleBox({ width: 0.12, height: 0.12, depth: 0.1 }),
       toonMaterial({ color: c }),
     );
-    top.position.set(x, 0.78, 0);
+    top.position.set(x, 0.8, 0);
+    top.rotation.z = Math.PI / 4;
     top.castShadow = true;
     g.add(top);
   }
 
   for (const y of [0.22, 0.6]) {
     const rail = new THREE.Mesh(
-      kidBox({ width: length, height: 0.07, depth: 0.06, radius: 0.02 }),
+      kidSimpleBox({ width: length, height: 0.07, depth: 0.06 }),
       toonMaterial({ color: c }),
     );
     rail.position.set(0, y, 0);
@@ -192,7 +202,7 @@ export function gatePost({ color }: BuildOptions): THREE.Object3D {
   const c = color ?? PALETTE.fence;
 
   const post = new THREE.Mesh(
-    kidBox({ width: 0.22, height: 1.6, depth: 0.22, radius: 0.04 }),
+    kidSimpleBox({ width: 0.22, height: 1.6, depth: 0.22 }),
     toonMaterial({ color: c }),
   );
   post.position.y = 0.8;
@@ -227,7 +237,7 @@ export function mailbox({ color }: BuildOptions): THREE.Object3D {
   const boxColor = color ?? '#7ab0d8';
 
   const post = new THREE.Mesh(
-    kidBox({ width: 0.12, height: 1.2, depth: 0.12, radius: 0.03 }),
+    kidSimpleBox({ width: 0.12, height: 1.2, depth: 0.12 }),
     toonMaterial({ color: PALETTE.woodLight }),
   );
   post.position.y = 0.6;
@@ -243,7 +253,7 @@ export function mailbox({ color }: BuildOptions): THREE.Object3D {
   g.add(box);
 
   const flag = new THREE.Mesh(
-    kidBox({ width: 0.04, height: 0.22, depth: 0.15, radius: 0.02 }),
+    kidSimpleBox({ width: 0.04, height: 0.22, depth: 0.15 }),
     toonMaterial({ color: PALETTE.roof }),
   );
   flag.position.set(0.27, 1.4, 0.12);

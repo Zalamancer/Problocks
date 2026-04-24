@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
   createKidEngine,
@@ -12,6 +12,9 @@ import {
   type GizmoMode,
   createPlayController,
   type PlayController,
+  applyWorld,
+  collectStats,
+  type SceneStats,
 } from '@/lib/kid-style-3d';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { useSceneStore } from '@/store/scene-store';
@@ -44,12 +47,15 @@ export function FreeformView3D() {
   const objects = useFreeform3D((s) => s.scene.objects);
   const selectedId = useFreeform3D((s) => s.selectedId);
   const cameraMode = useFreeform3D((s) => s.cameraMode);
+  const world = useFreeform3D((s) => s.world);
   const select = useFreeform3D((s) => s.select);
   const addPrefab = useFreeform3D((s) => s.addPrefab);
   const removeObject = useFreeform3D((s) => s.removeObject);
   const updateObject = useFreeform3D((s) => s.updateObject);
   const undo = useFreeform3D((s) => s.undo);
   const redo = useFreeform3D((s) => s.redo);
+
+  const [stats, setStats] = useState<SceneStats>({ vertices: 0, triangles: 0, meshes: 0 });
   // Silence "declared but unused" — addPrefab is retained as a store
   // action for the left-panel Assets view; the viewport doesn't spawn
   // directly anymore but other features (drag-drop, paste) will.
@@ -66,6 +72,9 @@ export function FreeformView3D() {
     const engine = createKidEngine({ canvas });
     engine.start();
     engineRef.current = engine;
+    // Apply persisted world on mount so brightness/time/etc. aren't
+    // reset to the engine defaults after a refresh.
+    applyWorld(engine, useFreeform3D.getState().world);
 
     // Gizmo lives for the lifetime of the engine; detached by default.
     const gizmo = createKidGizmo({
@@ -140,7 +149,18 @@ export function FreeformView3D() {
     if (gizmoRef.current?.isDragging()) return;
     applySceneToRoot(engine.root, objects);
     setSelectionHighlight(engine.root, selectedId);
-  }, [objects, selectedId]);
+    // Re-apply world so newly-hydrated meshes pick up wireframe / vertex
+    // overlay toggles. Cheap: applyWorld is idempotent.
+    applyWorld(engine, world);
+    setStats(collectStats(engine.root));
+  }, [objects, selectedId, world]);
+
+  /* ---- sync world settings (brightness/time/etc) without depending on scene ---- */
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    applyWorld(engine, world);
+  }, [world]);
 
   /* ---- attach gizmo to selected object ---- */
   useEffect(() => {
@@ -314,7 +334,28 @@ export function FreeformView3D() {
         style={{ outline: 'none', cursor: 'default', touchAction: 'none' }}
       />
       {!isPlaying && <TopToolbar />}
+      {!isPlaying && world.showStats && <StatsBadge stats={stats} />}
       {isPlaying ? <PlayHud cameraMode={cameraMode} /> : <HintBadge />}
+    </div>
+  );
+}
+
+function StatsBadge({ stats }: { stats: SceneStats }) {
+  const fmt = (n: number) => n.toLocaleString();
+  return (
+    <div
+      className="pointer-events-none absolute top-14 right-4 px-3 py-2 rounded-lg text-[11px] font-semibold leading-tight"
+      style={{
+        background: 'rgba(0,0,0,0.6)',
+        color: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(6px)',
+        fontFamily: 'ui-monospace, monospace',
+        letterSpacing: 0.3,
+      }}
+    >
+      <div>Verts: {fmt(stats.vertices)}</div>
+      <div>Tris:  {fmt(stats.triangles)}</div>
+      <div>Meshes: {fmt(stats.meshes)}</div>
     </div>
   );
 }

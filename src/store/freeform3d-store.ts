@@ -22,6 +22,39 @@ const HISTORY_LIMIT = 50;
 
 export type CameraMode = 'third' | 'first';
 
+/** World-level ambience + diagnostic controls. Exposed via the right
+    panel's Workspace section and applied to the kid-engine via a React
+    subscription in FreeformView3D. */
+export interface WorldSettings {
+  /** Scene background / hemi sky color (CSS hex). */
+  skyColor: string;
+  /** Sun key-light intensity (0..4). */
+  brightness: number;
+  /** Hemisphere-light intensity (0..2). Fills shadow sides. */
+  ambient: number;
+  /** 0..24 hours. Rotates the sun around the scene. */
+  timeOfDay: number;
+  /** Linear fog density (0..1). Scales the engine's default fog distance. */
+  fogDensity: number;
+  /** Render every mesh as wireframe — shows the polygon topology. */
+  wireframe: boolean;
+  /** Overlay small vertex dots on every geometry. */
+  showVertices: boolean;
+  /** Overlay live vertex/triangle counts on the viewport. */
+  showStats: boolean;
+}
+
+export const DEFAULT_WORLD: WorldSettings = {
+  skyColor: '#a8dcff',
+  brightness: 1.3,
+  ambient: 0.7,
+  timeOfDay: 14,
+  fogDensity: 0.5,
+  wireframe: false,
+  showVertices: false,
+  showStats: false,
+};
+
 interface Freeform3DState {
   scene: SceneJson;
   selectedId: string | null;
@@ -45,6 +78,11 @@ interface Freeform3DState {
       agent (only prefabs in this style are offered to the model). */
   activeStyle: PrefabStyleId;
   setActiveStyle: (s: PrefabStyleId) => void;
+
+  /** World ambience/diagnostic settings. */
+  world: WorldSettings;
+  setWorldField: <K extends keyof WorldSettings>(k: K, v: WorldSettings[K]) => void;
+  resetWorld: () => void;
 
   // Selection ------------------------------------------------------------
   select: (id: string | null) => void;
@@ -113,6 +151,11 @@ export const useFreeform3D = create<Freeform3DState>()(
 
       activeStyle: DEFAULT_PREFAB_STYLE,
       setActiveStyle: (s) => set({ activeStyle: s }),
+
+      world: DEFAULT_WORLD,
+      setWorldField: (k, v) =>
+        set((s) => ({ world: { ...s.world, [k]: v } })),
+      resetWorld: () => set({ world: DEFAULT_WORLD }),
 
       select: (id) => set({ selectedId: id }),
 
@@ -362,6 +405,7 @@ export const useFreeform3D = create<Freeform3DState>()(
         currentSceneName: s.currentSceneName,
         cameraMode: s.cameraMode,
         activeStyle: s.activeStyle,
+        world: s.world,
       }),
       // Normalize any persisted scene on rehydrate so objects authored
       // before a schema field existed (rotation, scale, anchored, etc.)
@@ -378,6 +422,9 @@ export const useFreeform3D = create<Freeform3DState>()(
           }
           state.savedScenes = fixed;
         }
+        // World was introduced after the initial persisted shape; fill in
+        // defaults for scenes saved before it existed.
+        state.world = { ...DEFAULT_WORLD, ...(state.world ?? {}) };
       },
     },
   ),

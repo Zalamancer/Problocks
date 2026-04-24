@@ -13,3 +13,4 @@ export * from './hydrate';
 export * from './gizmo';
 export * from './animations';
 export * from './play-controller';
+export * from './world-apply';

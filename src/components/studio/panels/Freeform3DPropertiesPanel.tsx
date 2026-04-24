@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2 } from 'lucide-react';
+import { RotateCcw, Trash2 } from 'lucide-react';
 import {
   PanelSection,
   PanelSlider,
@@ -76,6 +76,17 @@ const KID_PALETTE_COLORS: string[] = [
   '#ffffff',
 ];
 
+const SKY_COLORS: string[] = [
+  '#a8dcff',  // default day
+  '#7ec9ff',  // crisper blue
+  '#fdd6a8',  // warm sunset
+  '#ffa8c0',  // pink dawn
+  '#c9a0ff',  // purple dusk
+  '#1a2140',  // night
+  '#2a3a50',  // overcast dusk
+  '#c0e0c0',  // pastel mint
+];
+
 interface Props {
   headless?: boolean;
 }
@@ -87,6 +98,9 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
   );
   const updateObject = useFreeform3D((s) => s.updateObject);
   const removeObject = useFreeform3D((s) => s.removeObject);
+  const world = useFreeform3D((s) => s.world);
+  const setWorldField = useFreeform3D((s) => s.setWorldField);
+  const resetWorld = useFreeform3D((s) => s.resetWorld);
 
   // Sections and controls are hooks — render a neutral empty state if no selection.
   const def = object ? getPrefabDef(object.kind) : null;
@@ -101,28 +115,99 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
     updateObject(object.id, { props: { ...(object.props ?? {}), [key]: value } });
   };
 
-  const delBtn = (
+  const delBtn = object ? (
     <PanelActionButton
       variant="destructive"
       icon={Trash2}
       fullWidth
-      onClick={() => object && removeObject(object.id)}
-      disabled={!object}
+      onClick={() => removeObject(object.id)}
     >
       Delete object
     </PanelActionButton>
+  ) : (
+    <PanelActionButton
+      variant="secondary"
+      icon={RotateCcw}
+      fullWidth
+      onClick={resetWorld}
+    >
+      Reset world
+    </PanelActionButton>
+  );
+
+  const worldBody = (
+    <div className="flex flex-col gap-3 px-3 py-3">
+      <div
+        className="px-1 text-[11px] uppercase tracking-wider"
+        style={{ color: 'var(--pb-ink-muted)', fontWeight: 700 }}
+      >
+        No object selected — editing World
+      </div>
+
+      <PanelSection title="Ambience" collapsible defaultOpen>
+        <PanelSlider
+          label="Brightness"
+          value={world.brightness}
+          onChange={(v) => setWorldField('brightness', v)}
+          min={0} max={4} step={0.05} precision={2}
+          suffix="×"
+        />
+        <PanelSlider
+          label="Ambient"
+          value={world.ambient}
+          onChange={(v) => setWorldField('ambient', v)}
+          min={0} max={2} step={0.05} precision={2}
+          suffix="×"
+        />
+        <PanelSlider
+          label="Time of day"
+          value={world.timeOfDay}
+          onChange={(v) => setWorldField('timeOfDay', v)}
+          min={0} max={24} step={0.1} precision={1}
+          suffix="h"
+        />
+        <PanelSlider
+          label="Fog density"
+          value={world.fogDensity}
+          onChange={(v) => setWorldField('fogDensity', v)}
+          min={0} max={1} step={0.01} precision={2}
+        />
+      </PanelSection>
+
+      <PanelSection title="Sky" collapsible defaultOpen>
+        <PanelColorSwatches
+          label="Sky color"
+          value={world.skyColor}
+          onChange={(v) => setWorldField('skyColor', v)}
+          colors={SKY_COLORS}
+        />
+      </PanelSection>
+
+      <PanelSection title="Diagnostics" collapsible defaultOpen>
+        <PanelToggle
+          label="Wireframe"
+          checked={world.wireframe}
+          onChange={(v) => setWorldField('wireframe', v)}
+        />
+        <PanelToggle
+          label="Show vertices"
+          checked={world.showVertices}
+          onChange={(v) => setWorldField('showVertices', v)}
+        />
+        <PanelToggle
+          label="Show stats (verts / tris)"
+          checked={world.showStats}
+          onChange={(v) => setWorldField('showStats', v)}
+        />
+      </PanelSection>
+    </div>
   );
 
   const body = (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto">
         {!object ? (
-          <div
-            className="h-full flex items-center justify-center text-center px-6"
-            style={{ color: 'var(--pb-ink-muted)', fontSize: 12.5, fontWeight: 500 }}
-          >
-            Click any object in the scene to edit its properties.
-          </div>
+          worldBody
         ) : (
           <div className="flex flex-col gap-3 px-3 py-3">
             <PanelSection title="Info" collapsible defaultOpen>

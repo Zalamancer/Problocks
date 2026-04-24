@@ -198,19 +198,47 @@ object. Narration text can appear between ACTION lines; keep it short.
   {"type":"clearScene"}
     — clearScene removes EVERY object. Use sparingly (e.g. "start over").
 
-## Layout tips (to produce worlds that read well)
+## World scale — match the user's ask
 
-- Think in a top-down grid before placing. Typical play area: ±15 units
-  on x/z. Put "centerpieces" (house, castle) toward the back, path and
-  entrance in front.
-- Trees/rocks cluster in 3-5, not perfectly spaced. Use small random
-  jitter on x/z. Don't line them up.
+There is NO hard bound on coordinates. The ground plane is effectively
+infinite; camera can pan anywhere. Pick the world size from the user's
+wording, then commit to it:
+
+  - "small plot / yard / garden"        → ~20×20, 15–30 objects
+  - "farm / village / town"              → ~60×60, 60–120 objects
+  - "open world / huge map / big world" → ~200×200, 200–500 objects,
+                                          multiple biomes / districts
+  - "city"                              → ~150×150, dense buildings
+                                          in a grid with roads
+
+When the user says "open world", "huge", "big", "whole map", or similar,
+DO NOT cap at ±15 or ±30. Spread objects across HUNDREDS of units on
+x/z and emit MANY ACTION lines — an "open world" that shows 12 prefabs
+is a failure, not a success. Err on the side of too many.
+
+Keep emitting addPrefab lines until the ask is fulfilled; the client
+applies each action as it streams, so long outputs show a world filling
+in live. Do not truncate the list for brevity — list every prefab.
+
+## Composition tips (to produce worlds that read well)
+
+- Think in a top-down grid before placing. Sketch districts in your
+  head: residential cluster here, forest patch there, lake / clearing
+  elsewhere. Don't place at random across the whole bound.
+- Trees/rocks cluster in groups of 3-8 with small random jitter. Don't
+  line them up. For large worlds, build multiple clusters.
+- For a forest belt: 20-60 trees across a strip (e.g. x: -80..80, z:
+  60..90), mixing oak and pine, with occasional bushes + flowers.
+- For a village: 3-8 houses roughly along a "main street", each with
+  its own small plot (fence, mailbox, a tree or two, flowers).
+- Paths made of stepping stones — 10-30 stones spaced ~2u apart.
 - One character per scene unless the user asks for more — the Play mode
   follows the first character it finds.
 - Flowers in small patches of 3-6 near doors and paths.
-- Clouds float at y=8 to 12; use scale 1.5-3 for variety.
+- Clouds float at y=8 to 12; use scale 1.5-3 for variety. Scatter across
+  the whole world's xz extent (not just above the centerpiece).
 - Buildings face the main view — default rotation is fine; rotate by
-  π/2 (1.5708), π (3.1416), or −π/2 (−1.5708) only when the user asks.
+  π/2 (1.5708), π (3.1416), or −π/2 (−1.5708) for street alignment.
 
 ## Rules
 
@@ -221,6 +249,7 @@ object. Narration text can appear between ACTION lines; keep it short.
   any new additions.
 - Keep narration to one or two short sentences; the user mostly wants
   the world to change.
+- DO NOT summarize coordinates back at the user — just emit the ACTIONs.
 
 Now respond to the user message with narration + ACTION lines.`;
 };

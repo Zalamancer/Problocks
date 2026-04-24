@@ -14,15 +14,27 @@ import { getPrefabDef, PALETTE } from '@/lib/kid-style-3d';
 import type { Vec3 as SceneVec3 } from '@/lib/kid-style-3d/scene-schema';
 import { TransformControls, type Vec3 as ObjVec3 } from './TransformControls';
 
-/** Convert [x,y,z] tuple → {x,y,z} object for the shared TransformControls. */
-const toObj = (t: SceneVec3): ObjVec3 => ({ x: t[0], y: t[1], z: t[2] });
+/** Convert [x,y,z] tuple → {x,y,z} object for the shared TransformControls.
+    Defensive against undefined fields — an AI-generated object might land
+    here with partial transforms; default to 0 rather than crash the panel. */
+const toObj = (t: SceneVec3 | undefined): ObjVec3 => ({
+  x: t?.[0] ?? 0,
+  y: t?.[1] ?? 0,
+  z: t?.[2] ?? 0,
+});
+/** toObj + default scale of 1 instead of 0. */
+const toObjScale = (t: SceneVec3 | undefined): ObjVec3 => ({
+  x: t?.[0] ?? 1,
+  y: t?.[1] ?? 1,
+  z: t?.[2] ?? 1,
+});
 /** Reverse: {x,y,z} object → [x,y,z] tuple for the store. */
 const toTup = (v: ObjVec3): SceneVec3 => [v.x, v.y, v.z];
 /** Radians tuple → degrees object (for rotation display). */
-const radToDegObj = (t: SceneVec3): ObjVec3 => ({
-  x: (t[0] * 180) / Math.PI,
-  y: (t[1] * 180) / Math.PI,
-  z: (t[2] * 180) / Math.PI,
+const radToDegObj = (t: SceneVec3 | undefined): ObjVec3 => ({
+  x: ((t?.[0] ?? 0) * 180) / Math.PI,
+  y: ((t?.[1] ?? 0) * 180) / Math.PI,
+  z: ((t?.[2] ?? 0) * 180) / Math.PI,
 });
 const degObjToRad = (v: ObjVec3): SceneVec3 => [
   (v.x * Math.PI) / 180,
@@ -139,14 +151,14 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
                 <TransformControls
                   position={toObj(object.position)}
                   rotation={radToDegObj(object.rotation)}
-                  scale={toObj(object.scale)}
+                  scale={toObjScale(object.scale)}
                   onPositionChange={(v) => updateObject(object.id, { position: toTup(v) })}
                   onRotationChange={(v) => updateObject(object.id, { rotation: degObjToRad(v) })}
                   onScaleChange={(v) => updateObject(object.id, { scale: toTup(v) })}
                 />
                 <PanelSlider
                   label="Uniform scale"
-                  value={object.scale[0]}
+                  value={object.scale?.[0] ?? 1}
                   onChange={(v) => updateObject(object.id, { scale: [v, v, v] })}
                   min={0.1}
                   max={10}

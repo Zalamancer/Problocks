@@ -237,7 +237,7 @@ export const useFreeform3D = create<Freeform3DState>()(
       activeStyle: DEFAULT_PREFAB_STYLE,
       setActiveStyle: (s) => set({ activeStyle: s }),
 
-      performanceMode: 'high',
+      performanceMode: 'low',
       geomRev: 0,
       setPerformanceMode: (m) => {
         if (get().performanceMode === m) return;
@@ -571,6 +571,15 @@ export const useFreeform3D = create<Freeform3DState>()(
         setActiveTheme(state.world.theme);
         // Apply persisted perf mode to the geometry module so first
         // builds (thumbnails, starter scene) use the right variant.
+        // Auto-migrate 'extreme' → 'low': the old Extreme label meant
+        // "cubes only" but lands far from the chunky-pastel aesthetic;
+        // Low (faceted icosahedra) is a much closer default. Users who
+        // actually wanted the voxel look can re-select Voxel from the
+        // Geometry dropdown.
+        if (state.performanceMode === 'extreme') {
+          state.performanceMode = 'low';
+          state.geomRev = (state.geomRev ?? 0) + 1;
+        }
         if (state.performanceMode) {
           setGeometryPerfMode(state.performanceMode);
         }

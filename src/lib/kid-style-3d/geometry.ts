@@ -42,7 +42,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
  * grow with every variant held in memory.
  */
 export type GeometryPerfMode = 'high' | 'low' | 'extreme';
-let PERF_MODE: GeometryPerfMode = 'high';
+let PERF_MODE: GeometryPerfMode = 'low';
 
 export function getGeometryPerfMode(): GeometryPerfMode {
   return PERF_MODE;

@@ -257,13 +257,13 @@ export function Freeform3DAssetsView() {
             into a BoxGeometry for a minecraft-voxel look. Changing it
             rebuilds both the thumbnails AND any already-placed prefabs. */}
         <PanelSelect
-          label="Performance"
+          label="Geometry"
           value={performanceMode}
           onChange={(v) => setPerformanceMode(v as typeof performanceMode)}
           options={[
-            { value: 'high',    label: 'High — detailed' },
-            { value: 'low',     label: 'Low — minimal verts' },
-            { value: 'extreme', label: 'Extreme — cubes only' },
+            { value: 'low',     label: 'Faceted (Pokopia)' },
+            { value: 'high',    label: 'Smooth (detailed)' },
+            { value: 'extreme', label: 'Voxel (cubes only)' },
           ]}
         />
 

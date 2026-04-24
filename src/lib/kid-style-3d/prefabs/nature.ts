@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE, toonMaterial } from '../materials';
-import { kidSphere, kidCylinder, kidCone } from '../geometry';
+import { kidSphere, kidCylinder, kidCone, kidInstanced, type InstanceTransform } from '../geometry';
 import { addOutline, addOutlinesToTree } from '../outlines';
 import type { BuildOptions } from './types';
 
@@ -23,21 +23,23 @@ export function treeOak({ color, props }: BuildOptions): THREE.Object3D {
   trunk.castShadow = true; trunk.receiveShadow = true;
   g.add(trunk);
 
-  const layers = [
-    { y: 1.5, r: 0.95, c: leaf },
-    { y: 2.05, r: 0.8,  c: leafAccent },
-    { y: 2.5, r: 0.65, c: leaf },
-    { y: 2.85, r: 0.45, c: leafAccent },
+  // Canopy is 4 sphere blobs of varying radii. Two colours (leaf /
+  // leafAccent alternating) means 2 InstancedMeshes instead of 4
+  // individual meshes. Each instance is the base sphere scaled down.
+  const BASE = 0.95;
+  const leafXs: InstanceTransform[] = [
+    { position: [0, 1.5, 0],  scale: 1 },
+    { position: [0, 2.5, 0],  scale: 0.65 / BASE },
   ];
-  for (const l of layers) {
-    const blob = new THREE.Mesh(
-      kidSphere({ radius: l.r, detail: 1 }),
-      toonMaterial({ color: l.c }),
-    );
-    blob.position.y = l.y;
-    blob.castShadow = true; blob.receiveShadow = true;
-    g.add(blob);
-  }
+  const accentXs: InstanceTransform[] = [
+    { position: [0, 2.05, 0], scale: 0.8  / BASE },
+    { position: [0, 2.85, 0], scale: 0.45 / BASE },
+  ];
+  const sphereGeo = kidSphere({ radius: BASE, detail: 1 });
+  const leafM   = kidInstanced(sphereGeo, toonMaterial({ color: leaf       }), leafXs);
+  const accentM = kidInstanced(sphereGeo, toonMaterial({ color: leafAccent }), accentXs);
+  leafM.castShadow   = true; leafM.receiveShadow   = true; g.add(leafM);
+  accentM.castShadow = true; accentM.receiveShadow = true; g.add(accentM);
 
   addOutlinesToTree(g);
   return g;
@@ -56,20 +58,23 @@ export function treePine({ color, props }: BuildOptions): THREE.Object3D {
   trunk.castShadow = true; trunk.receiveShadow = true;
   g.add(trunk);
 
-  const tiers = [
-    { y: 0.8, r: 0.95, h: 0.9 },
-    { y: 1.45, r: 0.75, h: 0.8 },
-    { y: 2.0, r: 0.55, h: 0.7 },
+  // Three cone tiers → one InstancedMesh. Base cone has radius 0.95,
+  // height 0.9; upper tiers are scaled down per-instance. Different
+  // height scales mean the stack still reads as a tapered pine.
+  const BASE_R = 0.95;
+  const BASE_H = 0.9;
+  const tiers: InstanceTransform[] = [
+    { position: [0, 0.8  + 0.9 / 2, 0], scale: [1, 1, 1] },
+    { position: [0, 1.45 + 0.8 / 2, 0], scale: [0.75 / BASE_R, 0.8 / BASE_H, 0.75 / BASE_R] },
+    { position: [0, 2.0  + 0.7 / 2, 0], scale: [0.55 / BASE_R, 0.7 / BASE_H, 0.55 / BASE_R] },
   ];
-  for (const t of tiers) {
-    const cone = new THREE.Mesh(
-      kidCone({ radius: t.r, height: t.h }),
-      toonMaterial({ color: leaf }),
-    );
-    cone.position.y = t.y + t.h / 2;
-    cone.castShadow = true; cone.receiveShadow = true;
-    g.add(cone);
-  }
+  const canopy = kidInstanced(
+    kidCone({ radius: BASE_R, height: BASE_H }),
+    toonMaterial({ color: leaf }),
+    tiers,
+  );
+  canopy.castShadow = true; canopy.receiveShadow = true;
+  g.add(canopy);
 
   addOutlinesToTree(g);
   return g;
@@ -78,21 +83,23 @@ export function treePine({ color, props }: BuildOptions): THREE.Object3D {
 export function bush({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const c = color ?? PALETTE.flowerBush;
-  const blobs = [
-    { pos: [0, 0.5, 0], r: 0.5 },
-    { pos: [0.42, 0.42, 0.1], r: 0.4 },
-    { pos: [-0.4, 0.4, -0.05], r: 0.4 },
-    { pos: [0.1, 0.35, 0.4], r: 0.35 },
+  // Four sphere blobs via a single InstancedMesh. Base sphere is r=0.5;
+  // smaller blobs are just per-instance scaled down. Shares the sphere
+  // geometry across every bush in the scene.
+  const BASE = 0.5;
+  const blobs: InstanceTransform[] = [
+    { position: [0,     0.5,  0],    scale: 1 },
+    { position: [0.42,  0.42, 0.1],  scale: 0.4 / BASE },
+    { position: [-0.4,  0.4, -0.05], scale: 0.4 / BASE },
+    { position: [0.1,   0.35, 0.4],  scale: 0.35 / BASE },
   ];
-  for (const b of blobs) {
-    const m = new THREE.Mesh(
-      kidSphere({ radius: b.r, detail: 0 }),
-      toonMaterial({ color: c }),
-    );
-    m.position.set(b.pos[0], b.pos[1], b.pos[2]);
-    m.castShadow = true; m.receiveShadow = true;
-    g.add(m);
-  }
+  const m = kidInstanced(
+    kidSphere({ radius: BASE, detail: 0 }),
+    toonMaterial({ color: c }),
+    blobs,
+  );
+  m.castShadow = true; m.receiveShadow = true;
+  g.add(m);
   addOutlinesToTree(g);
   return g;
 }
@@ -118,15 +125,18 @@ export function mushroom({ color }: BuildOptions): THREE.Object3D {
   capMesh.castShadow = true;
   g.add(capMesh);
 
+  // 5 cap dots → one InstancedMesh.
+  const dotXs: InstanceTransform[] = [];
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2;
-    const dot = new THREE.Mesh(
-      kidSphere({ radius: 0.06, detail: 0 }),
-      toonMaterial({ color: PALETTE.ivory }),
-    );
-    dot.position.set(Math.cos(a) * 0.28, 0.62, Math.sin(a) * 0.28);
-    g.add(dot);
+    dotXs.push({ position: [Math.cos(a) * 0.28, 0.62, Math.sin(a) * 0.28] });
   }
+  const dots = kidInstanced(
+    kidSphere({ radius: 0.06, detail: 0 }),
+    toonMaterial({ color: PALETTE.ivory }),
+    dotXs,
+  );
+  g.add(dots);
 
   addOutlinesToTree(g);
   return g;
@@ -162,16 +172,22 @@ export function flower({ color }: BuildOptions): THREE.Object3D {
   center.position.y = 0.5;
   g.add(center);
 
+  // 6 petals → single InstancedMesh. Per-instance scale gives the
+  // stretched ellipsoid petal shape.
+  const petalXs: InstanceTransform[] = [];
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
-    const p = new THREE.Mesh(
-      kidSphere({ radius: 0.08, detail: 0 }),
-      toonMaterial({ color: petal }),
-    );
-    p.position.set(Math.cos(a) * 0.13, 0.5, Math.sin(a) * 0.13);
-    p.scale.set(1.4, 0.6, 1.4);
-    g.add(p);
+    petalXs.push({
+      position: [Math.cos(a) * 0.13, 0.5, Math.sin(a) * 0.13],
+      scale: [1.4, 0.6, 1.4],
+    });
   }
+  const petals = kidInstanced(
+    kidSphere({ radius: 0.08, detail: 0 }),
+    toonMaterial({ color: petal }),
+    petalXs,
+  );
+  g.add(petals);
 
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   addOutlinesToTree(g);
@@ -181,19 +197,21 @@ export function flower({ color }: BuildOptions): THREE.Object3D {
 export function cloud({ color }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
   const c = color ?? '#f9fafc';
-  const blobs = [
-    { x: 0, y: 0, z: 0, r: 0.7 },
-    { x: 0.7, y: -0.05, z: 0.1, r: 0.5 },
-    { x: -0.7, y: 0, z: -0.1, r: 0.55 },
-    { x: 0.3, y: 0.25, z: 0, r: 0.45 },
-    { x: -0.3, y: 0.2, z: 0.15, r: 0.4 },
+  const BASE = 0.7;
+  const blobs: InstanceTransform[] = [
+    { position: [ 0,    0,     0],    scale: 1 },
+    { position: [ 0.7, -0.05,  0.1],  scale: 0.5  / BASE },
+    { position: [-0.7,  0,    -0.1],  scale: 0.55 / BASE },
+    { position: [ 0.3,  0.25,  0],    scale: 0.45 / BASE },
+    { position: [-0.3,  0.2,   0.15], scale: 0.4  / BASE },
   ];
-  for (const b of blobs) {
-    const m = new THREE.Mesh(kidSphere({ radius: b.r, detail: 0 }), toonMaterial({ color: c }));
-    m.position.set(b.x, b.y, b.z);
-    m.castShadow = false; m.receiveShadow = false;
-    g.add(m);
-  }
+  const m = kidInstanced(
+    kidSphere({ radius: BASE, detail: 0 }),
+    toonMaterial({ color: c }),
+    blobs,
+  );
+  m.castShadow = false; m.receiveShadow = false;
+  g.add(m);
   g.position.y = 4;
   addOutlinesToTree(g, { thickness: 0.015 });
   return g;

@@ -85,6 +85,13 @@ function buildOutlineMaterial(opts: OutlineOptions, baseColor?: THREE.ColorRepre
  * Attach an inverted-hull outline to a mesh. The outline is parented to
  * the source mesh so it inherits position/rotation/scale automatically —
  * you never have to re-sync it when animating.
+ *
+ * Also handles THREE.InstancedMesh: the outline is itself an
+ * InstancedMesh that shares the same geometry AND the same instanceMatrix
+ * buffer, so updating instance transforms on the source automatically
+ * updates the outline too. Both the source and outline draw in a single
+ * draw call each (not per-instance), keeping the performance win of
+ * instancing intact.
  */
 export function addOutline(mesh: THREE.Mesh, opts: OutlineOptions = {}): THREE.Mesh {
   // Idempotent: calling twice doesn't stack outlines.
@@ -96,7 +103,20 @@ export function addOutline(mesh: THREE.Mesh, opts: OutlineOptions = {}): THREE.M
     undefined;
   const outlineMat = buildOutlineMaterial(opts, baseColor);
 
-  const outline = new THREE.Mesh(mesh.geometry, outlineMat);
+  // InstancedMesh needs its own InstancedMesh outline; regular mesh gets
+  // a Mesh outline. Both share the source geometry.
+  const inst = mesh as THREE.InstancedMesh;
+  const outline: THREE.Mesh = inst.isInstancedMesh
+    ? (() => {
+        const om = new THREE.InstancedMesh(mesh.geometry, outlineMat, inst.count);
+        // Share the matrix buffer so instance transforms only need to be
+        // written once. The source already holds the canonical copy.
+        om.instanceMatrix = inst.instanceMatrix;
+        om.count = inst.count;
+        return om;
+      })()
+    : new THREE.Mesh(mesh.geometry, outlineMat);
+
   outline.renderOrder = opts.renderOrder ?? -1;
   outline.castShadow = false;
   outline.receiveShadow = false;

@@ -228,6 +228,53 @@ export function kidTorus(opts: {
   ) as THREE.TorusGeometry;
 }
 
+// ---- instanced mesh builder ------------------------------------------
+
+export interface InstanceTransform {
+  position: [number, number, number];
+  /** Optional scale (uniform or per-axis). Defaults to 1. */
+  scale?: number | [number, number, number];
+  /** Optional Euler rotation in radians. Defaults to 0,0,0. */
+  rotation?: [number, number, number];
+}
+
+/**
+ * Build an InstancedMesh from a geometry + material + a list of per-
+ * instance transforms. Writes matrices once (not updated each frame)
+ * and leaves instanceMatrix.needsUpdate = true so the first render
+ * picks them up.
+ *
+ * Use for N repeated sub-parts of a single prefab — fence pickets,
+ * flower petals, bush blobs, cloud puffs. Collapses N separate Mesh
+ * draw calls + N outline draw calls into 2 total.
+ */
+export function kidInstanced(
+  geometry: BG,
+  material: THREE.Material,
+  transforms: InstanceTransform[],
+): THREE.InstancedMesh {
+  const mesh = new THREE.InstancedMesh(geometry, material, transforms.length);
+  const m = new THREE.Matrix4();
+  const pos = new THREE.Vector3();
+  const rot = new THREE.Euler();
+  const quat = new THREE.Quaternion();
+  const scl = new THREE.Vector3();
+  for (let i = 0; i < transforms.length; i++) {
+    const t = transforms[i];
+    pos.set(t.position[0], t.position[1], t.position[2]);
+    if (t.rotation) rot.set(t.rotation[0], t.rotation[1], t.rotation[2]);
+    else rot.set(0, 0, 0);
+    quat.setFromEuler(rot);
+    if (typeof t.scale === 'number') scl.set(t.scale, t.scale, t.scale);
+    else if (t.scale) scl.set(t.scale[0], t.scale[1], t.scale[2]);
+    else scl.set(1, 1, 1);
+    m.compose(pos, quat, scl);
+    mesh.setMatrixAt(i, m);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
+}
+
 // ---- utility ----------------------------------------------------------
 
 function clamp(n: number, lo: number, hi: number): number {

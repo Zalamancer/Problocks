@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PALETTE, toonMaterial } from '../materials';
-import { kidBox, kidSimpleBox, kidTriPrism, kidSphere, kidCylinder, kidCone } from '../geometry';
+import { kidBox, kidSimpleBox, kidTriPrism, kidSphere, kidCylinder, kidCone, kidInstanced, type InstanceTransform } from '../geometry';
 import { addOutline, addOutlinesToTree } from '../outlines';
 import type { BuildOptions } from './types';
 
@@ -162,26 +162,33 @@ export function fence({ color, props }: BuildOptions): THREE.Object3D {
   const picketCount = Math.max(1, Math.round(length / 0.45));
   const spacing = length / picketCount;
 
+  // Pickets + caps are each single InstancedMesh for the whole run:
+  // one draw call for N pickets, one for N caps (+ one per matching
+  // outline). A 12u fence goes from ~58 draw calls (+58 outlines) to 4
+  // draw calls (2 bodies + 2 outlines) for the picketry.
+  const picketXs: InstanceTransform[] = [];
+  const capXs: InstanceTransform[] = [];
   for (let i = 0; i <= picketCount; i++) {
     const x = -length / 2 + i * spacing;
-    const picket = new THREE.Mesh(
-      kidSimpleBox({ width: 0.1, height: 0.7, depth: 0.08 }),
-      toonMaterial({ color: c }),
-    );
-    picket.position.set(x, 0.4, 0);
-    picket.castShadow = true;
-    g.add(picket);
-    // 45°-rotated cube as a pointed cap — cheaper than a cone and shares
-    // its cached cube geometry with every other picket cap on the plot.
-    const top = new THREE.Mesh(
-      kidSimpleBox({ width: 0.12, height: 0.12, depth: 0.1 }),
-      toonMaterial({ color: c }),
-    );
-    top.position.set(x, 0.8, 0);
-    top.rotation.z = Math.PI / 4;
-    top.castShadow = true;
-    g.add(top);
+    picketXs.push({ position: [x, 0.4, 0] });
+    capXs.push({ position: [x, 0.8, 0], rotation: [0, 0, Math.PI / 4] });
   }
+
+  const pickets = kidInstanced(
+    kidSimpleBox({ width: 0.1, height: 0.7, depth: 0.08 }),
+    toonMaterial({ color: c }),
+    picketXs,
+  );
+  pickets.castShadow = true;
+  g.add(pickets);
+
+  const caps = kidInstanced(
+    kidSimpleBox({ width: 0.12, height: 0.12, depth: 0.1 }),
+    toonMaterial({ color: c }),
+    capXs,
+  );
+  caps.castShadow = true;
+  g.add(caps);
 
   for (const y of [0.22, 0.6]) {
     const rail = new THREE.Mesh(

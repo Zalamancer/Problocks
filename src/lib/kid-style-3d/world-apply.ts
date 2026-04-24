@@ -102,34 +102,36 @@ export function applyWorld(engine: KidEngine, w: WorldLike): void {
   });
 
   // Vertex dots overlay — attach/detach a Points child per mesh under
-  // root. We tag our overlays with `userData.__vertexOverlay` so reapplying
-  // doesn't duplicate them.
+  // root. Skip InstancedMesh: a Points child would only show the base
+  // geometry's verts (not transformed by instanceMatrix), which is
+  // misleading. Tag our overlays with `userData.__vertexOverlay` so
+  // reapplying doesn't duplicate them.
   root.traverse((obj) => {
-    if ((obj as THREE.Mesh).isMesh) {
-      const mesh = obj as THREE.Mesh;
-      const existing = mesh.children.find(
-        (c) => (c as THREE.Object3D).userData.__vertexOverlay,
-      ) as THREE.Points | undefined;
-      if (w.showVertices) {
-        if (!existing) {
-          const geo = mesh.geometry;
-          const mat = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 0.06,
-            sizeAttenuation: true,
-            depthTest: false,
-            transparent: true,
-            opacity: 0.95,
-          });
-          const pts = new THREE.Points(geo, mat);
-          pts.userData.__vertexOverlay = true;
-          pts.renderOrder = 999;
-          mesh.add(pts);
-        }
-      } else if (existing) {
-        mesh.remove(existing);
-        (existing.material as THREE.Material).dispose();
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if ((mesh as THREE.InstancedMesh).isInstancedMesh) return;
+    const existing = mesh.children.find(
+      (c) => (c as THREE.Object3D).userData.__vertexOverlay,
+    ) as THREE.Points | undefined;
+    if (w.showVertices) {
+      if (!existing) {
+        const geo = mesh.geometry;
+        const mat = new THREE.PointsMaterial({
+          color: 0xffffff,
+          size: 0.06,
+          sizeAttenuation: true,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const pts = new THREE.Points(geo, mat);
+        pts.userData.__vertexOverlay = true;
+        pts.renderOrder = 999;
+        mesh.add(pts);
       }
+    } else if (existing) {
+      mesh.remove(existing);
+      (existing.material as THREE.Material).dispose();
     }
   });
 }
@@ -140,9 +142,12 @@ export interface SceneStats {
   meshes: number;
 }
 
-/** Walk root children and sum geometry vertex / triangle counts. Skips
-    outlines and vertex-overlay Points so the count reflects the user's
-    actual scene. */
+/** Walk root children and sum per-frame vertex / triangle work. For an
+    InstancedMesh with N instances, the GPU processes geometry.verts × N
+    per frame — we scale by count so the number reflects what the GPU is
+    actually doing, not the unique-geometry size. Skips outlines (their
+    geometry is shared with a visible source mesh already counted) and
+    vertex-overlay Points. */
 export function collectStats(root: THREE.Object3D): SceneStats {
   let vertices = 0;
   let triangles = 0;
@@ -156,9 +161,11 @@ export function collectStats(root: THREE.Object3D): SceneStats {
     if (!geo) return;
     const pos = geo.attributes.position;
     if (!pos) return;
-    vertices += pos.count;
-    if (geo.index) triangles += geo.index.count / 3;
-    else triangles += pos.count / 3;
+    const inst = mesh as THREE.InstancedMesh;
+    const instances = inst.isInstancedMesh ? inst.count : 1;
+    vertices += pos.count * instances;
+    const trisPerInstance = geo.index ? geo.index.count / 3 : pos.count / 3;
+    triangles += trisPerInstance * instances;
     meshes += 1;
   });
   return { vertices: Math.round(vertices), triangles: Math.round(triangles), meshes };

@@ -22,6 +22,8 @@ const OBJECT_ID_KEY = '__sceneId';
 const OBJECT_KIND_KEY = '__sceneKind';
 const OBJECT_COLOR_KEY = '__sceneColor';
 const OBJECT_PROPS_KEY = '__scenePropsJson';
+const OBJECT_COLLIDE_KEY = '__sceneCanCollide';
+const OBJECT_ANCHORED_KEY = '__sceneAnchored';
 
 export function applySceneToRoot(root: THREE.Group, objects: SceneObject[]): void {
   const desired = new Map<string, SceneObject>();
@@ -67,6 +69,8 @@ export function applySceneToRoot(root: THREE.Group, objects: SceneObject[]): voi
       }
       applyTransform(have, obj);
       applyColorIfChanged(have, obj);
+      have.userData[OBJECT_COLLIDE_KEY] = obj.canCollide !== false;
+      have.userData[OBJECT_ANCHORED_KEY] = obj.anchored !== false;
     } else {
       root.add(createSceneObject(obj));
     }
@@ -79,6 +83,8 @@ function createSceneObject(obj: SceneObject): THREE.Object3D {
   built.userData[OBJECT_KIND_KEY] = obj.kind;
   built.userData[OBJECT_COLOR_KEY] = obj.color ?? '';
   built.userData[OBJECT_PROPS_KEY] = JSON.stringify(obj.props ?? {});
+  built.userData[OBJECT_COLLIDE_KEY] = obj.canCollide !== false;
+  built.userData[OBJECT_ANCHORED_KEY] = obj.anchored !== false;
   applyTransform(built, obj);
   return built;
 }

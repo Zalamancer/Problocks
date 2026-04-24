@@ -47,6 +47,22 @@ export interface SceneObject {
    * its own shape without polluting the shared schema.
    */
   props?: Record<string, unknown>;
+
+  /**
+   * Roblox-style physics flags. Defaults (when omitted) are true/true —
+   * matches the "newly-dropped part" behaviour students expect: stays
+   * where placed, blocks the player.
+   *
+   *   anchored   — object is pinned in place. Ignored by any future
+   *                dynamic physics (gravity, push). Currently every
+   *                object is visually anchored regardless; the flag is
+   *                forward-compatibility for a physics pass.
+   *   canCollide — the play-mode character cannot walk through this
+   *                object. Toggle off for decoration you want to pass
+   *                through (e.g. grass tufts, clouds, distant trees).
+   */
+  anchored?: boolean;
+  canCollide?: boolean;
 }
 
 export interface SceneJson {
@@ -77,6 +93,12 @@ export function makeSceneObject(kind: string, patch?: Partial<SceneObject>): Sce
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
+    anchored: true,
+    canCollide: true,
     ...patch,
   };
 }
+
+/** Read a flag with the Roblox "default true" semantics. */
+export function isAnchored(o: SceneObject): boolean { return o.anchored !== false; }
+export function canCollide(o: SceneObject): boolean { return o.canCollide !== false; }

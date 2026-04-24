@@ -19,12 +19,19 @@ import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 export type CameraMode = 'third' | 'first';
 
+interface Collider {
+  box: THREE.Box3;
+}
+
 export interface PlayControllerOptions {
   camera: THREE.PerspectiveCamera;
   character: THREE.Object3D;
   domElement: HTMLElement;
   orbit: OrbitControls;
   mode: CameraMode;
+  /** Root group containing every placed scene object. Used to collect
+      colliders. The character itself is excluded. */
+  root: THREE.Group;
   /** Play speed in world units per second. Sprint applies 1.6× with Shift. */
   speed?: number;
   /** Initial yaw (radians) — keeps the camera from snapping on start. */
@@ -53,9 +60,17 @@ const LOOK_Y_OFFSET = 1.6;
 const FIRST_HEAD_Y = 1.9;
 const MOUSE_YAW_SENS = 0.0035;
 const MOUSE_PITCH_SENS = 0.0025;
+// Character cylinder collider — r 0.45, height 2.0. Tuned to the
+// builder's character proportions; a little forgiving so brushes-past-
+// a-tree don't snag.
+const CHAR_R = 0.45;
+const CHAR_H = 2.0;
+// How much height the character can step up onto without jumping (path
+// stones, low curbs). Bigger obstacles require Space to clear.
+const STEP_UP = 0.4;
 
 export function createPlayController(opts: PlayControllerOptions): PlayController {
-  const { camera, character, domElement, orbit } = opts;
+  const { camera, character, domElement, orbit, root } = opts;
   const speed = opts.speed ?? WALK;
 
   const keys = new Set<string>();
@@ -63,6 +78,18 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   let pitch = 0;
   let velY = 0;
   let mode: CameraMode = opts.mode;
+  let colliders: Collider[] = [];
+
+  function collectColliders() {
+    colliders = [];
+    for (const child of root.children) {
+      if (child === character) continue;
+      if (child.userData.__sceneCanCollide === false) continue;
+      const box = new THREE.Box3().setFromObject(child);
+      if (box.isEmpty()) continue;
+      colliders.push({ box });
+    }
+  }
 
   // ---- Preserve edit-mode state so we can restore on stop() ----
   const prevOrbitEnabled = orbit.enabled;
@@ -114,6 +141,7 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     if (running) return;
     running = true;
     orbit.enabled = false;
+    collectColliders();
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     domElement.addEventListener('pointerdown', onPointerDown);
@@ -199,15 +227,59 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     const dx = (ix * rx + iz * fx) * mag * dt;
     const dz = (ix * rz + iz * fz) * mag * dt;
 
-    // Jump + gravity
-    if ((keys.has('Space')) && character.position.y <= 0.001) velY = JUMP_V;
+    // --- horizontal movement with slide + step-up against colliders ---
+    // Per-axis attempt: try X on its own, then Z on its own. If the move
+    // collides and the collider's top is within STEP_UP, hop onto it;
+    // otherwise simply don't advance on that axis (so we slide along walls).
+    const px = character.position.x, py = character.position.y, pz = character.position.z;
+    const tryX = px + dx, tryZ = pz + dz;
+
+    const stepY_X = highestTopBelow(colliders, tryX, pz, py, CHAR_R);
+    if (cylinderCollides(colliders, tryX, py, pz, CHAR_R, CHAR_H)) {
+      if (stepY_X != null && stepY_X - py <= STEP_UP && !cylinderCollides(colliders, tryX, stepY_X, pz, CHAR_R, CHAR_H)) {
+        character.position.x = tryX;
+        character.position.y = stepY_X;
+      }
+    } else {
+      character.position.x = tryX;
+    }
+    const stepY_Z = highestTopBelow(colliders, character.position.x, tryZ, character.position.y, CHAR_R);
+    if (cylinderCollides(colliders, character.position.x, character.position.y, tryZ, CHAR_R, CHAR_H)) {
+      if (stepY_Z != null && stepY_Z - character.position.y <= STEP_UP && !cylinderCollides(colliders, character.position.x, stepY_Z, tryZ, CHAR_R, CHAR_H)) {
+        character.position.z = tryZ;
+        character.position.y = stepY_Z;
+      }
+    } else {
+      character.position.z = tryZ;
+    }
+
+    // --- vertical: gravity / ground clamp / landing on colliders ---
+    // Determine grounded state BEFORE applying jump so space-to-jump
+    // only fires while feet are touching something.
+    const groundTop = highestTopUnder(colliders, character.position.x, character.position.z, character.position.y + 0.1, CHAR_R);
+    const groundY = Math.max(0, groundTop ?? 0);
+    const onGround = character.position.y <= groundY + 0.001 && velY <= 0;
+    if (keys.has('Space') && onGround) velY = JUMP_V;
     velY += GRAVITY * dt;
     let dy = velY * dt;
-    if (character.position.y + dy <= 0) { dy = -character.position.y; velY = 0; }
 
-    character.position.x += dx;
-    character.position.y += dy;
-    character.position.z += dz;
+    if (dy < 0) {
+      const nextY = character.position.y + dy;
+      if (nextY <= groundY) {
+        character.position.y = groundY;
+        velY = 0;
+      } else {
+        character.position.y = nextY;
+      }
+    } else if (dy > 0) {
+      // Rising — block against any collider whose underside is just above.
+      const newY = character.position.y + dy;
+      if (cylinderCollides(colliders, character.position.x, newY, character.position.z, CHAR_R, CHAR_H)) {
+        velY = 0;  // bonked a ceiling
+      } else {
+        character.position.y = newY;
+      }
+    }
 
     // Face movement direction in third-person so the character visually
     // turns as you run. Skip if no movement to avoid snapping to (0,0,-1).
@@ -247,4 +319,78 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     start, stop, update, setMode,
     dispose() { stop(); },
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Collision helpers                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cylinder-vs-box at the given position (x, y, z) is the character's
+ * feet. Height extends up from there. Cylinder is approximated by its
+ * bounding box (square). Good enough for kid-style where every prop is
+ * rounded-rect and the character is thick.
+ */
+function cylinderCollides(
+  colliders: Collider[],
+  x: number, y: number, z: number,
+  r: number, h: number,
+): boolean {
+  const cxMin = x - r, cxMax = x + r;
+  const cyMin = y,     cyMax = y + h;
+  const czMin = z - r, czMax = z + r;
+  for (const c of colliders) {
+    const b = c.box;
+    if (b.min.x < cxMax && b.max.x > cxMin &&
+        b.min.y < cyMax && b.max.y > cyMin &&
+        b.min.z < czMax && b.max.z > czMin) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Highest collider top within the cylinder footprint whose top is
+ * between (footY - STEP_UP - 0.05) and (footY + small). Used to detect
+ * a step the character can hop up onto when walking forward.
+ */
+function highestTopBelow(
+  colliders: Collider[],
+  x: number, z: number, footY: number, r: number,
+): number | null {
+  let best: number | null = null;
+  for (const c of colliders) {
+    const b = c.box;
+    if (b.min.x < x + r && b.max.x > x - r &&
+        b.min.z < z + r && b.max.z > z - r) {
+      const top = b.max.y;
+      if (top <= footY + 0.05 && top >= footY - STEP_UP - 0.05) {
+        if (best == null || top > best) best = top;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Highest collider top strictly below footY, within the cylinder
+ * footprint. Used for gravity's ground clamp.
+ */
+function highestTopUnder(
+  colliders: Collider[],
+  x: number, z: number, footY: number, r: number,
+): number | null {
+  let best: number | null = null;
+  for (const c of colliders) {
+    const b = c.box;
+    if (b.min.x < x + r && b.max.x > x - r &&
+        b.min.z < z + r && b.max.z > z - r) {
+      const top = b.max.y;
+      if (top <= footY) {
+        if (best == null || top > best) best = top;
+      }
+    }
+  }
+  return best;
 }

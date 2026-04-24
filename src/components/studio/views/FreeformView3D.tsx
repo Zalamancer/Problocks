@@ -196,6 +196,7 @@ export function FreeformView3D() {
       character: characterObj,
       domElement: engine.renderer.domElement,
       orbit: engine.controls,
+      root: engine.root,
       mode: cameraMode,
     });
     controller.start();

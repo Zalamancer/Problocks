@@ -7,6 +7,7 @@ import {
   PanelActionButton,
   PanelColorSwatches,
   PanelSelect,
+  PanelToggle,
 } from '@/components/ui';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { getPrefabDef, PALETTE } from '@/lib/kid-style-3d';
@@ -176,6 +177,19 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
                 value={object.color ?? def?.defaultColor ?? PALETTE.ivory}
                 onChange={setColor}
                 colors={KID_PALETTE_COLORS}
+              />
+            </PanelSection>
+
+            <PanelSection title="Physics" collapsible defaultOpen>
+              <PanelToggle
+                label="Anchored"
+                checked={object.anchored !== false}
+                onChange={(v) => updateObject(object.id, { anchored: v })}
+              />
+              <PanelToggle
+                label="Can collide"
+                checked={object.canCollide !== false}
+                onChange={(v) => updateObject(object.id, { canCollide: v })}
               />
             </PanelSection>
 

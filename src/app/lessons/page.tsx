@@ -7,8 +7,10 @@ import type { TemplateId } from '@/lib/templates/types';
 
 import { Nav } from '@/components/landing/pb-learn/Nav';
 import { Footer } from '@/components/landing/pb-learn/Footer';
-import { Block, Pill, Section, Icon, Chunky } from '@/components/landing/pb-site/primitives';
-import { CURRICULUM, TOTAL_UNIT_COUNT, type CurriculumGrade, type CurriculumSubject } from '@/lib/templates/data/curriculum';
+import { Block, Pill, Section, Chunky } from '@/components/landing/pb-site/primitives';
+import { CURRICULUM, type CurriculumGrade, type CurriculumSubject } from '@/lib/templates/data/curriculum';
+import { findDeepGrade, DEEP_MATH, DEEP_SCIENCE, DEEP_ENGLISH, countDeep } from '@/lib/templates/data/curriculum-deep';
+import { GradeDeepView } from './GradeDeepView';
 
 import '@/components/landing/pb-site/styles.css';
 
@@ -35,11 +37,25 @@ function paletteVars(key: PaletteKey): CSSProperties {
   } as CSSProperties;
 }
 
+function shortGradeLabel(grade: CurriculumGrade): string {
+  const g = grade.grade;
+  if (g === 'K') return 'Kindergarten';
+  if (g === '12+') return 'AP Calc';
+  if (g.includes('-')) return g.replace('-', '–');
+  if (/^\d+$/.test(g)) {
+    const label = grade.label.replace(/^Grade\s*/i, '');
+    const looksLikeCourse = /[A-Za-z]/.test(label) && !/^\d/.test(label);
+    return looksLikeCourse ? label : `Grade ${g}`;
+  }
+  return grade.label;
+}
+
 const SubjectTab = ({
-  subject, active, onClick,
+  subject, active, counts, onClick,
 }: {
   subject: CurriculumSubject;
   active: boolean;
+  counts: { units: number; lessons: number; questions: number };
   onClick: () => void;
 }) => (
   <button
@@ -70,23 +86,10 @@ const SubjectTab = ({
       {subject.tagline}
     </span>
     <span style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8, opacity: 0.72 }}>
-      {subject.grades.length} grade bands · {subject.grades.reduce((s, g) => s + g.units.length, 0)} units
+      {counts.units} units · {counts.lessons} lessons · {counts.questions} Qs
     </span>
   </button>
 );
-
-function shortGradeLabel(grade: CurriculumGrade): string {
-  const g = grade.grade;
-  if (g === 'K') return 'Kindergarten';
-  if (g === '12+') return 'AP';
-  if (g.includes('-')) return g.replace('-', '–');
-  if (/^\d+$/.test(g)) {
-    const label = grade.label.replace(/^Grade\s*/i, '');
-    const looksLikeCourse = /[A-Za-z]/.test(label) && !/^\d/.test(label);
-    return looksLikeCourse ? label : `Grade ${g}`;
-  }
-  return grade.label;
-}
 
 const GradeChip = ({
   grade, active, tone, onClick,
@@ -114,82 +117,76 @@ const GradeChip = ({
   </button>
 );
 
-const UnitRow = ({ index, name, description, tone }: { index: number; name: string; description: string; tone: CurriculumSubject['tone'] }) => (
-  <div style={{
-    display: 'flex', gap: 14, padding: '14px 16px',
-    borderTop: '1.5px dashed var(--pbs-line)',
-    alignItems: 'flex-start',
-  }}>
-    <div style={{
-      flex: '0 0 30px', height: 30, borderRadius: 10,
-      background: `var(--pbs-${tone})`,
-      color: `var(--pbs-${tone}-ink)`,
-      border: `1.5px solid var(--pbs-${tone}-ink)`,
-      boxShadow: `0 2px 0 var(--pbs-${tone}-ink)`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 13, fontWeight: 700,
-    }}>{index + 1}</div>
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--pbs-ink)', lineHeight: 1.35 }}>
-        {name}
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--pbs-ink-soft)', marginTop: 3, lineHeight: 1.5 }}>
-        {description}
-      </div>
-    </div>
-  </div>
-);
-
-const GradeCard = ({ grade, subject }: { grade: CurriculumGrade; subject: CurriculumSubject }) => (
-  <Block tone="paper" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 12, padding: '18px 20px',
-      background: `var(--pbs-${subject.tone})`,
-      color: `var(--pbs-${subject.tone}-ink)`,
-      borderBottom: `1.5px solid var(--pbs-${subject.tone}-ink)`,
-    }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8 }}>
-          {subject.subject}
+const GradeOverviewCard = ({
+  grade, subject, onOpen,
+}: {
+  grade: CurriculumGrade;
+  subject: CurriculumSubject;
+  onOpen: () => void;
+}) => {
+  const deep = findDeepGrade(subject.id, grade.grade);
+  const lessons = deep ? deep.units.reduce((s, u) => s + u.lessons.length, 0) : 0;
+  const questions = deep ? deep.units.reduce((s, u) => s + u.lessons.reduce((a, l) => a + l.questions.length, 0), 0) : 0;
+  return (
+    <Block tone="paper" style={{ padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 12, padding: '18px 20px',
+          background: `var(--pbs-${subject.tone})`,
+          color: `var(--pbs-${subject.tone}-ink)`,
+          borderBottom: `1.5px solid var(--pbs-${subject.tone}-ink)`,
+          cursor: 'pointer', border: 'none', textAlign: 'left',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.8 }}>
+            {subject.subject}
+          </div>
+          <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1, marginTop: 2 }}>
+            {grade.label}
+          </div>
         </div>
-        <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1, marginTop: 2 }}>
-          {grade.label}
+        <Pill tone={subject.tone} style={{ background: 'var(--pbs-paper)' }}>
+          {grade.units.length} units
+        </Pill>
+      </button>
+      <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ fontSize: 12, color: 'var(--pbs-ink-soft)' }}>
+          {lessons} lessons · {questions} practice questions
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--pbs-ink)', marginTop: 4, lineHeight: 1.45 }}>
+          {grade.units.slice(0, 4).map((u) => u.name).join(' · ')}
+          {grade.units.length > 4 && ' · …'}
         </div>
       </div>
-      <Pill tone={subject.tone} style={{ background: 'var(--pbs-paper)' }}>
-        {grade.units.length} units
-      </Pill>
-    </div>
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {grade.units.map((unit, i) => (
-        <UnitRow key={unit.name} index={i} name={unit.name} description={unit.description} tone={subject.tone} />
-      ))}
-    </div>
-    <a
-      href={grade.sourceUrl}
-      target="_blank"
-      rel="noreferrer"
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        padding: '12px 20px',
-        borderTop: '1.5px solid var(--pbs-line)',
-        background: 'var(--pbs-cream-2)',
-        color: 'var(--pbs-ink)',
-        fontSize: 13, fontWeight: 600,
-      }}
-    >
-      <span>Open on {subject.source.split(' & ')[0]}</span>
-      <Icon name="arrow-right" size={14} stroke={2.2} />
-    </a>
-  </Block>
-);
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          padding: '12px 20px',
+          borderTop: '1.5px solid var(--pbs-line)',
+          background: 'var(--pbs-cream-2)',
+          color: 'var(--pbs-ink)',
+          fontSize: 13, fontWeight: 700,
+          cursor: 'pointer', border: 'none', textAlign: 'left',
+        }}
+      >
+        Open grade
+        <span>→</span>
+      </button>
+    </Block>
+  );
+};
 
 export default function LessonsPage() {
   const router = useRouter();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [activeSubjectId, setActiveSubjectId] = useState<string>(CURRICULUM[0].id);
-  const [activeGradeKey, setActiveGradeKey] = useState<string>('all');
+  const [activeGradeKey, setActiveGradeKey] = useState<string>('overview');
 
   const [paletteStyle, setPaletteStyle] = useState<CSSProperties>(() => paletteVars('cream'));
   useEffect(() => {
@@ -198,15 +195,32 @@ export default function LessonsPage() {
     setPaletteStyle(paletteVars(pick));
   }, []);
 
+  const subjectCounts = useMemo(() => ({
+    math: countDeep(DEEP_MATH),
+    science: countDeep(DEEP_SCIENCE),
+    english: countDeep(DEEP_ENGLISH),
+  }), []);
+
+  const total = useMemo(() => {
+    const t = Object.values(subjectCounts).reduce(
+      (acc, c) => ({ units: acc.units + c.units, lessons: acc.lessons + c.lessons, questions: acc.questions + c.questions }),
+      { units: 0, lessons: 0, questions: 0 },
+    );
+    return t;
+  }, [subjectCounts]);
+
   const activeSubject = useMemo(
     () => CURRICULUM.find((s) => s.id === activeSubjectId) ?? CURRICULUM[0],
     [activeSubjectId],
   );
 
-  const visibleGrades = useMemo(
-    () => activeGradeKey === 'all'
-      ? activeSubject.grades
-      : activeSubject.grades.filter((g) => g.grade === activeGradeKey),
+  const activeDeepGrade = useMemo(
+    () => activeGradeKey === 'overview' ? undefined : findDeepGrade(activeSubject.id, activeGradeKey),
+    [activeSubject.id, activeGradeKey],
+  );
+
+  const activeFlatGrade = useMemo(
+    () => activeSubject.grades.find((g) => g.grade === activeGradeKey),
     [activeSubject, activeGradeKey],
   );
 
@@ -227,7 +241,7 @@ export default function LessonsPage() {
           label="K–12 curriculum"
           kicker={activeSubject.tone}
           title={<>Every grade, every subject, <span className="pbs-serif">one map.</span></>}
-          sub={`Lesson units for Math, Science, and English — ${TOTAL_UNIT_COUNT} units across Grades K–12, sourced from Khan Academy, NGSS, and Common Core. Pick a subject, then a grade.`}
+          sub={`${total.units} units, ${total.lessons} lessons, and ${total.questions} practice questions across Math, Science, and English — K–12, sourced from Khan Academy, NGSS, and Common Core. Pick a subject, then a grade.`}
         >
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -238,7 +252,8 @@ export default function LessonsPage() {
                 key={subject.id}
                 subject={subject}
                 active={subject.id === activeSubjectId}
-                onClick={() => { setActiveSubjectId(subject.id); setActiveGradeKey('all'); }}
+                counts={subjectCounts[subject.id as keyof typeof subjectCounts]}
+                onClick={() => { setActiveSubjectId(subject.id); setActiveGradeKey('overview'); }}
               />
             ))}
           </div>
@@ -251,17 +266,17 @@ export default function LessonsPage() {
           }}>
             <button
               type="button"
-              onClick={() => setActiveGradeKey('all')}
+              onClick={() => setActiveGradeKey('overview')}
               style={{
                 padding: '7px 13px', borderRadius: 999,
                 fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
-                background: activeGradeKey === 'all' ? 'var(--pbs-ink)' : 'transparent',
-                color: activeGradeKey === 'all' ? 'var(--pbs-cream)' : 'var(--pbs-ink-soft)',
+                background: activeGradeKey === 'overview' ? 'var(--pbs-ink)' : 'transparent',
+                color: activeGradeKey === 'overview' ? 'var(--pbs-cream)' : 'var(--pbs-ink-soft)',
                 border: '1.5px solid var(--pbs-ink)',
                 cursor: 'pointer',
               }}
             >
-              All grades
+              Overview
             </button>
             {activeSubject.grades.map((grade) => (
               <GradeChip
@@ -274,15 +289,28 @@ export default function LessonsPage() {
             ))}
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            gap: 20,
-          }}>
-            {visibleGrades.map((grade) => (
-              <GradeCard key={`${activeSubject.id}-${grade.grade}`} grade={grade} subject={activeSubject} />
-            ))}
-          </div>
+          {activeGradeKey === 'overview' ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: 20,
+            }}>
+              {activeSubject.grades.map((grade) => (
+                <GradeOverviewCard
+                  key={`${activeSubject.id}-${grade.grade}`}
+                  grade={grade}
+                  subject={activeSubject}
+                  onOpen={() => setActiveGradeKey(grade.grade)}
+                />
+              ))}
+            </div>
+          ) : activeDeepGrade ? (
+            <GradeDeepView grade={activeDeepGrade} subject={activeSubject} />
+          ) : activeFlatGrade ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--pbs-ink-soft)' }}>
+              Deep lessons for {activeFlatGrade.label} are not available yet.
+            </div>
+          ) : null}
 
           <div style={{ textAlign: 'center', marginTop: 42 }}>
             <Chunky tone="ink" as="a" href="/" trailing="arrow-right">

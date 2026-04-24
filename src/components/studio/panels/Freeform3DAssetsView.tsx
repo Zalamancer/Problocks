@@ -11,6 +11,7 @@ import {
 } from '@/lib/kid-style-3d/prefabs';
 import { getSpawnPosition } from '@/lib/kid-style-3d/spawn-target';
 import { useFreeform3D } from '@/store/freeform3d-store';
+import { PrefabThumbnail } from '@/components/studio/PrefabThumbnail';
 
 /**
  * Assets view for the 3D Freeform game system. Replaces the old bottom-
@@ -175,10 +176,10 @@ export function Freeform3DAssetsView() {
                 title={`${p.label} — click to add`}
               >
                 <div
-                  className="relative w-full aspect-square flex items-center justify-center"
+                  className="relative w-full aspect-square"
                   style={{ background: 'var(--pb-cream-2)' }}
                 >
-                  <span style={{ fontSize: 40, lineHeight: 1 }}>{p.icon}</span>
+                  <PrefabThumbnail kind={p.kind} fluid />
                   <span
                     className="absolute bottom-1 left-1"
                     style={{

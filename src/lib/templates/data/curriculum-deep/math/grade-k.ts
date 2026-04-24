@@ -7,138 +7,137 @@ export const GRADE_DATA: DeepGrade = {
   units: [
     {
       name: 'Counting and place value',
-      description: 'Count, read, and write numbers up to 20 and recognize teen numbers as ten-and-some-ones.',
       lessons: [
         {
-          name: 'Counting to 10',
-          description: 'Count objects one by one up to ten.',
-          questions: [
-            { prompt: 'Count the apples: 🍎🍎🍎🍎🍎. How many?', answer: '5', explanation: 'Counting each apple gives 1, 2, 3, 4, 5.' },
-            { prompt: 'What number comes after 7?', answer: '8', explanation: 'When counting up, 8 comes right after 7.' },
+          name: 'Counting small numbers',
+          items: [
+            { label: 'Counting with small numbers', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-counting/v/counting-with-small-numbers' },
+            { label: 'Count with small numbers', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-counting/e/counting-out-1-20-objects', question: { prompt: 'Count: 1, 2, 3, ..., 8. What number comes next?', answer: '9', explanation: 'After 8 comes 9 when counting up by 1.' } },
+            { label: 'Counting in order', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-counting/v/counting-in-order' },
+            { label: 'Count in order', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-counting/e/counting-objects', question: { prompt: 'Count: 1, 2, 3, ..., 3. What number comes next?', answer: '4', explanation: 'After 3 comes 4 when counting up by 1.' } },
+            { label: 'Find 1 more or 1 less than a number', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-counting/e/one-more--one-less', question: { prompt: 'What is 1 more than 5?', answer: '6', explanation: 'Adding 1 to 5 gives 6.' } },
           ],
         },
         {
-          name: 'Counting to 20',
-          description: 'Extend counting from ten up to twenty.',
-          questions: [
-            { prompt: 'What number comes after 15?', answer: '16', explanation: '16 comes right after 15 when counting.' },
-            { prompt: 'Count: 11, 12, 13, ___. What is next?', answer: '14', explanation: '14 follows 13 in the counting sequence.' },
+          name: 'Numbers 0 to 100',
+          items: [
+            { label: 'Missing numbers', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-numbers-100/e/count-from-any-number', question: { prompt: 'Fill in the blank: 7, 8, ___, 10.', answer: '9', explanation: 'The numbers go up by 1, so the missing number is 9.' } },
+            { label: 'Number grid', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-numbers-100/v/number-grid' },
+            { label: 'Missing numbers between 0 and 120', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-numbers-100/v/numbers-to-120' },
+            { label: 'Numbers to 100', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-numbers-100/e/count-to-100', question: { prompt: 'Practice: Numbers to 100. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
+            { label: 'Counting by tens', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-numbers-100/v/counting-by-tens-example-problems' },
+            { label: 'Count tens', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-numbers-100/e/counting-tens', question: { prompt: 'Skip-count by 10: 10, 20, 30, ..., what comes after 40?', answer: '50', explanation: 'Each step adds 10, so after 40 comes 50.' } },
           ],
         },
         {
-          name: 'Teen numbers as ten and ones',
-          description: 'Break teen numbers into a ten plus extra ones.',
-          questions: [
-            { prompt: '13 is 10 and how many ones?', answer: '3', explanation: '13 is made of 1 ten and 3 ones.' },
-            { prompt: '10 + 7 = ?', answer: '17', explanation: '10 ones plus 7 more ones makes 17.' },
+          name: 'Counting objects',
+          items: [
+            { label: 'Counting in pictures', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-count-object-topic/v/counting-in-scenes' },
+            { label: 'Count in pictures', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-count-object-topic/e/counting-in-scenes', question: { prompt: 'There are 7 apples in a bowl. How many apples?', answer: '7', explanation: 'Counting one by one gives 7 apples.' } },
+            { label: 'Counting objects 1', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-count-object-topic/v/how-many-objects-1' },
+            { label: 'Count objects 1', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-count-object-topic/e/how-many-objects-1', question: { prompt: 'There are 7 apples in a bowl. How many apples?', answer: '7', explanation: 'Counting one by one gives 7 apples.' } },
+            { label: 'Counting objects 2', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-count-object-topic/v/counting-objects-2' },
+            { label: 'Count objects 2', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-count-object-topic/e/how-many-objects-2', question: { prompt: 'There are 6 apples in a bowl. How many apples?', answer: '6', explanation: 'Counting one by one gives 6 apples.' } },
           ],
         },
         {
-          name: 'Writing numbers 0-20',
-          description: 'Write numerals that match counted quantities.',
-          questions: [
-            { prompt: 'Write the numeral for twelve.', answer: '12', explanation: 'Twelve is written as the digits 1 and 2.' },
-            { prompt: 'Write the numeral for zero.', answer: '0', explanation: 'Zero is the symbol 0, meaning none.' },
+          name: 'Comparing small numbers',
+          items: [
+            { label: 'Comparing numbers of objects', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-comparing-numbers/v/comparing-groups-through-10-example' },
+            { label: 'Compare numbers of objects 1', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-comparing-numbers/e/compare-groups-through-10', question: { prompt: 'Compare: 49 __ 8 (use >, <, or =).', answer: '>', explanation: '49 is greater than 8, so 49 > 8.' } },
+            { label: 'Comparing numbers on the number line', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-comparing-numbers/v/comparing-numbers-through-10-example' },
+            { label: 'Comparing numbers to 10', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-comparing-numbers/e/comparing-numbers-through-10', question: { prompt: 'Compare: 45 __ 49 (use >, <, or =).', answer: '<', explanation: '45 is less than 49, so 45 < 49.' } },
+            { label: 'Counting by category', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-comparing-numbers/v/count-by-category' },
+            { label: 'Compare numbers of objects 2', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-comparing-numbers/e/sort-groups-by-count', question: { prompt: 'Compare: 36 __ 7 (use >, <, or =).', answer: '>', explanation: '36 is greater than 7, so 36 > 7.' } },
           ],
         },
         {
-          name: 'Comparing numbers',
-          description: 'Decide which group has more, less, or equal amounts.',
-          questions: [
-            { prompt: 'Which is greater: 6 or 9?', answer: '9', explanation: '9 comes after 6 so it is larger.' },
-            { prompt: 'Which is less: 4 or 2?', answer: '2', explanation: '2 is smaller than 4.' },
+          name: 'Teens',
+          items: [
+            { label: 'Teens as sums with 10', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-teens/v/teens-and-ten' },
+            { label: 'Teen numbers: monkeys', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-teens/v/monkeys-for-party' },
+            { label: 'Teen numbers', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-counting/kindergarten-teens/e/teen-numbers-1', question: { prompt: 'What does 17 equal as 10 + ones?', answer: '10 + 7', explanation: '17 is 1 ten and 7 ones, so 10 + 7 = 17.' } },
           ],
         },
       ],
     },
     {
       name: 'Addition and subtraction',
-      description: 'Understand addition as putting together and subtraction as taking apart within 10.',
       lessons: [
         {
-          name: 'Adding within 5',
-          description: 'Combine two small groups to find the total.',
-          questions: [
-            { prompt: '2 + 3 = ?', answer: '5', explanation: '2 and 3 together make 5.' },
-            { prompt: '1 + 4 = ?', answer: '5', explanation: 'Counting on from 1 by 4 reaches 5.' },
+          name: 'What is addition? What is subtraction?',
+          items: [
+            { label: 'Intro to addition', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-add-sub-intro/v/addition-introduction' },
+            { label: 'Add within 5', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-add-sub-intro/e/addition_1', question: { prompt: 'What is 0 + 0?', answer: '0', explanation: '0 plus 0 equals 0.' } },
+            { label: 'Intro to subtraction', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-add-sub-intro/v/subtraction-introduction' },
+            { label: 'Subtract within 5', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-add-sub-intro/e/subtraction_1', question: { prompt: 'What is 3 - 1?', answer: '2', explanation: '3 minus 1 equals 2.' } },
           ],
         },
         {
-          name: 'Adding within 10',
-          description: 'Add two groups whose total is ten or less.',
-          questions: [
-            { prompt: '4 + 5 = ?', answer: '9', explanation: 'Four and five together make nine.' },
-            { prompt: '6 + 3 = ?', answer: '9', explanation: 'Counting on from 6 by 3 gives 9.' },
-          ],
-        },
-        {
-          name: 'Subtracting within 5',
-          description: 'Take a small amount away from a small amount.',
-          questions: [
-            { prompt: '5 - 2 = ?', answer: '3', explanation: 'Starting at 5 and removing 2 leaves 3.' },
-            { prompt: '4 - 1 = ?', answer: '3', explanation: 'Four minus one is three.' },
-          ],
-        },
-        {
-          name: 'Subtracting within 10',
-          description: 'Take away from groups of up to ten.',
-          questions: [
-            { prompt: '9 - 4 = ?', answer: '5', explanation: 'From 9 remove 4 to get 5.' },
-            { prompt: '8 - 3 = ?', answer: '5', explanation: 'From 8 take away 3 to reach 5.' },
+          name: 'Making small numbers',
+          items: [
+            { label: 'Making 5', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-make-10/v/making-5' },
+            { label: 'Making small numbers in different ways', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-make-10/e/making-totals-in-different-ways-within-10', question: { prompt: 'Practice: Making small numbers in different ways. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
           ],
         },
         {
           name: 'Making 10',
-          description: 'Find the partner that completes a ten.',
-          questions: [
-            { prompt: '7 + ? = 10', answer: '3', explanation: '7 needs 3 more to reach 10.' },
-            { prompt: '4 + ? = 10', answer: '6', explanation: '4 plus 6 equals 10.' },
+          items: [
+            { label: 'Getting to 10 by filling boxes', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-making-5-9/v/getting-to-10-by-filling-boxes' },
+            { label: 'Make 10 (grids and number bonds)', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-making-5-9/e/making-ten', question: { prompt: 'What number plus 4 makes 10?', answer: '6', explanation: '10 - 4 = 6, so 4 + 6 = 10.' } },
+            { label: 'Adding to 10', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-making-5-9/v/adding-to-10-example' },
+            { label: 'Make 10', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-making-5-9/e/making-ten-2', question: { prompt: 'What number plus 9 makes 10?', answer: '1', explanation: '10 - 9 = 1, so 9 + 1 = 10.' } },
+          ],
+        },
+        {
+          name: 'Put together, take apart',
+          items: [
+            { label: 'Add and subtract: pieces of fruit', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-together-apart/v/adding-fruit' },
+            { label: 'Addition and subtraction within 10', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-together-apart/v/addition-and-subtraction-within-10' },
+            { label: 'Add within 10', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-together-apart/e/put-together', question: { prompt: 'What is 5 + 1?', answer: '6', explanation: '5 plus 1 equals 6.' } },
+            { label: 'Subtract within 10', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-together-apart/e/take-apart', question: { prompt: 'What is 9 - 4?', answer: '5', explanation: '9 minus 4 equals 5.' } },
+          ],
+        },
+        {
+          name: 'Addition and subtraction word problems',
+          items: [
+            { label: 'Addition word problems within 10', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-add-sub-word-problem-within-10/v/addition-word-problems-within-10' },
+            { label: 'Subtraction word problems within 10', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-add-subtract/kindergarten-add-sub-word-problem-within-10/v/subtraction-word-problems-within-10' },
           ],
         },
       ],
     },
     {
       name: 'Measurement and geometry',
-      description: 'Identify flat and solid shapes and compare objects by length, weight, and capacity.',
       lessons: [
         {
-          name: 'Flat (2D) shapes',
-          description: 'Name circles, squares, triangles, and rectangles.',
-          questions: [
-            { prompt: 'How many sides does a triangle have?', answer: '3', explanation: 'A triangle always has three sides.' },
-            { prompt: 'A shape with 4 equal sides is a ___.', answer: 'square', explanation: 'A square has 4 equal sides and 4 corners.' },
+          name: 'Comparing size',
+          items: [
+            { label: 'Compare size', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-compare-size/e/which-has-more-', question: { prompt: 'Practice: Compare size. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
+            { label: 'Compare length', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-compare-size/e/compare-length', question: { prompt: 'Practice: Compare length. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
           ],
         },
         {
-          name: 'Solid (3D) shapes',
-          description: 'Recognize cubes, spheres, cones, and cylinders.',
-          questions: [
-            { prompt: 'A ball is shaped like a ___.', answer: 'sphere', explanation: 'A sphere is perfectly round like a ball.' },
-            { prompt: 'An ice cream cone is shaped like a ___.', answer: 'cone', explanation: 'A cone has a circle base and a point on top.' },
+          name: 'Basic shapes',
+          items: [
+            { label: 'Cousin Fal\'s shape collection', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-shapes/v/sides-corners' },
+            { label: 'Recognizing shapes', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-shapes/v/recognizing-shapes' },
+            { label: 'Name shapes 1', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-shapes/e/naming-shapes', question: { prompt: 'Practice: Name shapes 1. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
+            { label: 'Name shapes 2', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-shapes/e/naming-shapes-2', question: { prompt: 'Practice: Name shapes 2. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
           ],
         },
         {
-          name: 'Comparing length',
-          description: 'Decide which object is longer or shorter.',
-          questions: [
-            { prompt: 'Which is longer: a pencil or a crayon?', answer: 'pencil', explanation: 'Pencils are usually longer than crayons.' },
-            { prompt: 'Which is shorter: an ant or a dog?', answer: 'ant', explanation: 'An ant is much smaller than a dog.' },
+          name: 'Comparing shapes',
+          items: [
+            { label: 'Relative position', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-compare-shapes/v/relative-position' },
+            { label: 'Compare shapes', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-compare-shapes/e/compare-shapes', question: { prompt: 'Practice: Compare shapes. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
           ],
         },
         {
-          name: 'Comparing weight',
-          description: 'Decide which object is heavier or lighter.',
-          questions: [
-            { prompt: 'Which is heavier: a feather or a rock?', answer: 'rock', explanation: 'Rocks are denser and heavier than feathers.' },
-            { prompt: 'Which is lighter: a balloon or a book?', answer: 'balloon', explanation: 'Balloons are filled with air and weigh very little.' },
-          ],
-        },
-        {
-          name: 'Comparing capacity',
-          description: 'Decide which container holds more or less.',
-          questions: [
-            { prompt: 'Which holds more water: a bucket or a cup?', answer: 'bucket', explanation: 'A bucket is bigger and holds more.' },
-            { prompt: 'Which holds less: a bathtub or a bowl?', answer: 'bowl', explanation: 'A bowl is smaller than a bathtub.' },
+          name: 'Composing shapes',
+          items: [
+            { label: 'Composing shapes', type: 'video', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-composing-shapes/v/compose-shapes' },
+            { label: 'Compose shapes', type: 'exercise', href: '/math/cc-kindergarten-math/cc-kindergarten-geometry/kindergarten-composing-shapes/e/compose-shapes', question: { prompt: 'Practice: Compose shapes. Solve a sample problem matching this skill.', answer: 'See worked example', explanation: 'Apply the lesson concept step by step to reach the answer.' } },
           ],
         },
       ],

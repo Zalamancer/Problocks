@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Copy, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, Copy, Trash2, ChevronDown, MousePointer2 } from 'lucide-react';
 import { useSceneStore, type PartType } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import type { GamePreviewHandle } from './GamePreview';
@@ -23,6 +23,8 @@ interface Props {
 
 export function GameToolbar({ previewRef }: Props) {
   const { selectedPart } = useSceneStore();
+  const tool = useBuildingStore((s) => s.tool);
+  const setTool = useBuildingStore((s) => s.setTool);
   const [addOpen, setAddOpen] = useState(false);
   const addRef = useRef<HTMLDivElement>(null);
   const [colorIdx, setColorIdx] = useState(0);
@@ -104,6 +106,41 @@ export function GameToolbar({ previewRef }: Props) {
         borderBottom: '1.5px solid var(--pb-line-2)',
       }}
     >
+      {/* Select / pointer tool — switches the building-canvas tool to
+          'select' so clicks pick parts instead of placing floor/wall
+          tiles. Highlights when active. */}
+      <button
+        onClick={() => setTool('select')}
+        title="Select (cursor)"
+        aria-label="Select"
+        aria-pressed={tool === 'select'}
+        className="flex items-center justify-center transition-colors"
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: tool === 'select' ? 'var(--pb-butter)' : 'var(--pb-paper)',
+          color: tool === 'select' ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+          border: `1.5px solid ${tool === 'select' ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+          boxShadow: tool === 'select' ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          if (tool === 'select') return;
+          e.currentTarget.style.borderColor = 'var(--pb-ink)';
+          e.currentTarget.style.color = 'var(--pb-ink)';
+          e.currentTarget.style.boxShadow = '0 1.5px 0 var(--pb-ink)';
+        }}
+        onMouseLeave={(e) => {
+          if (tool === 'select') return;
+          e.currentTarget.style.borderColor = 'var(--pb-line-2)';
+          e.currentTarget.style.color = 'var(--pb-ink-soft)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
+      >
+        <MousePointer2 size={14} strokeWidth={2.2} />
+      </button>
+
       {/* Add Part */}
       <div className="relative" ref={addRef}>
         <button

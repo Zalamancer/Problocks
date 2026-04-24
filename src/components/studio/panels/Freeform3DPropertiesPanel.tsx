@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { getPrefabDef, PALETTE } from '@/lib/kid-style-3d';
+import { THEMES, THEME_ORDER } from '@/lib/kid-style-3d/themes';
 import type { Vec3 as SceneVec3 } from '@/lib/kid-style-3d/scene-schema';
 import { TransformControls, type Vec3 as ObjVec3 } from './TransformControls';
 
@@ -312,13 +313,38 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
         />
       </PanelSection>
 
-      <PanelSection title="Sky" collapsible defaultOpen>
+      <PanelSection title="Theme" collapsible defaultOpen>
+        <PanelSelect
+          label="Palette"
+          value={world.theme}
+          onChange={(v) => setWorldField('theme', v as typeof world.theme)}
+          options={THEME_ORDER.map((id) => ({
+            value: id,
+            label: THEMES[id].label,
+          }))}
+        />
+        <div
+          className="px-1 text-[11px] leading-snug"
+          style={{ color: 'var(--pb-ink-muted)' }}
+        >
+          {THEMES[world.theme]?.desc}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Sky (custom)" collapsible defaultOpen={false}>
         <PanelColorSwatches
           label="Sky color"
           value={world.skyColor}
           onChange={(v) => setWorldField('skyColor', v)}
           colors={SKY_COLORS}
         />
+        <div
+          className="px-1 text-[11px] leading-snug"
+          style={{ color: 'var(--pb-ink-muted)' }}
+        >
+          Legacy free-form sky picker. The active Theme owns the gradient
+          now, so this only affects exported scenes.
+        </div>
       </PanelSection>
 
       <PanelSection title="Diagnostics" collapsible defaultOpen>

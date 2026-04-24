@@ -18,6 +18,7 @@ import type { SceneObject, SceneJson, Vec3 } from '@/lib/kid-style-3d/scene-sche
 import { EMPTY_SCENE, makeSceneObject } from '@/lib/kid-style-3d/scene-schema';
 import { getPrefabDef, DEFAULT_PREFAB_STYLE, type PrefabStyleId } from '@/lib/kid-style-3d/prefabs';
 import { setGeometryPerfMode, type GeometryPerfMode } from '@/lib/kid-style-3d/geometry';
+import { DEFAULT_THEME, setActiveTheme, type ThemeId } from '@/lib/kid-style-3d/themes';
 import { clearPrefabThumbnailCache } from '@/components/studio/PrefabThumbnail';
 
 const HISTORY_LIMIT = 50;
@@ -28,7 +29,14 @@ export type CameraMode = 'third' | 'first';
     panel's Workspace section and applied to the kid-engine via a React
     subscription in FreeformView3D. */
 export interface WorldSettings {
-  /** Scene background / hemi sky color (CSS hex). */
+  /** Active palette theme — swaps sky / fog / grass / leaf greens and
+      triggers a scene rehydrate so every prefab re-reads colors. See
+      lib/kid-style-3d/themes.ts. */
+  theme: ThemeId;
+  /** Scene background / hemi sky color (CSS hex) — legacy free-form
+      override. The vivid/pastel themes now own the sky gradient; this
+      field is retained for the agent's WorldLike contract and reads
+      nothing on the freeform viewport. */
   skyColor: string;
   /** Sun key-light intensity (0..4). */
   brightness: number;
@@ -47,6 +55,7 @@ export interface WorldSettings {
 }
 
 export const DEFAULT_WORLD: WorldSettings = {
+  theme: DEFAULT_THEME,
   skyColor: '#a8dcff',
   brightness: 1.3,
   ambient: 0.7,
@@ -245,9 +254,27 @@ export const useFreeform3D = create<Freeform3DState>()(
       },
 
       world: DEFAULT_WORLD,
-      setWorldField: (k, v) =>
-        set((s) => ({ world: { ...s.world, [k]: v } })),
-      resetWorld: () => set({ world: DEFAULT_WORLD }),
+      setWorldField: (k, v) => {
+        // Theme swap side-effects: push the new palette into the
+        // module-level singleton (so prefab builders see new colors)
+        // and bump geomRev so the viewport rehydrates every mesh with
+        // the fresh palette. Everything else is a plain field set.
+        if (k === 'theme') {
+          setActiveTheme(v as ThemeId);
+          clearPrefabThumbnailCache();
+          set((s) => ({
+            world: { ...s.world, theme: v as ThemeId },
+            geomRev: s.geomRev + 1,
+          }));
+          return;
+        }
+        set((s) => ({ world: { ...s.world, [k]: v } }));
+      },
+      resetWorld: () => {
+        setActiveTheme(DEFAULT_WORLD.theme);
+        clearPrefabThumbnailCache();
+        set((s) => ({ world: DEFAULT_WORLD, geomRev: s.geomRev + 1 }));
+      },
 
       brush: DEFAULT_BRUSH,
       setBrushField: (k, v) =>
@@ -539,6 +566,9 @@ export const useFreeform3D = create<Freeform3DState>()(
         // World was introduced after the initial persisted shape; fill in
         // defaults for scenes saved before it existed.
         state.world = { ...DEFAULT_WORLD, ...(state.world ?? {}) };
+        // Apply persisted theme to the palette singleton so prefab
+        // thumbnails and the first hydrated scene read the right colors.
+        setActiveTheme(state.world.theme);
         // Apply persisted perf mode to the geometry module so first
         // builds (thumbnails, starter scene) use the right variant.
         if (state.performanceMode) {

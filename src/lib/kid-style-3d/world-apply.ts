@@ -48,15 +48,18 @@ function findLights(scene: THREE.Scene): EngineLightRefs {
 export function applyWorld(engine: KidEngine, w: WorldLike): void {
   const { scene, renderer, root } = engine;
 
-  scene.background = new THREE.Color(w.skyColor);
+  // Sky background is owned by the engine's theme system (CanvasTexture
+  // gradient) — intentionally NOT overridden here so swapping a theme
+  // reads correctly. The legacy `skyColor` field is kept for agent /
+  // /api/agent consumers but ignored on the freeform3d viewport.
 
   if (scene.fog) {
     const fog = scene.fog as THREE.Fog;
-    // Default fog is 30..85 at density 1. Lower density pushes far out.
+    // Default fog is 45..110 at density 1. Lower density pushes far out.
     const density = Math.max(0, Math.min(1, w.fogDensity));
-    fog.near = 30 + (1 - density) * 60;
-    fog.far = 85 + (1 - density) * 120;
-    fog.color.set(w.skyColor).lerp(new THREE.Color(0xffffff), 0.2);
+    fog.near = 45 + (1 - density) * 60;
+    fog.far = 110 + (1 - density) * 120;
+    // Fog color is also theme-driven (see engine's onThemeChange).
   }
 
   const { key, hemi } = findLights(scene);

@@ -8,17 +8,13 @@
  */
 
 import * as THREE from 'three';
+import { getActiveTheme } from './themes';
 
-// Bright, saturated Adopt-Me / Roblox palette. Pure primaries (#ff0000,
-// #00ff00) still read as debug-render, but stopping just short of them —
-// pinker pink, limier green, richer yellow — lands on the Adopt-Me sweet
-// spot. Toon banding + tonemapping exposure at 1.15 keep it from looking
-// clownish even with these saturation levels.
-//
-// Backwards-compat: the old "warm desaturated" keys (coral/mint/butter/
-// sage/dustyRose) still exist; their values just got brighter. Prefabs
-// and the Inspector palette pick them up automatically.
-export const PALETTE = {
+// Baseline palette — keys used across the kit. Any key not overridden
+// in the active theme falls back to this table. Themes live in
+// themes.ts; they supply partial overrides (sky / grass / fog / leaf
+// greens) and the PALETTE proxy below merges them on every read.
+const BASE_PALETTE = {
   // Accent brights — for characters, flowers, feature props
   coral: '#ff7aa0',        // Adopt-Me pink (shirts, cheeks, flowers, hearts)
   mint: '#88cc5a',         // tree canopy, accent greens
@@ -88,7 +84,28 @@ export const PALETTE = {
   sage: '#5a9a4a',
 } as const;
 
-export type PaletteKey = keyof typeof PALETTE;
+export type PaletteKey = keyof typeof BASE_PALETTE;
+export type PaletteRecord = Record<PaletteKey, string>;
+
+/**
+ * Palette proxy — every `PALETTE.foo` lookup returns the active theme's
+ * override if present, else the BASE_PALETTE value. Prefab builders read
+ * these at build time, so swapping themes + re-hydrating the scene is
+ * enough to re-color every mesh. No listeners needed here — themes.ts
+ * publishes a change event that the engine subscribes to for sky / cloud
+ * rebuilds, and the freeform3d-store bumps geomRev to force rehydrate.
+ */
+export const PALETTE = new Proxy(BASE_PALETTE, {
+  get(target, prop: string) {
+    const override = getActiveTheme().palette[prop];
+    if (override !== undefined) return override;
+    return target[prop as PaletteKey];
+  },
+}) as PaletteRecord;
+
+/** Escape-hatch for code that specifically needs the baseline (e.g. the
+    materials legend). Consumers should prefer PALETTE. */
+export { BASE_PALETTE };
 
 /** Singleton 4-step toon gradient — reuse across every kid-style material. */
 let toonGradient4: THREE.Texture | null = null;

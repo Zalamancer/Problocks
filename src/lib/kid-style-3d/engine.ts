@@ -13,6 +13,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PALETTE, groundMaterial, toonMaterial } from './materials';
 import { animateRoot } from './animations';
 import { isCachedGeometry, kidSphere, kidInstanced, type InstanceTransform } from './geometry';
+import { onThemeChange, setActiveTheme, type ThemeId } from './themes';
 
 export interface KidEngineOptions {
   canvas: HTMLCanvasElement;
@@ -59,6 +60,10 @@ export interface KidEngine {
   raycastGround: (ndc: THREE.Vector2) => THREE.Vector3 | null;
   /** Override the per-frame callback; receives dt. Null restores default (controls.update). */
   setPerFrame: (cb: ((dt: number) => void) | null) => void;
+  /** Swap the scene palette. Rebuilds the sky gradient + ambient clouds
+      so the new theme shows immediately. Prefab re-coloring is the
+      store's responsibility (bump geomRev for a rehydrate pass). */
+  setTheme: (id: ThemeId) => void;
 }
 
 export function createKidEngine(opts: KidEngineOptions): KidEngine {
@@ -168,8 +173,38 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   // Chunky low-poly cumulus blobs ringing the plot at sky altitude.
   // Static, non-shadow-casting; purpose is purely to hint at depth in
   // the sky gradient and break up the flat blue.
-  const clouds = makeAmbientClouds();
+  let clouds = makeAmbientClouds();
   scene.add(clouds);
+
+  // --- theme subscription ---
+  // When the store swaps the active theme, the PALETTE proxy already
+  // returns new values — but the scene-level assets (sky gradient
+  // texture, ambient cloud meshes, outer/plot ground materials) were
+  // built once with the previous palette. Rebuild them here so a theme
+  // swap reads as a whole-world mood change, not just "new prefabs".
+  const unsubscribeTheme = onThemeChange(() => {
+    // Dispose the old gradient texture so we don't leak CanvasTextures.
+    (scene.background as THREE.Texture | null)?.dispose?.();
+    scene.background = createSkyGradient();
+    if (scene.fog) (scene.fog as THREE.Fog).color.set(PALETTE.fogFar);
+    (outerGround.material as THREE.MeshLambertMaterial).color.set(PALETTE.grassDark);
+    (ground.material as THREE.MeshLambertMaterial).color.set(PALETTE.grass);
+    scene.remove(clouds);
+    // InstancedMeshes share a geometry + material; disposing here is
+    // safe because the clouds group owns its own sphere/material
+    // instance (kidInstanced returns fresh InstancedMesh each call).
+    clouds.traverse((obj) => {
+      const m = obj as THREE.InstancedMesh;
+      if (m.isInstancedMesh) {
+        m.geometry?.dispose?.();
+        const mat = m.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(mat)) mat.forEach((mm) => mm.dispose?.());
+        else mat?.dispose?.();
+      }
+    });
+    clouds = makeAmbientClouds();
+    scene.add(clouds);
+  });
 
   // --- root container for user objects ---
   const root = new THREE.Group();
@@ -266,6 +301,7 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
 
   function dispose() {
     stop();
+    unsubscribeTheme();
     canvas.removeEventListener('pointermove', onPointerMove);
     canvas.removeEventListener('pointerleave', onPointerLeave);
     observer?.disconnect();
@@ -299,6 +335,7 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     raycastRoot,
     raycastGround,
     setPerFrame: (cb) => { perFrameCb = cb; },
+    setTheme: (id) => setActiveTheme(id),
   };
 }
 

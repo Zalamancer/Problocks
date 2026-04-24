@@ -387,9 +387,13 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
     positions[li + 4] = Y;
     positions[li + 5] = p.z - pz * halfW;
   }
+  // Winding order chosen so triangle normals point +Y (up, toward the
+  // camera). The naive (a, a+1, a+2) order produced downward normals
+  // and MeshToonMaterial's FrontSide culling silently discarded the
+  // whole ribbon, leaving only the endcaps visible.
   for (let i = 0; i < vertexCount - 1; i++) {
     const a = i * 2;
-    indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
   }
 
   const geo = new THREE.BufferGeometry();

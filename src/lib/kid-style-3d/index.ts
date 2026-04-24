@@ -7,3 +7,6 @@ export * from './engine';
 export * from './geometry';
 export * from './materials';
 export * from './outlines';
+export * from './prefabs';
+export * from './scene-schema';
+export * from './hydrate';

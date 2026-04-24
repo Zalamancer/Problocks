@@ -10,9 +10,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { PALETTE, groundMaterial, toonMaterial } from './materials';
-import { kidBox, kidSphere } from './geometry';
-import { addOutline } from './outlines';
+import { PALETTE, groundMaterial } from './materials';
 
 export interface KidEngineOptions {
   canvas: HTMLCanvasElement;
@@ -48,10 +46,15 @@ export interface KidEngine {
   controls: OrbitControls;
   /** Container for user-placed objects. Keep engine props (lights, ground) on `scene` directly. */
   root: THREE.Group;
+  ground: THREE.Mesh;
   start: () => void;
   stop: () => void;
   dispose: () => void;
   resize: () => void;
+  /** Raycast from an NDC point against the root's children. Returns first hit. */
+  raycastRoot: (ndc: THREE.Vector2) => THREE.Intersection | null;
+  /** Intersect a ray from NDC with the ground plane. Returns world point or null. */
+  raycastGround: (ndc: THREE.Vector2) => THREE.Vector3 | null;
 }
 
 export function createKidEngine(opts: KidEngineOptions): KidEngine {
@@ -136,10 +139,22 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   // Keep the camera from tipping under the ground — 89° is plenty.
   controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
-  // --- starter content ---
-  // So you see something on first load. Cleared the moment a user
-  // drops their first prefab.
-  seedStarterScene(root);
+  // --- raycasting helpers (picking + ground drop) ---
+  const raycaster = new THREE.Raycaster();
+  function raycastRoot(ndc: THREE.Vector2): THREE.Intersection | null {
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(root.children, true);
+    // Skip outlines — they're BackSide and would give weird hit points.
+    for (const h of hits) {
+      if (!h.object.name.endsWith('__outline')) return h;
+    }
+    return null;
+  }
+  function raycastGround(ndc: THREE.Vector2): THREE.Vector3 | null {
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObject(ground, false);
+    return hits[0]?.point ?? null;
+  }
 
   // --- resize ---
   function resize() {
@@ -199,41 +214,12 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     renderer,
     controls,
     root,
+    ground,
     start,
     stop,
     dispose,
     resize,
+    raycastRoot,
+    raycastGround,
   };
-}
-
-function seedStarterScene(root: THREE.Group): void {
-  // A single rounded cube + sphere + capsule at the origin so the scene
-  // reads as "kid-style" the instant the viewport mounts. Users can
-  // delete them once prefab placement is wired.
-  const cube = new THREE.Mesh(kidBox({ width: 1.5, height: 1.5, depth: 1.5, radius: 0.22 }), toonMaterial({ color: PALETTE.coral }));
-  cube.position.set(-2, 0.75, 0);
-  cube.castShadow = true;
-  cube.receiveShadow = true;
-  addOutline(cube);
-  cube.userData.kind = 'rounded-box';
-  cube.name = 'starter-cube';
-  root.add(cube);
-
-  const sphere = new THREE.Mesh(kidSphere({ radius: 0.8, detail: 1 }), toonMaterial({ color: PALETTE.butter }));
-  sphere.position.set(0, 0.8, 0);
-  sphere.castShadow = true;
-  sphere.receiveShadow = true;
-  addOutline(sphere);
-  sphere.userData.kind = 'sphere';
-  sphere.name = 'starter-sphere';
-  root.add(sphere);
-
-  const pillar = new THREE.Mesh(kidBox({ width: 0.9, height: 2.2, depth: 0.9, radius: 0.18 }), toonMaterial({ color: PALETTE.mint }));
-  pillar.position.set(2.2, 1.1, 0);
-  pillar.castShadow = true;
-  pillar.receiveShadow = true;
-  addOutline(pillar);
-  pillar.userData.kind = 'rounded-box';
-  pillar.name = 'starter-pillar';
-  root.add(pillar);
 }

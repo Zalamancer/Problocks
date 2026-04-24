@@ -343,47 +343,148 @@ function cloud({ color }: BuildOptions): THREE.Object3D {
 
 function house({ color, props }: BuildOptions): THREE.Object3D {
   const g = new THREE.Group();
-  const wallColor = color ?? PALETTE.ivory;
-  const roofColor = (props?.roofColor as string) ?? PALETTE.coral;
-  const doorColor = (props?.doorColor as string) ?? PALETTE.woodDark;
+  const W = 2.8, H = 1.9, D = 2.8;
+  const ROOF_H = 1.3;
 
+  const wallColor       = color ?? PALETTE.ivory;
+  const roofColor       = (props?.roofColor as string)       ?? PALETTE.roof;
+  const doorColor       = (props?.doorColor as string)       ?? PALETTE.woodDark;
+  const foundationColor = (props?.foundationColor as string) ?? PALETTE.foundation;
+  const trimColor       = (props?.trimColor as string)       ?? PALETTE.wallTrim;
+
+  // Foundation — slightly wider + darker than walls, reads as "this
+  // house is sitting on something", not floating.
+  const foundation = new THREE.Mesh(
+    kidBox({ width: W + 0.15, height: 0.3, depth: D + 0.15, radius: 0.08 }),
+    toonMaterial({ color: foundationColor }),
+  );
+  foundation.position.y = 0.15;
+  foundation.castShadow = true; foundation.receiveShadow = true;
+  g.add(foundation);
+
+  // Walls
   const walls = new THREE.Mesh(
-    kidBox({ width: 2.4, height: 1.8, depth: 2.4, radius: 0.12 }),
+    kidBox({ width: W, height: H, depth: D, radius: 0.12 }),
     toonMaterial({ color: wallColor }),
   );
-  walls.position.y = 0.9;
+  walls.position.y = 0.3 + H / 2;
   walls.castShadow = true; walls.receiveShadow = true;
   g.add(walls);
 
-  // Pitched roof — ExtrudeGeometry of a triangle with bevel, the Adopt-Me
-  // rounded-roof look from docs/three-kid-style/01.
+  // Wall trim — ribbon at top of walls, warmer cream
+  const trim = new THREE.Mesh(
+    kidBox({ width: W + 0.08, height: 0.12, depth: D + 0.08, radius: 0.04 }),
+    toonMaterial({ color: trimColor }),
+  );
+  trim.position.y = 0.3 + H - 0.08;
+  trim.castShadow = true;
+  g.add(trim);
+
+  // Pitched roof — ExtrudeGeometry of a triangle with bevel, overhangs
+  // walls for the Adopt-Me overcut silhouette.
   const shape = new THREE.Shape();
-  shape.moveTo(-1.35, 0);
-  shape.lineTo(1.35, 0);
-  shape.lineTo(0, 0.9);
+  shape.moveTo(-(W + 0.3) / 2, 0);
+  shape.lineTo( (W + 0.3) / 2, 0);
+  shape.lineTo(0, ROOF_H);
   shape.closePath();
   const roofGeo = new THREE.ExtrudeGeometry(shape, {
-    depth: 2.6, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3, curveSegments: 4,
+    depth: D + 0.25, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3, curveSegments: 4,
   });
-  roofGeo.translate(0, 0, -1.3);
+  roofGeo.translate(0, 0, -(D + 0.25) / 2);
   const roof = new THREE.Mesh(roofGeo, toonMaterial({ color: roofColor }));
-  roof.position.y = 1.82;
+  roof.position.y = 0.3 + H;
   roof.castShadow = true; roof.receiveShadow = true;
   g.add(roof);
 
+  // Roof ridge — darker strip along the peak
+  const ridge = new THREE.Mesh(
+    kidBox({ width: 0.12, height: 0.08, depth: D + 0.25, radius: 0.03 }),
+    toonMaterial({ color: PALETTE.roofRidge }),
+  );
+  ridge.position.y = 0.3 + H + ROOF_H + 0.02;
+  g.add(ridge);
+
+  // Chimney — two-piece: body + darker top cap
+  const chimney = new THREE.Mesh(
+    kidBox({ width: 0.38, height: 1.0, depth: 0.38, radius: 0.05 }),
+    toonMaterial({ color: PALETTE.chimney }),
+  );
+  chimney.position.set(-0.85, 0.3 + H + 0.55, -0.3);
+  chimney.castShadow = true;
+  g.add(chimney);
+  const chimneyTop = new THREE.Mesh(
+    kidBox({ width: 0.46, height: 0.1, depth: 0.46, radius: 0.03 }),
+    toonMaterial({ color: PALETTE.chimneyTop }),
+  );
+  chimneyTop.position.set(-0.85, 0.3 + H + 1.08, -0.3);
+  g.add(chimneyTop);
+
+  // Door (centered on front face, z = +D/2)
+  const doorFrame = new THREE.Mesh(
+    kidBox({ width: 0.65, height: 1.2, depth: 0.08, radius: 0.03 }),
+    toonMaterial({ color: PALETTE.woodShadow }),
+  );
+  doorFrame.position.set(0, 0.3 + 0.6, D / 2 + 0.02);
+  g.add(doorFrame);
   const door = new THREE.Mesh(
-    kidBox({ width: 0.5, height: 0.9, depth: 0.1, radius: 0.06 }),
+    kidBox({ width: 0.55, height: 1.1, depth: 0.08, radius: 0.03 }),
     toonMaterial({ color: doorColor }),
   );
-  door.position.set(0, 0.45, 1.22);
-  door.castShadow = true; door.receiveShadow = true;
+  door.position.set(0, 0.3 + 0.55, D / 2 + 0.06);
+  door.castShadow = true;
   g.add(door);
-
-  const knob = new THREE.Mesh(kidSphere({ radius: 0.04, detail: 0 }), toonMaterial({ color: PALETTE.butter }));
-  knob.position.set(0.18, 0.5, 1.27);
+  const knob = new THREE.Mesh(
+    kidSphere({ radius: 0.045, detail: 0 }),
+    toonMaterial({ color: PALETTE.butter }),
+  );
+  knob.position.set(0.18, 0.3 + 0.55, D / 2 + 0.12);
   g.add(knob);
 
+  // Windows — two on the front flanking the door, one on each side
+  const windows: Array<[number, number, number, number]> = [
+    // [x, y, z, rotY]
+    [-1.0, 0.3 + 1.2, D / 2 + 0.04, 0],
+    [ 1.0, 0.3 + 1.2, D / 2 + 0.04, 0],
+    [-W / 2 - 0.04, 0.3 + 1.2, 0, Math.PI / 2],
+    [ W / 2 + 0.04, 0.3 + 1.2, 0, -Math.PI / 2],
+  ];
+  for (const [x, y, z, rotY] of windows) {
+    const wnd = buildWindow();
+    wnd.position.set(x, y, z);
+    wnd.rotation.y = rotY;
+    g.add(wnd);
+  }
+
   addOutlinesToTree(g);
+  return g;
+}
+
+function buildWindow(): THREE.Object3D {
+  const g = new THREE.Group();
+  const w = 0.7, h = 0.6;
+  const frame = new THREE.Mesh(
+    kidBox({ width: w + 0.1, height: h + 0.1, depth: 0.08, radius: 0.02 }),
+    toonMaterial({ color: PALETTE.paper }),
+  );
+  g.add(frame);
+  const glass = new THREE.Mesh(
+    kidBox({ width: w, height: h, depth: 0.05, radius: 0.02 }),
+    toonMaterial({ color: PALETTE.windowGlass }),
+  );
+  glass.position.z = 0.04;
+  g.add(glass);
+  const hBar = new THREE.Mesh(
+    kidBox({ width: w + 0.04, height: 0.04, depth: 0.04, radius: 0.01 }),
+    toonMaterial({ color: PALETTE.paper }),
+  );
+  hBar.position.z = 0.07;
+  g.add(hBar);
+  const vBar = new THREE.Mesh(
+    kidBox({ width: 0.04, height: h + 0.04, depth: 0.04, radius: 0.01 }),
+    toonMaterial({ color: PALETTE.paper }),
+  );
+  vBar.position.z = 0.07;
+  g.add(vBar);
   return g;
 }
 

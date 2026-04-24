@@ -28,17 +28,20 @@ import type { Vec3 } from '@/lib/kid-style-3d/scene-schema';
  */
 
 const KID_PALETTE_COLORS: string[] = [
-  PALETTE.coral,
-  PALETTE.mint,
-  PALETTE.butter,
-  PALETTE.sky,
-  PALETTE.ivory,
-  PALETTE.charcoal,
-  PALETTE.dustyRose,
-  PALETTE.sage,
+  PALETTE.flowerPink,    // Adopt-Me hero pink
+  PALETTE.roof,          // iconic bright red
+  PALETTE.butter,        // warm yellow
+  PALETTE.flowerPeach,   // peach
+  PALETTE.mint,          // bright green
   PALETTE.grass,
+  PALETTE.sky,
+  PALETTE.windowGlass,   // soft cyan
+  PALETTE.ivory,
+  PALETTE.wallTrim,      // warm cream
+  PALETTE.pants,         // dusty blue
+  PALETTE.woodDark,      // rich brown
   PALETTE.woodLight,
-  PALETTE.woodDark,
+  PALETTE.charcoal,
   '#ffffff',
 ];
 

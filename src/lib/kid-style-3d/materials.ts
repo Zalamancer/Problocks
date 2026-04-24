@@ -9,23 +9,72 @@
 
 import * as THREE from 'three';
 
-// Warm, desaturated palette — every kid-style scene pulls from these.
-// Saturated primaries (#ff0000, #00ff00) read as debug-render; these shift
-// everything toward warm + a little muted so the whole scene feels coherent.
+// Bright, saturated Adopt-Me / Roblox palette. Pure primaries (#ff0000,
+// #00ff00) still read as debug-render, but stopping just short of them —
+// pinker pink, limier green, richer yellow — lands on the Adopt-Me sweet
+// spot. Toon banding + tonemapping exposure at 1.15 keep it from looking
+// clownish even with these saturation levels.
+//
+// Backwards-compat: the old "warm desaturated" keys (coral/mint/butter/
+// sage/dustyRose) still exist; their values just got brighter. Prefabs
+// and the Inspector palette pick them up automatically.
 export const PALETTE = {
-  coral: '#ff7a6b',
-  mint: '#9fd86c',
-  butter: '#ffe58a',
-  sky: '#b0d6ff',
-  ivory: '#fff4e6',
-  charcoal: '#2a2a2f',
-  dustyRose: '#f5b8c4',
-  sage: '#7fa17a',
-  grass: '#8dc055',
-  grassDark: '#5e8a38',
-  groundFog: '#2f3a2a',
+  // Accent brights — for characters, flowers, feature props
+  coral: '#ff7aa0',        // Adopt-Me pink (shirts, cheeks, flowers, hearts)
+  mint: '#88cc5a',         // tree canopy, accent greens
+  butter: '#ffd070',       // flowers, door knob, coins
+  sky: '#a8dcff',          // sky background
+  fogFar: '#b8e4ff',       // horizon fog tint — mostly-sky with a whisper of haze
+
+  // Environmental
+  grass: '#7ecc5a',        // plot grass — saturated bright green
+  grassDark: '#5aa040',    // surrounding land outside the plot
+  groundFog: '#2f3a2a',    // dead shadowed ground (unused on outdoor scenes)
+
+  // Neutrals — warm paper / warm ink / stone / curb
+  ivory: '#fff2dc',        // house walls, windowsills, whites
+  paper: '#fffbf0',        // the whitest thing (window mullions)
+  fence: '#fdfdff',        // picket fence — slightly cooler than ivory
+  curb: '#d8d0c0',         // plot perimeter stone
+  curbDark: '#a89890',
+  stone: '#e8d4a8',        // path stones
+  stoneDark: '#d0b888',
+  charcoal: '#2a1a28',     // outlines, hair (slightly plum-tinted, not pure grey)
+
+  // Wood tones
   woodLight: '#c9a27a',
-  woodDark: '#8a6a48',
+  woodDark: '#a85838',     // tree trunks, door panels
+  woodShadow: '#6a3820',
+
+  // Adopt-Me cottage / feature pieces
+  roof: '#e85542',         // the iconic bright red roof
+  roofRidge: '#b8372a',
+  wallTrim: '#e8c498',
+  foundation: '#9a8878',
+  chimney: '#9a7a5a',
+  chimneyTop: '#6a5040',
+  windowGlass: '#b8e0ff',
+
+  // Flower / balloon brights
+  flowerPink: '#ff7aa0',
+  flowerYellow: '#ffd070',
+  flowerPeach: '#ff9a5a',
+  flowerBush: '#5a9a4a',
+  balloonPink: '#ff7aa0',
+
+  // Character kit
+  skin: '#fdd488',         // default skin tone (customizable per character)
+  shirt: '#ff7aa0',
+  pants: '#5a7aa0',        // Adopt-Me denim-ish blue
+  shoes: '#2a2438',
+  hair: '#3a2a28',
+  face: '#2a2438',
+  heart: '#ff5a8a',
+
+  // Legacy aliases — older prefabs/inspector swatches still reference
+  // these. Map to the closest new color so nothing snaps to a wrong hue.
+  dustyRose: '#ff7aa0',
+  sage: '#5a9a4a',
 } as const;
 
 export type PaletteKey = keyof typeof PALETTE;

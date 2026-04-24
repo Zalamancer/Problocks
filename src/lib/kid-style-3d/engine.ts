@@ -76,49 +76,84 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     quality.shadowType === 'pcf-soft' ? THREE.PCFShadowMap : THREE.BasicShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  // Exposure 1.15 — the Adopt-Me "daytime cereal-ad" look. Drops to 1.0
+  // for moodier scenes, up to 1.3 for actual sunlight photography vibe.
+  renderer.toneMappingExposure = 1.15;
 
   // --- scene ---
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PALETTE.sky);
-  scene.fog = new THREE.Fog(PALETTE.sky, 40, 120);
+  // Nearer fog start so the plot feels enclosed, further end so you can
+  // still see distant trees / clouds. Far colour shifted toward fogFar
+  // (a hair whiter than the sky) so the horizon reads as atmosphere, not
+  // a hard clip.
+  scene.fog = new THREE.Fog(PALETTE.fogFar, 30, 85);
 
   // --- camera ---
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
-  camera.position.set(9, 7, 12);
-  camera.lookAt(0, 1, 0);
+  // 42° FOV + further-back position is the Adopt-Me/Roblox plot
+  // framing: the whole plot fits comfortably on screen without feeling
+  // like a dollhouse. lookAt(0, 2, 0) raises the pivot to roughly the
+  // character's head height.
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
+  camera.position.set(14, 10, 16);
+  camera.lookAt(0, 2, 0);
 
-  // --- three-light rig ---
-  const hemi = new THREE.HemisphereLight(0xb0d6ff, 0x6b7a3a, 0.6);
+  // --- three-light rig (bright Adopt-Me) ---
+  // Warm sky / olive ground hemisphere: pushes warm light into the tops
+  // of objects and an olive-green bounce into their undersides, so even
+  // unshadowed meshes have directional tone instead of looking flat.
+  const hemi = new THREE.HemisphereLight(0xfffbe8, 0xb0d0a0, 0.7);
   scene.add(hemi);
 
-  const key = new THREE.DirectionalLight(0xffeedd, 1.0);
-  key.position.set(30, 50, 20);
+  // Warm key light: the bright cereal-ad sun. Intensity 1.3 is loud but
+  // PCF soft shadows + ACES rolloff prevent blown highlights.
+  const key = new THREE.DirectionalLight(0xfff4d0, 1.3);
+  key.position.set(10, 14, 6);
   if (quality.shadows) {
     key.castShadow = true;
     key.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
     key.shadow.bias = -0.0005;
     key.shadow.normalBias = 0.02;
+    // Shadow radius softens PCF samples — 6 is where Adopt-Me soft-edge
+    // shadows land before going blobby. Only affects the PCF tier.
+    key.shadow.radius = 6;
+    // Tight frustum around the 22u × 22u plot — waste no shadow-map
+    // resolution on empty land outside the scene.
     key.shadow.camera.near = 1;
-    key.shadow.camera.far = 120;
-    key.shadow.camera.left = -40;
-    key.shadow.camera.right = 40;
-    key.shadow.camera.top = 40;
-    key.shadow.camera.bottom = -40;
+    key.shadow.camera.far = 40;
+    key.shadow.camera.left = -18;
+    key.shadow.camera.right = 18;
+    key.shadow.camera.top = 18;
+    key.shadow.camera.bottom = -18;
   }
   scene.add(key);
 
-  const fill = new THREE.AmbientLight(0x404060, 0.3);
+  // Cool fill: a cool-blue directional in the opposite quadrant so shadow
+  // sides aren't dead. Not a shadow caster; just lifts the blue channel.
+  const fill = new THREE.DirectionalLight(0xb8d8ff, 0.4);
+  fill.position.set(-6, 5, -4);
   scene.add(fill);
 
-  const rim = new THREE.DirectionalLight(0xcfe6ff, 0.35);
-  rim.position.set(-25, 35, -18);
-  scene.add(rim);
-
   // --- ground ---
-  const groundGeo = new THREE.PlaneGeometry(80, 80, 1, 1);
-  const ground = new THREE.Mesh(groundGeo, groundMaterial(PALETTE.grass));
+  // Two layers: outer darker-green surround extending to fog ("land
+  // beyond the plot"), and a brighter plot grass slab raised 0.05 to
+  // read as a distinct parcel. Matches the Adopt-Me plot framing even
+  // before a curb/fence is placed.
+  const outerGround = new THREE.Mesh(
+    new THREE.PlaneGeometry(80, 80, 1, 1),
+    groundMaterial(PALETTE.grassDark),
+  );
+  outerGround.rotation.x = -Math.PI / 2;
+  outerGround.receiveShadow = quality.shadows;
+  outerGround.name = 'outer-ground';
+  scene.add(outerGround);
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(22, 22, 1, 1),
+    groundMaterial(PALETTE.grass),
+  );
   ground.rotation.x = -Math.PI / 2;
+  ground.position.y = 0.02;
   ground.receiveShadow = quality.shadows;
   ground.name = 'ground';
   scene.add(ground);
@@ -129,15 +164,17 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   scene.add(root);
 
   // --- orbit controls ---
+  // Target 2u up to frame a standing character; tight min/max clamps
+  // match the 22u plot so users can't pull the camera beyond what's
+  // meant to be visible. 85° max polar stops tipping under the ground.
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 1, 0);
+  controls.target.set(0, 2, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.screenSpacePanning = false;
-  controls.minDistance = 3;
-  controls.maxDistance = 60;
-  // Keep the camera from tipping under the ground — 89° is plenty.
-  controls.maxPolarAngle = Math.PI / 2 - 0.02;
+  controls.minDistance = 8;
+  controls.maxDistance = 30;
+  controls.maxPolarAngle = Math.PI * 0.47;
 
   // --- raycasting helpers (picking + ground drop) ---
   const raycaster = new THREE.Raycaster();

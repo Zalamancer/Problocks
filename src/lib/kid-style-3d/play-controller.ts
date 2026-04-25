@@ -75,18 +75,10 @@ const ISO_DIST = 16;
 // the whole character + a bit of foreground visible with 42° FOV.
 const THIRD_DIST = 9;
 const THIRD_Y = 3.2;
-// Min/max for third-person trackpad pinch zoom. Stays inside the range
-// where the character + a little foreground both read.
-const THIRD_DIST_MIN = 4;
-const THIRD_DIST_MAX = 24;
 const LOOK_Y_OFFSET = 1.6;
 const FIRST_HEAD_Y = 1.9;
 const MOUSE_YAW_SENS = 0.0035;
 const MOUSE_PITCH_SENS = 0.0025;
-// Trackpad two-finger orbit during play. Same units as the edit-mode
-// engine onWheel handler, so a swipe feels equivalent across the
-// edit/play boundary.
-const WHEEL_YAW_SENS = 0.005;
 // Character cylinder collider — r 0.45, height 2.0. Tuned to the
 // builder's character proportions; a little forgiving so brushes-past-
 // a-tree don't snag.
@@ -114,11 +106,20 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   let velY = 0;
   let mode: CameraMode = opts.mode;
   let colliders: Collider[] = [];
-  // Mutable third-person follow distance — pinch / Cmd+wheel during play
-  // tweaks this so the user can pull the camera in or out without
-  // exiting play. Reset to default whenever the controller starts so
-  // each play session begins at the canonical framing.
+  // Mutable third-person follow distance — only used at applyModeInitial
+  // time to drop the camera at a sensible distance behind the character.
+  // After that, OrbitControls owns the actual radius (engine.ts onWheel
+  // pinch zoom dollies it). Reset on every start() so a Stop→Play
+  // doesn't bring the previous zoom back as the new initial framing.
   let thirdDist = THIRD_DIST;
+  // Per-frame third-person follow state. We translate orbit.target +
+  // camera.position by the character's delta each frame so the orbit
+  // pivot rides with the player; this matches how the tile-based
+  // building studio's play-mode does it (src/components/building/
+  // play-mode.ts ~L412–425). Initialised on entering 'third' mode.
+  let prevPivotX = 0;
+  let prevPivotY = 0;
+  let prevPivotZ = 0;
 
   function collectColliders() {
     colliders = [];
@@ -174,7 +175,6 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   // ---- Input listeners (installed on start) ----
   let running = false;
   let pointerLocked = false;
-  let thirdDragging = false;
 
   const onKeyDown = (e: KeyboardEvent) => {
     // Don't steal typing in inputs (Scenes dropdown rename, etc.)
@@ -184,29 +184,20 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   };
   const onKeyUp = (e: KeyboardEvent) => { keys.delete(e.code); };
 
-  const onPointerDown = (e: PointerEvent) => {
-    if (mode === 'first') {
-      if (!pointerLocked) domElement.requestPointerLock?.();
-    } else {
-      thirdDragging = true;
-      (domElement as HTMLCanvasElement).setPointerCapture?.(e.pointerId);
-    }
-  };
-  const onPointerUp = (e: PointerEvent) => {
-    thirdDragging = false;
-    try { (domElement as HTMLCanvasElement).releasePointerCapture?.(e.pointerId); } catch { /* ignore */ }
+  // First-person uses pointer lock for FPS-style mouse-look. Third-person
+  // does NOT install any pointer or wheel handlers here — orbit camera
+  // control is delegated entirely to OrbitControls + the engine's onWheel
+  // (engine.ts ~L258), so the same trackpad / drag / pinch behaviour as
+  // edit mode applies. update() syncs yaw FROM the camera each frame so
+  // WASD stays camera-relative even though we don't own the rotation.
+  const onPointerDown = () => {
+    if (mode === 'first' && !pointerLocked) domElement.requestPointerLock?.();
   };
   const onPointerMove = (e: PointerEvent) => {
     if (mode === 'first' && pointerLocked) {
       yaw -= e.movementX * MOUSE_YAW_SENS;
       pitch -= e.movementY * MOUSE_PITCH_SENS;
       pitch = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, pitch));
-    } else if (mode === 'third' && thirdDragging) {
-      // Inverted: drag-right swings the camera CCW around the character
-      // (the world appears to rotate right under it). Matches the
-      // engine onWheel orbit-direction so click-drag and trackpad
-      // swipe feel identical in play.
-      yaw += e.movementX * MOUSE_YAW_SENS;
     }
   };
 
@@ -214,57 +205,9 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     pointerLocked = document.pointerLockElement === domElement;
   };
 
-  /**
-   * Trackpad-aware wheel handler that brings edit-mode-feel orbit into
-   * play. The engine's own onWheel bails when orbit.enabled === false
-   * (which is what start() sets), so this listener wakes up exactly
-   * during play. Behavior mirrors engine.ts:
-   *   • plain swipe (deltaMode 0, modest |deltaY|)  → orbit yaw
-   *   • ctrl/⌘ + wheel (pinch)                       → zoom (third only)
-   *   • mouse wheel notch (deltaMode !== 0)          → zoom (third only)
-   *
-   * Topdown / isometric stay locked: we ignore wheel there to preserve
-   * the "RTS pan + zoom" feel set by applyModeInitial().
-   */
-  const onWheel = (e: WheelEvent) => {
-    if (mode !== 'third' && mode !== 'first') return;
-    e.preventDefault();
-
-    const isPinch = e.ctrlKey || e.metaKey;
-    // Same heuristic as engine.ts — short per-frame deltas + non-zero
-    // deltaX strongly imply trackpad swipes. Mouse wheel notches
-    // typically arrive with |deltaY| >= 60 in deltaMode 0 or any value
-    // in deltaMode 1.
-    const trackpadLike =
-      e.deltaMode === 0 && (Math.abs(e.deltaY) < 50 || e.deltaX !== 0);
-
-    if (mode === 'third') {
-      if (isPinch || !trackpadLike) {
-        // ZOOM — pull camera in / out by scaling thirdDist. Pinch
-        // sensitivity matches the edit-mode handler so it feels equal
-        // crossing the play boundary.
-        const factor = 1 + (e.deltaY * (isPinch ? 0.01 : 0.0015));
-        thirdDist = Math.max(THIRD_DIST_MIN, Math.min(THIRD_DIST_MAX, thirdDist * factor));
-      } else {
-        // ORBIT yaw. Inverted to match the drag direction above.
-        yaw += e.deltaX * WHEEL_YAW_SENS;
-      }
-    } else if (mode === 'first') {
-      // Trackpad orbit in first-person: yaw on deltaX, pitch on deltaY.
-      // Inverted relative to mouse-look so two-finger right makes the
-      // view spin right (consistent with the third-person convention).
-      if (!isPinch && trackpadLike) {
-        yaw += e.deltaX * WHEEL_YAW_SENS;
-        pitch += e.deltaY * WHEEL_YAW_SENS;
-        pitch = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, pitch));
-      }
-    }
-  };
-
   function start() {
     if (running) return;
     running = true;
-    orbit.enabled = false;
     // Reset the follow distance every start so the canonical framing
     // is what greets the user; otherwise a Stop-then-Play after a
     // pinch-zoom would persist the zoom into the next play session.
@@ -274,12 +217,8 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     domElement.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerlockchange', onPointerLockChange);
-    // passive:false because we preventDefault() to stop the page from
-    // scrolling under the studio when the user two-finger swipes.
-    domElement.addEventListener('wheel', onWheel, { passive: false });
     applyModeInitial();
   }
 
@@ -290,10 +229,8 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);
     domElement.removeEventListener('pointerdown', onPointerDown);
-    window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('pointerlockchange', onPointerLockChange);
-    domElement.removeEventListener('wheel', onWheel);
     if (pointerLocked) document.exitPointerLock?.();
     orbit.enabled = prevOrbitEnabled;
     character.visible = prevCharVisible;
@@ -306,11 +243,14 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   function applyModeInitial() {
     const p = character.position;
     if (mode === 'first') {
+      // First-person: pointer-lock owns the camera, OrbitControls off.
+      orbit.enabled = false;
       character.visible = false;  // player is the camera
       camera.position.set(p.x, p.y + FIRST_HEAD_Y, p.z);
     } else if (mode === 'topdown') {
       // Straight down — yaw is fixed to 0 so WASD reads as world-axis.
       // Tiny X/Z offset keeps OrbitControls / lookAt out of gimbal.
+      orbit.enabled = false;
       yaw = 0;
       character.visible = true;
       camera.position.set(p.x + 0.001, p.y + TOPDOWN_HEIGHT, p.z + 0.001);
@@ -318,24 +258,33 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     } else if (mode === 'isometric') {
       // 45° corner view, yaw fixed so WASD axes don't rotate as the
       // player moves. Offset the camera by ISO_DIST on each axis.
+      orbit.enabled = false;
       yaw = 0;
       character.visible = true;
       camera.position.set(p.x + ISO_DIST, p.y + ISO_DIST, p.z + ISO_DIST);
       camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
     } else {
+      // Third-person: hand the camera to OrbitControls and let the
+      // engine's wheel handler / OrbitControls' built-in left-click drag
+      // run the orbit + zoom. update() per-frame translates target +
+      // camera by the character's delta so the orbit pivot rides with
+      // the player. Same approach as the tile-based studio's play-mode
+      // (src/components/building/play-mode.ts ~L412–425), so trackpad
+      // swipe + pinch behave identically across edit / play.
       character.visible = true;
-      // Camera behind the character along current yaw. Character faces +Z
-      // by default so "behind" means subtract the forward vector. Uses
-      // thirdDist (mutable, pinch-zoomable) instead of the THIRD_DIST
-      // constant so the user's chosen follow distance is the initial
-      // framing on subsequent setMode → 'third' transitions.
       const fx = Math.sin(yaw), fz = Math.cos(yaw);
       camera.position.set(
         p.x - fx * thirdDist,
         p.y + THIRD_Y,
         p.z - fz * thirdDist,
       );
-      camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
+      orbit.target.set(p.x, p.y + LOOK_Y_OFFSET, p.z);
+      orbit.enabled = true;
+      orbit.enableRotate = true;
+      orbit.update();
+      prevPivotX = p.x;
+      prevPivotY = p.y + LOOK_Y_OFFSET;
+      prevPivotZ = p.z;
     }
   }
 
@@ -353,6 +302,20 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
 
   function update(dt: number) {
     if (!running) return;
+
+    // Sync `yaw` from the OrbitControls camera before reading it for
+    // WASD direction. In 'third' the user owns the orbit angle via
+    // OrbitControls — yaw is no longer a piece of state we mutate from
+    // input, it's a derived view of where the camera is. This is what
+    // keeps WASD camera-relative even though the trackpad / drag /
+    // pinch all flow through the engine's onWheel + OrbitControls.
+    if (mode === 'third') {
+      const fwdX = orbit.target.x - camera.position.x;
+      const fwdZ = orbit.target.z - camera.position.z;
+      if (fwdX * fwdX + fwdZ * fwdZ > 1e-6) {
+        yaw = Math.atan2(fwdX, fwdZ);
+      }
+    }
 
     const shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
     const mag = speed * speedMul * (shift ? SPRINT_MULT : 1);
@@ -480,19 +443,25 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
       camera.position.z += (targetZ - camera.position.z) * k;
       camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
     } else {
-      const fx2 = Math.sin(yaw), fz2 = Math.cos(yaw);
-      // thirdDist is mutated by onWheel pinch / mouse-wheel notches so
-      // the user can pull the camera in or out without leaving play;
-      // every frame re-evaluates the desired position from the current
-      // distance and lerps for a smooth dolly.
-      const targetX = p.x - fx2 * thirdDist;
-      const targetZ = p.z - fz2 * thirdDist;
-      const targetY = p.y + THIRD_Y;
-      // Damped lerp for a soft follow
-      camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 8);
-      camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 8);
-      camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 8);
-      camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
+      // Third-person: OrbitControls owns angle + zoom. We just slide the
+      // pivot (and the camera in lockstep) by the character's delta this
+      // frame, then call controls.update() so the user's accumulated
+      // wheel-orbit gets integrated. Same pattern as the tile-based
+      // building studio's play-mode (~L412–425).
+      const newPivotX = p.x;
+      const newPivotY = p.y + LOOK_Y_OFFSET;
+      const newPivotZ = p.z;
+      const dxP = newPivotX - prevPivotX;
+      const dyP = newPivotY - prevPivotY;
+      const dzP = newPivotZ - prevPivotZ;
+      if (dxP !== 0 || dyP !== 0 || dzP !== 0) {
+        orbit.target.x += dxP; orbit.target.y += dyP; orbit.target.z += dzP;
+        camera.position.x += dxP; camera.position.y += dyP; camera.position.z += dzP;
+      }
+      prevPivotX = newPivotX;
+      prevPivotY = newPivotY;
+      prevPivotZ = newPivotZ;
+      orbit.update();
     }
   }
 

@@ -171,15 +171,15 @@ export function ScribbleOverlay() {
       }
       const s = activeStrokeRef.current;
       if (!s) return;
-      // Drop points the cursor barely moved to. Trackpads/mice fire
-      // pointermove on every pixel of motion; keeping all of them
-      // produces a chunky jagged path because each tiny segment
-      // becomes its own corner. ~1.5 px is small enough that the
-      // user can't see the lag and big enough to suppress noise.
+      // Drop points the cursor barely moved to. Higher threshold = fewer
+      // raw samples = each rendered Bezier spans more pixels, which is
+      // what makes the curve look fluid instead of buzzy. ~4 px is the
+      // sweet spot for trackpads — small enough that the lag is invisible,
+      // big enough to kill the high-frequency jitter we want gone.
       const last = s.points[s.points.length - 1];
       const dx = p.x - last.x;
       const dy = p.y - last.y;
-      if (dx * dx + dy * dy < 2.25) return;
+      if (dx * dx + dy * dy < 16) return;
       s.points.push(p);
       paint();
     },
@@ -380,9 +380,28 @@ function strokeHits(s: Stroke, p: Pt): boolean {
   return false;
 }
 
+// One pass of Chaikin's corner-cutting algorithm. Each interior segment
+// (p, q) becomes two new points at 25% and 75% along it, so every
+// "corner" gets shaved into a pair of softer ones. We keep the first and
+// last points pinned so the stroke still starts/ends where the user
+// actually pressed and lifted. One pass is usually enough; two looks
+// almost rubbery.
+function chaikin(pts: Pt[]): Pt[] {
+  if (pts.length < 3) return pts;
+  const out: Pt[] = [pts[0]];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p = pts[i];
+    const q = pts[i + 1];
+    out.push({ x: 0.75 * p.x + 0.25 * q.x, y: 0.75 * p.y + 0.25 * q.y });
+    out.push({ x: 0.25 * p.x + 0.75 * q.x, y: 0.25 * p.y + 0.75 * q.y });
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
 function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
-  const pts = s.points;
-  if (pts.length === 0) return;
+  const raw = s.points;
+  if (raw.length === 0) return;
   ctx.save();
   if (s.tool === 'eraser') {
     // Use destination-out so the eraser cuts through any underlying
@@ -394,29 +413,39 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
     ctx.strokeStyle = s.color;
   }
   ctx.lineWidth = s.width;
-  // Round joins/caps so the smoothed segments meet without sharp
-  // bevels at every quadratic seam.
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+
+  // Two Chaikin passes pre-smooth the polyline before we feed it to
+  // Catmull-Rom — this kills any remaining high-frequency wiggle from
+  // the trackpad without needing to drop more raw samples.
+  const pts = chaikin(chaikin(raw));
+
   ctx.beginPath();
-  if (pts.length < 3) {
-    // Not enough points to interpolate — fall back to straight lines.
+  if (pts.length < 2) {
     ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.lineTo(pts[0].x, pts[0].y);
+  } else if (pts.length === 2) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[1].x, pts[1].y);
   } else {
-    // Quadratic-through-midpoints smoothing (the "signature pad" trick).
-    // Each raw point becomes a Bezier *control* point; the curve passes
-    // through the midpoints of consecutive segments. The eye reads the
-    // resulting path as a single fluid stroke instead of a polyline.
+    // Catmull-Rom → Bezier. Each segment from p1 to p2 gets two control
+    // points derived from the surrounding four points (p0, p1, p2, p3),
+    // producing a curve that passes exactly through every input point
+    // with C1-continuous tangents at each junction. End-point tangents
+    // clamp to the boundary by reusing p0/p_{n-1}.
     ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length - 1; i++) {
-      const midX = (pts[i].x + pts[i + 1].x) / 2;
-      const midY = (pts[i].y + pts[i + 1].y) / 2;
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(i - 1, 0)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(i + 2, pts.length - 1)];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
     }
-    // Anchor the tail at the actual final pointer position.
-    const tail = pts[pts.length - 1];
-    ctx.lineTo(tail.x, tail.y);
   }
   ctx.stroke();
   ctx.restore();

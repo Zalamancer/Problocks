@@ -296,14 +296,32 @@ export function FreeformView3D() {
     }
     // Find a character in the scene. First one wins — users can put the
     // starter character back in front of the house if the pick feels wrong.
-    const characterObj = engine.root.children.find(
+    let characterObj = engine.root.children.find(
       (c) => c.userData.__sceneKind === 'character',
     );
     if (!characterObj) {
-      // No character — fall through gracefully. The isPlaying state will
-      // flip back when the user hits Stop.
-      engine.setPerFrame((dt) => { engine.controls.update(); void dt; });
-      return;
+      // Agent-generated games regularly clearScene and rebuild without
+      // adding a character prefab, which leaves play mode with no one
+      // to drive — WASD dies silently. Auto-spawn the user's avatar so
+      // the loop always works, then re-query from the root once the
+      // hydrator wires it in.
+      const outfit = useUserAvatar.getState().outfit;
+      useFreeform3D.getState().addPrefabFull('character', {
+        position: [0, 0, 2],
+        color: outfit.shirt,
+        props: outfitToCharacterProps(outfit),
+      });
+      addToastRef.current('info', 'Added your avatar — the world had no character');
+      applySceneToRoot(engine.root, useFreeform3D.getState().scene.objects);
+      characterObj = engine.root.children.find(
+        (c) => c.userData.__sceneKind === 'character',
+      );
+      if (!characterObj) {
+        // Still none — something's off with the hydrator. Fall through
+        // gracefully, the user can hit Stop and try again.
+        engine.setPerFrame((dt) => { engine.controls.update(); void dt; });
+        return;
+      }
     }
     // Deselect so the gizmo doesn't flash on the character mesh.
     useFreeform3D.getState().select(null);

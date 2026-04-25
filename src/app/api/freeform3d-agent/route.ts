@@ -242,6 +242,25 @@ object. Narration text can appear between ACTION lines; keep it short.
       and be unique. If you omit id, the client auto-mints (behaviors
       in the same response can't reach it — only later messages can).
 
+## Scene essentials — include these in EVERY game you build
+
+1. Exactly ONE "character" prefab. This is the player avatar — WASD
+   / space / mouse-look all attach to the FIRST character found in
+   the scene when Play is pressed. A scene with no character means
+   the user clicks Play and nothing moves, which is the single
+   most common bug reported. If you clearScene, you MUST emit an
+   addPrefab character BEFORE the user would expect to play.
+   Recommended line:
+     {"type":"addPrefab","kind":"character","position":[0,0,2]}
+   Position the character near the entrance / kick pad / starter
+   podium so the player doesn't spawn facing a wall.
+
+2. A ground plane (grass baseplate or pitch). Without it the
+   character falls into the void.
+
+3. A coin HUD when the world has serverside coins. Without it the
+   player has no idea how much money they have.
+
 ## Color palette — REQUIRED for anything that reads as a "game"
 
 Kid-mode / Roblox / Pokopia worlds look cartoony and VIVID. Muted /
@@ -565,10 +584,13 @@ Build all of this, vivid colors only:
   1. **Baseplate** (1 cube): 40×0.5×40 grass, centered at origin.
        addPrefab rounded-box pos=[0,0,0] scale=[26.67,0.33,26.67] color="#58c04d"
 
-  2. **Starter podium** (1 cube): small raised platform at the entrance.
+  2. **Character** (player avatar, REQUIRED — no character = no WASD):
+       addPrefab character pos=[0,0,-10]
+
+  3. **Starter podium** (1 cube): small raised platform at the entrance.
        addPrefab id=podium rounded-box pos=[0,0.5,-12] scale=[2.67,0.33,2.67] color="#ffe4bf"
 
-  3. **3–5 shop stalls** (7 cubes each), lined up along one edge
+  4. **3–5 shop stalls** (7 cubes each), lined up along one edge
      facing the plot, ~6–7u apart. For shop N at (sx, sz) with
      signature color <shopColor> picked from the vivid palette:
        backwall:    pos=[sx,1.5,sz-0.5] scale=[2.0,1.0,0.13]   color=<shopColor>
@@ -589,7 +611,7 @@ Build all of this, vivid colors only:
      scene — that's the exact bug the user flagged as "shops not
      unique".
 
-  4. **Pet spawners** (EXACTLY 12 cubes per pet — non-negotiable).
+  5. **Pet spawners** (EXACTLY 12 cubes per pet — non-negotiable).
      A truncated pet (missing eyes or legs) is the exact bug the
      user flagged as "pets look like blobs". You MUST emit all
      twelve addPrefab lines for every pet. No exceptions.
@@ -616,13 +638,13 @@ Build all of this, vivid colors only:
      missing cubes. Pets without eyes read as "blobs"; pets without
      legs look like they're floating.
 
-  5. **Upgrade board** in the plot centre — 1 post + 1 sign cube.
+  6. **Upgrade board** in the plot centre — 1 post + 1 sign cube.
      The SIGN gets id=upgrade_sign so each click→buyUpgrade behavior
      can target it (one cube, many behaviors is fine):
        post: pos=[0,0,6] scale=[0.07,1.67,0.07] color="#8b5c3b"
        sign: id=upgrade_sign  pos=[0,2,6]  scale=[0.93,0.6,0.07]  color="#ffd60a"
 
-  6. **Fence around the plot edge** (optional, ~12 fence prefabs)
+  7. **Fence around the plot edge** (optional, ~12 fence prefabs)
      on each of the 4 sides: addPrefab kind=fence at ~12u out, rotated
      along the fence run. Use the fence prefab (not rounded-box) — it
      scatters pickets automatically.
@@ -658,13 +680,16 @@ kickRange multipliers through upgrades. Build this layout:
   1. **Pitch** — long thin baseplate 80×0.5×8, grass color.
        addPrefab rounded-box pos=[30,0,0] scale=[53.3,0.33,5.33] color="#58c04d"
 
-  2. **Kick pad** — red tile with id=kick_pad at origin, plus a
+  2. **Character** (player avatar, REQUIRED — no character = no WASD):
+       addPrefab character pos=[-2,0,0]
+
+  3. **Kick pad** — red tile with id=kick_pad at origin, plus a
      yellow arrow stripe pointing +X so the player knows which way
      the ball flies:
        addPrefab id=kick_pad rounded-box pos=[0,0.05,0] scale=[1.33,0.07,1.33] color="#e63946"
        addPrefab rounded-box pos=[1.2,0.08,0] scale=[0.8,0.04,0.27] color="#ffd60a"
 
-  3. **Distance cones** — small yellow cones every 20m along +X so
+  4. **Distance cones** — small yellow cones every 20m along +X so
      players can read their kick distance visually. Use the 'cone'
      prefab kind (it's a proper cone, not a rounded-box):
        addPrefab cone pos=[20,0,-2] color="#ffd60a"
@@ -672,27 +697,27 @@ kickRange multipliers through upgrades. Build this layout:
        addPrefab cone pos=[60,0,-2] color="#e63946"
        (etc. at 80, 100; bigger range = warmer color)
 
-  4. **Trophy pads** — 3 small tiles along the sideline. Each gets
+  5. **Trophy pads** — 3 small tiles along the sideline. Each gets
      a unique id so its claimIf behavior can target it:
        addPrefab id=trophy_bronze rounded-box pos=[0,0.05,4] scale=[1.0,0.07,1.0] color="#cd7f32"
        addPrefab id=trophy_silver rounded-box pos=[0,0.05,5.5] scale=[1.0,0.07,1.0] color="#c0c0c0"
        addPrefab id=trophy_gold   rounded-box pos=[0,0.05,7]   scale=[1.0,0.07,1.0] color="#ffd60a"
 
-  5. **Mystery crate** — a gift-box prefab with id=mystery_crate
+  6. **Mystery crate** — a gift-box prefab with id=mystery_crate
      for the unboxing click:
        addPrefab id=mystery_crate gift-box pos=[-3,0,3] color="#ff3d9a"
 
-  6. **3–4 shops + 3–4 pets** — same recipe as section 3/4 above.
+  7. **3–4 shops + 3–4 pets** — same recipe as section 4/5 above.
      Shops face the pitch, pets behind the shops.
 
-  7. **HUD** — coin counter (server), kick-distance counter bound
+  8. **HUD** — coin counter (server), kick-distance counter bound
      to bestKick (local):
        {"type":"defineVariable","name":"coins","initial":50,"serverside":true,"label":"Coins"}
        {"type":"defineVariable","name":"bestKick","initial":0,"serverside":false,"label":"Best"}
        {"type":"addHUD","id":"h_coin","hudType":"coinCounter","bind":"coins","anchor":"top-right"}
        {"type":"addHUD","id":"h_best","hudType":"coinCounter","bind":"bestKick","anchor":"top-left"}
 
-  8. **Wire the arcade behaviors** — INLINE, same response:
+  9. **Wire the arcade behaviors** — INLINE, same response:
        // kick pad — base speed scales with equipped pet tier
        {"type":"addBehavior","prefabId":"kick_pad","on":"click","action":{
          "do":"kickBall","baseSpeed":8,"duration":1.4,"trackVar":"bestKick"}}

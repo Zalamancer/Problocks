@@ -71,6 +71,13 @@ type StudioAction =
  * StudioAction because the two agents target different stores — the
  * freeform3d agent speaks in prefab kinds + [x,y,z] tuples, the legacy
  * studio agent speaks in grid tiles + {x,y,z} objects.
+ *
+ * Slice 4/6 adds the tycoon scripting layer to the action vocabulary:
+ * defineVariable / addBehavior / defineUpgrade / addHUD let the agent
+ * declare clickable shops, ticking pets, upgrade panels, and a HUD
+ * overlay. Apply paths route to the freeform3d-store's slice-1
+ * actions; the runtime (slice 3 click + slice 5 tick) reads what the
+ * agent declared and binds it to live game state.
  */
 type Freeform3DAction =
   | {
@@ -92,7 +99,46 @@ type Freeform3DAction =
       props?: Record<string, unknown>;
     }
   | { type: 'removePrefab'; id: string }
-  | { type: 'clearScene' };
+  | { type: 'clearScene' }
+  // --- Tycoon scripting (slice 4/6) ---
+  | {
+      type: 'defineVariable';
+      name: string;
+      initial: number;
+      serverside: boolean;
+      label?: string;
+    }
+  | { type: 'removeVariable'; name: string }
+  | {
+      /** Attach a click/tick behavior to a prefab. The action body
+          mirrors BehaviorAction; the wire format keeps it nested
+          rather than flattened so it stays a 1:1 shape with the
+          schema in game-logic-schema.ts. */
+      type: 'addBehavior';
+      prefabId: string;
+      on: 'click' | 'tick';
+      action: Record<string, unknown>;
+      interval?: number;
+    }
+  | { type: 'clearBehaviors'; prefabId: string }
+  | {
+      type: 'defineUpgrade';
+      id: string;
+      label: string;
+      cost: number;
+      effect: Record<string, unknown>;
+    }
+  | { type: 'removeUpgrade'; id: string }
+  | {
+      /** hudType is renamed to dodge the action `type` field. */
+      type: 'addHUD';
+      id: string;
+      hudType: 'coinCounter' | 'inventory' | 'upgradePanel';
+      anchor: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+      bind?: string;
+      title?: string;
+    }
+  | { type: 'removeHUD'; id: string };
 
 function shortDescribeFreeform3D(a: Freeform3DAction): string {
   switch (a.type) {
@@ -104,6 +150,24 @@ function shortDescribeFreeform3D(a: Freeform3DAction): string {
       return `🗑️ Remove ${a.id}`;
     case 'clearScene':
       return '🧹 Clear scene';
+    case 'defineVariable':
+      return `🔢 ${a.name} = ${a.initial}${a.serverside ? ' [server]' : ''}`;
+    case 'removeVariable':
+      return `🔢 Remove var ${a.name}`;
+    case 'addBehavior': {
+      const doStr = (a.action as { do?: string }).do ?? '?';
+      return `⚡ ${a.on}:${doStr} on ${a.prefabId}`;
+    }
+    case 'clearBehaviors':
+      return `⚡ Clear behaviors on ${a.prefabId}`;
+    case 'defineUpgrade':
+      return `⬆️ ${a.label} (${a.cost})`;
+    case 'removeUpgrade':
+      return `⬆️ Remove upgrade ${a.id}`;
+    case 'addHUD':
+      return `🖼️ HUD ${a.hudType} ${a.anchor}`;
+    case 'removeHUD':
+      return `🖼️ Remove HUD ${a.id}`;
   }
 }
 
@@ -331,6 +395,74 @@ export function ChatPanel() {
       case 'clearScene':
         s.clearScene();
         break;
+
+      // --- Tycoon scripting (slice 4/6) ---
+      case 'defineVariable':
+        s.defineVariable({
+          name: action.name,
+          initial: action.initial,
+          serverside: action.serverside,
+          label: action.label,
+        });
+        break;
+      case 'removeVariable':
+        s.removeVariable(action.name);
+        break;
+      case 'addBehavior':
+        // The store's attachBehavior rejects unknown prefabIds silently
+        // (see game-logic.ts) — that's intentional so a stale agent ref
+        // doesn't crash the apply loop. We pass the action through as-is;
+        // the runtime is the single source of validation.
+        s.attachBehavior(action.prefabId, {
+          on: action.on,
+          action: action.action as never,
+          interval: action.interval,
+        });
+        break;
+      case 'clearBehaviors':
+        s.clearBehaviors(action.prefabId);
+        break;
+      case 'defineUpgrade':
+        s.defineUpgrade({
+          id: action.id,
+          label: action.label,
+          cost: action.cost,
+          effect: action.effect as never,
+        });
+        break;
+      case 'removeUpgrade':
+        s.removeUpgrade(action.id);
+        break;
+      case 'addHUD':
+        // Map the wire format's hudType back into the store's `type`
+        // discriminator. Only the three known shapes get through;
+        // anything else is dropped.
+        if (action.hudType === 'coinCounter') {
+          s.addHUDElement({
+            id: action.id,
+            type: 'coinCounter',
+            bind: action.bind ?? 'coins',
+            anchor: action.anchor,
+          });
+        } else if (action.hudType === 'inventory') {
+          s.addHUDElement({
+            id: action.id,
+            type: 'inventory',
+            anchor: action.anchor,
+            title: action.title,
+          });
+        } else if (action.hudType === 'upgradePanel') {
+          s.addHUDElement({
+            id: action.id,
+            type: 'upgradePanel',
+            anchor: action.anchor,
+            title: action.title,
+          });
+        }
+        break;
+      case 'removeHUD':
+        s.removeHUDElement(action.id);
+        break;
     }
   }, []);
 
@@ -372,7 +504,13 @@ export function ChatPanel() {
           scale: o.scale,
           color: o.color,
           props: o.props,
+          // Slice 4 — surface attached behaviors so the agent can edit
+          // (clearBehaviors before re-attaching) instead of duplicating.
+          behaviors: o.behaviors,
         })),
+        // Slice 4 — variables/upgrades/hud declared so far so the agent
+        // doesn't re-define what's already in place.
+        gameLogic: f3d.scene.gameLogic ?? { variables: {}, upgrades: {}, hud: [] },
       };
       endpoint = '/api/freeform3d-agent';
     } else {

@@ -46,7 +46,33 @@ interface Freeform3DSnapshot {
     scale: [number, number, number];
     color?: string;
     props?: Record<string, unknown>;
+    /** Slice 4 — already-attached click/tick behaviors so the agent
+        sees its prior tycoon wiring and can edit (clearBehaviors then
+        re-attach) instead of duplicating. */
+    behaviors?: Array<{
+      on: 'click' | 'tick';
+      action: Record<string, unknown>;
+      interval?: number;
+    }>;
   }>;
+  /** Slice 4 — declared variables / upgrades / HUD so far. Keeps the
+      agent idempotent across messages: re-asking for "a tycoon" with
+      coins+podium already declared shouldn't double them up. */
+  gameLogic?: {
+    variables: Record<string, {
+      name: string;
+      initial: number;
+      serverside: boolean;
+      label?: string;
+    }>;
+    upgrades: Record<string, {
+      id: string;
+      label: string;
+      cost: number;
+      effect: Record<string, unknown>;
+    }>;
+    hud: Array<{ id: string; type: string; anchor: string; bind?: string; title?: string }>;
+  };
 }
 
 function cliEnv(): NodeJS.ProcessEnv {
@@ -142,12 +168,35 @@ const FREEFORM3D_PROMPT = (
 
   const objectsDump = scene.objects.length
     ? scene.objects
-        .map(
-          (o) =>
-            `  id=${o.id} kind=${o.kind} pos=(${o.position.join(',')}) color=${o.color ?? '-'}`,
-        )
+        .map((o) => {
+          const beh = (o.behaviors && o.behaviors.length)
+            ? ` behaviors=[${o.behaviors.map((b) => `${b.on}:${(b.action as { do?: string }).do ?? '?'}`).join(',')}]`
+            : '';
+          return `  id=${o.id} kind=${o.kind} pos=(${o.position.join(',')}) color=${o.color ?? '-'}${beh}`;
+        })
         .join('\n')
     : '  (scene is empty)';
+
+  // Slice 4 — surface declared game logic so the agent doesn't re-define
+  // existing variables / upgrades / HUD when extending a tycoon.
+  const gl = scene.gameLogic ?? { variables: {}, upgrades: {}, hud: [] };
+  const varList = Object.values(gl.variables);
+  const upList = Object.values(gl.upgrades);
+  const gameLogicDump = (
+    `Variables: ${
+      varList.length
+        ? varList.map((v) => `${v.name}=${v.initial}${v.serverside ? '[server]' : ''}`).join(', ')
+        : '(none)'
+    }\n` +
+    `Upgrades:  ${
+      upList.length
+        ? upList.map((u) => `${u.id}($${u.cost})`).join(', ')
+        : '(none)'
+    }\n` +
+    `HUD:       ${
+      gl.hud.length ? gl.hud.map((h) => `${h.type}@${h.anchor}`).join(', ') : '(none)'
+    }`
+  );
 
   return `You are the Playdemy 3D Freeform agent. You build kid-style Three.js
 scenes by emitting ACTION lines that add/edit/remove prefabs. You do NOT
@@ -159,6 +208,9 @@ ${history ? `Previous conversation:\n${history}\n\n` : ''}Current user message: 
 
 Objects:
 ${objectsDump}
+
+Game logic:
+${gameLogicDump}
 
 ## Available prefab kinds — USE EXACTLY THESE strings for "kind"
 
@@ -197,6 +249,131 @@ object. Narration text can appear between ACTION lines; keep it short.
   {"type":"removePrefab","id":"o_abc12345"}
   {"type":"clearScene"}
     — clearScene removes EVERY object. Use sparingly (e.g. "start over").
+
+## Tycoon scripting — make the world a real game
+
+When the user asks for a tycoon (or any game with money / shops /
+upgrades / inventory), do not just place cubes. Wire behaviors,
+declare variables, define an upgrade catalog, and add the HUD.
+The runtime applies these live: clicking a shop deducts coins on
+the server, ticking pets earn over time, upgrades multiply rates.
+
+### 1. Declare game variables
+
+  {"type":"defineVariable","name":"coins","initial":50,"serverside":true,"label":"Coins"}
+
+    — name MUST be a short ascii id; the HUD's "bind" points at it.
+    — serverside:true means money is server-authoritative (the buy /
+      tick API enforces it). Use serverside:true for coins / gems /
+      anything spendable. serverside:false is for cosmetic local
+      counters.
+    — initial is the starting value. 50 coins is the standard tycoon
+      seed: enough for the first one or two shops.
+
+### 2. Attach behaviors to prefabs
+
+  {"type":"addBehavior","prefabId":"o_shop1","on":"click","action":{
+    "do":"buy",
+    "cost":50,
+    "addToInventory":"pet_red",
+    "label":"Red Pet"}}
+
+  {"type":"addBehavior","prefabId":"o_pet1","on":"tick","action":{
+    "do":"earn","amount":2,"requires":"pet_red"},"interval":1}
+
+  {"type":"addBehavior","prefabId":"o_upBtn","on":"click","action":{
+    "do":"buyUpgrade","upgradeId":"speed_2x"}}
+
+  {"type":"addBehavior","prefabId":"o_podium","on":"click","action":{
+    "do":"grant","to":"coins","amount":10,"oncePerSession":true}}
+
+    — prefabId MUST come from the scene dump above. Behaviors only
+      fire on existing prefabs; never invent ids.
+    — Click behaviors fire on a play-mode click. Tick behaviors fire
+      every "interval" seconds (default 1). Tick "earn" only credits
+      when the player owns "requires" (the inventory id).
+    — One behavior per prefab is the common case. Multiple are
+      allowed — e.g. a podium that both grants on click AND earns
+      on tick — but keep it simple unless the user asked for it.
+    — clearBehaviors wipes everything from one prefab; use it before
+      re-attaching when the agent wants to change a shop's price.
+
+### 3. Define purchasable upgrades
+
+  {"type":"defineUpgrade","id":"speed_2x","label":"Sprint Boots",
+    "cost":200,"effect":{"kind":"multiply","target":"playerSpeed","factor":2}}
+
+  {"type":"defineUpgrade","id":"earn_2x","label":"Golden Ticket",
+    "cost":500,"effect":{"kind":"multiply","target":"earnRate","factor":2}}
+
+    — id MUST be a short ascii string; behaviors reference it via
+      buyUpgrade.upgradeId.
+    — effect.kind = "multiply" with target ∈ {earnRate, playerSpeed,
+      jumpHeight} and a factor. Factor is the multiplier applied
+      ONCE on purchase (so 2x stacks if bought twice — but the buy
+      API treats upgrade ids as a set, so the same id can't stack;
+      the agent should declare "earn_3x" / "earn_5x" tiers if it
+      wants escalation).
+    — Or effect.kind = "unlock" with a flag string for future-gated
+      content. Today the runtime exposes the flag; behaviors that
+      consume it land in slice 6+.
+
+### 4. Add HUD elements
+
+  {"type":"addHUD","id":"h_coin","hudType":"coinCounter",
+    "bind":"coins","anchor":"top-right"}
+  {"type":"addHUD","id":"h_inv","hudType":"inventory","anchor":"top-left","title":"Pets"}
+  {"type":"addHUD","id":"h_up","hudType":"upgradePanel","anchor":"bottom-right","title":"Upgrades"}
+
+    — id MUST be unique per HUD element; re-emitting the same id
+      replaces the prior element (idempotent).
+    — hudType is one of: coinCounter, inventory, upgradePanel.
+    — anchor pins the element to a corner. Avoid two elements at
+      the same anchor unless they read well stacked.
+    — bind is the variable name the counter reads — usually "coins".
+    — Always declare a coinCounter when the world has serverside
+      coins; otherwise the player can't see their balance.
+
+### 5. Removals (rare; keep the agent idempotent before reaching for these)
+
+  {"type":"removeVariable","name":"coins"}
+  {"type":"removeUpgrade","id":"speed_2x"}
+  {"type":"removeHUD","id":"h_coin"}
+  {"type":"clearBehaviors","prefabId":"o_shop1"}
+
+### Tycoon wiring example — paste together with the cube placements
+
+After emitting the cube actions for the tycoon template, follow with:
+
+  // money
+  {"type":"defineVariable","name":"coins","initial":50,"serverside":true,"label":"Coins"}
+  {"type":"addHUD","id":"h_coin","hudType":"coinCounter","bind":"coins","anchor":"top-right"}
+  {"type":"addHUD","id":"h_inv","hudType":"inventory","anchor":"top-left","title":"Pets"}
+  {"type":"addHUD","id":"h_up","hudType":"upgradePanel","anchor":"bottom-right","title":"Upgrades"}
+
+  // shops — wire each shop-tile prefab as a click→buy. Use the id
+  // returned by the addPrefab line for that shop's tile cube. Pets
+  // get tick→earn that requires the matching inventory id.
+  {"type":"addBehavior","prefabId":"<shop1-tile-id>","on":"click",
+    "action":{"do":"buy","cost":50,"addToInventory":"pet_red","label":"Red Pet"}}
+  {"type":"addBehavior","prefabId":"<pet1-body-id>","on":"tick",
+    "action":{"do":"earn","amount":2,"requires":"pet_red"},"interval":1}
+
+  // upgrades catalog
+  {"type":"defineUpgrade","id":"earn_2x","label":"Golden Ticket","cost":500,
+    "effect":{"kind":"multiply","target":"earnRate","factor":2}}
+  {"type":"defineUpgrade","id":"speed_2x","label":"Sprint Boots","cost":200,
+    "effect":{"kind":"multiply","target":"playerSpeed","factor":2}}
+
+  // upgrade-panel post: a click→buyUpgrade for each upgrade
+  {"type":"addBehavior","prefabId":"<upgrade-board-sign-id>","on":"click",
+    "action":{"do":"buyUpgrade","upgradeId":"earn_2x"}}
+
+When the user asks "make this a tycoon" against an existing world:
+do NOT clearScene — just attach behaviors / declare variables / add
+HUD against the prefab ids already in the scene dump. The runtime
+treats addBehavior as additive; clearBehaviors before re-attaching
+if you mean to overwrite.
 
 ## World scale — match the user's ask
 

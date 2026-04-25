@@ -101,7 +101,7 @@ export function PlayHUD() {
   const gameLogic = useFreeform3D((s) => s.scene.gameLogic);
   const objects = useFreeform3D((s) => s.scene.objects);
   const user = useAuthStore((s) => s.user);
-  const { state, loading, buy } = useGameState();
+  const { state, loading, buy, localVars } = useGameState();
   const addToast = useToastStore((s) => s.addToast);
 
   if (!gameLogic || (gameLogic.hud.length === 0 && Object.keys(gameLogic.variables).length === 0)) {
@@ -159,19 +159,35 @@ export function PlayHUD() {
             key={anchor}
             className={`pointer-events-none absolute z-10 flex flex-col gap-2 ${ANCHOR_CLASS[anchor]}`}
           >
-            {elements.map((el) => (
-              <HUDElementView
-                key={el.id}
-                el={el}
-                coins={state?.coins ?? 0}
-                inventory={state?.inventory ?? []}
-                ownedUpgrades={state?.upgrades ?? []}
-                upgradeCatalog={upgradeCatalog}
-                inventoryLabels={labels}
-                loading={loading && !state}
-                onBuyUpgrade={handleBuyUpgrade}
-              />
-            ))}
+            {elements.map((el) => {
+              // coinCounter with a non-server bind (e.g. bestKick) reads
+              // from localVars. Server-side bind reads from state.coins —
+              // v1 only supports coins as the single server var. The
+              // upgrade panel always uses actual state.coins for
+              // affordability regardless of any counter's bind.
+              const bind = el.type === 'coinCounter' ? el.bind : undefined;
+              const varDef = bind ? gameLogic.variables[bind] : undefined;
+              const isServerBind = varDef?.serverside ?? true;
+              const coinLikeValue = isServerBind
+                ? state?.coins ?? 0
+                : localVars[bind ?? ''] ?? 0;
+              return (
+                <HUDElementView
+                  key={el.id}
+                  el={el}
+                  coinLikeValue={coinLikeValue}
+                  coinLikeLabel={varDef?.label}
+                  coinServerside={isServerBind}
+                  actualCoins={state?.coins ?? 0}
+                  inventory={state?.inventory ?? []}
+                  ownedUpgrades={state?.upgrades ?? []}
+                  upgradeCatalog={upgradeCatalog}
+                  inventoryLabels={labels}
+                  loading={loading && !state && isServerBind}
+                  onBuyUpgrade={handleBuyUpgrade}
+                />
+              );
+            })}
           </div>
         );
       })}
@@ -181,7 +197,10 @@ export function PlayHUD() {
 
 function HUDElementView({
   el,
-  coins,
+  coinLikeValue,
+  coinLikeLabel,
+  coinServerside,
+  actualCoins,
   inventory,
   ownedUpgrades,
   upgradeCatalog,
@@ -190,7 +209,10 @@ function HUDElementView({
   onBuyUpgrade,
 }: {
   el: HUDElement;
-  coins: number;
+  coinLikeValue: number;
+  coinLikeLabel?: string;
+  coinServerside: boolean;
+  actualCoins: number;
   inventory: string[];
   ownedUpgrades: string[];
   upgradeCatalog: Record<string, UpgradeDef>;
@@ -200,12 +222,22 @@ function HUDElementView({
 }) {
   switch (el.type) {
     case 'coinCounter':
+      // Non-server bindings (bestKick, etc.) drop the coin dot and
+      // use a different accent. This keeps a distance counter from
+      // reading as "coins" when both are on screen.
       return (
         <HUDPill>
           <div className="flex items-center gap-2">
-            <span className="text-amber-300 text-lg leading-none">●</span>
+            {coinServerside ? (
+              <span className="text-amber-300 text-lg leading-none">●</span>
+            ) : (
+              <span className="text-emerald-400 text-[10px] uppercase tracking-wide">
+                {coinLikeLabel ?? el.bind}
+              </span>
+            )}
             <span className="font-mono tabular-nums text-base">
-              {loading ? '—' : coins.toLocaleString()}
+              {loading ? '—' : coinLikeValue.toLocaleString()}
+              {coinServerside ? '' : 'm'}
             </span>
           </div>
         </HUDPill>
@@ -222,7 +254,7 @@ function HUDElementView({
       return (
         <UpgradesPanel
           title={el.title ?? 'Upgrades'}
-          coins={coins}
+          coins={actualCoins}
           ownedUpgrades={ownedUpgrades}
           catalog={upgradeCatalog}
           onBuy={onBuyUpgrade}

@@ -67,6 +67,50 @@ export type BehaviorAction =
           bonus). When false, repeats on every click — useful for an
           arcade-style "click for coin" cube. */
       oncePerSession?: boolean;
+    }
+  // ---- Slice 7: arcade primitives (no real physics) ----
+  | {
+      /** Spawn a ball that visually arcs forward from the clicked pad
+          for `duration` seconds, ending at `baseSpeed * duration * kickRangeMult`
+          units away. Updates `trackVar` (default "bestKick") on a
+          new-max. Pure visual + client-local variable — no server
+          calls. */
+      do: 'kickBall';
+      /** Base distance-per-second in world units. Typical 6–15. */
+      baseSpeed: number;
+      /** Flight time in seconds. Typical 1.0–1.8. */
+      duration?: number;
+      /** Local variable name the kick distance gets max'd into. */
+      trackVar?: string;
+      /** Ball color (defaults to white). Pulled from the vivid palette. */
+      ballColor?: string;
+    }
+  | {
+      /** Weighted random draw from `drops`. Deducts cost, then picks
+          one drop and adds it to inventory. Weights are relative —
+          [{weight:3}, {weight:1}] = 75%/25%. */
+      do: 'roll';
+      cost: number;
+      drops: Array<{
+        inventory: string;
+        weight: number;
+        /** Label shown in the "You got: …" toast. */
+        label?: string;
+      }>;
+    }
+  | {
+      /** Conditional claim — fires only when `ifVar >= gte` AND the
+          player doesn't already own `trophyId`. Grants `reward` coins
+          and adds `trophyId` to inventory. Client-checked + server-
+          credited via the existing earn/buy endpoints. */
+      do: 'claimIf';
+      ifVar: string;
+      gte: number;
+      reward: number;
+      /** Inventory id marking "trophy owned". */
+      trophyId: string;
+      /** Human label for the trophy toast ("You earned: Bronze"). */
+      label?: string;
     };
 
 export interface Behavior {
@@ -106,7 +150,7 @@ export interface UpgradeDef {
   effect:
     | {
         kind: 'multiply';
-        target: 'earnRate' | 'playerSpeed' | 'jumpHeight';
+        target: 'earnRate' | 'playerSpeed' | 'jumpHeight' | 'kickRange';
         factor: number;
       }
     | {

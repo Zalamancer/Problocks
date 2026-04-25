@@ -390,6 +390,62 @@ the server, ticking pets earn over time, upgrades multiply rates.
   {"type":"removeHUD","id":"h_coin"}
   {"type":"clearBehaviors","prefabId":"o_shop1"}
 
+## Arcade primitives — kickBall / roll / claimIf
+
+For games like "kick a ball" / "throw as far as possible" / "unbox a
+mystery pet" / "claim a trophy at 100m", use these three extra
+behavior action types. They are client-only (no server round-trip
+for kickBall) or reuse buy/earn (for roll + claimIf).
+
+### kickBall — click pad, ball arcs forward, distance tracked
+
+  {"type":"addBehavior","prefabId":"kick_pad","on":"click","action":{
+    "do":"kickBall","baseSpeed":8,"duration":1.4,"trackVar":"bestKick",
+    "ballColor":"#ffffff"}}
+
+    — A white sphere tweens from the clicked pad along world +X
+      for "duration" seconds with a parabolic arc. Total distance =
+      baseSpeed × duration × kickRangeMultiplier.
+    — Owned upgrades with effect {kind:'multiply', target:'kickRange'}
+      scale the distance. Stack by buying multiple upgrade tiers.
+    — trackVar (default 'bestKick') is a CLIENT-ONLY variable that
+      gets max'd with the landing distance. Declare it as
+      serverside:false so the HUD reads it from local state.
+    — baseSpeed 6–15 is the honest feel-good range. duration 1.0–1.8.
+      Do not use speeds > 30 — the ball flies off-screen and reads
+      as bugged.
+
+### roll — weighted random unboxing
+
+  {"type":"addBehavior","prefabId":"mystery_crate","on":"click","action":{
+    "do":"roll","cost":100,
+    "drops":[
+      {"inventory":"pet_puppy", "weight":3,"label":"Puppy"},
+      {"inventory":"pet_kitty", "weight":2,"label":"Kitty"},
+      {"inventory":"pet_dragon","weight":1,"label":"Dragon"}
+    ]}}
+
+    — Deducts cost, rolls one drop from the weighted list, adds its
+      inventory id to the player's row. Toast says "You got: <label>".
+    — Weights are relative. [{weight:3}, {weight:1}] = 75%/25%.
+    — Keep the pool to 3–6 drops. The dragon/legendary drop should
+      be a small weight (1) so rarity feels earned.
+
+### claimIf — conditional trophy
+
+  {"type":"addBehavior","prefabId":"trophy_bronze","on":"click","action":{
+    "do":"claimIf","ifVar":"bestKick","gte":50,"reward":100,
+    "trophyId":"trophy_bronze","label":"Bronze"}}
+
+    — Client gate: fires ONLY when localVars[ifVar] >= gte AND the
+      player doesn't already own trophyId. Otherwise a toast tells
+      them the threshold.
+    — On claim: grants "reward" coins + adds trophyId to inventory
+      (via a cost-0 buy + an earn call). One trophy per click; once
+      claimed, the button stays inert.
+    — Pick thresholds that feel achievable: bronze at 50m, silver
+      at 150m, gold at 500m. Rewards scale with the grind.
+
 ### Tycoon wiring example — PASTE INLINE WITH THE CUBE PLACEMENTS
 
 The addPrefab lines for shop tiles and pet bodies set explicit ids
@@ -512,36 +568,53 @@ Build all of this, vivid colors only:
   2. **Starter podium** (1 cube): small raised platform at the entrance.
        addPrefab id=podium rounded-box pos=[0,0.5,-12] scale=[2.67,0.33,2.67] color="#ffe4bf"
 
-  3. **3–5 shop stalls** (5 cubes each), lined up along one edge
-     facing the plot, ~6–7u apart. For shop N at (sx, sz):
-       leftPillar:  pos=[sx-1.3,0,sz]     scale=[0.13,1.67,0.13] color="#8b5c3b"
-       rightPillar: pos=[sx+1.3,0,sz]     scale=[0.13,1.67,0.13] color="#8b5c3b"
-       desk:        pos=[sx,1,sz]         scale=[1.87,0.07,0.53] color="#ff8c1a"
-       sunshade:    pos=[sx,2.6,sz+0.3]   scale=[2.0,0.05,1.2]   rotation=[0.39,0,0] color=<roofColor>
-       tile:        id=shopN_tile  pos=[sx,0,sz]  scale=[2.0,0.04,1.33]  color="#ffe4bf"
+  3. **3–5 shop stalls** (7 cubes each), lined up along one edge
+     facing the plot, ~6–7u apart. For shop N at (sx, sz) with
+     signature color <shopColor> picked from the vivid palette:
+       backwall:    pos=[sx,1.5,sz-0.5] scale=[2.0,1.0,0.13]   color=<shopColor>
+       leftPillar:  pos=[sx-1.3,0,sz]   scale=[0.13,1.67,0.13] color="#8b5c3b"
+       rightPillar: pos=[sx+1.3,0,sz]   scale=[0.13,1.67,0.13] color="#8b5c3b"
+       desk:        pos=[sx,1,sz]       scale=[1.87,0.07,0.53] color="#ffe4bf"
+       sunshade:    pos=[sx,2.6,sz+0.3] scale=[2.0,0.05,1.2]   rotation=[0.39,0,0] color=<shopColor>
+       sign:        pos=[sx,2.0,sz-0.7] scale=[0.53,0.33,0.07] color="#ffd60a"
+       tile:        id=shopN_tile  pos=[sx,0,sz]  scale=[2.0,0.04,1.33]  color=<shopColor>
      The TILE cube is the clickable one — it gets id=shopN_tile (shop1_tile,
      shop2_tile, …) so you can attach the click→buy behavior to it later.
-     Vary roofColor per shop from the vivid palette — e.g.
-     "#e63946" (red), "#ff8c1a" (orange), "#3a9cf0" (blue),
-     "#a349e6" (purple).
+     The backwall + sunshade + tile all use the SAME shopColor so the
+     stall reads as a single colored "stand" at a distance — that's
+     what makes each shop recognizable. Yellow signs contrast.
+     Pick shopColor from: "#e63946" (red), "#ff8c1a" (orange),
+     "#3a9cf0" (blue), "#a349e6" (purple), "#38d86a" (green),
+     "#ff3d9a" (pink). Never reuse a color across two shops in one
+     scene — that's the exact bug the user flagged as "shops not
+     unique".
 
-  4. **Pet spawners** (each pet is ~12 cubes), placed in a row behind
-     the shops, 3u apart. Give pet N's BODY cube an id (pet1_body,
-     pet2_body, …) so the tick→earn behavior can target it. Use
-     VIVID palette body colors — puppy_pink, kitty_orange,
-     bunny_white, dragon_purple, baby_blue, lime_green, sunny_yellow.
+  4. **Pet spawners** (EXACTLY 12 cubes per pet — non-negotiable).
+     A truncated pet (missing eyes or legs) is the exact bug the
+     user flagged as "pets look like blobs". You MUST emit all
+     twelve addPrefab lines for every pet. No exceptions.
+     Placed in a row behind the shops, 3u apart. Give pet N's BODY
+     cube an id (pet1_body, pet2_body, …) so the tick→earn behavior
+     can target it. Use VIVID palette body colors — puppy_pink
+     #ff5c9e, kitty_orange #ff8e2b, bunny_white #fff8e7,
+     dragon_purple #b14aed, baby_blue #5bb6ff, lime_green #8de63c,
+     sunny_yellow #ffd84d.
        body:   id=petN_body  pos=[px,0.25,pz]  scale=[0.73,0.47,0.47] color=<bodyColor>
-       head:   pos=[px,0.55,pz+0.45]     scale=[0.47,0.4,0.4]   color=<bodyColor>
-       earL:   pos=[px-0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]  color=<bodyColor>
-       earR:   pos=[px+0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]  color=<bodyColor>
+       head:   pos=[px,0.55,pz+0.45]      scale=[0.47,0.4,0.4]   color=<bodyColor>
+       earL:   pos=[px-0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]   color=<bodyColor>
+       earR:   pos=[px+0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]   color=<bodyColor>
        eyeL:   pos=[px-0.12,0.75,pz+0.65] scale=[0.09,0.09,0.03] color="#ffffff"
        eyeR:   pos=[px+0.12,0.75,pz+0.65] scale=[0.09,0.09,0.03] color="#ffffff"
        pupilL: pos=[px-0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#111111"
        pupilR: pos=[px+0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#111111"
-       leg1:   pos=[px-0.25,0,pz-0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
-       leg2:   pos=[px+0.25,0,pz-0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
-       leg3:   pos=[px-0.25,0,pz+0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
-       leg4:   pos=[px+0.25,0,pz+0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg1:   pos=[px-0.25,0,pz-0.1]     scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg2:   pos=[px+0.25,0,pz-0.1]     scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg3:   pos=[px-0.25,0,pz+0.1]     scale=[0.1,0.2,0.1]    color="#8b5c3b"
+       leg4:   pos=[px+0.25,0,pz+0.1]     scale=[0.1,0.2,0.1]    color="#8b5c3b"
+     Self-check before moving on: count your addPrefab lines for
+     each pet. If the number isn't 12, go back and fill in the
+     missing cubes. Pets without eyes read as "blobs"; pets without
+     legs look like they're floating.
 
   5. **Upgrade board** in the plot centre — 1 post + 1 sign cube.
      The SIGN gets id=upgrade_sign so each click→buyUpgrade behavior
@@ -572,6 +645,78 @@ design metadata so the user sees what they just got. Format:
 
 Pick names that fit the theme (Pet Tycoon: fluffy/mythic; Food Tycoon:
 deli/diner; Car Tycoon: garage/chrome). Keep it short — 1 line per entry.
+
+### Ball-kick arena template (for "kick the ball farthest" games)
+
+Uses the arcade primitives (kickBall, roll, claimIf) instead of the
+tycoon earn loop. The world is a long green pitch, a kick pad with
+an arrow pointing down the pitch, distance-marker cones every ~20m,
+trophy pads at 50m / 150m / 500m, and an unboxing crate for mystery
+pets. Pets perch behind the pad; owning them unlocks higher
+kickRange multipliers through upgrades. Build this layout:
+
+  1. **Pitch** — long thin baseplate 80×0.5×8, grass color.
+       addPrefab rounded-box pos=[30,0,0] scale=[53.3,0.33,5.33] color="#58c04d"
+
+  2. **Kick pad** — red tile with id=kick_pad at origin, plus a
+     yellow arrow stripe pointing +X so the player knows which way
+     the ball flies:
+       addPrefab id=kick_pad rounded-box pos=[0,0.05,0] scale=[1.33,0.07,1.33] color="#e63946"
+       addPrefab rounded-box pos=[1.2,0.08,0] scale=[0.8,0.04,0.27] color="#ffd60a"
+
+  3. **Distance cones** — small yellow cones every 20m along +X so
+     players can read their kick distance visually. Use the 'cone'
+     prefab kind (it's a proper cone, not a rounded-box):
+       addPrefab cone pos=[20,0,-2] color="#ffd60a"
+       addPrefab cone pos=[40,0,-2] color="#ff8c1a"
+       addPrefab cone pos=[60,0,-2] color="#e63946"
+       (etc. at 80, 100; bigger range = warmer color)
+
+  4. **Trophy pads** — 3 small tiles along the sideline. Each gets
+     a unique id so its claimIf behavior can target it:
+       addPrefab id=trophy_bronze rounded-box pos=[0,0.05,4] scale=[1.0,0.07,1.0] color="#cd7f32"
+       addPrefab id=trophy_silver rounded-box pos=[0,0.05,5.5] scale=[1.0,0.07,1.0] color="#c0c0c0"
+       addPrefab id=trophy_gold   rounded-box pos=[0,0.05,7]   scale=[1.0,0.07,1.0] color="#ffd60a"
+
+  5. **Mystery crate** — a gift-box prefab with id=mystery_crate
+     for the unboxing click:
+       addPrefab id=mystery_crate gift-box pos=[-3,0,3] color="#ff3d9a"
+
+  6. **3–4 shops + 3–4 pets** — same recipe as section 3/4 above.
+     Shops face the pitch, pets behind the shops.
+
+  7. **HUD** — coin counter (server), kick-distance counter bound
+     to bestKick (local):
+       {"type":"defineVariable","name":"coins","initial":50,"serverside":true,"label":"Coins"}
+       {"type":"defineVariable","name":"bestKick","initial":0,"serverside":false,"label":"Best"}
+       {"type":"addHUD","id":"h_coin","hudType":"coinCounter","bind":"coins","anchor":"top-right"}
+       {"type":"addHUD","id":"h_best","hudType":"coinCounter","bind":"bestKick","anchor":"top-left"}
+
+  8. **Wire the arcade behaviors** — INLINE, same response:
+       // kick pad — base speed scales with equipped pet tier
+       {"type":"addBehavior","prefabId":"kick_pad","on":"click","action":{
+         "do":"kickBall","baseSpeed":8,"duration":1.4,"trackVar":"bestKick"}}
+
+       // trophies — three thresholds
+       {"type":"addBehavior","prefabId":"trophy_bronze","on":"click","action":{
+         "do":"claimIf","ifVar":"bestKick","gte":50,"reward":100,"trophyId":"trophy_bronze","label":"Bronze"}}
+       {"type":"addBehavior","prefabId":"trophy_silver","on":"click","action":{
+         "do":"claimIf","ifVar":"bestKick","gte":150,"reward":500,"trophyId":"trophy_silver","label":"Silver"}}
+       {"type":"addBehavior","prefabId":"trophy_gold","on":"click","action":{
+         "do":"claimIf","ifVar":"bestKick","gte":500,"reward":2000,"trophyId":"trophy_gold","label":"Gold"}}
+
+       // crate — weighted unbox, rarity falls off
+       {"type":"addBehavior","prefabId":"mystery_crate","on":"click","action":{
+         "do":"roll","cost":100,"drops":[
+           {"inventory":"pet_puppy","weight":4,"label":"Puppy"},
+           {"inventory":"pet_kitty","weight":2,"label":"Kitty"},
+           {"inventory":"pet_dragon","weight":1,"label":"Dragon"}]}}
+
+       // kickRange upgrades stack onto the kick distance
+       {"type":"defineUpgrade","id":"kick_2x","label":"Stronger Kick","cost":300,
+         "effect":{"kind":"multiply","target":"kickRange","factor":2}}
+       {"type":"defineUpgrade","id":"kick_3x","label":"Mega Kick","cost":1200,
+         "effect":{"kind":"multiply","target":"kickRange","factor":1.5}}
 
 ### Other genres — quick templates
 

@@ -86,6 +86,17 @@ export interface UseGameStateResult {
   /** Imperative override of local state — used by the tick batcher
       to apply optimistic credits before the server round-trips back. */
   setState: (next: PlayerState) => void;
+
+  /** Slice 7 — runtime-only variables (serverside:false). Used by
+      arcade primitives like `kickBall` that need a client-tracked
+      metric (bestKick distance). Resets when play mode stops. */
+  localVars: Record<string, number>;
+  /** Set a local var. Idempotent when the incoming value matches. */
+  setLocalVar: (name: string, value: number) => void;
+  /** Set a local var only if the new value is strictly greater.
+      Used for monotonic metrics like bestKick. Returns true if
+      changed. */
+  setLocalVarMax: (name: string, value: number) => boolean;
 }
 
 /** Stable gameId derivation. Saved scenes get their saved name; an
@@ -103,6 +114,7 @@ export function useGameState(): UseGameStateResult {
 
   const [state, setLocalState] = useState<PlayerState | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [localVars, setLocalVarsState] = useState<Record<string, number>>({});
   const gameId = deriveGameId(currentSceneName);
 
   // Track the in-flight fetch so a fast scene-rename doesn't write back
@@ -209,6 +221,24 @@ export function useGameState(): UseGameStateResult {
     [gameId, isAuthed, state],
   );
 
+  const setLocalVar = useCallback((name: string, value: number) => {
+    setLocalVarsState((prev) => {
+      if (prev[name] === value) return prev;
+      return { ...prev, [name]: value };
+    });
+  }, []);
+
+  const setLocalVarMax = useCallback((name: string, value: number): boolean => {
+    let changed = false;
+    setLocalVarsState((prev) => {
+      const cur = prev[name] ?? 0;
+      if (value <= cur) return prev;
+      changed = true;
+      return { ...prev, [name]: value };
+    });
+    return changed;
+  }, []);
+
   return {
     gameId,
     state,
@@ -218,5 +248,8 @@ export function useGameState(): UseGameStateResult {
     buy,
     earn,
     setState: setLocalState,
+    localVars,
+    setLocalVar,
+    setLocalVarMax,
   };
 }

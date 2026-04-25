@@ -26,6 +26,7 @@ import { setSpawnTargetProvider } from '@/lib/kid-style-3d/spawn-target';
 import { PlayHUD as TycoonHUD } from './freeform3d/PlayHUD';
 import { PlayTicker } from './freeform3d/PlayTicker';
 import { useGameState } from '@/hooks/use-game-state';
+import { spawnKickBall } from '@/lib/kid-style-3d/kick-ball';
 
 /** Convert a user-avatar AvatarOutfit into SceneObject.props for the
     character prefab. Kept local because the character prefab is the
@@ -94,9 +95,24 @@ export function FreeformView3D() {
   // Tycoon money loop — only fetches when scene declares serverside vars
   // (the hook itself is anonymous-aware and won't probe the API for
   // non-authed users).
-  const { buy: buyAction, isAuthed, state: gameStateValue } = useGameState();
+  const {
+    buy: buyAction,
+    earn: earnAction,
+    isAuthed,
+    state: gameStateValue,
+    localVars: gameLocalVars,
+    setLocalVarMax,
+  } = useGameState();
   const buyRef = useRef(buyAction);
   buyRef.current = buyAction;
+  const earnRef = useRef(earnAction);
+  earnRef.current = earnAction;
+  const gameStateRef = useRef(gameStateValue);
+  gameStateRef.current = gameStateValue;
+  const localVarsRef = useRef(gameLocalVars);
+  localVarsRef.current = gameLocalVars;
+  const setLocalVarMaxRef = useRef(setLocalVarMax);
+  setLocalVarMaxRef.current = setLocalVarMax;
   const isAuthedRef = useRef(isAuthed);
   isAuthedRef.current = isAuthed;
   const addToast = useToastStore((s) => s.addToast);
@@ -481,8 +497,115 @@ export function FreeformView3D() {
         return;
       }
 
-      // 'earn' / 'grant' don't fire on a single click in slice 3 — the
-      // server-side tick batcher (slice 5) will own the periodic credit.
+      // --- Slice 7: arcade primitives ---
+
+      if (action.do === 'kickBall') {
+        const engine2 = engineRef.current;
+        if (!engine2) return;
+        // Compute the kick range multiplier from owned upgrades.
+        const ownedUpgrades = gameStateRef.current?.upgrades ?? [];
+        const upgradeCatalog = scene.gameLogic?.upgrades ?? {};
+        let kickMul = 1;
+        const seenU = new Set<string>();
+        for (const id of ownedUpgrades) {
+          if (seenU.has(id)) continue;
+          seenU.add(id);
+          const def = upgradeCatalog[id];
+          if (def && def.effect.kind === 'multiply' && def.effect.target === 'kickRange') {
+            kickMul *= def.effect.factor;
+          }
+        }
+        // Launch from the clicked pad's position, +X forward in world
+        // space so the ball always flies "away" in the same direction
+        // (keeps the game easy to read without per-pad rotation math).
+        const padPos = new THREE.Vector3(obj!.position[0], obj!.position[1] + 0.3, obj!.position[2]);
+        const trackVar = action.trackVar ?? 'bestKick';
+        spawnKickBall({
+          root: engine2.root,
+          start: padPos,
+          forward: new THREE.Vector3(1, 0, 0),
+          baseSpeed: action.baseSpeed,
+          duration: action.duration ?? 1.4,
+          speedMul: kickMul,
+          color: action.ballColor ?? '#ffffff',
+          onLand: (dist) => {
+            const rounded = Math.floor(dist);
+            const changed = setLocalVarMaxRef.current(trackVar, rounded);
+            addToastRef.current(
+              'info',
+              changed ? `New best! ${rounded}m` : `Kicked ${rounded}m`,
+            );
+          },
+        });
+        return;
+      }
+
+      if (action.do === 'roll') {
+        // Weighted pick from the drops list on the client. The buy API
+        // only sees a single grants id, which keeps the server honest
+        // about cost without needing a new endpoint.
+        const drops = action.drops;
+        if (!drops || drops.length === 0) return;
+        const totalWeight = drops.reduce((s, d) => s + Math.max(0, d.weight), 0);
+        if (totalWeight <= 0) return;
+        let roll = Math.random() * totalWeight;
+        let picked = drops[0];
+        for (const d of drops) {
+          roll -= Math.max(0, d.weight);
+          if (roll <= 0) { picked = d; break; }
+        }
+        const result = await buyRef.current({
+          kind: 'item',
+          cost: action.cost,
+          grants: picked.inventory,
+          label: picked.label,
+        });
+        if (!result.ok) {
+          if (result.reason === 'insufficient') addToastRef.current('warning', `Need ${action.cost} coins`);
+          else if (result.reason === 'auth')    addToastRef.current('warning', 'Sign in to play this world');
+          else                                  addToastRef.current('error',   'Unboxing failed');
+        } else {
+          addToastRef.current('info', `You got: ${picked.label ?? picked.inventory}!`);
+        }
+        return;
+      }
+
+      if (action.do === 'claimIf') {
+        // Client-side gate: read local var, check threshold, check
+        // trophy-not-already-owned. If all pass, two calls:
+        //   buy(cost:0, grants:trophyId)  adds trophy to inventory
+        //   earn(reward)                  credits coins (rate-capped)
+        const curVar = localVarsRef.current[action.ifVar] ?? 0;
+        if (curVar < action.gte) {
+          addToastRef.current('warning', `Kick ${action.gte}m+ to claim`);
+          return;
+        }
+        const owned = gameStateRef.current?.inventory ?? [];
+        if (owned.includes(action.trophyId)) {
+          addToastRef.current('info', 'Already claimed');
+          return;
+        }
+        // Grant the trophy (cost-0 buy). Separate earn() for the coin
+        // reward. Two round-trips is fine for a one-off click.
+        const buyRes = await buyRef.current({
+          kind: 'item',
+          cost: 0,
+          grants: action.trophyId,
+          label: action.label,
+        });
+        if (!buyRes.ok) {
+          addToastRef.current('error', 'Claim failed — try again');
+          return;
+        }
+        if (action.reward > 0) {
+          await earnRef.current(action.reward);
+        }
+        addToastRef.current('info', `Claimed: ${action.label ?? action.trophyId} (+${action.reward})`);
+        return;
+      }
+
+      // 'earn' / 'grant' don't fire on a single click — the server-side
+      // tick batcher (slice 5) owns the periodic credit.
     };
 
     canvas.addEventListener('pointerdown', onPointerDown);

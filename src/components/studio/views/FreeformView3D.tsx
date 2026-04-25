@@ -268,7 +268,13 @@ export function FreeformView3D() {
       Edit-mode only — play mode's controller owns the camera. The
       preset rewrites OrbitControls' target + camera position, then
       enables/disables rotate so topdown / isometric feel like locked
-      "RTS-style" views (pan + zoom only). */
+      "RTS-style" views (pan + zoom only).
+
+      Also a defensive recovery point: the play-controller flips
+      orbit.enabled false during play and restores it on stop, but if
+      anything in stop() ever throws before the restore happens, the
+      orbit camera ends up wedged. Re-asserting enabled=true here on
+      every isPlaying=false transition makes that path self-healing. */
   useEffect(() => {
     if (isPlaying) return;
     const engine = engineRef.current;
@@ -276,6 +282,15 @@ export function FreeformView3D() {
     const camera = engine.camera;
     const controls = engine.controls;
     const view = world.cameraView;
+
+    // Force-enable controls + clear any residual sphericalDelta state
+    // by calling update(). Damping with enableDamping=true means the
+    // delta decays toward zero each frame; calling update once is
+    // enough to settle the camera's spherical to the new position
+    // before our preset overrides it below.
+    controls.enabled = true;
+    controls.update();
+
     if (view === 'topdown') {
       controls.target.set(0, 0, 0);
       // Tiny non-zero X/Z so OrbitControls' polar angle stays slightly
@@ -418,13 +433,20 @@ export function FreeformView3D() {
     engine.setPerFrame((dt) => controller.update(dt));
 
     return () => {
-      if (tickTimer !== null) clearInterval(tickTimer);
-      script.dispose();
-      scriptRef.current = null;
-      controller.stop();
-      controller.dispose();
-      playRef.current = null;
-      engine.setPerFrame(null);
+      // Order matters: controller.stop() must run regardless of script
+      // teardown errors so it can re-enable OrbitControls. Without this,
+      // a bad script throwing in dispose() would leave orbit.enabled
+      // false and the user couldn't pan/orbit after exiting play.
+      try {
+        if (tickTimer !== null) clearInterval(tickTimer);
+        try { script.dispose(); } catch (err) { console.error('[scene-script] dispose', err); }
+        scriptRef.current = null;
+      } finally {
+        controller.stop();
+        controller.dispose();
+        playRef.current = null;
+        engine.setPerFrame(null);
+      }
     };
   }, [isPlaying, cameraMode]);
 

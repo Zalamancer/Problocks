@@ -112,6 +112,39 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     }
   }
 
+  /**
+   * Pop the character up to the top of any collider it's intersecting
+   * on spawn. Without this, a character placed at y=0 on a scene with
+   * a 0.5u-thick grass baseplate ends up with its lower cylinder body
+   * inside the plate — cylinderCollides() then blocks every horizontal
+   * move and gravity can't pull up, so WASD feels "locked".
+   *
+   * Iterative so stacked geometry (a podium on a baseplate) resolves
+   * in one call. Capped at 12 iterations and 10 world units to avoid
+   * runaway in pathological scenes (e.g. a scene that covers the
+   * character's XZ footprint with cubes all the way up to the sky).
+   */
+  function popToGroundOnSpawn() {
+    for (let i = 0; i < 12; i++) {
+      let top: number | null = null;
+      const cx = character.position.x;
+      const cz = character.position.z;
+      const cy = character.position.y;
+      for (const c of colliders) {
+        const b = c.box;
+        if (b.min.x < cx + CHAR_R && b.max.x > cx - CHAR_R &&
+            b.min.z < cz + CHAR_R && b.max.z > cz - CHAR_R &&
+            // The collider overlaps our cylinder vertically.
+            b.min.y < cy + CHAR_H && b.max.y > cy) {
+          if (top == null || b.max.y > top) top = b.max.y;
+        }
+      }
+      if (top == null) return;
+      if (top - cy > 10) return;
+      character.position.y = top;
+    }
+  }
+
   // ---- Preserve edit-mode state so we can restore on stop() ----
   const prevOrbitEnabled = orbit.enabled;
   const prevCharVisible = character.visible;
@@ -163,6 +196,7 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     running = true;
     orbit.enabled = false;
     collectColliders();
+    popToGroundOnSpawn();
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     domElement.addEventListener('pointerdown', onPointerDown);

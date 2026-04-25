@@ -81,8 +81,24 @@ function WhiteboardAnswer({
   onAnswer: (answer: Answer) => void;
 }) {
   const ref = useRef<WhiteboardHandle | null>(null);
+  const submitBtnRef = useRef<HTMLButtonElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [warn, setWarn] = useState<string | null>(null);
+
+  // The homework page is fixed-height with internal scroll columns,
+  // and the canvas is tall enough that the Submit button can fall
+  // below the fold the moment the part is expanded. Scroll the
+  // button into view on mount so the user never misses it.
+  useEffect(() => {
+    if (selected?.dataUrl) return; // already submitted
+    const t = setTimeout(() => {
+      submitBtnRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end',
+      });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [selected?.dataUrl]);
 
   const requestTutorReview = useCallback(
     async (dataUrl: string) => {
@@ -196,7 +212,7 @@ function WhiteboardAnswer({
           {micro.hint}
         </div>
       )}
-      <WhiteboardCanvas ref={ref} width={320} height={300} disabled={busy} theme="light" />
+      <WhiteboardCanvas ref={ref} width={320} height={220} disabled={busy} theme="light" />
       {warn && (
         <div
           style={{
@@ -213,6 +229,7 @@ function WhiteboardAnswer({
         </div>
       )}
       <button
+        ref={submitBtnRef}
         type="button"
         onClick={submit}
         disabled={busy}

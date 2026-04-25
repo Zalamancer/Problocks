@@ -224,8 +224,9 @@ object. Narration text can appear between ACTION lines; keep it short.
 ### Add a prefab
 
   {"type":"addPrefab","kind":"house","position":[0,0,-5]}
-  {"type":"addPrefab","kind":"tree-oak","position":[7,0,3],"rotation":[0,1.2,0],"scale":[1,1,1],"color":"#6fbf7a"}
-  {"type":"addPrefab","kind":"house","position":[0,0,-5],"props":{"roofColor":"#cc4444","doorColor":"#3a1e12"}}
+  {"type":"addPrefab","id":"shop1_tile","kind":"rounded-box","position":[-9,0,-11],"scale":[2.0,0.04,1.33],"color":"#e63946"}
+  {"type":"addPrefab","kind":"tree-oak","position":[7,0,3],"rotation":[0,1.2,0],"scale":[1,1,1],"color":"#58c04d"}
+  {"type":"addPrefab","kind":"house","position":[0,0,-5],"props":{"roofColor":"#e63946","doorColor":"#3a1e12"}}
 
     — kind MUST be one of the ids in the catalog above. Do NOT invent ids.
     — position/rotation/scale are [x,y,z] arrays. y=0 is the ground plane.
@@ -235,6 +236,54 @@ object. Narration text can appear between ACTION lines; keep it short.
     — props lets you override per-prefab colors/lengths; only send props
       documented in the catalog above (e.g. house: roofColor, doorColor,
       trimColor, foundationColor; fence: length).
+    — "id" is OPTIONAL. When you set one, the client uses it as the
+      object's permanent id, so you can reference it from addBehavior
+      later in the SAME response. Ids must match ^[a-zA-Z0-9_-]{1,40}$
+      and be unique. If you omit id, the client auto-mints (behaviors
+      in the same response can't reach it — only later messages can).
+
+## Color palette — REQUIRED for anything that reads as a "game"
+
+Kid-mode / Roblox / Pokopia worlds look cartoony and VIVID. Muted /
+desaturated / pastel hex values read as blueprint mockups, not
+games. When you need a color for any prefab or prop, pick from or
+scale from THIS palette. Avoid anything less saturated than these:
+
+  Nature / ground
+    grass_green   #58c04d    (ground plane / grass plots)
+    leaf_green    #4ea83c    (tree leaves / bushes)
+    dirt_brown    #a0643c    (paths / dirt patches)
+    wood_brown    #8b5c3b    (trunks, fence posts, upgrade posts)
+    stone_gray    #b8b8b8    (path stones / rocks)
+    cream_warm    #ffe4bf    (foundations / warm neutrals)
+
+  Vivid accents (shops, pets, signs, toys)
+    vivid_red     #e63946
+    vivid_orange  #ff8c1a
+    vivid_yellow  #ffd60a
+    vivid_green   #38d86a
+    vivid_blue    #3a9cf0
+    vivid_purple  #a349e6
+    vivid_pink    #ff3d9a
+    vivid_cyan    #2ad4d0
+
+  Pet body shades (pick one per pet)
+    puppy_pink    #ff5c9e
+    kitty_orange  #ff8e2b
+    bunny_white   #fff8e7
+    dragon_purple #b14aed
+    baby_blue     #5bb6ff
+    lime_green    #8de63c
+    sunny_yellow  #ffd84d
+
+  Neutrals
+    white_pure    #ffffff
+    black_ink     #111111
+
+DO NOT use washed-out pastels (e.g. #8fcc8f, #c4b4a0, #f4a261,
+#ffefd5, #9d7ae8, #7ab0d8, #d4a86a, #c44536). Those read grey next
+to the vivid palette. If a scene has been authored with pastel hex
+values, CLEAR and rebuild with the vivid palette instead.
 
 ### Update an existing prefab
 
@@ -341,9 +390,11 @@ the server, ticking pets earn over time, upgrades multiply rates.
   {"type":"removeHUD","id":"h_coin"}
   {"type":"clearBehaviors","prefabId":"o_shop1"}
 
-### Tycoon wiring example — paste together with the cube placements
+### Tycoon wiring example — PASTE INLINE WITH THE CUBE PLACEMENTS
 
-After emitting the cube actions for the tycoon template, follow with:
+The addPrefab lines for shop tiles and pet bodies set explicit ids
+(shop1_tile, pet1_body, …). After the cube placements, emit these
+in the SAME response (never in a follow-up):
 
   // money
   {"type":"defineVariable","name":"coins","initial":50,"serverside":true,"label":"Coins"}
@@ -351,29 +402,43 @@ After emitting the cube actions for the tycoon template, follow with:
   {"type":"addHUD","id":"h_inv","hudType":"inventory","anchor":"top-left","title":"Pets"}
   {"type":"addHUD","id":"h_up","hudType":"upgradePanel","anchor":"bottom-right","title":"Upgrades"}
 
-  // shops — wire each shop-tile prefab as a click→buy. Use the id
-  // returned by the addPrefab line for that shop's tile cube. Pets
-  // get tick→earn that requires the matching inventory id.
-  {"type":"addBehavior","prefabId":"<shop1-tile-id>","on":"click",
-    "action":{"do":"buy","cost":50,"addToInventory":"pet_red","label":"Red Pet"}}
-  {"type":"addBehavior","prefabId":"<pet1-body-id>","on":"tick",
-    "action":{"do":"earn","amount":2,"requires":"pet_red"},"interval":1}
+  // shops — click→buy on the shop N tile cube (id=shopN_tile)
+  {"type":"addBehavior","prefabId":"shop1_tile","on":"click",
+    "action":{"do":"buy","cost":50,"addToInventory":"pet_puppy","label":"Puppy"}}
+  {"type":"addBehavior","prefabId":"shop2_tile","on":"click",
+    "action":{"do":"buy","cost":200,"addToInventory":"pet_kitty","label":"Kitty"}}
+
+  // pets — tick→earn on the pet N body cube (id=petN_body), gated
+  // on owning the matching inventory id
+  {"type":"addBehavior","prefabId":"pet1_body","on":"tick",
+    "action":{"do":"earn","amount":2,"requires":"pet_puppy"},"interval":1}
+  {"type":"addBehavior","prefabId":"pet2_body","on":"tick",
+    "action":{"do":"earn","amount":8,"requires":"pet_kitty"},"interval":1}
 
   // upgrades catalog
-  {"type":"defineUpgrade","id":"earn_2x","label":"Golden Ticket","cost":500,
+  {"type":"defineUpgrade","id":"earn_2x","label":"Stronger Legs","cost":300,
     "effect":{"kind":"multiply","target":"earnRate","factor":2}}
   {"type":"defineUpgrade","id":"speed_2x","label":"Sprint Boots","cost":200,
     "effect":{"kind":"multiply","target":"playerSpeed","factor":2}}
 
-  // upgrade-panel post: a click→buyUpgrade for each upgrade
-  {"type":"addBehavior","prefabId":"<upgrade-board-sign-id>","on":"click",
+  // upgrade panel — click→buyUpgrade on the sign (one cube, many
+  // behaviors is fine; every click picks one upgrade to buy)
+  {"type":"addBehavior","prefabId":"upgrade_sign","on":"click",
     "action":{"do":"buyUpgrade","upgradeId":"earn_2x"}}
 
-When the user asks "make this a tycoon" against an existing world:
-do NOT clearScene — just attach behaviors / declare variables / add
-HUD against the prefab ids already in the scene dump. The runtime
+**When the user asks "make this a tycoon" against an existing
+world:** do NOT clearScene. Look at the scene dump above — it has
+prefab ids you can reference directly via addBehavior. The runtime
 treats addBehavior as additive; clearBehaviors before re-attaching
 if you mean to overwrite.
+
+**What you must NOT do** (this has caused real bugs):
+  - Do not ask the user to "reply with 'wire shops'" — always wire
+    inline in the same response.
+  - Do not use pastel / desaturated hex values anywhere. Use the
+    VIVID PALETTE above for every non-natural color.
+  - Do not emit addBehavior with an id that wasn't assigned via an
+    addPrefab "id" field OR returned in the scene dump.
 
 ## World scale — match the user's ask
 
@@ -419,46 +484,70 @@ Examples:
     0.2 × 2.5 × 0.2 pillar → scale=[0.133, 1.667, 0.133]
     40 × 0.5 × 40 baseplate → scale=[26.67, 0.333, 26.67]
 
-### Tycoon template
+### Tycoon template — ASSIGN IDS SO YOU CAN WIRE BEHAVIORS
 
-Classic Roblox tycoon: claim a plot, buy shops with conveyors, spawn
-pets/products, collect money, buy upgrades. Build all of this:
+Classic Roblox tycoon: claim a plot, buy shops, spawn pets/products,
+collect money, buy upgrades. All colors come from the palette above —
+do NOT use pastels here, the whole point is a cartoony game.
+
+**CRITICAL RULE — same-response wiring.** You MUST emit the
+addBehavior / defineVariable / defineUpgrade / addHUD lines in the
+SAME response as the addPrefab lines that establish the shops / pets
+/ upgrade board. Do NOT tell the user to "reply with 'wire shops'" —
+that is forbidden. To reach a prefab from addBehavior you assign its
+"id" on the addPrefab line itself. Recommended id scheme:
+
+    shop1_tile, shop2_tile, shop3_tile, shop4_tile
+    pet1_body,  pet2_body,  pet3_body,  pet4_body
+    upgrade_sign
+
+(lowercase, snake_case, 1-per-kind suffix). These match the
+^[a-zA-Z0-9_-]{1,40}$ id regex.
+
+Build all of this, vivid colors only:
 
   1. **Baseplate** (1 cube): 40×0.5×40 grass, centered at origin.
-       addPrefab rounded-box pos=[0,0,0] scale=[26.67,0.33,26.67] color="#8fcc8f"
+       addPrefab rounded-box pos=[0,0,0] scale=[26.67,0.33,26.67] color="#58c04d"
 
-  2. **Starter podium** (1 cube): small raised platform for the player
-     to stand on at the entrance.
-       addPrefab rounded-box pos=[0,0.5,-12] scale=[2.67,0.33,2.67] color="#c4b4a0"
+  2. **Starter podium** (1 cube): small raised platform at the entrance.
+       addPrefab id=podium rounded-box pos=[0,0.5,-12] scale=[2.67,0.33,2.67] color="#ffe4bf"
 
   3. **3–5 shop stalls** (5 cubes each), lined up along one edge
-     facing the plot, ~6–7u apart. Shop stall at (sx, sz):
+     facing the plot, ~6–7u apart. For shop N at (sx, sz):
        leftPillar:  pos=[sx-1.3,0,sz]     scale=[0.13,1.67,0.13] color="#8b5c3b"
        rightPillar: pos=[sx+1.3,0,sz]     scale=[0.13,1.67,0.13] color="#8b5c3b"
-       desk:        pos=[sx,1,sz]         scale=[1.87,0.07,0.53] color="#d4a86a"
+       desk:        pos=[sx,1,sz]         scale=[1.87,0.07,0.53] color="#ff8c1a"
        sunshade:    pos=[sx,2.6,sz+0.3]   scale=[2.0,0.05,1.2]   rotation=[0.39,0,0] color=<roofColor>
-       tile:        pos=[sx,0,sz]         scale=[2.0,0.04,1.33]  color="#b0a080"
-     Vary roofColor per shop ("#c44536", "#e8a355", "#7ab0d8", "#9d7ae8").
+       tile:        id=shopN_tile  pos=[sx,0,sz]  scale=[2.0,0.04,1.33]  color="#ffe4bf"
+     The TILE cube is the clickable one — it gets id=shopN_tile (shop1_tile,
+     shop2_tile, …) so you can attach the click→buy behavior to it later.
+     Vary roofColor per shop from the vivid palette — e.g.
+     "#e63946" (red), "#ff8c1a" (orange), "#3a9cf0" (blue),
+     "#a349e6" (purple).
 
   4. **Pet spawners** (each pet is ~12 cubes), placed in a row behind
-     the shops, 3u apart. Pet at (px, pz), bodyColor = the pet's tint:
-       body:   pos=[px,0.25,pz]          scale=[0.73,0.47,0.47] color=<bodyColor>
+     the shops, 3u apart. Give pet N's BODY cube an id (pet1_body,
+     pet2_body, …) so the tick→earn behavior can target it. Use
+     VIVID palette body colors — puppy_pink, kitty_orange,
+     bunny_white, dragon_purple, baby_blue, lime_green, sunny_yellow.
+       body:   id=petN_body  pos=[px,0.25,pz]  scale=[0.73,0.47,0.47] color=<bodyColor>
        head:   pos=[px,0.55,pz+0.45]     scale=[0.47,0.4,0.4]   color=<bodyColor>
        earL:   pos=[px-0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]  color=<bodyColor>
        earR:   pos=[px+0.15,0.95,pz+0.45] scale=[0.1,0.17,0.1]  color=<bodyColor>
        eyeL:   pos=[px-0.12,0.75,pz+0.65] scale=[0.09,0.09,0.03] color="#ffffff"
        eyeR:   pos=[px+0.12,0.75,pz+0.65] scale=[0.09,0.09,0.03] color="#ffffff"
-       pupilL: pos=[px-0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#1a1a1a"
-       pupilR: pos=[px+0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#1a1a1a"
+       pupilL: pos=[px-0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#111111"
+       pupilR: pos=[px+0.12,0.75,pz+0.67] scale=[0.05,0.05,0.02] color="#111111"
        leg1:   pos=[px-0.25,0,pz-0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
        leg2:   pos=[px+0.25,0,pz-0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
        leg3:   pos=[px-0.25,0,pz+0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
        leg4:   pos=[px+0.25,0,pz+0.1]    scale=[0.1,0.2,0.1]    color="#8b5c3b"
-     Give each pet a different bodyColor and a different name.
 
-  5. **Upgrade board** in the plot centre — 1 post + 1 sign cube:
-       post: pos=[0,0,6] scale=[0.07,1.67,0.07] color="#6b3e32"
-       sign: pos=[0,2,6] scale=[0.93,0.6,0.07]  color="#d4a86a"
+  5. **Upgrade board** in the plot centre — 1 post + 1 sign cube.
+     The SIGN gets id=upgrade_sign so each click→buyUpgrade behavior
+     can target it (one cube, many behaviors is fine):
+       post: pos=[0,0,6] scale=[0.07,1.67,0.07] color="#8b5c3b"
+       sign: id=upgrade_sign  pos=[0,2,6]  scale=[0.93,0.6,0.07]  color="#ffd60a"
 
   6. **Fence around the plot edge** (optional, ~12 fence prefabs)
      on each of the 4 sides: addPrefab kind=fence at ~12u out, rotated

@@ -82,6 +82,11 @@ type StudioAction =
 type Freeform3DAction =
   | {
       type: 'addPrefab';
+      /** Optional agent-assigned id. When set + not already taken, the
+          store uses it as the object's id so behaviors emitted later
+          in the same response can reference it by name. Rejected +
+          auto-minted if it collides or fails the safe-chars check. */
+      id?: string;
       kind: string;
       position?: Vec3;
       rotation?: Vec3;
@@ -370,8 +375,18 @@ export function ChatPanel() {
   const applyFreeform3DAction = useCallback((action: Freeform3DAction) => {
     const s = useFreeform3D.getState();
     switch (action.type) {
-      case 'addPrefab':
+      case 'addPrefab': {
+        // Accept the agent's id only if it passes a tight safe-chars
+        // check AND isn't already taken. The store double-guards by
+        // minting a fresh id on collision, so this is UX polish
+        // (avoids silently losing an id the agent counts on).
+        const safeId = /^[a-zA-Z0-9_-]{1,40}$/.test(action.id ?? '')
+          ? action.id
+          : undefined;
+        const existing = useFreeform3D.getState().scene.objects;
+        const finalId = safeId && !existing.some((o) => o.id === safeId) ? safeId : undefined;
         s.addPrefabFull(action.kind, {
+          id: finalId,
           position: action.position,
           rotation: action.rotation,
           scale: action.scale,
@@ -379,6 +394,7 @@ export function ChatPanel() {
           props: action.props,
         });
         break;
+      }
       case 'updatePrefab': {
         const patch: Record<string, unknown> = {};
         if (action.position) patch.position = action.position;

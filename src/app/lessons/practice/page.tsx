@@ -8,6 +8,7 @@ import {
   type PracticeQuestion,
 } from '@/lib/templates/data/curriculum-deep';
 import { Icon } from '@/components/landing/pb-site/primitives';
+import { TutorChatbot } from '@/components/homework/tutor/TutorChatbot';
 
 import '@/components/landing/pb-site/styles.css';
 
@@ -70,6 +71,37 @@ function isAnswerLetter(answer: string, letter: string): boolean {
   return new RegExp(`(^|[^A-Z])${letter}([^A-Z]|$)`).test(answer);
 }
 
+function buildTutorContext(title: string, q: PracticeQuestion | undefined) {
+  if (!q) return { subject: title };
+  const parsed = parsePrompt(q.prompt);
+  return {
+    subject: title,
+    prompt: parsed.text + (parsed.options.length ? `\nOptions: ${parsed.options.join(' | ')}` : ''),
+    answer: q.answer,
+    explanation: q.explanation,
+    source: q.source,
+  };
+}
+
+async function askTutor(
+  question: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+  context: ReturnType<typeof buildTutorContext>,
+): Promise<string> {
+  const messages = [...history, { role: 'user' as const, content: question }];
+  const res = await fetch('/api/lesson-tutor', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, context }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return err.error || `Tutor is unavailable (${res.status}).`;
+  }
+  const data = await res.json();
+  return data.text || 'Hmm, I got nothing back. Try again?';
+}
+
 function PracticeRunner({ keyParam }: { keyParam: string }) {
   const router = useRouter();
   const { questions, title, tone, backHref, sourceUrl } = useMemo(() => resolveQuestions(keyParam), [keyParam]);
@@ -77,6 +109,7 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [tutorHistory, setTutorHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
 
   const current = questions[index];
   const total = questions.length;
@@ -84,7 +117,16 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
   useEffect(() => {
     setRevealed(false);
     setSelected([]);
+    setTutorHistory([]);
   }, [index]);
+
+  const tutorContext = useMemo(() => buildTutorContext(title, current), [title, current]);
+
+  const onAskTutor = async (question: string): Promise<string> => {
+    const reply = await askTutor(question, tutorHistory, tutorContext);
+    setTutorHistory((h) => [...h, { role: 'user', content: question }, { role: 'assistant', content: reply }]);
+    return reply;
+  };
 
   if (total === 0) {
     return (
@@ -149,6 +191,10 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
       setSelected([letter]);
     }
   };
+
+  const tutorGreeting = current
+    ? `Hey! I'm your tutor. Stuck on this one? Ask me for a hint — I won't give the answer straight away, just a nudge in the right direction.`
+    : `Hey! I'm your tutor. Ask me anything about this practice set.`;
 
   return (
     <div style={{
@@ -346,13 +392,26 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
 function PracticeShell() {
   const params = useSearchParams();
   const key = params.get('key') ?? '';
+  const { questions, title } = useMemo(() => resolveQuestions(key), [key]);
+  const firstQ = questions[0];
+  const tutorCtx = useMemo(() => buildTutorContext(title, firstQ), [title, firstQ]);
+  const [tutorHistory, setTutorHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const onAsk = async (question: string): Promise<string> => {
+    const reply = await askTutor(question, tutorHistory, tutorCtx);
+    setTutorHistory((h) => [...h, { role: 'user', content: question }, { role: 'assistant', content: reply }]);
+    return reply;
+  };
   return (
     <div className="pbs-root" style={{ ...PALETTE_VARS, minHeight: '100vh' }}>
       <div className="pbs-page-bg" aria-hidden />
       <div className="pbs-page-noise" aria-hidden />
-      <div className="pbs-content">
+      <div className="pbs-content" style={{ paddingRight: 376 }}>
         <PracticeRunner keyParam={key} />
       </div>
+      <TutorChatbot
+        greeting={`Hey! I'm your tutor for ${title}. Stuck? Ask me for a hint — I won't just hand you the answer.`}
+        onAsk={onAsk}
+      />
     </div>
   );
 }

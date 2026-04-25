@@ -28,9 +28,9 @@ specific feedback in 1–3 sentences:
 - No lecturing. No re-stating the question.
 End with one short next-step suggestion only if something is wrong.`;
 
-// Default to a cheap, vision-capable Flash. Override with GEMINI_MODEL
-// in .env.local to point at a preview / pro variant.
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Flash Lite for speed; vision quality on Lite is enough for the
+// short "did they label this correctly?" review we ask for here.
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
 export async function POST(req: NextRequest) {
   let body: Body;
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
           },
         ],
         generationConfig: {
-          maxOutputTokens: 400,
+          maxOutputTokens: 220,
           // Slight creativity, not 0 — tutor responses sound stiff at 0.
           temperature: 0.4,
         },

@@ -164,11 +164,12 @@ export function ScribbleOverlay() {
   }, [paint]);
 
   // Expose a snapshot helper so other surfaces (e.g. the tutor chat's
-  // "Help me" button) can grab the current annotations as a PNG data
-  // URL. Returns null when nothing has been drawn yet so callers can
-  // skip the upload and avoid asking the model to review a blank
-  // page. The canvas only mounts while `active` is true; outside of
-  // that we still keep the function but it just reports null.
+  // "Help me" button) can grab the current annotations. Returns null
+  // when nothing has been drawn yet so callers can skip the upload
+  // and avoid asking the model to review a blank page. We downsample
+  // to ≤900 px on the long side and emit a lightly-compressed JPEG —
+  // strokes don't need lossless fidelity, and a smaller payload makes
+  // the round-trip noticeably faster on Gemini Flash Lite.
   useEffect(() => {
     const w = window as Window & {
       __scribbleSnapshot?: () => Promise<string | null>;
@@ -177,10 +178,28 @@ export function ScribbleOverlay() {
       if (strokesRef.current.length === 0) return null;
       const canvas = canvasRef.current;
       if (!canvas) return null;
-      // Force a repaint first so the bitmap reflects the latest stroke
-      // state (paint() also commits any in-flight active stroke).
       paint();
-      return canvas.toDataURL('image/png');
+
+      const cssW = sizeRef.current.w;
+      const cssH = sizeRef.current.h;
+      if (cssW === 0 || cssH === 0) return null;
+      const MAX = 900;
+      const scale = Math.min(1, MAX / Math.max(cssW, cssH));
+      const outW = Math.max(1, Math.round(cssW * scale));
+      const outH = Math.max(1, Math.round(cssH * scale));
+
+      const off = document.createElement('canvas');
+      off.width = outW;
+      off.height = outH;
+      const ctx = off.getContext('2d');
+      if (!ctx) return canvas.toDataURL('image/png');
+      // White background so the JPEG doesn't render the strokes on
+      // black where alpha was. Vision models handle pure backgrounds
+      // better anyway.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(canvas, 0, 0, outW, outH);
+      return off.toDataURL('image/jpeg', 0.78);
     };
     return () => {
       delete w.__scribbleSnapshot;

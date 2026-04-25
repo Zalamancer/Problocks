@@ -44,7 +44,10 @@ Style:
 - Match the student's level: they are working through AP Physics 1
   free-response, but encourage them gently rather than lecturing.`;
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+// Flash Lite gives noticeably faster first-token times than full
+// Flash for short conversational replies. Override with GEMINI_MODEL
+// when you want quality over latency.
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
 export async function POST(req: NextRequest) {
   let body: Body;
@@ -147,7 +150,9 @@ export async function POST(req: NextRequest) {
         systemInstruction: { parts: [{ text: SYSTEM }] },
         contents,
         generationConfig: {
-          maxOutputTokens: 350,
+          // Smaller cap → fewer round-trips, faster end-to-end. Tutor
+          // replies are 1–3 sentences anyway.
+          maxOutputTokens: 180,
           temperature: 0.5,
         },
       }),

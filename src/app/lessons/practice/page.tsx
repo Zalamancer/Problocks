@@ -317,10 +317,22 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
                           ? (isCorrect ? 'var(--pbs-mint)' : (isSelected ? '#fde2e2' : 'var(--pbs-paper)'))
                           : (isSelected ? `var(--pbs-${tone})` : 'var(--pbs-paper)'),
                         color: 'var(--pbs-ink)',
-                        border: `1.5px solid ${revealed
-                          ? (isCorrect ? '#0f5b2e' : (isSelected ? '#7a2a18' : 'var(--pbs-line-2)'))
-                          : (isSelected ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)')}`,
-                        borderBottom: stepForOption ? 'none' : undefined,
+                        // Use side-specific borders (not the `border`
+                        // shorthand) because we conditionally drop
+                        // borderBottom — mixing shorthand + non-shorthand
+                        // triggers a React rerender warning.
+                        ...(() => {
+                          const c = revealed
+                            ? (isCorrect ? '#0f5b2e' : (isSelected ? '#7a2a18' : 'var(--pbs-line-2)'))
+                            : (isSelected ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)');
+                          const side = `1.5px solid ${c}`;
+                          return {
+                            borderTop: side,
+                            borderRight: side,
+                            borderLeft: side,
+                            borderBottom: stepForOption ? 'none' : side,
+                          };
+                        })(),
                         boxShadow: isSelected || isCorrect ? '0 2px 0 var(--pbs-line-2)' : 'none',
                         cursor: revealed ? 'default' : 'pointer',
                         fontSize: 15, fontWeight: 500, lineHeight: 1.45,

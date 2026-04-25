@@ -40,13 +40,27 @@ interface Stroke {
   points: Pt[];
 }
 
-const PEN_COLORS = ['#dc2626', '#1f2937', '#2563eb', '#16a34a', '#ca8a04'];
-// Default pen width; user can tweak via the Pen popover (1–18 px).
-const DEFAULT_PEN_WIDTH = 3;
-const PEN_WIDTH_MIN = 1;
-const PEN_WIDTH_MAX = 18;
-// Default smoothing passes; 0 = raw polyline, 3 = very fluffy.
-const DEFAULT_SMOOTHING = 2;
+// Miro-ish drawing palette. 8 colors in a single row covers the common
+// markup needs (red/orange/yellow/green/blue/purple/pink/black) without
+// overwhelming the popover.
+const PEN_COLORS = [
+  '#1f2937', // black
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#3b82f6', // blue
+  '#8b5cf6', // purple
+  '#ec4899', // pink
+];
+// Five preset sizes shown as actual dots in the popover, smallest →
+// largest. No slider — Miro uses this dot grid for its drawing tool too.
+const SIZE_PRESETS = [2, 4, 6, 10, 16] as const;
+const DEFAULT_PEN_WIDTH = SIZE_PRESETS[1];
+// Discrete smoothing levels; matches the segmented button group below.
+const SMOOTHING_LEVELS = [0, 2, 3] as const;
+const SMOOTHING_LABELS = ['Off', 'Smooth', 'Smoother'] as const;
+const DEFAULT_SMOOTHING: number = SMOOTHING_LEVELS[1];
 const SMOOTHING_MAX = 3;
 // Bigger eraser so the user can wipe annotations quickly without precision.
 const ERASER_WIDTH = 28;
@@ -252,26 +266,31 @@ export function ScribbleOverlay() {
           left: 18,
           bottom: 78,
           zIndex: 99998,
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           borderRadius: 999,
-          background: active ? '#dc2626' : '#1f2937',
-          color: '#fff',
-          border: '2px solid rgba(255,255,255,0.85)',
-          boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+          background: active ? '#1a1a1a' : '#fff',
+          color: active ? '#fff' : '#1a1a1a',
+          border: active ? '0' : '1px solid rgba(0,0,0,0.08)',
+          boxShadow: active
+            ? '0 8px 22px rgba(0,0,0,0.32)'
+            : '0 4px 14px rgba(0,0,0,0.18)',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
+          transition: 'all 0.15s',
         }}
       >
-        {active ? <X size={18} strokeWidth={2.4} /> : <Pen size={18} strokeWidth={2.4} />}
+        {active ? <X size={20} strokeWidth={2.2} /> : <Pen size={18} strokeWidth={2.2} />}
       </button>
 
       {active && (
         <>
-          {/* Floating toolbar — sits above the canvas so its own clicks
-              never get treated as strokes (separate fixed element). */}
+          {/* Miro-style floating tool bar. Light card with soft shadow,
+              icon-only square buttons, subtle dividers between groups.
+              Sits above the canvas so its own clicks never get treated
+              as strokes (separate fixed element). */}
           <div
             style={{
               position: 'fixed',
@@ -281,16 +300,16 @@ export function ScribbleOverlay() {
               zIndex: 100000,
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
-              padding: '6px 8px',
-              borderRadius: 12,
-              background: 'rgba(20,18,12,0.92)',
-              border: '1px solid rgba(255,255,255,0.18)',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-              color: '#fff',
+              gap: 4,
+              padding: 6,
+              borderRadius: 14,
+              background: '#ffffff',
+              border: '1px solid rgba(0,0,0,0.06)',
+              boxShadow: '0 12px 32px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.08)',
+              color: '#0f172a',
             }}
           >
-            <ToolPill
+            <ToolButton
               active={tool === 'pen'}
               // Click while pen is already active → toggle the size +
               // smoothing popover. Otherwise → activate the pen and
@@ -302,82 +321,52 @@ export function ScribbleOverlay() {
                   setPenPopover(false);
                 }
               }}
-              icon={<Pen size={13} strokeWidth={2.4} />}
-              label="Pen"
-              trailing={
-                tool === 'pen' ? (
-                  <ChevronDown
-                    size={11}
-                    strokeWidth={2.4}
-                    style={{
-                      transform: penPopover ? 'rotate(180deg)' : 'none',
-                      transition: 'transform 0.15s',
-                    }}
-                  />
-                ) : null
-              }
+              title="Pen"
+              icon={<Pen size={16} strokeWidth={2} />}
+              swatch={tool === 'pen' ? color : undefined}
+              chevron={tool === 'pen' ? penPopover : undefined}
             />
-            <ToolPill
+            <ToolButton
               active={tool === 'eraser'}
               onClick={() => {
                 setTool('eraser');
                 setPenPopover(false);
               }}
-              icon={<Eraser size={13} strokeWidth={2.4} />}
-              label="Erase"
+              title="Eraser"
+              icon={<Eraser size={16} strokeWidth={2} />}
             />
-            <ToolPill
+            <ToolButton
               active={tool === 'eraser-stroke'}
               onClick={() => {
                 setTool('eraser-stroke');
                 setPenPopover(false);
               }}
-              icon={<Scissors size={13} strokeWidth={2.4} />}
-              label="Stroke"
+              title="Stroke eraser"
+              icon={<Scissors size={16} strokeWidth={2} />}
             />
-            <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.2)', margin: '0 2px' }} />
-            {PEN_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  setColor(c);
-                  setTool('pen');
-                }}
-                aria-label={`Color ${c}`}
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 999,
-                  background: c,
-                  border: c === color && tool === 'pen' ? '2px solid #fff' : '1px solid rgba(0,0,0,0.4)',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-              />
-            ))}
-            <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.2)', margin: '0 2px' }} />
-            <ToolPill
+            <Divider />
+            <ToolButton
               onClick={undo}
-              icon={<RotateCcw size={13} strokeWidth={2.4} />}
-              label="Undo"
               disabled={!hasStrokes}
+              title="Undo last stroke"
+              icon={<RotateCcw size={16} strokeWidth={2} />}
             />
-            <ToolPill
+            <ToolButton
               onClick={clear}
-              icon={<Trash2 size={13} strokeWidth={2.4} />}
-              label="Clear"
               disabled={!hasStrokes}
+              title="Clear all"
+              icon={<Trash2 size={16} strokeWidth={2} />}
             />
           </div>
 
           {tool === 'pen' && penPopover && (
             <PenSettingsPopover
+              color={color}
+              onColor={setColor}
               width={penWidth}
               onWidth={setPenWidth}
               smoothing={smoothing}
               onSmoothing={setSmoothing}
-              color={color}
               onClose={() => setPenPopover(false)}
             />
           )}
@@ -507,91 +496,157 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
   ctx.restore();
 }
 
-function ToolPill({
+// Single icon-only square button used for every slot in the floating
+// toolbar. White background, dark icon, soft hover lift, accent-blue
+// active state — Miro's drawing palette uses the same vocabulary.
+function ToolButton({
   active,
   onClick,
   icon,
-  label,
+  title,
   disabled,
-  trailing,
+  swatch,
+  chevron,
 }: {
   active?: boolean;
   onClick: () => void;
   icon: React.ReactNode;
-  label: string;
+  title: string;
   disabled?: boolean;
-  trailing?: React.ReactNode;
+  // When set, paints a small color dot at the bottom-right of the
+  // button. Used on the active Pen so the current pen color is visible
+  // without opening the popover.
+  swatch?: string;
+  // When defined, renders a chevron next to the icon. `true` means the
+  // popover is open (chevron points up).
+  chevron?: boolean;
 }) {
+  const accent = '#1971ff'; // Miro-ish action blue
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
-      aria-label={label}
+      title={title}
+      aria-label={title}
+      aria-pressed={!!active}
       style={{
+        position: 'relative',
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
-        padding: '5px 9px',
+        justifyContent: 'center',
+        gap: 2,
+        width: chevron !== undefined ? 44 : 36,
+        height: 36,
         borderRadius: 8,
-        background: active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
-        color: '#fff',
-        border: `1px solid ${active ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.12)'}`,
-        fontSize: 11,
-        fontWeight: 700,
+        background: active ? 'rgba(25,113,255,0.10)' : 'transparent',
+        color: active ? accent : '#0f172a',
+        border: 0,
+        padding: 0,
         cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.45 : 1,
+        opacity: disabled ? 0.35 : 1,
+        transition: 'background 0.12s, color 0.12s',
+      }}
+      onMouseEnter={(e) => {
+        if (disabled || active) return;
+        (e.currentTarget as HTMLButtonElement).style.background =
+          'rgba(15,23,42,0.06)';
+      }}
+      onMouseLeave={(e) => {
+        if (active) return;
+        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
       }}
     >
       {icon}
-      <span>{label}</span>
-      {trailing}
+      {chevron !== undefined && (
+        <ChevronDown
+          size={11}
+          strokeWidth={2}
+          style={{
+            transform: chevron ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.15s',
+            opacity: 0.6,
+          }}
+        />
+      )}
+      {swatch && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            right: 4,
+            bottom: 4,
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: swatch,
+            boxShadow: '0 0 0 1.5px #fff',
+          }}
+        />
+      )}
     </button>
   );
 }
 
+function Divider() {
+  return (
+    <span
+      style={{
+        width: 1,
+        height: 20,
+        background: 'rgba(15,23,42,0.10)',
+        margin: '0 4px',
+      }}
+    />
+  );
+}
+
 function PenSettingsPopover({
+  color,
+  onColor,
   width,
   onWidth,
   smoothing,
   onSmoothing,
-  color,
   onClose,
 }: {
+  color: string;
+  onColor: (c: string) => void;
   width: number;
   onWidth: (n: number) => void;
   smoothing: number;
   onSmoothing: (n: number) => void;
-  color: string;
   onClose: () => void;
 }) {
-  const SMOOTHING_LABELS = ['Off', 'Light', 'Medium', 'Heavy'];
   return (
     <div
-      // Sits directly under the toolbar. Same dark glass styling so it
-      // reads as an extension of the same control strip. zIndex above
-      // the canvas so its sliders don't get hijacked as strokes.
       style={{
         position: 'fixed',
         left: '50%',
-        top: 64,
+        top: 68,
         transform: 'translateX(-50%)',
         zIndex: 100001,
-        width: 280,
-        padding: '12px 14px',
-        borderRadius: 12,
-        background: 'rgba(20,18,12,0.96)',
-        border: '1px solid rgba(255,255,255,0.18)',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-        color: '#fff',
+        width: 296,
+        padding: 16,
+        borderRadius: 16,
+        background: '#ffffff',
+        border: '1px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 16px 40px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06)',
+        color: '#0f172a',
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 14,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.75 }}>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            color: '#0f172a',
+          }}
+        >
           Pen
         </span>
         <button
@@ -599,121 +654,157 @@ function PenSettingsPopover({
           onClick={onClose}
           aria-label="Close pen settings"
           style={{
-            padding: 2,
+            width: 22,
+            height: 22,
             borderRadius: 6,
             background: 'transparent',
             border: 0,
-            color: 'rgba(255,255,255,0.7)',
+            color: 'rgba(15,23,42,0.5)',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          <X size={12} strokeWidth={2.4} />
+          <X size={13} strokeWidth={2.2} />
         </button>
       </div>
 
-      <SliderRow
-        label="Size"
-        value={width}
-        min={PEN_WIDTH_MIN}
-        max={PEN_WIDTH_MAX}
-        step={1}
-        suffix=" px"
-        onChange={onWidth}
-        preview={
-          <span
-            style={{
-              display: 'inline-block',
-              width: width,
-              height: width,
-              minWidth: 4,
-              minHeight: 4,
-              borderRadius: 999,
-              background: color,
-              border: '1px solid rgba(255,255,255,0.35)',
-            }}
-          />
-        }
-      />
+      <Section label="Color">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {PEN_COLORS.map((c) => {
+            const selected = c === color;
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onColor(c)}
+                title={c}
+                aria-label={`Color ${c}`}
+                aria-pressed={selected}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 999,
+                  background: c,
+                  border: selected ? '2.5px solid #1971ff' : '1.5px solid rgba(15,23,42,0.12)',
+                  // Tiny inset white halo on the selected swatch lifts
+                  // it above the row. Miro uses the same pattern.
+                  boxShadow: selected
+                    ? 'inset 0 0 0 2px #fff'
+                    : 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'box-shadow 0.12s, border-color 0.12s',
+                }}
+              />
+            );
+          })}
+        </div>
+      </Section>
 
-      <SliderRow
-        label="Smoothing"
-        value={smoothing}
-        min={0}
-        max={SMOOTHING_MAX}
-        step={1}
-        suffix=""
-        valueFormatter={(v) => SMOOTHING_LABELS[v] ?? String(v)}
-        onChange={onSmoothing}
-      />
+      <Section label="Size">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {SIZE_PRESETS.map((px) => {
+            const selected = px === width;
+            return (
+              <button
+                key={px}
+                type="button"
+                onClick={() => onWidth(px)}
+                title={`${px} px`}
+                aria-label={`${px} px`}
+                aria-pressed={selected}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: selected ? 'rgba(25,113,255,0.10)' : 'transparent',
+                  border: selected ? '1.5px solid #1971ff' : '1.5px solid transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'background 0.12s, border-color 0.12s',
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: px,
+                    height: px,
+                    borderRadius: 999,
+                    background: color,
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section label="Smoothing">
+        <div
+          style={{
+            display: 'flex',
+            background: 'rgba(15,23,42,0.05)',
+            borderRadius: 8,
+            padding: 3,
+          }}
+        >
+          {SMOOTHING_LEVELS.map((lvl, i) => {
+            const selected = lvl === smoothing;
+            return (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => onSmoothing(lvl)}
+                style={{
+                  flex: 1,
+                  padding: '7px 0',
+                  borderRadius: 6,
+                  background: selected ? '#fff' : 'transparent',
+                  color: selected ? '#0f172a' : 'rgba(15,23,42,0.6)',
+                  border: 0,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: selected ? '0 1px 3px rgba(15,23,42,0.12)' : 'none',
+                  transition: 'background 0.12s, color 0.12s',
+                }}
+              >
+                {SMOOTHING_LABELS[i]}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
     </div>
   );
 }
 
-function SliderRow({
+function Section({
   label,
-  value,
-  min,
-  max,
-  step,
-  suffix,
-  onChange,
-  preview,
-  valueFormatter,
+  children,
 }: {
   label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  suffix: string;
-  onChange: (n: number) => void;
-  preview?: React.ReactNode;
-  valueFormatter?: (v: number) => string;
+  children: React.ReactNode;
 }) {
-  const display = valueFormatter ? valueFormatter(value) : `${value}${suffix}`;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85, flex: 1 }}>{label}</span>
-        {preview && (
-          <span
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 6,
-              background: 'rgba(255,255,255,0.06)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {preview}
-          </span>
-        )}
-        <span
-          style={{
-            fontFamily: 'DM Mono, ui-monospace, monospace',
-            fontSize: 11,
-            fontWeight: 700,
-            opacity: 0.85,
-            minWidth: 48,
-            textAlign: 'right',
-          }}
-        >
-          {display}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        style={{ width: '100%', accentColor: '#fff' }}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'rgba(15,23,42,0.5)',
+        }}
+      >
+        {label}
+      </span>
+      {children}
     </div>
   );
 }

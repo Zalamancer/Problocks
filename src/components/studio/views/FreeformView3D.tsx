@@ -27,6 +27,7 @@ import { PlayHUD as TycoonHUD } from './freeform3d/PlayHUD';
 import { PlayTicker } from './freeform3d/PlayTicker';
 import { useGameState } from '@/hooks/use-game-state';
 import { spawnKickBall } from '@/lib/kid-style-3d/kick-ball';
+import { loadScript, type ScriptHandle } from '@/lib/kid-style-3d/script-runtime';
 
 /** Convert a user-avatar AvatarOutfit into SceneObject.props for the
     character prefab. Kept local because the character prefab is the
@@ -66,6 +67,7 @@ export function FreeformView3D() {
   const engineRef = useRef<KidEngine | null>(null);
   const gizmoRef = useRef<KidGizmo | null>(null);
   const playRef = useRef<PlayController | null>(null);
+  const scriptRef = useRef<ScriptHandle | null>(null);
 
   const objects = useFreeform3D((s) => s.scene.objects);
   const selectedId = useFreeform3D((s) => s.selectedId);
@@ -348,9 +350,33 @@ export function FreeformView3D() {
     });
     controller.start();
     playRef.current = controller;
+
+    // Load the user script AFTER the controller exists so player.*
+    // methods can mutate speed / jump at eval time. Script errors are
+    // caught by loadScript and reported via toast; playback continues.
+    const scriptSource = useFreeform3D.getState().scene.script ?? '';
+    const script = loadScript(scriptSource, {
+      player: controller,
+      getCoins: () => gameStateRef.current?.coins ?? 0,
+      getInventory: () => gameStateRef.current?.inventory ?? [],
+      toast: (msg, kind = 'info') => addToastRef.current(kind, msg),
+    });
+    scriptRef.current = script;
+    script.fireStart();
+
+    // Tick the script once per second. Simple interval, not tied to
+    // frame rate — onTick is for game logic, not animation.
+    let tickTimer: ReturnType<typeof setInterval> | null = null;
+    if (script.hooks.onTick.length > 0) {
+      tickTimer = setInterval(() => script.fireTick(1), 1000);
+    }
+
     engine.setPerFrame((dt) => controller.update(dt));
 
     return () => {
+      if (tickTimer !== null) clearInterval(tickTimer);
+      script.dispose();
+      scriptRef.current = null;
       controller.stop();
       controller.dispose();
       playRef.current = null;
@@ -473,6 +499,13 @@ export function FreeformView3D() {
 
       const scene = useFreeform3D.getState().scene;
       const obj = scene.objects.find((o) => o.id === id);
+
+      // Let the user script handle clicks first — it may have custom
+      // behavior the declarative system doesn't express (toast on
+      // specific id, side effect on an already-existing cube, etc.).
+      // Script + behavior can coexist; we run both.
+      scriptRef.current?.fireClick(id);
+
       const behaviors = obj?.behaviors ?? [];
       const onClick = behaviors.find((b) => b.on === 'click');
       if (!onClick) return;

@@ -130,6 +130,9 @@ export function StudioLayout() {
   const setViewMode = useStudio((s) => s.setViewMode);
   const gameSystem = useStudio((s) => s.gameSystem);
   const freeform3dSelectedId = useFreeform3D((s) => s.selectedId);
+  // Subscribe so the Code tab re-renders when the agent edits the
+  // scene script via setScript ACTION.
+  const freeform3dScript = useFreeform3D((s) => s.scene.script);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -468,8 +471,18 @@ export function StudioLayout() {
               {openFileName && !terminalMaximized ? (() => {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
                 const directContent = activeGame?.files?.[openFileName];
+                // Freeform 3D doesn't ship an HTML game — its "code"
+                // is the scene-level script (src/lib/kid-style-3d/
+                // script-runtime.ts). Surface it under the same Code
+                // tab so the user has something real to read instead
+                // of an empty file. Read fresh from the store so
+                // edits by the agent (setScript ACTION) reflect live.
+                const freeformScript =
+                  viewMode === '3d' && gameSystem === '3d-freeform'
+                    ? freeform3dScript ?? '// Scene has no script yet. Ask the agent: "add a script that makes me jump higher".'
+                    : null;
                 // When there's no game/file yet, show an empty file instead of nothing.
-                const content = directContent ?? (gameHtml ? undefined : '');
+                const content = freeformScript ?? directContent ?? (gameHtml ? undefined : '');
                 return (
                   <CodeView
                     html={gameHtml ?? ''}

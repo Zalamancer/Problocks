@@ -143,7 +143,15 @@ type Freeform3DAction =
       bind?: string;
       title?: string;
     }
-  | { type: 'removeHUD'; id: string };
+  | { type: 'removeHUD'; id: string }
+  | {
+      /** Set the scene-wide JavaScript script. The runtime evaluates
+          this on play start with a sandboxed API (player / coins /
+          inventory / onStart / onTick / onClick / toast). See
+          lib/kid-style-3d/script-runtime.ts. */
+      type: 'setScript';
+      source: string;
+    };
 
 function shortDescribeFreeform3D(a: Freeform3DAction): string {
   switch (a.type) {
@@ -173,6 +181,8 @@ function shortDescribeFreeform3D(a: Freeform3DAction): string {
       return `🖼️ HUD ${a.hudType} ${a.anchor}`;
     case 'removeHUD':
       return `🖼️ Remove HUD ${a.id}`;
+    case 'setScript':
+      return `📜 Script (${a.source.split('\n').length} lines)`;
   }
 }
 
@@ -478,6 +488,9 @@ export function ChatPanel() {
         break;
       case 'removeHUD':
         s.removeHUDElement(action.id);
+        break;
+      case 'setScript':
+        if (typeof action.source === 'string') s.setScript(action.source);
         break;
     }
   }, []);

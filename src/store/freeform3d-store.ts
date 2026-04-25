@@ -262,6 +262,9 @@ interface Freeform3DState {
   addHUDElement: (el: HUDElement) => void;
   removeHUDElement: (id: string) => void;
 
+  /** Replace the scene's script source. Empty string clears it. */
+  setScript: (source: string) => void;
+
   // History --------------------------------------------------------------
   undo: () => void;
   redo: () => void;
@@ -681,6 +684,14 @@ export const useFreeform3D = create<Freeform3DState>()(
             ...s.scene,
             gameLogic: removeHUDElementPure(readGameLogic(s.scene), id),
           },
+          redoStack: [],
+        }));
+      },
+
+      setScript: (source) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: { ...s.scene, script: source || undefined },
           redoStack: [],
         }));
       },

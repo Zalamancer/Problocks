@@ -426,6 +426,46 @@ the server, ticking pets earn over time, upgrades multiply rates.
   {"type":"removeHUD","id":"h_coin"}
   {"type":"clearBehaviors","prefabId":"o_shop1"}
 
+### 6. Ship a script with every game — setScript
+
+Every game world you build MUST also emit a setScript action. This
+is the JS source the user reads in the Code tab and the runtime
+evaluates on Play. It's how the user gets to SEE what their world
+does — without it, the Code tab shows the placeholder and the
+user rightfully complains that "no code is generated".
+
+  {"type":"setScript","source":"onStart(() => { player.setSpeed(6); player.setJumpHeight(1.6); });"}
+
+The source field is a single JSON string (escape newlines as \\n).
+The available API inside the script is small but real:
+
+  onStart(fn)              — once at play start
+  onTick(fn)               — every second
+  onClick(prefabId, fn)    — fires when player clicks that prefab
+
+  player.setSpeed(n)       — base walk speed (world units/sec)
+  player.setJumpHeight(n)  — peak jump height in units (0.1..20)
+  player.enableDoubleJump()— 2 chained jumps (ground + 1 air)
+  player.setMaxJumps(n)    — exactly n chained jumps (1..5)
+
+  coins.get()              — current server coin balance
+  inventory.has(id)        — ownership check
+  inventory.count(id)      — ownership count
+
+  toast(msg, kind?)        — info/warning/error toast
+  log(...args)             — console.log proxy
+
+The script should do TWO things: (a) tune the player to match the
+game feel — a bouncy obby wants setJumpHeight(4); a tycoon wants
+setSpeed(7); a kick arena wants setJumpHeight(1.2) and
+enableDoubleJump(). (b) Add one or two onClick handlers that toast
+a hint about the world — click the starter podium → "Welcome!" —
+so the user can tell the script is live.
+
+The script complements the declarative behaviors; it does not
+replace them. Buys / earns / upgrades STILL come from addBehavior.
+The script is for tuning + side effects + custom clicks.
+
 ## Arcade primitives — kickBall / roll / claimIf
 
 For games like "kick a ball" / "throw as far as possible" / "unbox a

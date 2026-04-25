@@ -50,6 +50,13 @@ export interface PlayController {
       1; setting it to 0 stops the character without removing the
       controller. */
   setSpeedMultiplier: (m: number) => void;
+  /** Set approximate peak jump height in world units. Converts to
+      an initial vertical velocity using the current gravity —
+      v = sqrt(2 * g * h). Default jump reaches ~0.83 units. */
+  setJumpHeight: (h: number) => void;
+  /** Max chained jumps (ground + air). 1 = no double jump, 2 =
+      double, etc. Capped at 5. */
+  setMaxJumps: (n: number) => void;
 }
 
 const WALK = 5;
@@ -81,6 +88,11 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   // Mutable so upgrades can scale the character at runtime via
   // setSpeedMultiplier. Multiplied into both walk and sprint.
   let speedMul = 1;
+  // Jump tuning — mutable so scripts can set height / double jump.
+  let jumpV = JUMP_V;
+  let maxJumps = 1;
+  let jumpsUsed = 0;
+  let prevSpaceDown = false;
 
   const keys = new Set<string>();
   let yaw = opts.initialYaw ?? 0;
@@ -268,7 +280,17 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     const groundTop = highestTopUnder(colliders, character.position.x, character.position.z, character.position.y + 0.1, CHAR_R);
     const groundY = Math.max(0, groundTop ?? 0);
     const onGround = character.position.y <= groundY + 0.001 && velY <= 0;
-    if (keys.has('Space') && onGround) velY = JUMP_V;
+    if (onGround) jumpsUsed = 0;
+    // Edge-triggered: only on Space transition from up→down, so a held
+    // key doesn't burn every chained jump the instant you leave the
+    // ground. Critical for double-jump feel.
+    const spaceDown = keys.has('Space');
+    const spaceJustPressed = spaceDown && !prevSpaceDown;
+    prevSpaceDown = spaceDown;
+    if (spaceJustPressed && jumpsUsed < maxJumps) {
+      velY = jumpV;
+      jumpsUsed++;
+    }
     velY += GRAVITY * dt;
     let dy = velY * dt;
 
@@ -331,6 +353,16 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
       // huge factor doesn't make the character unplayable. 0.25..8x
       // covers every reasonable tycoon tier.
       speedMul = Math.max(0.25, Math.min(8, m));
+    },
+    setJumpHeight: (h: number) => {
+      // v = sqrt(2 * |g| * h). Clamp h to [0.1, 20] so a script
+      // can't either disable jumping entirely or launch the player
+      // into orbit. With g=-15, h=2 → v≈7.75 (beefy tycoon jump).
+      const clamped = Math.max(0.1, Math.min(20, h));
+      jumpV = Math.sqrt(2 * Math.abs(GRAVITY) * clamped);
+    },
+    setMaxJumps: (n: number) => {
+      maxJumps = Math.max(1, Math.min(5, Math.floor(n)));
     },
     dispose() { stop(); },
   };

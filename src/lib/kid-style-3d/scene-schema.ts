@@ -89,6 +89,20 @@ export interface SceneJson {
    * and the runtime skips its play-mode interpreter entirely.
    */
   gameLogic?: GameLogic;
+
+  /**
+   * Optional JavaScript script — evaluated once on Play with a small
+   * sandboxed API (player / world / coins / onClick / onStart /
+   * onTick / toast). Lives alongside the declarative behaviors: the
+   * behavior primitives handle buys / ticks / kicks; the script
+   * handles anything ad-hoc the user wants to add (custom events,
+   * jump heights, double-jump, side effects on click).
+   *
+   * Shown in the studio Code tab so the user can read what the
+   * world is doing. v1 is read-only from the tab; editing lands in
+   * a later slice.
+   */
+  script?: string;
 }
 
 export const EMPTY_SCENE: SceneJson = {

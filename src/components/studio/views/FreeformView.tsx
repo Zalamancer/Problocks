@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2, Play, Square, User, FlipHorizontal, FlipVertical, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
+import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2, Play, Square, User, FlipHorizontal, FlipVertical, ArrowUpToLine, ArrowDownToLine, Undo2, Redo2 } from 'lucide-react';
 import { useFreeform, type FreeformAnchor, type FreeformBackground, type FreeformImage } from '@/store/freeform-store';
 import {
   screenToWorld, worldToLocal, localToWorld,
@@ -139,6 +139,12 @@ export function FreeformView() {
   const selectCharacter = useFreeform((s) => s.selectCharacter);
   const setPlaying = useFreeform((s) => s.setPlaying);
   const addAsset = useFreeform((s) => s.addAsset);
+  const beginDrag = useFreeform((s) => s.beginDrag);
+  const endDrag = useFreeform((s) => s.endDrag);
+  const undo = useFreeform((s) => s.undo);
+  const redo = useFreeform((s) => s.redo);
+  const canUndo = useFreeform((s) => s.past.length > 0);
+  const canRedo = useFreeform((s) => s.future.length > 0);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -316,6 +322,9 @@ export function FreeformView() {
     const charHit = pickCharacter(world.x, world.y, characters);
     if (charHit) {
       selectCharacter(charHit.id);
+      // Bracket the drag in a single history transaction. Every
+      // updateCharacter call between begin/end collapses into one undo step.
+      beginDrag();
       dragRef.current = {
         kind: 'move',
         imageId: `char:${charHit.id}`,
@@ -330,6 +339,7 @@ export function FreeformView() {
     const hit = pickImage(world.x, world.y, images);
     if (hit) {
       selectImage(hit.id);
+      beginDrag();
       dragRef.current = {
         kind: 'move',
         imageId: hit.id,
@@ -344,7 +354,7 @@ export function FreeformView() {
       selectImage(null);
       selectCharacter(null);
     }
-  }, [tool, pan, playing, eventToWorld, images, characters, selectedImage, pendingPenImageId, pendingPenAnchors, selectImage, selectCharacter, addPenAnchor, beginPenPath, commitPenPath, zoom]);
+  }, [tool, pan, playing, eventToWorld, images, characters, selectedImage, pendingPenImageId, pendingPenAnchors, selectImage, selectCharacter, addPenAnchor, beginPenPath, commitPenPath, beginDrag, zoom]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
@@ -448,16 +458,38 @@ export function FreeformView() {
     if (svgRef.current?.hasPointerCapture(e.pointerId)) {
       svgRef.current.releasePointerCapture(e.pointerId);
     }
+    const drag = dragRef.current;
+    // Close out the history transaction opened by beginDrag() — covers
+    // move (image + character), resize, and rotate. Pan / penHandle don't
+    // start a transaction so they don't need an end. endDrag() is a no-op
+    // when paused depth is 0, so always-calling-it is safe.
+    if (drag && (drag.kind === 'move' || drag.kind === 'resize' || drag.kind === 'rotate')) {
+      endDrag();
+    }
     dragRef.current = null;
     setSnapGuides([]);
-  }, []);
+  }, [endDrag]);
 
   // Keyboard shortcuts — V (select), P (pen), Enter (commit pen),
-  // Esc (cancel pen), Delete/Backspace (delete selected).
+  // Esc (cancel pen), Delete/Backspace (delete selected),
+  // ⌘Z / Ctrl+Z = undo, ⌘⇧Z / Ctrl+Y = redo.
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      // Undo/Redo first so they take precedence over single-letter
+      // shortcuts when modifier keys are held.
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+        return;
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        redo();
+        return;
+      }
       if (e.key === 'v' || e.key === 'V') { setTool('select'); }
       else if (e.key === 'p' || e.key === 'P') { setTool('pen'); }
       else if (e.key === 'Enter') {
@@ -480,7 +512,7 @@ export function FreeformView() {
     }
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setTool, pendingPenImageId, commitPenPath, cancelPenPath, selectImage, selectedCollisionId, selectedImageId, selectedCharacterId, deleteCollision, deleteImage, deleteCharacter, playing, setPlaying]);
+  }, [setTool, pendingPenImageId, commitPenPath, cancelPenPath, selectImage, selectedCollisionId, selectedImageId, selectedCharacterId, deleteCollision, deleteImage, deleteCharacter, playing, setPlaying, undo, redo]);
 
   function handleAddImage() { fileInputRef.current?.click(); }
 
@@ -694,6 +726,7 @@ export function FreeformView() {
   // captured at drag start, so corner handles call this to set up dragRef.
   function startResizeDrag(corner: 'nw' | 'ne' | 'sw' | 'se', img: FreeformImage, e: React.PointerEvent) {
     const world = eventToWorld(e);
+    beginDrag();
     dragRef.current = {
       kind: 'resize',
       imageId: img.id,
@@ -711,6 +744,7 @@ export function FreeformView() {
   function startRotateDrag(img: FreeformImage, e: React.PointerEvent) {
     const world = eventToWorld(e);
     const ang = (Math.atan2(world.y - img.y, world.x - img.x) * 180) / Math.PI;
+    beginDrag();
     dragRef.current = {
       kind: 'rotate',
       imageId: img.id,
@@ -981,6 +1015,13 @@ export function FreeformView() {
           <PenTool size={14} strokeWidth={2.2} />
         </ToolButton>
         <Separator />
+        <ToolButton disabled={!canUndo} title="Undo  (⌘Z)" onClick={undo}>
+          <Undo2 size={14} strokeWidth={2.2} />
+        </ToolButton>
+        <ToolButton disabled={!canRedo} title="Redo  (⌘⇧Z)" onClick={redo}>
+          <Redo2 size={14} strokeWidth={2.2} />
+        </ToolButton>
+        <Separator />
         <ToolButton title="Add image…" onClick={handleAddImage}>
           <ImageIcon size={14} strokeWidth={2.2} />
         </ToolButton>
@@ -1071,25 +1112,33 @@ export function FreeformView() {
 }
 
 function ToolButton({
-  active = false, destructive = false, title, onClick, children,
+  active = false, destructive = false, disabled = false, title, onClick, children,
 }: {
-  active?: boolean; destructive?: boolean; title: string;
+  active?: boolean; destructive?: boolean; disabled?: boolean; title: string;
   onClick: () => void; children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       title={title}
+      disabled={disabled}
       onClick={onClick}
       onMouseDown={(e) => e.stopPropagation()}
       className="flex items-center justify-center transition-colors"
       style={{
         height: 30, width: 30, borderRadius: 8,
         background: active ? 'var(--pb-butter)' : 'var(--pb-paper)',
-        color: destructive ? 'var(--pb-coral-ink)' : active ? 'var(--pb-butter-ink)' : 'var(--pb-ink-soft)',
+        color: disabled
+          ? 'var(--pb-ink-muted)'
+          : destructive
+          ? 'var(--pb-coral-ink)'
+          : active
+          ? 'var(--pb-butter-ink)'
+          : 'var(--pb-ink-soft)',
         border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        opacity: disabled ? 0.45 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
         boxShadow: active ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
-        cursor: 'pointer',
       }}
     >
       {children}

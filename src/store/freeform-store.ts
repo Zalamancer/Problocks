@@ -114,6 +114,22 @@ export type FreeformBackground =
   | { kind: 'image'; src: string; fit: 'cover' | 'contain' }
   | { kind: 'tile'; src: string; tileSize: number };
 
+/**
+ * Slice of the store that participates in undo/redo. Selections, the
+ * camera (pan/zoom), the active tool, and play-mode are intentionally
+ * excluded — undoing should restore *the scene*, not surprise the user
+ * by jumping the camera around.
+ */
+interface FreeformHistoryEntry {
+  images: FreeformImage[];
+  characters: FreeformCharacter[];
+  assets: FreeformAsset[];
+  background: FreeformBackground;
+  showGrid: boolean;
+}
+
+const HISTORY_LIMIT = 100;
+
 interface FreeformStore {
   images: FreeformImage[];
   characters: FreeformCharacter[];
@@ -124,6 +140,19 @@ interface FreeformStore {
   selectedImageId: string | null;
   selectedCollisionId: string | null;
   selectedCharacterId: string | null;
+
+  /** Undo / redo. Stacks are pre-mutation snapshots: `past` grows when
+   *  trackable state changes, `future` grows when the user undoes. Both
+   *  reset to empty on redo of any non-history mutation. */
+  past: FreeformHistoryEntry[];
+  future: FreeformHistoryEntry[];
+  /** When > 0, mutating actions skip writing to `past` (used so a single
+   *  drag from move/resize/rotate becomes a single undo step instead of
+   *  one per pointer-move tick). */
+  historyPaused: number;
+  /** Snapshot captured by `beginDrag()` so endDrag() can push exactly one
+   *  entry covering the whole drag. Null when no drag is in progress. */
+  pausedSnapshot: FreeformHistoryEntry | null;
 
   /** Test-play mode — disables editing and lets WASD/arrows drive the
    *  first character while walk animations cycle. */
@@ -180,6 +209,21 @@ interface FreeformStore {
   setBackground: (bg: FreeformBackground) => void;
   resetBackground: () => void;
   setShowGrid: (b: boolean) => void;
+
+  /** Capture the current trackable slice and pause history recording.
+   *  `endDrag()` pops it back into the past stack as a single entry,
+   *  collapsing every intermediate `updateImage` call into one undo
+   *  step. Safe to call without a matching `endDrag()` — `cancelDrag()`
+   *  drops the pending snapshot. */
+  beginDrag: () => void;
+  endDrag: () => void;
+  cancelDrag: () => void;
+
+  undo: () => void;
+  redo: () => void;
+  /** Convenience for the toolbar buttons. */
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 }
 
 const DEFAULT_BACKGROUND: FreeformBackground = {
@@ -188,6 +232,49 @@ const DEFAULT_BACKGROUND: FreeformBackground = {
 };
 
 const newId = () => Math.random().toString(36).slice(2, 10);
+
+/** Capture the trackable slice of the current state. Cheap because we
+ *  reference-share the existing arrays — the only cost is when a mutator
+ *  later replaces them, leaving the snapshot pinned to the old reference. */
+function snapshotOf(state: {
+  images: FreeformImage[];
+  characters: FreeformCharacter[];
+  assets: FreeformAsset[];
+  background: FreeformBackground;
+  showGrid: boolean;
+}): FreeformHistoryEntry {
+  return {
+    images: state.images,
+    characters: state.characters,
+    assets: state.assets,
+    background: state.background,
+    showGrid: state.showGrid,
+  };
+}
+
+/** Returns the partial state to merge so the upcoming mutation pushes
+ *  one entry into `past` and clears `future`. Skipped while a drag-in-
+ *  progress has paused recording — those updates collapse into the
+ *  single endDrag() entry instead. */
+function pushHistory(state: {
+  past: FreeformHistoryEntry[];
+  future: FreeformHistoryEntry[];
+  historyPaused: number;
+  images: FreeformImage[];
+  characters: FreeformCharacter[];
+  assets: FreeformAsset[];
+  background: FreeformBackground;
+  showGrid: boolean;
+}): { past: FreeformHistoryEntry[]; future: FreeformHistoryEntry[] } {
+  if (state.historyPaused > 0) {
+    return { past: state.past, future: state.future };
+  }
+  const snap = snapshotOf(state);
+  const nextPast = state.past.length >= HISTORY_LIMIT
+    ? [...state.past.slice(state.past.length - HISTORY_LIMIT + 1), snap]
+    : [...state.past, snap];
+  return { past: nextPast, future: [] };
+}
 
 export const useFreeform = create<FreeformStore>()(
   persist(
@@ -201,6 +288,11 @@ export const useFreeform = create<FreeformStore>()(
       selectedCollisionId: null,
       selectedCharacterId: null,
       playing: false,
+
+      past: [],
+      future: [],
+      historyPaused: 0,
+      pausedSnapshot: null,
 
       tool: 'select',
       pendingPenAnchors: [],
@@ -227,6 +319,7 @@ export const useFreeform = create<FreeformStore>()(
         const y = opts.y ?? 0;
         const maxZ = get().images.reduce((m, i) => Math.max(m, i.zIndex), 0);
         set((state) => ({
+          ...pushHistory(state),
           images: [
             ...state.images,
             {
@@ -250,6 +343,7 @@ export const useFreeform = create<FreeformStore>()(
 
       updateImage: (id, patch) =>
         set((state) => ({
+          ...pushHistory(state),
           images: state.images.map((img) =>
             img.id === id ? { ...img, ...patch } : img,
           ),
@@ -257,6 +351,7 @@ export const useFreeform = create<FreeformStore>()(
 
       deleteImage: (id) =>
         set((state) => ({
+          ...pushHistory(state),
           images: state.images.filter((img) => img.id !== id),
           selectedImageId: state.selectedImageId === id ? null : state.selectedImageId,
         })),
@@ -280,7 +375,8 @@ export const useFreeform = create<FreeformStore>()(
         }),
 
       commitPenPath: (closed) => {
-        const { pendingPenAnchors, pendingPenImageId, images } = get();
+        const state = get();
+        const { pendingPenAnchors, pendingPenImageId, images } = state;
         if (!pendingPenImageId || pendingPenAnchors.length < 2) {
           set({ pendingPenAnchors: [], pendingPenImageId: null });
           return null;
@@ -292,6 +388,7 @@ export const useFreeform = create<FreeformStore>()(
           closed,
         };
         set({
+          ...pushHistory(state),
           images: images.map((img) =>
             img.id === pendingPenImageId
               ? { ...img, collisions: [...img.collisions, newCollision] }
@@ -310,6 +407,7 @@ export const useFreeform = create<FreeformStore>()(
 
       deleteCollision: (imageId, collisionId) =>
         set((state) => ({
+          ...pushHistory(state),
           images: state.images.map((img) =>
             img.id === imageId
               ? { ...img, collisions: img.collisions.filter((c) => c.id !== collisionId) }
@@ -327,6 +425,7 @@ export const useFreeform = create<FreeformStore>()(
         if (existing) return existing.id;
         const id = newId();
         set((state) => ({
+          ...pushHistory(state),
           assets: [
             ...state.assets,
             {
@@ -343,11 +442,15 @@ export const useFreeform = create<FreeformStore>()(
       },
 
       deleteAsset: (id) =>
-        set((state) => ({ assets: state.assets.filter((a) => a.id !== id) })),
+        set((state) => ({
+          ...pushHistory(state),
+          assets: state.assets.filter((a) => a.id !== id),
+        })),
 
       addCharacter: (src, opts = {}) => {
         const id = newId();
         set((state) => ({
+          ...pushHistory(state),
           characters: [
             ...state.characters,
             {
@@ -372,11 +475,13 @@ export const useFreeform = create<FreeformStore>()(
 
       updateCharacter: (id, patch) =>
         set((state) => ({
+          ...pushHistory(state),
           characters: state.characters.map((c) => (c.id === id ? { ...c, ...patch } : c)),
         })),
 
       deleteCharacter: (id) =>
         set((state) => ({
+          ...pushHistory(state),
           characters: state.characters.filter((c) => c.id !== id),
           selectedCharacterId: state.selectedCharacterId === id ? null : state.selectedCharacterId,
         })),
@@ -389,11 +494,19 @@ export const useFreeform = create<FreeformStore>()(
       setPan: (x, y) => set({ pan: { x, y } }),
       setZoom: (z) => set({ zoom: Math.max(0.1, Math.min(8, z)) }),
       resetView: () => set({ pan: { x: 0, y: 0 }, zoom: 1 }),
-      setBackground: (bg) => set({ background: bg }),
-      resetBackground: () => set({ background: DEFAULT_BACKGROUND, showGrid: true }),
-      setShowGrid: (b) => set({ showGrid: b }),
+      setBackground: (bg) =>
+        set((state) => ({ ...pushHistory(state), background: bg })),
+      resetBackground: () =>
+        set((state) => ({
+          ...pushHistory(state),
+          background: DEFAULT_BACKGROUND,
+          showGrid: true,
+        })),
+      setShowGrid: (b) =>
+        set((state) => ({ ...pushHistory(state), showGrid: b })),
       clearAll: () =>
-        set({
+        set((state) => ({
+          ...pushHistory(state),
           images: [],
           characters: [],
           selectedImageId: null,
@@ -402,7 +515,117 @@ export const useFreeform = create<FreeformStore>()(
           pendingPenAnchors: [],
           pendingPenImageId: null,
           playing: false,
-        }),
+        })),
+
+      // ── History controls ──
+      // beginDrag/endDrag bracket every pointer-driven mutation (move,
+      // resize, rotate). historyPaused is a depth counter so nested
+      // begins (paranoia, but cheap) don't lose the outermost snapshot.
+      beginDrag: () =>
+        set((state) => ({
+          historyPaused: state.historyPaused + 1,
+          // Only capture on the OUTERMOST begin — nested calls keep the
+          // first snapshot so endDrag still produces a single entry.
+          pausedSnapshot: state.historyPaused === 0 ? snapshotOf(state) : state.pausedSnapshot,
+        })),
+
+      endDrag: () => {
+        const state = get();
+        if (state.historyPaused <= 0) return;
+        const nextPaused = state.historyPaused - 1;
+        if (nextPaused > 0) {
+          set({ historyPaused: nextPaused });
+          return;
+        }
+        // Outermost end — push the captured snapshot if anything actually
+        // changed during the drag. Cheap diff: array reference equality
+        // works because every mutator above creates fresh arrays.
+        const before = state.pausedSnapshot;
+        const cur = snapshotOf(state);
+        const same =
+          !before ||
+          (before.images === cur.images &&
+            before.characters === cur.characters &&
+            before.assets === cur.assets &&
+            before.background === cur.background &&
+            before.showGrid === cur.showGrid);
+        if (same || !before) {
+          set({ historyPaused: 0, pausedSnapshot: null });
+          return;
+        }
+        const nextPast = state.past.length >= HISTORY_LIMIT
+          ? [...state.past.slice(state.past.length - HISTORY_LIMIT + 1), before]
+          : [...state.past, before];
+        set({
+          historyPaused: 0,
+          pausedSnapshot: null,
+          past: nextPast,
+          future: [],
+        });
+      },
+
+      cancelDrag: () => {
+        const state = get();
+        if (state.historyPaused <= 0) return;
+        // Restore the snapshot taken at beginDrag — used when the user
+        // hits Esc to abort a move/resize without leaving the in-progress
+        // changes on the canvas.
+        if (state.pausedSnapshot) {
+          set({
+            ...state.pausedSnapshot,
+            historyPaused: 0,
+            pausedSnapshot: null,
+          });
+        } else {
+          set({ historyPaused: 0, pausedSnapshot: null });
+        }
+      },
+
+      undo: () => {
+        const state = get();
+        if (state.past.length === 0) return;
+        const prev = state.past[state.past.length - 1];
+        const cur = snapshotOf(state);
+        set({
+          ...prev,
+          past: state.past.slice(0, -1),
+          future: [...state.future, cur],
+          // Drop selections / pen state that may now point to deleted ids.
+          selectedImageId: prev.images.some((i) => i.id === state.selectedImageId)
+            ? state.selectedImageId
+            : null,
+          selectedCharacterId: prev.characters.some((c) => c.id === state.selectedCharacterId)
+            ? state.selectedCharacterId
+            : null,
+          selectedCollisionId: null,
+          pendingPenAnchors: [],
+          pendingPenImageId: null,
+        });
+      },
+
+      redo: () => {
+        const state = get();
+        if (state.future.length === 0) return;
+        const next = state.future[state.future.length - 1];
+        const cur = snapshotOf(state);
+        set({
+          ...next,
+          past: [...state.past, cur],
+          future: state.future.slice(0, -1),
+          selectedImageId: next.images.some((i) => i.id === state.selectedImageId)
+            ? state.selectedImageId
+            : null,
+          selectedCharacterId: next.characters.some((c) => c.id === state.selectedCharacterId)
+            ? state.selectedCharacterId
+            : null,
+          selectedCollisionId: null,
+          pendingPenAnchors: [],
+          pendingPenImageId: null,
+        });
+      },
+
+      canUndo: () => get().past.length > 0,
+      canRedo: () => get().future.length > 0,
     }),
     {
       name: 'pb-freeform-2d',

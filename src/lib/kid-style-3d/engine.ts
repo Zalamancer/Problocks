@@ -299,9 +299,16 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
       // _sphericalDelta accumulates in the controls; controls.update()
       // (called every frame in the engine loop) integrates with damping
       // and clamps to min/maxPolarAngle automatically.
+      //
+      // Sign is inverted from the Three.js example default: a swipe
+      // RIGHT now rotates the camera CCW around the target (the world
+      // visibly spins right under the camera) instead of CW. Mac
+      // trackpad scroll-direction conventions assume content moves
+      // with the fingers, so the prior sign read as "the world goes
+      // the wrong way" to the user.
       const speed = 0.005;
-      controls.rotateLeft(e.deltaX * speed);
-      controls.rotateUp(e.deltaY * speed);
+      controls.rotateLeft(-e.deltaX * speed);
+      controls.rotateUp(-e.deltaY * speed);
     } else {
       // Rotate locked (top-down / iso preset) — fall through to zoom.
       const offset = new THREE.Vector3().subVectors(camera.position, controls.target);

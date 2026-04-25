@@ -75,10 +75,18 @@ const ISO_DIST = 16;
 // the whole character + a bit of foreground visible with 42° FOV.
 const THIRD_DIST = 9;
 const THIRD_Y = 3.2;
+// Min/max for third-person trackpad pinch zoom. Stays inside the range
+// where the character + a little foreground both read.
+const THIRD_DIST_MIN = 4;
+const THIRD_DIST_MAX = 24;
 const LOOK_Y_OFFSET = 1.6;
 const FIRST_HEAD_Y = 1.9;
 const MOUSE_YAW_SENS = 0.0035;
 const MOUSE_PITCH_SENS = 0.0025;
+// Trackpad two-finger orbit during play. Same units as the edit-mode
+// engine onWheel handler, so a swipe feels equivalent across the
+// edit/play boundary.
+const WHEEL_YAW_SENS = 0.005;
 // Character cylinder collider — r 0.45, height 2.0. Tuned to the
 // builder's character proportions; a little forgiving so brushes-past-
 // a-tree don't snag.
@@ -106,6 +114,11 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   let velY = 0;
   let mode: CameraMode = opts.mode;
   let colliders: Collider[] = [];
+  // Mutable third-person follow distance — pinch / Cmd+wheel during play
+  // tweaks this so the user can pull the camera in or out without
+  // exiting play. Reset to default whenever the controller starts so
+  // each play session begins at the canonical framing.
+  let thirdDist = THIRD_DIST;
 
   function collectColliders() {
     colliders = [];
@@ -189,7 +202,11 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
       pitch -= e.movementY * MOUSE_PITCH_SENS;
       pitch = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, pitch));
     } else if (mode === 'third' && thirdDragging) {
-      yaw -= e.movementX * MOUSE_YAW_SENS;
+      // Inverted: drag-right swings the camera CCW around the character
+      // (the world appears to rotate right under it). Matches the
+      // engine onWheel orbit-direction so click-drag and trackpad
+      // swipe feel identical in play.
+      yaw += e.movementX * MOUSE_YAW_SENS;
     }
   };
 
@@ -197,10 +214,61 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     pointerLocked = document.pointerLockElement === domElement;
   };
 
+  /**
+   * Trackpad-aware wheel handler that brings edit-mode-feel orbit into
+   * play. The engine's own onWheel bails when orbit.enabled === false
+   * (which is what start() sets), so this listener wakes up exactly
+   * during play. Behavior mirrors engine.ts:
+   *   • plain swipe (deltaMode 0, modest |deltaY|)  → orbit yaw
+   *   • ctrl/⌘ + wheel (pinch)                       → zoom (third only)
+   *   • mouse wheel notch (deltaMode !== 0)          → zoom (third only)
+   *
+   * Topdown / isometric stay locked: we ignore wheel there to preserve
+   * the "RTS pan + zoom" feel set by applyModeInitial().
+   */
+  const onWheel = (e: WheelEvent) => {
+    if (mode !== 'third' && mode !== 'first') return;
+    e.preventDefault();
+
+    const isPinch = e.ctrlKey || e.metaKey;
+    // Same heuristic as engine.ts — short per-frame deltas + non-zero
+    // deltaX strongly imply trackpad swipes. Mouse wheel notches
+    // typically arrive with |deltaY| >= 60 in deltaMode 0 or any value
+    // in deltaMode 1.
+    const trackpadLike =
+      e.deltaMode === 0 && (Math.abs(e.deltaY) < 50 || e.deltaX !== 0);
+
+    if (mode === 'third') {
+      if (isPinch || !trackpadLike) {
+        // ZOOM — pull camera in / out by scaling thirdDist. Pinch
+        // sensitivity matches the edit-mode handler so it feels equal
+        // crossing the play boundary.
+        const factor = 1 + (e.deltaY * (isPinch ? 0.01 : 0.0015));
+        thirdDist = Math.max(THIRD_DIST_MIN, Math.min(THIRD_DIST_MAX, thirdDist * factor));
+      } else {
+        // ORBIT yaw. Inverted to match the drag direction above.
+        yaw += e.deltaX * WHEEL_YAW_SENS;
+      }
+    } else if (mode === 'first') {
+      // Trackpad orbit in first-person: yaw on deltaX, pitch on deltaY.
+      // Inverted relative to mouse-look so two-finger right makes the
+      // view spin right (consistent with the third-person convention).
+      if (!isPinch && trackpadLike) {
+        yaw += e.deltaX * WHEEL_YAW_SENS;
+        pitch += e.deltaY * WHEEL_YAW_SENS;
+        pitch = Math.max(-Math.PI / 2.3, Math.min(Math.PI / 2.3, pitch));
+      }
+    }
+  };
+
   function start() {
     if (running) return;
     running = true;
     orbit.enabled = false;
+    // Reset the follow distance every start so the canonical framing
+    // is what greets the user; otherwise a Stop-then-Play after a
+    // pinch-zoom would persist the zoom into the next play session.
+    thirdDist = THIRD_DIST;
     collectColliders();
     popToGroundOnSpawn();
     window.addEventListener('keydown', onKeyDown);
@@ -209,6 +277,9 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerlockchange', onPointerLockChange);
+    // passive:false because we preventDefault() to stop the page from
+    // scrolling under the studio when the user two-finger swipes.
+    domElement.addEventListener('wheel', onWheel, { passive: false });
     applyModeInitial();
   }
 
@@ -222,6 +293,7 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointermove', onPointerMove);
     document.removeEventListener('pointerlockchange', onPointerLockChange);
+    domElement.removeEventListener('wheel', onWheel);
     if (pointerLocked) document.exitPointerLock?.();
     orbit.enabled = prevOrbitEnabled;
     character.visible = prevCharVisible;
@@ -253,12 +325,15 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     } else {
       character.visible = true;
       // Camera behind the character along current yaw. Character faces +Z
-      // by default so "behind" means subtract the forward vector.
+      // by default so "behind" means subtract the forward vector. Uses
+      // thirdDist (mutable, pinch-zoomable) instead of the THIRD_DIST
+      // constant so the user's chosen follow distance is the initial
+      // framing on subsequent setMode → 'third' transitions.
       const fx = Math.sin(yaw), fz = Math.cos(yaw);
       camera.position.set(
-        p.x - fx * THIRD_DIST,
+        p.x - fx * thirdDist,
         p.y + THIRD_Y,
-        p.z - fz * THIRD_DIST,
+        p.z - fz * thirdDist,
       );
       camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
     }
@@ -406,8 +481,12 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
       camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
     } else {
       const fx2 = Math.sin(yaw), fz2 = Math.cos(yaw);
-      const targetX = p.x - fx2 * THIRD_DIST;
-      const targetZ = p.z - fz2 * THIRD_DIST;
+      // thirdDist is mutated by onWheel pinch / mouse-wheel notches so
+      // the user can pull the camera in or out without leaving play;
+      // every frame re-evaluates the desired position from the current
+      // distance and lerps for a smooth dolly.
+      const targetX = p.x - fx2 * thirdDist;
+      const targetZ = p.z - fz2 * thirdDist;
       const targetY = p.y + THIRD_Y;
       // Damped lerp for a soft follow
       camera.position.x += (targetX - camera.position.x) * Math.min(1, dt * 8);

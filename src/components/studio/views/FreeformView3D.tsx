@@ -19,9 +19,12 @@ import {
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { useSceneStore } from '@/store/scene-store';
 import { useUserAvatar } from '@/store/user-avatar-store';
+import { useToastStore } from '@/store/toast-store';
 import { TopToolbar } from './freeform3d/TopToolbar';
 import { setSelectionHighlight } from './freeform3d/selection-outline';
 import { setSpawnTargetProvider } from '@/lib/kid-style-3d/spawn-target';
+import { PlayHUD as TycoonHUD } from './freeform3d/PlayHUD';
+import { useGameState } from '@/hooks/use-game-state';
 
 /** Convert a user-avatar AvatarOutfit into SceneObject.props for the
     character prefab. Kept local because the character prefab is the
@@ -86,6 +89,18 @@ export function FreeformView3D() {
   // Studio-wide Play toggle lives in scene-store. We react to it here to
   // enter/exit freeform 3D play mode (WASD + follow camera).
   const isPlaying = useSceneStore((s) => s.isPlaying);
+
+  // Tycoon money loop — only fetches when scene declares serverside vars
+  // (the hook itself is anonymous-aware and won't probe the API for
+  // non-authed users).
+  const { buy: buyAction, isAuthed } = useGameState();
+  const buyRef = useRef(buyAction);
+  buyRef.current = buyAction;
+  const isAuthedRef = useRef(isAuthed);
+  isAuthedRef.current = isAuthed;
+  const addToast = useToastStore((s) => s.addToast);
+  const addToastRef = useRef(addToast);
+  addToastRef.current = addToast;
 
   /* ---- boot engine once + gizmo ---- */
   useEffect(() => {
@@ -344,6 +359,116 @@ export function FreeformView3D() {
       canvas.removeEventListener('pointerup', onPointerUp);
     };
   }, [select, isPlaying, brushEnabled]);
+
+  /* ---- play-mode click-to-buy ----
+      Only active in play mode. Reads behaviors[] off the clicked
+      prefab and fires the first one with on:'click'. Money flows
+      through the buy() callback from useGameState — server is truth.
+      Non-buy click actions (grant) are no-ops in slice 3; slice 5's
+      /tick endpoint will absorb them. */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (!isPlaying) return;
+
+    let downX = 0;
+    let downY = 0;
+    let isDown = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      // Right/middle = camera control; ignore.
+      if (e.button !== 0) return;
+      isDown = true;
+      downX = e.clientX;
+      downY = e.clientY;
+    };
+
+    const onPointerUp = async (e: PointerEvent) => {
+      if (!isDown) return;
+      isDown = false;
+      // A real "drag" never fires a click — keep the threshold tight in
+      // play mode so a slight mouselook doesn't accidentally shop.
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return;
+      const engine = engineRef.current;
+      if (!engine) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const hit = engine.raycastRoot(ndc);
+      if (!hit) return;
+      const id = sceneIdForObject(hit.object);
+      if (!id) return;
+
+      const scene = useFreeform3D.getState().scene;
+      const obj = scene.objects.find((o) => o.id === id);
+      const behaviors = obj?.behaviors ?? [];
+      const onClick = behaviors.find((b) => b.on === 'click');
+      if (!onClick) return;
+
+      const action = onClick.action;
+
+      // Auth gate — clicking a serverside-spending behavior without a
+      // session shows the toast instead of silently failing.
+      const needsAuth = action.do === 'buy' || action.do === 'buyUpgrade';
+      if (needsAuth && !isAuthedRef.current) {
+        addToastRef.current('warning', 'Sign in to play this world');
+        return;
+      }
+
+      if (action.do === 'buy') {
+        const grants = action.addToInventory ?? '__noop__';
+        const result = await buyRef.current({
+          kind: 'item',
+          cost: action.cost,
+          grants,
+          label: action.label,
+        });
+        if (!result.ok) {
+          if (result.reason === 'insufficient') addToastRef.current('warning', 'Not enough coins');
+          else if (result.reason === 'auth')    addToastRef.current('warning', 'Sign in to play this world');
+          else                                  addToastRef.current('error',   'Purchase failed — try again');
+        } else if (action.label) {
+          addToastRef.current('info', `Bought ${action.label}`);
+        }
+        return;
+      }
+
+      if (action.do === 'buyUpgrade') {
+        const catalog = scene.gameLogic?.upgrades ?? {};
+        const def = catalog[action.upgradeId];
+        if (!def) {
+          addToastRef.current('error', 'Unknown upgrade');
+          return;
+        }
+        const result = await buyRef.current({
+          kind: 'upgrade',
+          upgradeId: action.upgradeId,
+          catalog,
+        });
+        if (!result.ok) {
+          if (result.reason === 'insufficient') addToastRef.current('warning', `Need ${def.cost} coins for ${def.label}`);
+          else if (result.reason === 'auth')    addToastRef.current('warning', 'Sign in to play this world');
+          else                                  addToastRef.current('error',   'Upgrade failed — try again');
+        } else {
+          addToastRef.current('info', `Unlocked ${def.label}`);
+        }
+        return;
+      }
+
+      // 'earn' / 'grant' don't fire on a single click in slice 3 — the
+      // server-side tick batcher (slice 5) will own the periodic credit.
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointerup', onPointerUp);
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [isPlaying]);
 
   /* ---- brush paint handler ---- */
   useEffect(() => {
@@ -673,6 +798,7 @@ export function FreeformView3D() {
       {!isPlaying && <TopToolbar />}
       {!isPlaying && world.showStats && <StatsBadge stats={stats} />}
       {isPlaying ? <PlayHud cameraMode={cameraMode} /> : <HintBadge />}
+      {isPlaying && <TycoonHUD />}
     </div>
   );
 }

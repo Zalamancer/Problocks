@@ -86,18 +86,61 @@ function WhiteboardAnswer({
   const [warn, setWarn] = useState<string | null>(null);
 
   // The homework page is fixed-height with internal scroll columns,
-  // and the canvas is tall enough that the Submit button can fall
-  // below the fold the moment the part is expanded. Scroll the
-  // button into view on mount so the user never misses it.
+  // and the canvas can push the Submit button below the fold the
+  // moment Part (f) expands. Walk up to the first scrollable
+  // ancestor and scroll it so the button is fully in view. We watch
+  // the wrapper with a ResizeObserver because the canvas inside
+  // sizes itself in its own useEffect *after* mount — without the
+  // observer our scroll fires before the final height settles.
   useEffect(() => {
     if (selected?.dataUrl) return; // already submitted
-    const t = setTimeout(() => {
-      submitBtnRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'end',
-      });
-    }, 80);
-    return () => clearTimeout(t);
+    const btn = submitBtnRef.current;
+    if (!btn) return;
+
+    let lastScrollAt = 0;
+    const tryScroll = () => {
+      let el: HTMLElement | null = btn.parentElement;
+      while (el && el !== document.body) {
+        const cs = getComputedStyle(el);
+        const yScrolls = cs.overflowY === 'auto' || cs.overflowY === 'scroll';
+        if (yScrolls && el.scrollHeight > el.clientHeight) {
+          const margin = 32;
+          const elRect = el.getBoundingClientRect();
+          const btnRect = btn.getBoundingClientRect();
+          const overflow = btnRect.bottom - elRect.bottom + margin;
+          if (overflow > 0) {
+            // Avoid stomping a smooth scroll that's still in flight.
+            const now = performance.now();
+            if (now - lastScrollAt > 250) {
+              el.scrollTo({ top: el.scrollTop + overflow, behavior: 'smooth' });
+              lastScrollAt = now;
+            }
+          }
+          return;
+        }
+        el = el.parentElement;
+      }
+      btn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    };
+
+    // Re-check whenever the wrapper around the canvas changes size
+    // (covers WhiteboardCanvas's post-mount resize). ResizeObserver
+    // only fires for the watched element, so attach it to the button's
+    // immediate parent which grows when the canvas mounts.
+    const observed = btn.parentElement;
+    const ro = observed
+      ? new ResizeObserver(() => tryScroll())
+      : null;
+    if (observed && ro) ro.observe(observed);
+
+    // Belt + braces: a single delayed call in case the observer
+    // doesn't catch the very first mount on Safari.
+    const t = setTimeout(tryScroll, 120);
+
+    return () => {
+      ro?.disconnect();
+      clearTimeout(t);
+    };
   }, [selected?.dataUrl]);
 
   const requestTutorReview = useCallback(
@@ -212,7 +255,7 @@ function WhiteboardAnswer({
           {micro.hint}
         </div>
       )}
-      <WhiteboardCanvas ref={ref} width={320} height={220} disabled={busy} theme="light" />
+      <WhiteboardCanvas ref={ref} width={300} height={170} disabled={busy} theme="light" />
       {warn && (
         <div
           style={{
@@ -228,27 +271,43 @@ function WhiteboardAnswer({
           {warn}
         </div>
       )}
-      <button
-        ref={submitBtnRef}
-        type="button"
-        onClick={submit}
-        disabled={busy}
+      <div
+        // Sticky pedestal so the Submit button is always pinned to the
+        // bottom of the visible scroll viewport, no matter how tall
+        // the canvas is. Background fades into the cream paper so the
+        // button doesn't appear to float over a gap.
         style={{
-          alignSelf: 'flex-start',
-          padding: '10px 14px',
-          borderRadius: 10,
-          background: 'var(--pb-butter)',
-          color: 'var(--pb-butter-ink)',
-          border: '1.5px solid var(--pb-butter-ink)',
-          boxShadow: '0 2px 0 var(--pb-butter-ink)',
-          fontSize: 12,
-          fontWeight: 800,
-          cursor: busy ? 'wait' : 'pointer',
-          opacity: busy ? 0.6 : 1,
+          position: 'sticky',
+          bottom: 0,
+          marginTop: 4,
+          paddingTop: 8,
+          background:
+            'linear-gradient(to top, var(--pb-paper) 60%, rgba(255,250,240,0))',
+          zIndex: 5,
         }}
       >
-        {busy ? 'Saving…' : 'Submit drawing'}
-      </button>
+        <button
+          ref={submitBtnRef}
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          style={{
+            display: 'inline-block',
+            padding: '10px 14px',
+            borderRadius: 10,
+            background: 'var(--pb-butter)',
+            color: 'var(--pb-butter-ink)',
+            border: '1.5px solid var(--pb-butter-ink)',
+            boxShadow: '0 2px 0 var(--pb-butter-ink)',
+            fontSize: 12,
+            fontWeight: 800,
+            cursor: busy ? 'wait' : 'pointer',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? 'Saving…' : 'Submit drawing'}
+        </button>
+      </div>
     </div>
   );
 }

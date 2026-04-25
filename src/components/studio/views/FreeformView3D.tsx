@@ -374,13 +374,23 @@ export function FreeformView3D() {
     // Deselect so the gizmo doesn't flash on the character mesh.
     useFreeform3D.getState().select(null);
 
+    // Pick the play camera mode from world.cameraView when it's set
+    // to topdown / isometric — those preset views carry across edit
+    // and play. orbit falls back to the user's existing cameraMode
+    // (first|third) so first-person players keep their existing pref.
+    const worldView = useFreeform3D.getState().world.cameraView;
+    const playMode =
+      worldView === 'topdown' ? 'topdown' :
+      worldView === 'isometric' ? 'isometric' :
+      cameraMode;
+
     const controller = createPlayController({
       camera: engine.camera,
       character: characterObj,
       domElement: engine.renderer.domElement,
       orbit: engine.controls,
       root: engine.root,
-      mode: cameraMode,
+      mode: playMode,
     });
     controller.start();
     playRef.current = controller;
@@ -418,10 +428,18 @@ export function FreeformView3D() {
     };
   }, [isPlaying, cameraMode]);
 
-  /* ---- camera mode live-switch (while playing) ---- */
+  /* ---- camera mode live-switch (while playing) ----
+      Derives the same way as the play-mode useEffect: world.cameraView
+      wins when it's topdown/isometric; otherwise the user's cameraMode
+      (first|third) applies. */
   useEffect(() => {
-    if (isPlaying && playRef.current) playRef.current.setMode(cameraMode);
-  }, [cameraMode, isPlaying]);
+    if (!isPlaying || !playRef.current) return;
+    const playMode =
+      world.cameraView === 'topdown' ? 'topdown' :
+      world.cameraView === 'isometric' ? 'isometric' :
+      cameraMode;
+    playRef.current.setMode(playMode);
+  }, [cameraMode, world.cameraView, isPlaying]);
 
   /* ---- upgrade-driven player-speed multiplier (slice 6) ----
       Walks the player's owned upgrades, multiplies every "playerSpeed"
@@ -1083,10 +1101,12 @@ function HintBadge() {
   );
 }
 
-function PlayHud({ cameraMode }: { cameraMode: 'third' | 'first' }) {
-  const hint = cameraMode === 'first'
-    ? 'WASD · mouse to look · click to lock pointer · Space to jump · Shift to sprint'
-    : 'WASD · drag mouse to orbit · Space to jump · Shift to sprint';
+function PlayHud({ cameraMode }: { cameraMode: 'third' | 'first' | 'topdown' | 'isometric' }) {
+  const hint =
+    cameraMode === 'first'    ? 'WASD · mouse to look · click to lock pointer · Space to jump · Shift to sprint' :
+    cameraMode === 'topdown'  ? 'WASD · top-down view · Space to jump · Shift to sprint' :
+    cameraMode === 'isometric'? 'WASD · isometric view · Space to jump · Shift to sprint' :
+    'WASD · drag mouse to orbit · Space to jump · Shift to sprint';
   return (
     <div
       className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-xs font-medium"

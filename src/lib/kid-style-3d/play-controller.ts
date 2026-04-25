@@ -17,7 +17,7 @@
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-export type CameraMode = 'third' | 'first';
+export type CameraMode = 'third' | 'first' | 'topdown' | 'isometric';
 
 interface Collider {
   box: THREE.Box3;
@@ -63,6 +63,12 @@ const WALK = 5;
 const SPRINT_MULT = 1.6;
 const JUMP_V = 5;
 const GRAVITY = -15;
+// Top-down + isometric play camera tuning. Distances are in world
+// units; camera follows the character XZ. Topdown is straight down,
+// isometric is at the [1,1,1] corner of an orbit so the world reads
+// 3/4-perspective.
+const TOPDOWN_HEIGHT = 22;
+const ISO_DIST = 16;
 // Character builder puts eyes at +Z (face-forward = +Z world at rotation 0),
 // so the camera needs to sit at -Z of the character to see its back. Y is
 // raised ~3u for a Roblox-esque over-the-shoulder framing; dist 9u keeps
@@ -226,15 +232,28 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
   }
 
   function applyModeInitial() {
+    const p = character.position;
     if (mode === 'first') {
       character.visible = false;  // player is the camera
-      const p = character.position;
       camera.position.set(p.x, p.y + FIRST_HEAD_Y, p.z);
+    } else if (mode === 'topdown') {
+      // Straight down — yaw is fixed to 0 so WASD reads as world-axis.
+      // Tiny X/Z offset keeps OrbitControls / lookAt out of gimbal.
+      yaw = 0;
+      character.visible = true;
+      camera.position.set(p.x + 0.001, p.y + TOPDOWN_HEIGHT, p.z + 0.001);
+      camera.lookAt(p.x, p.y, p.z);
+    } else if (mode === 'isometric') {
+      // 45° corner view, yaw fixed so WASD axes don't rotate as the
+      // player moves. Offset the camera by ISO_DIST on each axis.
+      yaw = 0;
+      character.visible = true;
+      camera.position.set(p.x + ISO_DIST, p.y + ISO_DIST, p.z + ISO_DIST);
+      camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
     } else {
       character.visible = true;
       // Camera behind the character along current yaw. Character faces +Z
       // by default so "behind" means subtract the forward vector.
-      const p = character.position;
       const fx = Math.sin(yaw), fz = Math.cos(yaw);
       camera.position.set(
         p.x - fx * THIRD_DIST,
@@ -346,12 +365,13 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
       }
     }
 
-    // Face movement direction in third-person so the character visually
-    // turns as you run. Skip if no movement to avoid snapping to (0,0,-1).
-    if (mode === 'third' && hasInput) {
+    // Face movement direction in any visible-character mode so the
+    // character visually turns as you run. Skip first-person (no
+    // visible character) and skip when there's no input.
+    if (mode !== 'first' && hasInput) {
       const targetYaw = Math.atan2(dx, dz);
       // Shortest-arc interpolation
-      let cur = character.rotation.y;
+      const cur = character.rotation.y;
       let diff = targetYaw - cur;
       while (diff > Math.PI) diff -= 2 * Math.PI;
       while (diff < -Math.PI) diff += 2 * Math.PI;
@@ -359,15 +379,32 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     }
 
     // Camera rig
+    const p = character.position;
     if (mode === 'first') {
-      camera.position.set(
-        character.position.x,
-        character.position.y + FIRST_HEAD_Y,
-        character.position.z,
-      );
+      camera.position.set(p.x, p.y + FIRST_HEAD_Y, p.z);
       camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    } else if (mode === 'topdown') {
+      // Camera locked above character. Lerp so a fast-moving player
+      // doesn't jitter the view; slightly off-axis to dodge gimbal.
+      const targetX = p.x + 0.001;
+      const targetY = p.y + TOPDOWN_HEIGHT;
+      const targetZ = p.z + 0.001;
+      const k = Math.min(1, dt * 8);
+      camera.position.x += (targetX - camera.position.x) * k;
+      camera.position.y += (targetY - camera.position.y) * k;
+      camera.position.z += (targetZ - camera.position.z) * k;
+      camera.lookAt(p.x, p.y, p.z);
+    } else if (mode === 'isometric') {
+      // Fixed 45° offset on +X / +Z; camera follows character XZ.
+      const targetX = p.x + ISO_DIST;
+      const targetY = p.y + ISO_DIST;
+      const targetZ = p.z + ISO_DIST;
+      const k = Math.min(1, dt * 8);
+      camera.position.x += (targetX - camera.position.x) * k;
+      camera.position.y += (targetY - camera.position.y) * k;
+      camera.position.z += (targetZ - camera.position.z) * k;
+      camera.lookAt(p.x, p.y + LOOK_Y_OFFSET, p.z);
     } else {
-      const p = character.position;
       const fx2 = Math.sin(yaw), fz2 = Math.cos(yaw);
       const targetX = p.x - fx2 * THIRD_DIST;
       const targetZ = p.z - fz2 * THIRD_DIST;

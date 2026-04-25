@@ -43,7 +43,7 @@ import { clearPrefabThumbnailCache } from '@/components/studio/PrefabThumbnail';
 
 const HISTORY_LIMIT = 50;
 
-export type CameraMode = 'third' | 'first';
+export type CameraMode = 'third' | 'first' | 'topdown' | 'isometric';
 
 export type CameraView = 'orbit' | 'topdown' | 'isometric';
 

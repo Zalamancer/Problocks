@@ -64,6 +64,10 @@ export interface KidEngine {
       so the new theme shows immediately. Prefab re-coloring is the
       store's responsibility (bump geomRev for a rehydrate pass). */
   setTheme: (id: ThemeId) => void;
+  /** Lock or unlock the wheel-orbit branch. Locked = scroll/swipe
+      becomes a zoom (top-down / isometric presets); unlocked = scroll
+      orbits around target (default for orbit / third-person). */
+  setOrbitLocked: (locked: boolean) => void;
 }
 
 export function createKidEngine(opts: KidEngineOptions): KidEngine {
@@ -218,109 +222,136 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   scene.add(root);
 
   // --- orbit controls ---
-  // Target 2u up to frame a standing character; tight min/max clamps
-  // match the 22u plot so users can't pull the camera beyond what's
-  // meant to be visible. 85° max polar stops tipping under the ground.
+  // Mirrors the tile-based building studio (BuildingCanvas.tsx ~L242–347):
+  // OrbitControls is reduced to a target/pose container with every input
+  // disabled — no built-in rotate / pan / zoom / damping. All camera
+  // input is driven by the custom wheel + pointer handlers below so a
+  // student gets the same trackpad scroll-to-orbit + pinch-to-zoom +
+  // right-drag pan that the building studio has.
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 0, 0);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.screenSpacePanning = false;
-  controls.minDistance = 8;
-  // The boot camera sits ~52u from origin; allow a little more headroom
-  // so pinch-out doesn't clamp on the first interaction.
-  controls.maxDistance = 70;
-  // Cap at 0.4π (72° from up axis = 18° above horizon). The earlier
-  // 0.47π let the camera tilt almost to ground-level which read as
-  // first-person to the user. 0.4π keeps the camera always reading
-  // as "above the world".
-  controls.maxPolarAngle = Math.PI * 0.4;
-  // Disable OrbitControls' default wheel-to-zoom — we install our own
-  // wheel handler below that maps a Mac-style two-finger trackpad
-  // swipe to ORBIT (the default OrbitControls behavior is "wheel
-  // always zooms" which is wrong for trackpad users). Mouse wheel +
-  // pinch + shift-wheel are still respected.
+  controls.enableDamping = false;
+  controls.enableRotate = false;
+  controls.enablePan = false;
   controls.enableZoom = false;
+  controls.target.set(0, 0, 0);
+  controls.update();
 
-  // Custom wheel routing — runs through OrbitControls' public
-  // rotateLeft / rotateUp so its damping + spherical bookkeeping stays
-  // in charge. Direct camera.position manipulation (the prior version)
-  // fought update()'s clamp-and-write path, which is why orbit only
-  // "worked for a split second" before snapping back.
-  //
-  //   • ctrlKey or metaKey   — pinch / Cmd+wheel → zoom
-  //   • shiftKey             — pan
-  //   • deltaMode === 0      — trackpad two-finger swipe → orbit
-  //   • deltaMode !== 0      — mouse wheel notch → zoom
-  //
-  // Mouse wheel users on Mac can hold Cmd to force zoom even on a
-  // trackpad; keyboard-less users (touch) won't reach this path.
-  const onWheel = (e: WheelEvent) => {
+  // Decoupled "is the wheel handler allowed to orbit?" toggle. The
+  // right-panel useEffect calls engine.setOrbitLocked(true) when the
+  // user picks the top-down / isometric view preset so the wheel
+  // falls through to a zoom; orbit / third-person leave it false.
+  // Kept separate from controls.enableRotate so OrbitControls' built-
+  // in left-click drag stays disabled in every mode.
+  let orbitLocked = false;
+
+  // Tunables. Verbatim from BuildingCanvas — keeping the constants
+  // identical guarantees identical felt-speed across both viewports.
+  const ORBIT_SPEED = 0.004;          // radians per wheel-delta unit
+  const ZOOM_FACTOR_PER_UNIT = 1.01;  // pow(this, deltaY) per tick
+  const ZOOM_MIN = 1.5;
+  const ZOOM_MAX = 150;
+  const POLAR_EPS = 0.05;             // keep camera off the exact pole
+  const PAN_SPEED = 0.0025;           // pixels → world units per camera-distance unit
+
+  const spherical = new THREE.Spherical();
+  const sphOffset = new THREE.Vector3();
+  const panRight = new THREE.Vector3();
+  const panUp = new THREE.Vector3();
+  const panDelta = new THREE.Vector3();
+
+  // Right- or middle-button drag pans the camera. Left-drag stays free
+  // for tools (selection, gizmo, paint brush). Pointer capture keeps
+  // the drag alive when the cursor leaves the canvas.
+  let panDragActive = false;
+  let lastPanX = 0;
+  let lastPanY = 0;
+  let panPointerId: number | null = null;
+
+  function onPanPointerDown(e: PointerEvent) {
+    if (e.button !== 1 && e.button !== 2) return;
+    panDragActive = true;
+    panPointerId = e.pointerId;
+    lastPanX = e.clientX;
+    lastPanY = e.clientY;
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    e.preventDefault();
+  }
+  function onPanPointerMove(e: PointerEvent) {
+    if (!panDragActive || e.pointerId !== panPointerId) return;
+    const dx = e.clientX - lastPanX;
+    const dy = e.clientY - lastPanY;
+    lastPanX = e.clientX;
+    lastPanY = e.clientY;
+
+    sphOffset.copy(camera.position).sub(controls.target);
+    const dist = sphOffset.length();
+    panRight.setFromMatrixColumn(camera.matrix, 0); // camera X axis
+    panUp.setFromMatrixColumn(camera.matrix, 1);    // camera Y axis
+    panDelta
+      .copy(panRight).multiplyScalar(-dx * PAN_SPEED * dist)
+      .addScaledVector(panUp,        dy * PAN_SPEED * dist);
+    camera.position.add(panDelta);
+    controls.target.add(panDelta);
+  }
+  function onPanPointerUp(e: PointerEvent) {
+    if (e.pointerId !== panPointerId) return;
+    panDragActive = false;
+    panPointerId = null;
+    try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  }
+  // Suppress the native context menu on right-drag so pan isn't interrupted.
+  const onContextMenu = (e: Event) => { e.preventDefault(); };
+
+  canvas.addEventListener('pointerdown', onPanPointerDown);
+  canvas.addEventListener('pointermove', onPanPointerMove);
+  canvas.addEventListener('pointerup', onPanPointerUp);
+  canvas.addEventListener('pointercancel', onPanPointerUp);
+  canvas.addEventListener('contextmenu', onContextMenu);
+
+  function onWheel(e: WheelEvent) {
     if (controls.enabled === false) return;
     e.preventDefault();
 
-    const isPinch = e.ctrlKey || e.metaKey;
-    const isShiftPan = e.shiftKey;
-    // Trackpad signal: deltaMode=0 (DOM_DELTA_PIXEL). Mouse wheel notches
-    // are usually deltaMode=1 (LINE) or 2 (PAGE). Some browsers report
-    // deltaMode=0 for mouse wheel too — guard against that with a
-    // magnitude heuristic (mouse notches are typically |deltaY| >= 60
-    // in px, trackpad swipes are smaller per-frame).
-    const trackpadLike =
-      e.deltaMode === 0 && (Math.abs(e.deltaY) < 50 || e.deltaX !== 0);
-
-    if (isPinch || (!isShiftPan && !trackpadLike)) {
-      // ZOOM — scale offset toward target. Pinch sensitivity is higher
-      // because trackpad pinch deltaY is typically large per frame.
-      const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
-      const factor = 1 + (e.deltaY * (isPinch ? 0.01 : 0.0015));
-      offset.multiplyScalar(factor);
-      const len = offset.length();
-      if (len < controls.minDistance) offset.setLength(controls.minDistance);
-      if (len > controls.maxDistance) offset.setLength(controls.maxDistance);
-      camera.position.copy(controls.target).add(offset);
-      camera.lookAt(controls.target);
-    } else if (isShiftPan) {
-      // PAN — shift+swipe pans on camera-screen axes, scaled by
-      // current distance so the felt-speed stays constant.
-      const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
-      const dist = offset.length();
-      const panRight = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
-      const panUp = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
-      const k = dist * 0.0015;
-      const delta = new THREE.Vector3()
-        .copy(panRight).multiplyScalar(-e.deltaX * k)
-        .addScaledVector(panUp, e.deltaY * k);
-      controls.target.add(delta);
-      camera.position.add(delta);
-      camera.lookAt(controls.target);
-    } else if (controls.enableRotate !== false) {
-      // ORBIT — feed deltas through OrbitControls' own rotation API.
-      // _sphericalDelta accumulates in the controls; controls.update()
-      // (called every frame in the engine loop) integrates with damping
-      // and clamps to min/maxPolarAngle automatically.
-      //
-      // Sign is inverted from the Three.js example default: a swipe
-      // RIGHT now rotates the camera CCW around the target (the world
-      // visibly spins right under the camera) instead of CW. Mac
-      // trackpad scroll-direction conventions assume content moves
-      // with the fingers, so the prior sign read as "the world goes
-      // the wrong way" to the user.
-      const speed = 0.005;
-      controls.rotateLeft(-e.deltaX * speed);
-      controls.rotateUp(-e.deltaY * speed);
-    } else {
-      // Rotate locked (top-down / iso preset) — fall through to zoom.
-      const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
-      const factor = 1 + (e.deltaY * 0.0015);
-      offset.multiplyScalar(factor);
-      const len = offset.length();
-      if (len < controls.minDistance) offset.setLength(controls.minDistance);
-      if (len > controls.maxDistance) offset.setLength(controls.maxDistance);
-      camera.position.copy(controls.target).add(offset);
-      camera.lookAt(controls.target);
+    // Pinch (trackpad) or ctrl/⌘ + wheel → dolly toward the orbit target.
+    // Always allowed even when the camera-view preset locks rotation
+    // (top-down / isometric still want zoom).
+    if (e.ctrlKey || e.metaKey) {
+      sphOffset.copy(camera.position).sub(controls.target);
+      const curDist = sphOffset.length();
+      if (curDist <= 0) return;
+      const factor = Math.pow(ZOOM_FACTOR_PER_UNIT, e.deltaY);
+      const newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, curDist * factor));
+      sphOffset.multiplyScalar(newDist / curDist);
+      camera.position.copy(controls.target).add(sphOffset);
+      return;
     }
-  };
+
+    // Top-down / isometric view presets call engine.setOrbitLocked(true)
+    // in the right-panel useEffect — respect that so those modes stay
+    // locked. Plain wheel falls through to a zoom in that case.
+    if (orbitLocked) {
+      sphOffset.copy(camera.position).sub(controls.target);
+      const curDist = sphOffset.length();
+      if (curDist <= 0) return;
+      const factor = Math.pow(ZOOM_FACTOR_PER_UNIT, e.deltaY);
+      const newDist = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, curDist * factor));
+      sphOffset.multiplyScalar(newDist / curDist);
+      camera.position.copy(controls.target).add(sphOffset);
+      return;
+    }
+
+    // Plain wheel / two-finger swipe → orbit around target. deltaX spins
+    // azimuth, deltaY tilts polar. Sign convention matches the building
+    // studio: swipe up = look up, swipe right = look right.
+    sphOffset.copy(camera.position).sub(controls.target);
+    spherical.setFromVector3(sphOffset);
+    spherical.theta += e.deltaX * ORBIT_SPEED;
+    spherical.phi   += e.deltaY * ORBIT_SPEED;
+    spherical.phi = Math.max(POLAR_EPS, Math.min(Math.PI - POLAR_EPS, spherical.phi));
+    sphOffset.setFromSpherical(spherical);
+    camera.position.copy(controls.target).add(sphOffset);
+    camera.lookAt(controls.target);
+  }
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
   // --- raycasting helpers (picking + ground drop) ---
@@ -404,6 +435,11 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     canvas.removeEventListener('pointermove', onPointerMove);
     canvas.removeEventListener('pointerleave', onPointerLeave);
     canvas.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('pointerdown', onPanPointerDown);
+    canvas.removeEventListener('pointermove', onPanPointerMove);
+    canvas.removeEventListener('pointerup', onPanPointerUp);
+    canvas.removeEventListener('pointercancel', onPanPointerUp);
+    canvas.removeEventListener('contextmenu', onContextMenu);
     observer?.disconnect();
     controls.dispose();
     scene.traverse((obj) => {
@@ -436,6 +472,7 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     raycastGround,
     setPerFrame: (cb) => { perFrameCb = cb; },
     setTheme: (id) => setActiveTheme(id),
+    setOrbitLocked: (locked) => { orbitLocked = locked; },
   };
 }
 

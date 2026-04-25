@@ -279,8 +279,12 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
         p.z - fz * thirdDist,
       );
       orbit.target.set(p.x, p.y + LOOK_Y_OFFSET, p.z);
+      // controls.enabled = true so the engine's wheel handler actually
+      // runs (it bails on enabled=false). enableRotate intentionally
+      // stays false: OrbitControls' built-in left-click rotate stays
+      // off, and the engine's wheel handler reads the engine-local
+      // orbitLocked flag, not enableRotate.
       orbit.enabled = true;
-      orbit.enableRotate = true;
       orbit.update();
       prevPivotX = p.x;
       prevPivotY = p.y + LOOK_Y_OFFSET;

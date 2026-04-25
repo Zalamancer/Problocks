@@ -309,24 +309,24 @@ export function FreeformView3D() {
       // off the gimbal pole (otherwise camera.up parallel to view dir
       // makes orbit math go NaN).
       camera.position.set(0.001, 30, 0.001);
-      controls.enableRotate = false;
+      engine.setOrbitLocked(true);
     } else if (view === 'isometric') {
       controls.target.set(0, 2, 0);
       camera.position.set(20, 20, 20);
-      controls.enableRotate = false;
+      engine.setOrbitLocked(true);
     } else if (view === 'third') {
       // Tile-based studio's framing — (18,22,24) lookAt origin gives the
-      // angled 3/4 perspective the user expects. Rotate stays enabled so
-      // they can still orbit before play; play-mode forces follow-cam.
+      // angled 3/4 perspective the user expects. Wheel orbit stays
+      // unlocked so the user can still orbit before play.
       controls.target.set(0, 0, 0);
       camera.position.set(18, 22, 24);
-      controls.enableRotate = true;
+      engine.setOrbitLocked(false);
     } else {
       // orbit — restore the engine defaults (kept here in sync with
       // engine.ts's initial setup so toggling back lands cleanly).
       controls.target.set(0, 0, 0);
       camera.position.set(25, 32, 32);
-      controls.enableRotate = true;
+      engine.setOrbitLocked(false);
     }
     camera.lookAt(controls.target);
     controls.update();

@@ -44,6 +44,12 @@ export interface PlayController {
   dispose: () => void;
   update: (dt: number) => void;
   setMode: (m: CameraMode) => void;
+  /** Apply a multiplier on top of the base walk speed. Used by the
+      tycoon upgrade system — buying a "Sprint Boots" upgrade calls
+      this with 2 to double both walk and sprint speeds. Defaults to
+      1; setting it to 0 stops the character without removing the
+      controller. */
+  setSpeedMultiplier: (m: number) => void;
 }
 
 const WALK = 5;
@@ -72,6 +78,9 @@ const STEP_UP = 0.4;
 export function createPlayController(opts: PlayControllerOptions): PlayController {
   const { camera, character, domElement, orbit, root } = opts;
   const speed = opts.speed ?? WALK;
+  // Mutable so upgrades can scale the character at runtime via
+  // setSpeedMultiplier. Multiplied into both walk and sprint.
+  let speedMul = 1;
 
   const keys = new Set<string>();
   let yaw = opts.initialYaw ?? 0;
@@ -206,7 +215,7 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
     if (!running) return;
 
     const shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    const mag = speed * (shift ? SPRINT_MULT : 1);
+    const mag = speed * speedMul * (shift ? SPRINT_MULT : 1);
 
     // Build movement vector in camera-relative forward/right, flattened to XZ.
     let ix = 0, iz = 0;
@@ -317,6 +326,12 @@ export function createPlayController(opts: PlayControllerOptions): PlayControlle
 
   return {
     start, stop, update, setMode,
+    setSpeedMultiplier: (m: number) => {
+      // Clamp to a sensible range so an agent-emitted upgrade with a
+      // huge factor doesn't make the character unplayable. 0.25..8x
+      // covers every reasonable tycoon tier.
+      speedMul = Math.max(0.25, Math.min(8, m));
+    },
     dispose() { stop(); },
   };
 }

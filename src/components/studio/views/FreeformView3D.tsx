@@ -94,7 +94,7 @@ export function FreeformView3D() {
   // Tycoon money loop — only fetches when scene declares serverside vars
   // (the hook itself is anonymous-aware and won't probe the API for
   // non-authed users).
-  const { buy: buyAction, isAuthed } = useGameState();
+  const { buy: buyAction, isAuthed, state: gameStateValue } = useGameState();
   const buyRef = useRef(buyAction);
   buyRef.current = buyAction;
   const isAuthedRef = useRef(isAuthed);
@@ -316,6 +316,28 @@ export function FreeformView3D() {
   useEffect(() => {
     if (isPlaying && playRef.current) playRef.current.setMode(cameraMode);
   }, [cameraMode, isPlaying]);
+
+  /* ---- upgrade-driven player-speed multiplier (slice 6) ----
+      Walks the player's owned upgrades, multiplies every "playerSpeed"
+      multiplier together, and feeds it to the play controller. Same
+      upgrade id only counts once (buy API treats them as a set). */
+  useEffect(() => {
+    const ctl = playRef.current;
+    if (!ctl) return;
+    const owned = gameStateValue?.upgrades ?? [];
+    const catalog = useFreeform3D.getState().scene.gameLogic?.upgrades ?? {};
+    let m = 1;
+    const seen = new Set<string>();
+    for (const id of owned) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const def = catalog[id];
+      if (def && def.effect.kind === 'multiply' && def.effect.target === 'playerSpeed') {
+        m *= def.effect.factor;
+      }
+    }
+    ctl.setSpeedMultiplier(m);
+  }, [gameStateValue?.upgrades, isPlaying]);
 
   /* ---- click picking on the canvas (edit mode only) ---- */
   useEffect(() => {

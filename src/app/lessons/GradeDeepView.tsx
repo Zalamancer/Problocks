@@ -67,13 +67,28 @@ const ItemRow = ({ item, tone }: { item: KhanItem; tone: Tone }) => {
   const href = item.href.startsWith('http') ? item.href : `https://www.khanacademy.org${item.href}`;
   const khanQs = getKhanQuestionsByHref(item.href);
   const hasReal = khanQs.length > 0;
+  const canToggle = hasReal || !!item.question;
+  const toggleLabel = hasReal
+    ? (showQ ? `Hide ${khanQs.length} Khan Qs` : `Show ${khanQs.length} Khan Qs`)
+    : item.question
+      ? (showQ ? 'Hide Q' : 'Practice')
+      : null;
+
+  const handleRowClick = () => {
+    if (canToggle) setShowQ((v) => !v);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 12px', borderRadius: 10,
-        background: 'var(--pbs-paper)', border: `1.5px solid ${hasReal ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)'}`,
-      }}>
+      <div
+        onClick={handleRowClick}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 12px', borderRadius: 10,
+          background: 'var(--pbs-paper)', border: `1.5px solid ${hasReal ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)'}`,
+          cursor: canToggle ? 'pointer' : 'default',
+        }}
+      >
         <span style={{
           flex: '0 0 54px', textAlign: 'center',
           fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em',
@@ -84,51 +99,41 @@ const ItemRow = ({ item, tone }: { item: KhanItem; tone: Tone }) => {
         }}>
           <span style={{ marginRight: 3 }}>{badge.glyph}</span>{badge.label}
         </span>
-        <a href={href} target="_blank" rel="noreferrer" style={{
+        <span style={{
           flex: 1, minWidth: 0,
           fontSize: 13.5, fontWeight: 600, color: 'var(--pbs-ink)',
-          textDecoration: 'none',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {item.label}
-        </a>
-        {hasReal && (
+        </span>
+        {toggleLabel && (
           <button
             type="button"
-            onClick={() => setShowQ((v) => !v)}
+            onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); }}
             style={{
               flex: '0 0 auto', fontSize: 11.5, fontWeight: 700,
               padding: '4px 10px', borderRadius: 999,
-              background: showQ ? `var(--pbs-${tone}-ink)` : `var(--pbs-${tone})`,
+              background: showQ ? `var(--pbs-${tone}-ink)` : (hasReal ? `var(--pbs-${tone})` : 'transparent'),
               color: showQ ? 'var(--pbs-cream)' : `var(--pbs-${tone}-ink)`,
               border: `1.5px solid var(--pbs-${tone}-ink)`,
               cursor: 'pointer', whiteSpace: 'nowrap',
             }}
           >
-            {showQ ? `Hide ${khanQs.length} Khan Qs` : `Show ${khanQs.length} Khan Qs`}
+            {toggleLabel}
           </button>
         )}
-        {!hasReal && item.question && (
-          <button
-            type="button"
-            onClick={() => setShowQ((v) => !v)}
-            style={{
-              flex: '0 0 auto', fontSize: 11.5, fontWeight: 700,
-              padding: '4px 10px', borderRadius: 999,
-              background: showQ ? `var(--pbs-${tone}-ink)` : 'transparent',
-              color: showQ ? 'var(--pbs-cream)' : `var(--pbs-${tone}-ink)`,
-              border: `1.5px solid var(--pbs-${tone}-ink)`,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-            }}
-          >
-            {showQ ? 'Hide Q' : 'Practice'}
-          </button>
-        )}
-        <a href={href} target="_blank" rel="noreferrer" title="Open on Khan Academy" style={{
-          flex: '0 0 auto', display: 'inline-flex', alignItems: 'center',
-          padding: 6, borderRadius: 8,
-          color: 'var(--pbs-ink-soft)',
-        }}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          title="Open on Khan Academy"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            flex: '0 0 auto', display: 'inline-flex', alignItems: 'center',
+            padding: 6, borderRadius: 8,
+            color: 'var(--pbs-ink-soft)',
+          }}
+        >
           <Icon name="arrow-up-right" size={14} stroke={2.2} />
         </a>
       </div>

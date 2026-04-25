@@ -230,69 +230,77 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   // pinch + shift-wheel are still respected.
   controls.enableZoom = false;
 
-  // Custom wheel routing:
-  //   • ctrlKey wheel    — pinch zoom (Mac trackpad sets ctrlKey on
-  //                         pinch events; also covers Ctrl+wheel for
-  //                         mouse users who want explicit zoom)
-  //   • shiftKey wheel   — pan
-  //   • deltaMode === 0  — trackpad two-finger swipe → orbit
-  //   • deltaMode !== 0  — mouse wheel notch → zoom
-  // OrbitControls' minDistance / maxDistance / maxPolarAngle are
-  // honored manually since we're bypassing controls.update() for
-  // the wheel-driven path.
+  // Custom wheel routing — runs through OrbitControls' public
+  // rotateLeft / rotateUp so its damping + spherical bookkeeping stays
+  // in charge. Direct camera.position manipulation (the prior version)
+  // fought update()'s clamp-and-write path, which is why orbit only
+  // "worked for a split second" before snapping back.
+  //
+  //   • ctrlKey or metaKey   — pinch / Cmd+wheel → zoom
+  //   • shiftKey             — pan
+  //   • deltaMode === 0      — trackpad two-finger swipe → orbit
+  //   • deltaMode !== 0      — mouse wheel notch → zoom
+  //
+  // Mouse wheel users on Mac can hold Cmd to force zoom even on a
+  // trackpad; keyboard-less users (touch) won't reach this path.
   const onWheel = (e: WheelEvent) => {
     if (controls.enabled === false) return;
     e.preventDefault();
-    const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
 
     const isPinch = e.ctrlKey || e.metaKey;
-    const isTrackpadPan = e.shiftKey;
-    const isTrackpadSwipe = !isPinch && !isTrackpadPan && e.deltaMode === 0;
+    const isShiftPan = e.shiftKey;
+    // Trackpad signal: deltaMode=0 (DOM_DELTA_PIXEL). Mouse wheel notches
+    // are usually deltaMode=1 (LINE) or 2 (PAGE). Some browsers report
+    // deltaMode=0 for mouse wheel too — guard against that with a
+    // magnitude heuristic (mouse notches are typically |deltaY| >= 60
+    // in px, trackpad swipes are smaller per-frame).
+    const trackpadLike =
+      e.deltaMode === 0 && (Math.abs(e.deltaY) < 50 || e.deltaX !== 0);
 
-    if (isPinch || (!isTrackpadSwipe && !isTrackpadPan)) {
-      // ZOOM — scale offset toward/away from target.
+    if (isPinch || (!isShiftPan && !trackpadLike)) {
+      // ZOOM — scale offset toward target. Pinch sensitivity is higher
+      // because trackpad pinch deltaY is typically large per frame.
+      const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
       const factor = 1 + (e.deltaY * (isPinch ? 0.01 : 0.0015));
       offset.multiplyScalar(factor);
       const len = offset.length();
       if (len < controls.minDistance) offset.setLength(controls.minDistance);
       if (len > controls.maxDistance) offset.setLength(controls.maxDistance);
       camera.position.copy(controls.target).add(offset);
-    } else if (isTrackpadPan) {
-      // PAN — shift+wheel pans on screen-space axes scaled by distance
-      // so the felt-speed stays constant as you zoom in/out.
+      camera.lookAt(controls.target);
+    } else if (isShiftPan) {
+      // PAN — shift+swipe pans on camera-screen axes, scaled by
+      // current distance so the felt-speed stays constant.
+      const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
       const dist = offset.length();
       const panRight = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
       const panUp = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
       const k = dist * 0.0015;
-      const dx = -e.deltaX * k;
-      const dy =  e.deltaY * k;
       const delta = new THREE.Vector3()
-        .copy(panRight).multiplyScalar(dx)
-        .addScaledVector(panUp, dy);
+        .copy(panRight).multiplyScalar(-e.deltaX * k)
+        .addScaledVector(panUp, e.deltaY * k);
       controls.target.add(delta);
       camera.position.add(delta);
+      camera.lookAt(controls.target);
     } else if (controls.enableRotate !== false) {
-      // ORBIT — spherical coords around the target. Skipped when the
-      // active camera preset has rotate locked (top-down / iso).
-      const sph = new THREE.Spherical().setFromVector3(offset);
-      sph.theta -= e.deltaX * 0.005;
-      sph.phi   -= e.deltaY * 0.005;
-      const maxPolar = controls.maxPolarAngle ?? Math.PI - 0.05;
-      const minPolar = controls.minPolarAngle ?? 0.05;
-      sph.phi = Math.max(minPolar + 0.01, Math.min(maxPolar - 0.01, sph.phi));
-      offset.setFromSpherical(sph);
-      camera.position.copy(controls.target).add(offset);
+      // ORBIT — feed deltas through OrbitControls' own rotation API.
+      // _sphericalDelta accumulates in the controls; controls.update()
+      // (called every frame in the engine loop) integrates with damping
+      // and clamps to min/maxPolarAngle automatically.
+      const speed = 0.005;
+      controls.rotateLeft(e.deltaX * speed);
+      controls.rotateUp(e.deltaY * speed);
     } else {
-      // Rotate is locked (preset view) — treat plain swipe as zoom so
-      // the user can still pull in/out without switching modes.
+      // Rotate locked (top-down / iso preset) — fall through to zoom.
+      const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
       const factor = 1 + (e.deltaY * 0.0015);
       offset.multiplyScalar(factor);
       const len = offset.length();
       if (len < controls.minDistance) offset.setLength(controls.minDistance);
       if (len > controls.maxDistance) offset.setLength(controls.maxDistance);
       camera.position.copy(controls.target).add(offset);
+      camera.lookAt(controls.target);
     }
-    camera.lookAt(controls.target);
   };
   canvas.addEventListener('wheel', onWheel, { passive: false });
 

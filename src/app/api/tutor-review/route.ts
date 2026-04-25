@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 
 // POST /api/tutor-review — vision-grading hook for the homework
-// whiteboard. Body:
+// whiteboard, backed by Google Gemini (cheap multimodal). Body:
 //   {
 //     image: data URL (image/png),
 //     microPrompt: string,         // the question they were answering
-//     partText?: string,           // the parent part's full text (extra context)
+//     partText?: string,           // the parent part's full text
 //     hint?: string,               // any hint shown beneath the prompt
 //   }
 //
@@ -29,6 +28,10 @@ specific feedback in 1–3 sentences:
 - No lecturing. No re-stating the question.
 End with one short next-step suggestion only if something is wrong.`;
 
+// Default to a cheap, vision-capable Flash. Override with GEMINI_MODEL
+// in .env.local to point at a preview / pro variant.
+const DEFAULT_MODEL = 'gemini-2.5-flash';
+
 export async function POST(req: NextRequest) {
   let body: Body;
   try {
@@ -49,18 +52,19 @@ export async function POST(req: NextRequest) {
   const partText = typeof body.partText === 'string' ? body.partText : '';
   const hint = typeof body.hint === 'string' ? body.hint : '';
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey =
+    process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY ?? '';
   if (!apiKey) {
     return NextResponse.json(
       {
         error:
-          'ANTHROPIC_API_KEY not set. Add it to .env.local and restart npm run dev.',
+          'GEMINI_API_KEY not set. Add it to .env.local (https://aistudio.google.com/apikey) and restart npm run dev.',
       },
       { status: 503 },
     );
   }
 
-  // Pull the base64 + media type out of the data URL the client sends.
+  // Pull base64 + media type out of the data URL the client sends.
   const m = image.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) {
     return NextResponse.json(
@@ -70,55 +74,98 @@ export async function POST(req: NextRequest) {
   }
   const mediaType = m[1];
   const data = m[2];
-  if (mediaType !== 'image/png' && mediaType !== 'image/jpeg' && mediaType !== 'image/webp') {
+  if (
+    mediaType !== 'image/png' &&
+    mediaType !== 'image/jpeg' &&
+    mediaType !== 'image/webp'
+  ) {
     return NextResponse.json(
       { error: `unsupported image media type ${mediaType}` },
       { status: 400 },
     );
   }
 
-  const anthropic = new Anthropic({ apiKey });
+  const userText = [
+    partText ? `Part of the assignment:\n${partText}` : null,
+    `Question being answered:\n${microPrompt}`,
+    hint ? `Hint shown to the student:\n${hint}` : null,
+    "Review the student's drawing in the image above.",
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const model = process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model,
+  )}:generateContent`;
+
   try {
-    const resp = await anthropic.messages.create({
-      // Sonnet 4.5 is the cheapest current Sonnet that supports vision
-      // well enough for handwriting + diagrams. Bump if quality slips.
-      model: 'claude-sonnet-4-5',
-      max_tokens: 400,
-      system: SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType as 'image/png' | 'image/jpeg' | 'image/webp',
-                data,
-              },
-            },
-            {
-              type: 'text',
-              text: [
-                partText ? `Part of the assignment:\n${partText}` : null,
-                `Question being answered:\n${microPrompt}`,
-                hint ? `Hint shown to the student:\n${hint}` : null,
-                'Review the student\'s drawing in the image above.',
-              ]
-                .filter(Boolean)
-                .join('\n\n'),
-            },
-          ],
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        // Header auth keeps the key out of URL logs.
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        // Gemini's `systemInstruction` keeps the role prompt out of the
+        // turn body so we can vary the user content without rewriting
+        // the persona every call.
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inline_data: { mime_type: mediaType, data } },
+              { text: userText },
+            ],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 400,
+          // Slight creativity, not 0 — tutor responses sound stiff at 0.
+          temperature: 0.4,
         },
-      ],
+      }),
     });
 
-    const text = resp.content
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n')
-      .trim();
+    if (!res.ok) {
+      const errBody = await res.text();
+      return NextResponse.json(
+        { error: `Gemini ${res.status}: ${errBody.slice(0, 400)}` },
+        { status: 502 },
+      );
+    }
 
+    const json = (await res.json()) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        finishReason?: string;
+      }>;
+      promptFeedback?: { blockReason?: string };
+    };
+
+    if (json.promptFeedback?.blockReason) {
+      return NextResponse.json(
+        {
+          text: `Gemini declined to review: ${json.promptFeedback.blockReason}.`,
+        },
+      );
+    }
+
+    const text =
+      json.candidates
+        ?.flatMap((c) => c.content?.parts ?? [])
+        .map((p) => p.text ?? '')
+        .join('')
+        .trim() || '';
+
+    if (!text) {
+      return NextResponse.json(
+        { error: 'Gemini returned no text', detail: json },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({ text });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';

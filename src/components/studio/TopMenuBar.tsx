@@ -173,11 +173,13 @@ export function TopMenuBar() {
   }, [isPlaying, setIsPlaying, setBuildTool]);
 
   const handleSave = useCallback(async () => {
-    // 2D Freeform mode doesn't have an activeGame — its scene lives in the
-    // freeform-2d store. Save = export the scene to a JSON file the user
-    // can re-import later (download bypasses the localStorage quota that
-    // blocks pasting many high-res images). The same flow can later become
-    // a server-side save once we have a scene-storage backend.
+    // 2D Freeform mode doesn't have an activeGame — the scene lives in the
+    // freeform-2d store. POST it to /api/scenes/freeform-2d so it persists
+    // server-side, scoped per user via Supabase RLS. The endpoint upserts
+    // on (user_id, name) so saving twice with the same project name
+    // updates the same row. If Supabase isn't configured (or returns 503),
+    // fall back to a JSON download so the user still gets something they
+    // can keep.
     if (gameSystem === '2d-freeform') {
       const ff = useFreeform.getState();
       if (
@@ -188,17 +190,46 @@ export function TopMenuBar() {
         addToast('warning', 'Empty canvas — drop or paste an image first.');
         return;
       }
-      const safeName = (projectName || 'scene').replace(/[^a-z0-9-_]+/gi, '-');
-      downloadJson(`${safeName}.problocks2d.json`, {
+      if (saving) return;
+      setSaving(true);
+      const safeName = (projectName || 'Untitled scene').slice(0, 200);
+      const payload = {
         version: 1,
-        type: 'problocks-freeform-2d',
+        type: 'problocks-freeform-2d' as const,
         savedAt: new Date().toISOString(),
         images: ff.images,
         characters: ff.characters,
         background: ff.background,
         showGrid: ff.showGrid,
-      });
-      addToast('success', 'Scene saved to Downloads.');
+      };
+      try {
+        const res = await fetch('/api/scenes/freeform-2d', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: safeName,
+            data: payload,
+            userId: currentUserId,
+          }),
+        });
+        if (res.ok) {
+          addToast('success', `Saved scene "${safeName}".`);
+        } else if (res.status === 503) {
+          // Backend not configured — keep working via local download.
+          downloadJson(
+            `${safeName.replace(/[^a-z0-9-_]+/gi, '-') || 'scene'}.problocks2d.json`,
+            payload,
+          );
+          addToast('info', 'Cloud save unavailable — downloaded a local copy instead.');
+        } else {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          addToast('error', `Save failed: ${body?.error ?? res.statusText}`);
+        }
+      } catch (err) {
+        addToast('error', `Save failed: ${(err as Error).message}`);
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 

@@ -223,6 +223,78 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   controls.minDistance = 8;
   controls.maxDistance = 30;
   controls.maxPolarAngle = Math.PI * 0.47;
+  // Disable OrbitControls' default wheel-to-zoom — we install our own
+  // wheel handler below that maps a Mac-style two-finger trackpad
+  // swipe to ORBIT (the default OrbitControls behavior is "wheel
+  // always zooms" which is wrong for trackpad users). Mouse wheel +
+  // pinch + shift-wheel are still respected.
+  controls.enableZoom = false;
+
+  // Custom wheel routing:
+  //   • ctrlKey wheel    — pinch zoom (Mac trackpad sets ctrlKey on
+  //                         pinch events; also covers Ctrl+wheel for
+  //                         mouse users who want explicit zoom)
+  //   • shiftKey wheel   — pan
+  //   • deltaMode === 0  — trackpad two-finger swipe → orbit
+  //   • deltaMode !== 0  — mouse wheel notch → zoom
+  // OrbitControls' minDistance / maxDistance / maxPolarAngle are
+  // honored manually since we're bypassing controls.update() for
+  // the wheel-driven path.
+  const onWheel = (e: WheelEvent) => {
+    if (controls.enabled === false) return;
+    e.preventDefault();
+    const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+
+    const isPinch = e.ctrlKey || e.metaKey;
+    const isTrackpadPan = e.shiftKey;
+    const isTrackpadSwipe = !isPinch && !isTrackpadPan && e.deltaMode === 0;
+
+    if (isPinch || (!isTrackpadSwipe && !isTrackpadPan)) {
+      // ZOOM — scale offset toward/away from target.
+      const factor = 1 + (e.deltaY * (isPinch ? 0.01 : 0.0015));
+      offset.multiplyScalar(factor);
+      const len = offset.length();
+      if (len < controls.minDistance) offset.setLength(controls.minDistance);
+      if (len > controls.maxDistance) offset.setLength(controls.maxDistance);
+      camera.position.copy(controls.target).add(offset);
+    } else if (isTrackpadPan) {
+      // PAN — shift+wheel pans on screen-space axes scaled by distance
+      // so the felt-speed stays constant as you zoom in/out.
+      const dist = offset.length();
+      const panRight = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+      const panUp = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+      const k = dist * 0.0015;
+      const dx = -e.deltaX * k;
+      const dy =  e.deltaY * k;
+      const delta = new THREE.Vector3()
+        .copy(panRight).multiplyScalar(dx)
+        .addScaledVector(panUp, dy);
+      controls.target.add(delta);
+      camera.position.add(delta);
+    } else if (controls.enableRotate !== false) {
+      // ORBIT — spherical coords around the target. Skipped when the
+      // active camera preset has rotate locked (top-down / iso).
+      const sph = new THREE.Spherical().setFromVector3(offset);
+      sph.theta -= e.deltaX * 0.005;
+      sph.phi   -= e.deltaY * 0.005;
+      const maxPolar = controls.maxPolarAngle ?? Math.PI - 0.05;
+      const minPolar = controls.minPolarAngle ?? 0.05;
+      sph.phi = Math.max(minPolar + 0.01, Math.min(maxPolar - 0.01, sph.phi));
+      offset.setFromSpherical(sph);
+      camera.position.copy(controls.target).add(offset);
+    } else {
+      // Rotate is locked (preset view) — treat plain swipe as zoom so
+      // the user can still pull in/out without switching modes.
+      const factor = 1 + (e.deltaY * 0.0015);
+      offset.multiplyScalar(factor);
+      const len = offset.length();
+      if (len < controls.minDistance) offset.setLength(controls.minDistance);
+      if (len > controls.maxDistance) offset.setLength(controls.maxDistance);
+      camera.position.copy(controls.target).add(offset);
+    }
+    camera.lookAt(controls.target);
+  };
+  canvas.addEventListener('wheel', onWheel, { passive: false });
 
   // --- raycasting helpers (picking + ground drop) ---
   const raycaster = new THREE.Raycaster();
@@ -304,6 +376,7 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
     unsubscribeTheme();
     canvas.removeEventListener('pointermove', onPointerMove);
     canvas.removeEventListener('pointerleave', onPointerLeave);
+    canvas.removeEventListener('wheel', onWheel);
     observer?.disconnect();
     controls.dispose();
     scene.traverse((obj) => {

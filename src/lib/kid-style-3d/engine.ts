@@ -105,9 +105,14 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   // framing: the whole plot fits comfortably on screen without feeling
   // like a dollhouse. lookAt(0, 2, 0) raises the pivot to roughly the
   // character's head height.
-  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 500);
-  camera.position.set(14, 10, 16);
-  camera.lookAt(0, 2, 0);
+  // Camera FOV / position match the tile-based BuildingCanvas so the
+  // two studios feel like the same product. The earlier 42°/(14,10,16)
+  // setup landed at near-horizon height which read as first-person on
+  // first load — kid-style worlds want a clear 3/4-perspective overview
+  // of the plot from the start.
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
+  camera.position.set(18, 22, 24);
+  camera.lookAt(0, 0, 0);
 
   // --- three-light rig (bright Adopt-Me) ---
   // Warm sky / olive ground hemisphere: pushes warm light into the tops
@@ -216,12 +221,15 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   // match the 22u plot so users can't pull the camera beyond what's
   // meant to be visible. 85° max polar stops tipping under the ground.
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 2, 0);
+  controls.target.set(0, 0, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.screenSpacePanning = false;
   controls.minDistance = 8;
-  controls.maxDistance = 30;
+  // Bumped from 30 → 50 since the higher 3/4-perspective default sits
+  // ~37u from origin; a 30u cap would clamp the user immediately on
+  // first scroll-to-zoom-out.
+  controls.maxDistance = 50;
   controls.maxPolarAngle = Math.PI * 0.47;
   // Disable OrbitControls' default wheel-to-zoom — we install our own
   // wheel handler below that maps a Mac-style two-finger trackpad

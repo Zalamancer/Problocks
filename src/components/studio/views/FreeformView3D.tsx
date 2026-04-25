@@ -305,8 +305,8 @@ export function FreeformView3D() {
     } else {
       // orbit — restore the engine defaults (kept here in sync with
       // engine.ts's initial setup so toggling back lands cleanly).
-      controls.target.set(0, 2, 0);
-      camera.position.set(14, 10, 16);
+      controls.target.set(0, 0, 0);
+      camera.position.set(18, 22, 24);
       controls.enableRotate = true;
     }
     camera.lookAt(controls.target);

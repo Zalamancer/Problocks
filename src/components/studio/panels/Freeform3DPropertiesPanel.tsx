@@ -363,6 +363,7 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
           onChange={(v) => setWorldField('cameraView', v as typeof world.cameraView)}
           options={[
             { value: 'orbit',     label: 'Orbit (free)' },
+            { value: 'third',     label: 'Third-person (follow)' },
             { value: 'topdown',   label: 'Top-down (RTS)' },
             { value: 'isometric', label: 'Isometric (45°)' },
           ]}
@@ -371,8 +372,10 @@ export function Freeform3DPropertiesPanel({ headless }: Props) {
           className="px-1 text-[11px] leading-snug"
           style={{ color: 'var(--pb-ink-muted)' }}
         >
-          Edit-mode only. Top-down + isometric lock rotation; pan with
-          right-drag and scroll to zoom. Play mode uses its own camera.
+          Orbit / third-person let you orbit freely in edit mode. Top-down +
+          isometric lock rotation; pan with right-drag and scroll to zoom. In
+          play, third-person / top-down / isometric force matching cameras;
+          orbit defers to the play-camera setting in the gear menu.
         </div>
       </PanelSection>
 

@@ -314,6 +314,13 @@ export function FreeformView3D() {
       controls.target.set(0, 2, 0);
       camera.position.set(20, 20, 20);
       controls.enableRotate = false;
+    } else if (view === 'third') {
+      // Tile-based studio's framing — (18,22,24) lookAt origin gives the
+      // angled 3/4 perspective the user expects. Rotate stays enabled so
+      // they can still orbit before play; play-mode forces follow-cam.
+      controls.target.set(0, 0, 0);
+      camera.position.set(18, 22, 24);
+      controls.enableRotate = true;
     } else {
       // orbit — restore the engine defaults (kept here in sync with
       // engine.ts's initial setup so toggling back lands cleanly).
@@ -402,13 +409,14 @@ export function FreeformView3D() {
     useFreeform3D.getState().select(null);
 
     // Pick the play camera mode from world.cameraView when it's set
-    // to topdown / isometric — those preset views carry across edit
-    // and play. orbit falls back to the user's existing cameraMode
+    // to third / topdown / isometric — those preset views carry across
+    // edit and play. orbit falls back to the user's existing cameraMode
     // (first|third) so first-person players keep their existing pref.
     const worldView = useFreeform3D.getState().world.cameraView;
     const playMode =
       worldView === 'topdown' ? 'topdown' :
       worldView === 'isometric' ? 'isometric' :
+      worldView === 'third' ? 'third' :
       cameraMode;
 
     const controller = createPlayController({
@@ -464,13 +472,14 @@ export function FreeformView3D() {
 
   /* ---- camera mode live-switch (while playing) ----
       Derives the same way as the play-mode useEffect: world.cameraView
-      wins when it's topdown/isometric; otherwise the user's cameraMode
-      (first|third) applies. */
+      wins when it's third/topdown/isometric; otherwise the user's
+      cameraMode (first|third) applies. */
   useEffect(() => {
     if (!isPlaying || !playRef.current) return;
     const playMode =
       world.cameraView === 'topdown' ? 'topdown' :
       world.cameraView === 'isometric' ? 'isometric' :
+      world.cameraView === 'third' ? 'third' :
       cameraMode;
     playRef.current.setMode(playMode);
   }, [cameraMode, world.cameraView, isPlaying]);

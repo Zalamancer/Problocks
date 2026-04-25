@@ -45,7 +45,7 @@ const HISTORY_LIMIT = 50;
 
 export type CameraMode = 'third' | 'first' | 'topdown' | 'isometric';
 
-export type CameraView = 'orbit' | 'topdown' | 'isometric';
+export type CameraView = 'orbit' | 'third' | 'topdown' | 'isometric';
 
 /** World-level ambience + diagnostic controls. Exposed via the right
     panel's Workspace section and applied to the kid-engine via a React
@@ -55,11 +55,14 @@ export interface WorldSettings {
       triggers a scene rehydrate so every prefab re-reads colors. See
       lib/kid-style-3d/themes.ts. */
   theme: ThemeId;
-  /** Edit-mode camera preset.
-        orbit     — free OrbitControls (default)
+  /** Camera preset (edit + play).
+        orbit     — free OrbitControls (default); play falls back to cameraMode
+        third     — angled 3/4 overhead matching the tile-based studio;
+                    play forces third-person follow camera
         topdown   — straight down, pan+zoom only (RTS / Builder feel)
         isometric — fixed 45° angle, pan+zoom only
-      Play mode ignores this — its own play-controller drives the camera. */
+      orbit/third let users orbit freely in edit mode. topdown/isometric/third
+      override the play camera mode; orbit defers to the user's cameraMode pref. */
   cameraView: CameraView;
   /** Scene background / hemi sky color (CSS hex) — legacy free-form
       override. The vivid/pastel themes now own the sky gradient; this

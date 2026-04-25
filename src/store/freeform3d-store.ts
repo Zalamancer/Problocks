@@ -45,6 +45,8 @@ const HISTORY_LIMIT = 50;
 
 export type CameraMode = 'third' | 'first';
 
+export type CameraView = 'orbit' | 'topdown' | 'isometric';
+
 /** World-level ambience + diagnostic controls. Exposed via the right
     panel's Workspace section and applied to the kid-engine via a React
     subscription in FreeformView3D. */
@@ -53,6 +55,12 @@ export interface WorldSettings {
       triggers a scene rehydrate so every prefab re-reads colors. See
       lib/kid-style-3d/themes.ts. */
   theme: ThemeId;
+  /** Edit-mode camera preset.
+        orbit     — free OrbitControls (default)
+        topdown   — straight down, pan+zoom only (RTS / Builder feel)
+        isometric — fixed 45° angle, pan+zoom only
+      Play mode ignores this — its own play-controller drives the camera. */
+  cameraView: CameraView;
   /** Scene background / hemi sky color (CSS hex) — legacy free-form
       override. The vivid/pastel themes now own the sky gradient; this
       field is retained for the agent's WorldLike contract and reads
@@ -76,6 +84,7 @@ export interface WorldSettings {
 
 export const DEFAULT_WORLD: WorldSettings = {
   theme: DEFAULT_THEME,
+  cameraView: 'orbit',
   skyColor: '#a8dcff',
   brightness: 1.3,
   ambient: 0.7,

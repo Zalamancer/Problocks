@@ -264,6 +264,40 @@ export function FreeformView3D() {
     applyWorld(engine, world);
   }, [world]);
 
+  /* ---- camera-view preset ----
+      Edit-mode only — play mode's controller owns the camera. The
+      preset rewrites OrbitControls' target + camera position, then
+      enables/disables rotate so topdown / isometric feel like locked
+      "RTS-style" views (pan + zoom only). */
+  useEffect(() => {
+    if (isPlaying) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    const camera = engine.camera;
+    const controls = engine.controls;
+    const view = world.cameraView;
+    if (view === 'topdown') {
+      controls.target.set(0, 0, 0);
+      // Tiny non-zero X/Z so OrbitControls' polar angle stays slightly
+      // off the gimbal pole (otherwise camera.up parallel to view dir
+      // makes orbit math go NaN).
+      camera.position.set(0.001, 30, 0.001);
+      controls.enableRotate = false;
+    } else if (view === 'isometric') {
+      controls.target.set(0, 2, 0);
+      camera.position.set(20, 20, 20);
+      controls.enableRotate = false;
+    } else {
+      // orbit — restore the engine defaults (kept here in sync with
+      // engine.ts's initial setup so toggling back lands cleanly).
+      controls.target.set(0, 2, 0);
+      camera.position.set(14, 10, 16);
+      controls.enableRotate = true;
+    }
+    camera.lookAt(controls.target);
+    controls.update();
+  }, [world.cameraView, isPlaying]);
+
   /* ---- attach gizmo to selected object ---- */
   useEffect(() => {
     const engine = engineRef.current;

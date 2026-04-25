@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Eraser, Pen, RotateCcw, Scissors, Trash2, X } from 'lucide-react';
+import { ChevronDown, Eraser, Pen, RotateCcw, Scissors, Trash2, X } from 'lucide-react';
 
 // `eraser` = pixel eraser (uses globalCompositeOperation: destination-out
 // so it carves through anything underneath). `eraser-stroke` = whole-
@@ -33,11 +33,21 @@ interface Stroke {
   tool: 'pen' | 'eraser';
   color: string;
   width: number;
+  // Number of Chaikin smoothing passes baked into this stroke when it
+  // was drawn. Stored per-stroke so old strokes don't morph if the user
+  // changes the slider mid-session.
+  smoothing: number;
   points: Pt[];
 }
 
 const PEN_COLORS = ['#dc2626', '#1f2937', '#2563eb', '#16a34a', '#ca8a04'];
-const PEN_WIDTH = 3;
+// Default pen width; user can tweak via the Pen popover (1–18 px).
+const DEFAULT_PEN_WIDTH = 3;
+const PEN_WIDTH_MIN = 1;
+const PEN_WIDTH_MAX = 18;
+// Default smoothing passes; 0 = raw polyline, 3 = very fluffy.
+const DEFAULT_SMOOTHING = 2;
+const SMOOTHING_MAX = 3;
 // Bigger eraser so the user can wipe annotations quickly without precision.
 const ERASER_WIDTH = 28;
 
@@ -45,6 +55,10 @@ export function ScribbleOverlay() {
   const [active, setActive] = useState(false);
   const [tool, setTool] = useState<Tool>('pen');
   const [color, setColor] = useState(PEN_COLORS[0]);
+  const [penWidth, setPenWidth] = useState(DEFAULT_PEN_WIDTH);
+  const [smoothing, setSmoothing] = useState(DEFAULT_SMOOTHING);
+  // True when the small pen-settings popover (size + smoothing) is open.
+  const [penPopover, setPenPopover] = useState(false);
   const [, repaintToolbar] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -147,12 +161,15 @@ export function ScribbleOverlay() {
       activeStrokeRef.current = {
         tool,
         color,
-        width: tool === 'eraser' ? ERASER_WIDTH : PEN_WIDTH,
+        width: tool === 'eraser' ? ERASER_WIDTH : penWidth,
+        // Eraser doesn't need smoothing — straight cuts are usually
+        // what the user wants. Pen uses the slider value.
+        smoothing: tool === 'eraser' ? 0 : smoothing,
         points: [p],
       };
       paint();
     },
-    [active, color, tool, paint, eraseStrokeAt],
+    [active, color, tool, penWidth, smoothing, paint, eraseStrokeAt],
   );
 
   const extend = useCallback(
@@ -275,19 +292,46 @@ export function ScribbleOverlay() {
           >
             <ToolPill
               active={tool === 'pen'}
-              onClick={() => setTool('pen')}
+              // Click while pen is already active → toggle the size +
+              // smoothing popover. Otherwise → activate the pen and
+              // close the popover.
+              onClick={() => {
+                if (tool === 'pen') setPenPopover((v) => !v);
+                else {
+                  setTool('pen');
+                  setPenPopover(false);
+                }
+              }}
               icon={<Pen size={13} strokeWidth={2.4} />}
               label="Pen"
+              trailing={
+                tool === 'pen' ? (
+                  <ChevronDown
+                    size={11}
+                    strokeWidth={2.4}
+                    style={{
+                      transform: penPopover ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.15s',
+                    }}
+                  />
+                ) : null
+              }
             />
             <ToolPill
               active={tool === 'eraser'}
-              onClick={() => setTool('eraser')}
+              onClick={() => {
+                setTool('eraser');
+                setPenPopover(false);
+              }}
               icon={<Eraser size={13} strokeWidth={2.4} />}
               label="Erase"
             />
             <ToolPill
               active={tool === 'eraser-stroke'}
-              onClick={() => setTool('eraser-stroke')}
+              onClick={() => {
+                setTool('eraser-stroke');
+                setPenPopover(false);
+              }}
               icon={<Scissors size={13} strokeWidth={2.4} />}
               label="Stroke"
             />
@@ -326,6 +370,17 @@ export function ScribbleOverlay() {
               disabled={!hasStrokes}
             />
           </div>
+
+          {tool === 'pen' && penPopover && (
+            <PenSettingsPopover
+              width={penWidth}
+              onWidth={setPenWidth}
+              smoothing={smoothing}
+              onSmoothing={setSmoothing}
+              color={color}
+              onClose={() => setPenPopover(false)}
+            />
+          )}
 
           {/* The transparent capture canvas */}
           <canvas
@@ -416,10 +471,11 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Two Chaikin passes pre-smooth the polyline before we feed it to
-  // Catmull-Rom — this kills any remaining high-frequency wiggle from
-  // the trackpad without needing to drop more raw samples.
-  const pts = chaikin(chaikin(raw));
+  // Apply Chaikin pre-smoothing the number of times the stroke baked in
+  // when it was drawn. 0 = raw polyline; 1–3 progressively softer.
+  let pts = raw;
+  const passes = Math.max(0, Math.min(SMOOTHING_MAX, s.smoothing));
+  for (let i = 0; i < passes; i++) pts = chaikin(pts);
 
   ctx.beginPath();
   if (pts.length < 2) {
@@ -457,12 +513,14 @@ function ToolPill({
   icon,
   label,
   disabled,
+  trailing,
 }: {
   active?: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
   disabled?: boolean;
+  trailing?: React.ReactNode;
 }) {
   return (
     <button
@@ -488,6 +546,174 @@ function ToolPill({
     >
       {icon}
       <span>{label}</span>
+      {trailing}
     </button>
+  );
+}
+
+function PenSettingsPopover({
+  width,
+  onWidth,
+  smoothing,
+  onSmoothing,
+  color,
+  onClose,
+}: {
+  width: number;
+  onWidth: (n: number) => void;
+  smoothing: number;
+  onSmoothing: (n: number) => void;
+  color: string;
+  onClose: () => void;
+}) {
+  const SMOOTHING_LABELS = ['Off', 'Light', 'Medium', 'Heavy'];
+  return (
+    <div
+      // Sits directly under the toolbar. Same dark glass styling so it
+      // reads as an extension of the same control strip. zIndex above
+      // the canvas so its sliders don't get hijacked as strokes.
+      style={{
+        position: 'fixed',
+        left: '50%',
+        top: 64,
+        transform: 'translateX(-50%)',
+        zIndex: 100001,
+        width: 280,
+        padding: '12px 14px',
+        borderRadius: 12,
+        background: 'rgba(20,18,12,0.96)',
+        border: '1px solid rgba(255,255,255,0.18)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        color: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.75 }}>
+          Pen
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close pen settings"
+          style={{
+            padding: 2,
+            borderRadius: 6,
+            background: 'transparent',
+            border: 0,
+            color: 'rgba(255,255,255,0.7)',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
+        >
+          <X size={12} strokeWidth={2.4} />
+        </button>
+      </div>
+
+      <SliderRow
+        label="Size"
+        value={width}
+        min={PEN_WIDTH_MIN}
+        max={PEN_WIDTH_MAX}
+        step={1}
+        suffix=" px"
+        onChange={onWidth}
+        preview={
+          <span
+            style={{
+              display: 'inline-block',
+              width: width,
+              height: width,
+              minWidth: 4,
+              minHeight: 4,
+              borderRadius: 999,
+              background: color,
+              border: '1px solid rgba(255,255,255,0.35)',
+            }}
+          />
+        }
+      />
+
+      <SliderRow
+        label="Smoothing"
+        value={smoothing}
+        min={0}
+        max={SMOOTHING_MAX}
+        step={1}
+        suffix=""
+        valueFormatter={(v) => SMOOTHING_LABELS[v] ?? String(v)}
+        onChange={onSmoothing}
+      />
+    </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  step,
+  suffix,
+  onChange,
+  preview,
+  valueFormatter,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  suffix: string;
+  onChange: (n: number) => void;
+  preview?: React.ReactNode;
+  valueFormatter?: (v: number) => string;
+}) {
+  const display = valueFormatter ? valueFormatter(value) : `${value}${suffix}`;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85, flex: 1 }}>{label}</span>
+        {preview && (
+          <span
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              background: 'rgba(255,255,255,0.06)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {preview}
+          </span>
+        )}
+        <span
+          style={{
+            fontFamily: 'DM Mono, ui-monospace, monospace',
+            fontSize: 11,
+            fontWeight: 700,
+            opacity: 0.85,
+            minWidth: 48,
+            textAlign: 'right',
+          }}
+        >
+          {display}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: '100%', accentColor: '#fff' }}
+      />
+    </div>
   );
 }

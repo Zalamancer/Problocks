@@ -291,9 +291,7 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
 
         {hasOptions && (() => {
           const hintSteps = revealed ? parseHintSteps(current.explanation ?? '') : [];
-          const overviewStep = hintSteps[0] ?? null;
           const perOptionSteps = hintSteps.slice(1);
-          const summaryStep = hintSteps.length > 1 ? hintSteps[hintSteps.length - 1] : null;
 
           return (
             <div style={{ display: 'grid', gap: 12 }}>
@@ -370,31 +368,6 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
                 );
               })}
 
-              {revealed && (overviewStep || summaryStep) && (
-                <div style={{
-                  padding: '14px 18px', borderRadius: 14,
-                  background: 'var(--pbs-cream-2)',
-                  border: '1.5px solid var(--pbs-line-2)',
-                  display: 'flex', flexDirection: 'column', gap: 8,
-                }}>
-                  <div style={{
-                    fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
-                    textTransform: 'uppercase', color: `var(--pbs-${tone}-ink)`,
-                  }}>
-                    Answer · {current.answer}
-                  </div>
-                  {overviewStep && (
-                    <div style={{ fontSize: 13.5, color: 'var(--pbs-ink)', lineHeight: 1.55 }}>
-                      {overviewStep}
-                    </div>
-                  )}
-                  {summaryStep && summaryStep !== overviewStep && (
-                    <div style={{ fontSize: 13, color: 'var(--pbs-ink-soft)', lineHeight: 1.55, fontStyle: 'italic' }}>
-                      {summaryStep}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           );
         })()}

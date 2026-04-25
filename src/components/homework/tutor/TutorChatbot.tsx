@@ -146,48 +146,82 @@ export function TutorChatbot({
       setMessages(updated);
       setPending(true);
 
-      let reply: string;
+      const tutorId = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      // Append an empty tutor bubble we'll grow as bytes arrive. This
+      // is the perceived-latency win — the bubble shows up the moment
+      // the request is in flight and fills in word-by-word.
+      setMessages((m) => [
+        ...m,
+        { id: tutorId, role: 'tutor', text: '', ts: Date.now() },
+      ]);
+
+      const finalize = (text: string) => {
+        setMessages((m) =>
+          m.map((msg) => (msg.id === tutorId ? { ...msg, text } : msg)),
+        );
+        // Drive the viseme animation off the final text — bubble is
+        // already fully visible, so the speech is purely cosmetic.
+        if (text) {
+          setSpeakingId(tutorId);
+          speak(text, { onDone: () => setSpeakingId(null) });
+        }
+      };
+
       try {
         if (onAsk) {
           // Caller-supplied stub takes precedence — keeps the chatbot
-          // generic for surfaces that don't want the Gemini call.
-          reply = await onAsk(questionText);
-        } else {
-          // Default homework path: ship overlay snapshot + current
-          // part context + recent history to the Gemini-backed
-          // tutor-help route.
-          const { image, context } = await gatherTutorContext();
-          // Trim history to the last 10 turns so the prompt stays
-          // small. Drop the just-added student message so the API
-          // can re-add it as the final turn.
-          const history = updated.slice(-11, -1).map((m) => ({
-            role: m.role,
-            text: m.text,
-          }));
-          const res = await fetch('/api/tutor-help', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              image,
-              ...context,
-              message: questionText,
-              history,
-            }),
-          });
-          const data = (await res.json()) as { text?: string; error?: string };
-          reply =
-            (res.ok && data.text) ||
-            `I couldn't reach the tutor (${data.error ?? 'unknown'}).`;
+          // generic for surfaces that don't want the streaming call.
+          const reply = await onAsk(questionText);
+          finalize(reply);
+          return;
         }
-        const tutorMsg: TutorMessage = {
-          id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          role: 'tutor',
-          text: reply,
-          ts: Date.now(),
-        };
-        setMessages((m) => [...m, tutorMsg]);
-        setSpeakingId(tutorMsg.id);
-        speak(reply, { onDone: () => setSpeakingId(null) });
+
+        const { image, context } = await gatherTutorContext();
+        const history = updated.slice(-11, -1).map((m) => ({
+          role: m.role,
+          text: m.text,
+        }));
+        const res = await fetch('/api/tutor-help', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            image,
+            ...context,
+            message: questionText,
+            history,
+          }),
+        });
+
+        if (!res.ok || !res.body) {
+          // Server returned a JSON error rather than the stream.
+          const data = await res
+            .json()
+            .catch(() => ({ error: 'unreachable' }));
+          finalize(
+            `I couldn't reach the tutor (${data.error ?? 'unknown'}).`,
+          );
+          return;
+        }
+
+        // Stream the plain-text body from /api/tutor-help into the
+        // bubble as chunks arrive.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let acc = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          if (!chunk) continue;
+          acc += chunk;
+          setMessages((m) =>
+            m.map((msg) => (msg.id === tutorId ? { ...msg, text: acc } : msg)),
+          );
+        }
+        finalize(acc.trim() || 'Hmm, I got nothing back.');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'unknown';
+        finalize(`Tutor failed: ${msg}`);
       } finally {
         setPending(false);
       }
@@ -365,10 +399,11 @@ export function TutorChatbot({
             <Bubble
               key={m.id}
               msg={m}
-              // While this message is being spoken, show only the portion
-              // that's been "voiced" so far. Letters appear synced with
-              // the viseme-driven mouth animation instead of all at once.
-              shownText={isSpeaking ? revealedText : m.text}
+              // Always show the full message text. Streaming fills the
+              // bubble word-by-word as Gemini types; the speech engine
+              // still drives viseme animation in parallel but no
+              // longer gates what's visible.
+              shownText={m.text}
               speaking={isSpeaking}
             />
           );

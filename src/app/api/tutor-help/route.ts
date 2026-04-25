@@ -135,12 +135,16 @@ export async function POST(req: NextRequest) {
   contents.push({ role: 'user', parts: finalParts });
 
   const model = process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+  // streamGenerateContent emits incremental SSE chunks; we relay the
+  // text deltas to the client as a plain text/event-stream so the
+  // tutor bubble fills in as Gemini types instead of waiting for the
+  // whole response.
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model,
-  )}:generateContent`;
+  )}:streamGenerateContent?alt=sse`;
 
   try {
-    const res = await fetch(url, {
+    const upstream = await fetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -150,49 +154,97 @@ export async function POST(req: NextRequest) {
         systemInstruction: { parts: [{ text: SYSTEM }] },
         contents,
         generationConfig: {
-          // Smaller cap → fewer round-trips, faster end-to-end. Tutor
-          // replies are 1–3 sentences anyway.
           maxOutputTokens: 180,
           temperature: 0.5,
         },
       }),
     });
 
-    if (!res.ok) {
-      const errBody = await res.text();
+    if (!upstream.ok || !upstream.body) {
+      const errBody = await upstream.text();
       return NextResponse.json(
-        { error: `Gemini ${res.status}: ${errBody.slice(0, 400)}` },
+        { error: `Gemini ${upstream.status}: ${errBody.slice(0, 400)}` },
         { status: 502 },
       );
     }
 
-    const json = (await res.json()) as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
-      promptFeedback?: { blockReason?: string };
-    };
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const reader = upstream.body!.getReader();
+        const decoder = new TextDecoder();
+        const encoder = new TextEncoder();
+        let buf = '';
+        let emitted = 0;
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            // SSE events end at a blank line. Tolerate \r\n line
+            // endings the Gemini gateway sometimes uses.
+            const norm = buf.replace(/\r\n/g, '\n');
+            let nl = norm.indexOf('\n\n');
+            if (nl >= 0) buf = norm;
+            while (nl >= 0) {
+              const evt = buf.slice(0, nl);
+              buf = buf.slice(nl + 2);
+              for (const rawLine of evt.split('\n')) {
+                if (!rawLine.startsWith('data:')) continue;
+                const json = rawLine.replace(/^data:\s*/, '').trim();
+                if (!json || json === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(json) as {
+                    candidates?: Array<{
+                      content?: { parts?: Array<{ text?: string }> };
+                    }>;
+                    promptFeedback?: { blockReason?: string };
+                  };
+                  if (parsed.promptFeedback?.blockReason) {
+                    controller.enqueue(
+                      encoder.encode(
+                        `\n[blocked: ${parsed.promptFeedback.blockReason}]`,
+                      ),
+                    );
+                    emitted += 1;
+                    continue;
+                  }
+                  const chunk =
+                    parsed.candidates
+                      ?.flatMap((c) => c.content?.parts ?? [])
+                      .map((p) => p.text ?? '')
+                      .join('') ?? '';
+                  if (chunk) {
+                    controller.enqueue(encoder.encode(chunk));
+                    emitted += 1;
+                  }
+                } catch {
+                  /* ignore malformed event */
+                }
+              }
+              nl = buf.indexOf('\n\n');
+            }
+          }
+          if (emitted === 0) {
+            controller.enqueue(
+              encoder.encode('Hmm, the model returned nothing.'),
+            );
+          }
+          controller.close();
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
 
-    if (json.promptFeedback?.blockReason) {
-      return NextResponse.json({
-        text: `I can't respond to that — ${json.promptFeedback.blockReason}.`,
-      });
-    }
-
-    const text =
-      json.candidates
-        ?.flatMap((c) => c.content?.parts ?? [])
-        .map((p) => p.text ?? '')
-        .join('')
-        .trim() || '';
-
-    if (!text) {
-      return NextResponse.json(
-        { error: 'Gemini returned no text', detail: json },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json({ text });
+    return new Response(stream, {
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        // Disable buffering on Vercel/Cloudflare so chunks ship as
+        // soon as they arrive.
+        'cache-control': 'no-cache, no-transform',
+        'x-accel-buffering': 'no',
+      },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown';
     return NextResponse.json({ error: msg }, { status: 500 });

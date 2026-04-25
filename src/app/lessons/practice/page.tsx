@@ -23,6 +23,23 @@ const PALETTE_VARS: CSSProperties = {
   '--pbs-ink': '#1d1a14',
   '--pbs-ink-soft': '#57524a',
   '--pbs-ink-muted': '#8a8478',
+  // Mirror the cream palette onto the shared --pb-* tokens so the
+  // TutorChatbot (right panel) renders on cream paper, matching the
+  // runner, instead of picking up the dark theme defaults.
+  '--pb-cream': '#fdf6e6',
+  '--pb-paper': '#fffaf0',
+  '--pb-cream-2': '#f7edd4',
+  '--pb-line': '#e8dcbc',
+  '--pb-line-2': '#d6c896',
+  '--pb-ink': '#1d1a14',
+  '--pb-ink-soft': '#57524a',
+  '--pb-ink-muted': '#8a8478',
+  '--pb-butter': '#ffd84d',
+  '--pb-butter-ink': '#6b4f00',
+  '--pb-mint': '#b6f0c6',
+  '--pb-mint-ink': '#0f5b2e',
+  '--pb-grape': '#dcc7ff',
+  '--pb-grape-ink': '#4d2a8a',
 } as CSSProperties;
 
 function resolveQuestions(key: string): { questions: PracticeQuestion[]; title: string; tone: Tone; backHref: string; sourceUrl?: string } {

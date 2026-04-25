@@ -289,31 +289,50 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
 
   const width = (props?.width as number | undefined) ?? 2.2;
   const thickness = (props?.thickness as number | undefined) ?? 0.2;
+  // Flat mode: skip side walls + use disc endcaps. Vertex count is
+  // roughly half the extruded version — 2 verts per sample instead of
+  // 6, and the endcaps become circles instead of cylinders. Users who
+  // don't need a raised trail (top-down games, pure terrain-painting)
+  // can opt in here.
+  const flat = (props?.flat as boolean | undefined) ?? false;
   const samplesPerSegment = (props?.samplesPerSegment as number | undefined) ?? 12;
   const fillColor = color ?? PALETTE.dirt;
 
   const g = new THREE.Group();
   const topMat = toonMaterial({ color: fillColor });
   // Darker sides read as edge shadow — anchors the path onto the
-  // grass instead of looking like it's floating.
+  // grass instead of looking like it's floating. Unused in flat mode.
   const sideMat = toonMaterial({ color: PALETTE.dirtDark });
   const halfW = Math.max(0.1, width / 2);
   const H = Math.max(0.02, thickness);
   const Y_BOT = 0.02;        // slight lift so outlines don't z-fight with grass
-  const Y_TOP = Y_BOT + H;
+  const Y_TOP = flat ? Y_BOT : Y_BOT + H;
 
   // --- Endcap helper -------------------------------------------------
-  // Full cylinder (top disc + side) at a waypoint. Perf-mode-independent
-  // geometry (plain Three.js CylinderGeometry at 18 segments) so the
-  // disc stays round at every tier.
-  const capGeo = new THREE.CylinderGeometry(halfW, halfW, H, 18);
-  const addCap = (x: number, z: number) => {
-    const cap = new THREE.Mesh(capGeo, topMat);
-    cap.position.set(x, Y_BOT + H / 2, z);
-    cap.castShadow = false;
-    cap.receiveShadow = true;
-    g.add(cap);
-  };
+  // Flat mode: thin disc (CircleGeometry, 1 triangle-fan). Extruded
+  // mode: full cylinder with visible side wall. Both perf-mode
+  // independent so the disc stays round at every tier.
+  const addCap = (() => {
+    if (flat) {
+      const discGeo = new THREE.CircleGeometry(halfW, 18);
+      discGeo.rotateX(-Math.PI / 2);
+      return (x: number, z: number) => {
+        const cap = new THREE.Mesh(discGeo, topMat);
+        cap.position.set(x, Y_TOP, z);
+        cap.castShadow = false;
+        cap.receiveShadow = true;
+        g.add(cap);
+      };
+    }
+    const cylGeo = new THREE.CylinderGeometry(halfW, halfW, H, 18);
+    return (x: number, z: number) => {
+      const cap = new THREE.Mesh(cylGeo, topMat);
+      cap.position.set(x, Y_BOT + H / 2, z);
+      cap.castShadow = false;
+      cap.receiveShadow = true;
+      g.add(cap);
+    };
+  })();
 
   // --- Degenerate: 0 or 1 points ------------------------------------
   if (waypoints.length === 0) return g;
@@ -364,14 +383,15 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
     return g;
   }
 
-  // --- Build the extruded ribbon ------------------------------------
-  // Per sample we emit 4 vertices: leftTop, rightTop, leftBot, rightBot.
-  // Each gap between samples gets 3 quads (top, left side, right side).
-  // Top uses the warm dirt color; sides use the darker dirt-edge color.
+  // --- Build the ribbon ---------------------------------------------
+  // Flat mode: top strip only (2 verts/sample, ~half the vertex cost
+  // of the extruded version). Extruded mode: top strip + left + right
+  // side strips (6 verts/sample). Top winding faces +Y.
   const vertexCount = samples.length;
   const topPositions = new Float32Array(vertexCount * 2 * 3);
   const topIndices: number[] = [];
-  const sidePositions = new Float32Array(vertexCount * 4 * 3);
+  // Side buffers only allocated when extruded, to keep flat mode lean.
+  const sidePositions = flat ? null : new Float32Array(vertexCount * 4 * 3);
   const sideIndices: number[] = [];
   for (let i = 0; i < vertexCount; i++) {
     const p = samples[i];
@@ -380,35 +400,30 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
     const pz = tan.x;
     const lx = p.x + px * halfW, lz = p.z + pz * halfW; // left
     const rx = p.x - px * halfW, rz = p.z - pz * halfW; // right
-    // Top strip: two verts (left / right) per sample.
     const ti = i * 6;
     topPositions[ti + 0] = lx; topPositions[ti + 1] = Y_TOP; topPositions[ti + 2] = lz;
     topPositions[ti + 3] = rx; topPositions[ti + 4] = Y_TOP; topPositions[ti + 5] = rz;
-    // Side strip: four verts (leftTop, leftBot, rightTop, rightBot) per sample.
-    const si = i * 12;
-    sidePositions[si + 0]  = lx; sidePositions[si + 1]  = Y_TOP; sidePositions[si + 2]  = lz;
-    sidePositions[si + 3]  = lx; sidePositions[si + 4]  = Y_BOT; sidePositions[si + 5]  = lz;
-    sidePositions[si + 6]  = rx; sidePositions[si + 7]  = Y_TOP; sidePositions[si + 8]  = rz;
-    sidePositions[si + 9]  = rx; sidePositions[si + 10] = Y_BOT; sidePositions[si + 11] = rz;
+    if (sidePositions) {
+      const si = i * 12;
+      sidePositions[si + 0]  = lx; sidePositions[si + 1]  = Y_TOP; sidePositions[si + 2]  = lz;
+      sidePositions[si + 3]  = lx; sidePositions[si + 4]  = Y_BOT; sidePositions[si + 5]  = lz;
+      sidePositions[si + 6]  = rx; sidePositions[si + 7]  = Y_TOP; sidePositions[si + 8]  = rz;
+      sidePositions[si + 9]  = rx; sidePositions[si + 10] = Y_BOT; sidePositions[si + 11] = rz;
+    }
   }
-  // Top quads — same winding fix as before (faces +Y).
   for (let i = 0; i < vertexCount - 1; i++) {
     const a = i * 2;
     topIndices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
   }
-  // Side quads. Per-sample side verts: [LT, LB, RT, RB] at indices
-  // [a, a+1, a+2, a+3] where a = i*4.
-  for (let i = 0; i < vertexCount - 1; i++) {
-    const a = i * 4;
-    const b = a + 4;
-    // Left side: LT_i → LB_i → LT_{i+1} → LB_{i+1}
-    // Normals should face in the +perpendicular direction (outward
-    // from the ribbon centreline). Winding set so that's the case.
-    sideIndices.push(a, a + 1, b,     a + 1, b + 1, b);
-    // Right side: RT_i → RB_i → RT_{i+1} → RB_{i+1} (flipped winding
-    // so normals face the -perpendicular direction, i.e. outward on
-    // the other side).
-    sideIndices.push(a + 2, b + 2, a + 3,     a + 3, b + 2, b + 3);
+  if (sidePositions) {
+    // Per-sample side verts: [LT, LB, RT, RB] at indices [a, a+1, a+2, a+3]
+    // where a = i*4. Winding set so each side's normals face outward.
+    for (let i = 0; i < vertexCount - 1; i++) {
+      const a = i * 4;
+      const b = a + 4;
+      sideIndices.push(a, a + 1, b,           a + 1, b + 1, b);
+      sideIndices.push(a + 2, b + 2, a + 3,   a + 3, b + 2, b + 3);
+    }
   }
 
   const topGeo = new THREE.BufferGeometry();
@@ -420,14 +435,16 @@ export function pathSpline({ color, props }: BuildOptions): THREE.Object3D {
   topMesh.castShadow = false;
   g.add(topMesh);
 
-  const sideGeo = new THREE.BufferGeometry();
-  sideGeo.setAttribute('position', new THREE.BufferAttribute(sidePositions, 3));
-  sideGeo.setIndex(sideIndices);
-  sideGeo.computeVertexNormals();
-  const sideMesh = new THREE.Mesh(sideGeo, sideMat);
-  sideMesh.receiveShadow = true;
-  sideMesh.castShadow = false;
-  g.add(sideMesh);
+  if (sidePositions) {
+    const sideGeo = new THREE.BufferGeometry();
+    sideGeo.setAttribute('position', new THREE.BufferAttribute(sidePositions, 3));
+    sideGeo.setIndex(sideIndices);
+    sideGeo.computeVertexNormals();
+    const sideMesh = new THREE.Mesh(sideGeo, sideMat);
+    sideMesh.receiveShadow = true;
+    sideMesh.castShadow = false;
+    g.add(sideMesh);
+  }
 
   // Endcaps — full cylinders at the first and last waypoint so the
   // rounded stub has visible side walls, not just a flat disc rim.

@@ -90,8 +90,13 @@ export interface BrushSettings {
   activePathId: string | null;
   /** Spline mode only — path width in world units (default 2.2). */
   pathWidth: number;
-  /** Spline mode only — path thickness (height above grass). */
+  /** Spline mode only — path thickness (height above grass).
+      Ignored when pathFlat is true. */
   pathThickness: number;
+  /** Spline mode only — render the path as a flat plane instead of a
+      raised extruded ribbon. Halves the vertex count; good for
+      top-down games or performance-sensitive builds. */
+  pathFlat: boolean;
   /** How many objects to scatter per click / paint tick. 1–20.
       In 'path' mode this is the number of tiles across the path
       width (1 = single tile line; 3–5 = wide road). */
@@ -129,6 +134,7 @@ export const DEFAULT_BRUSH: BrushSettings = {
   activePathId: null,
   pathWidth: 2.2,
   pathThickness: 0.2,
+  pathFlat: false,
   density: 3,
   radius: 1.5,
   randomRotY: true,

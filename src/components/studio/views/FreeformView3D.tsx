@@ -528,6 +528,7 @@ export function FreeformView3D() {
             points: [[pt.x, pt.z]],
             width: b.pathWidth,
             thickness: b.pathThickness,
+            flat: b.pathFlat,
           },
         });
         state.setBrushField('activePathId', id);
@@ -543,6 +544,7 @@ export function FreeformView3D() {
           points: nextPoints,
           width: b.pathWidth,
           thickness: b.pathThickness,
+          flat: b.pathFlat,
         },
       });
     }

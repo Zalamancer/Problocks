@@ -71,6 +71,26 @@ function isAnswerLetter(answer: string, letter: string): boolean {
   return new RegExp(`(^|[^A-Z])${letter}([^A-Z]|$)`).test(answer);
 }
 
+function parseHintSteps(explanation: string): string[] {
+  if (!explanation) return [];
+  const cleaned = explanation.replace(/\s+/g, ' ').trim();
+  // Split on "Hint #N" markers. Khan hint chain format:
+  //   "Hint #1 1 / 6 ... Hint #2 2 / 6 ..."
+  // The "N / M" token right after "Hint #N" is a page counter we drop.
+  const parts = cleaned.split(/Hint\s*#\d+\s*\d+\s*\/\s*\d+\s*/i);
+  const steps = parts.map((p) => p.trim()).filter(Boolean);
+  return steps.length > 0 ? steps : [cleaned];
+}
+
+function matchStepToOption(step: string, optionBody: string): boolean {
+  // Heuristic: if the step text contains the option's body (or most of it), it's a match.
+  // Strip numeric noise and match the first 8 meaningful chars.
+  const haystack = step.toLowerCase().replace(/\s+/g, ' ');
+  const needle = optionBody.toLowerCase().replace(/\s+/g, ' ').slice(0, 20);
+  if (!needle) return false;
+  return haystack.includes(needle);
+}
+
 function buildTutorContext(title: string, q: PracticeQuestion | undefined) {
   if (!q) return { subject: title };
   const parsed = parsePrompt(q.prompt);
@@ -269,67 +289,145 @@ function PracticeRunner({ keyParam }: { keyParam: string }) {
           )}
         </div>
 
-        {hasOptions && (
-          <div style={{ display: 'grid', gap: 12 }}>
-            {parsed.options.map((opt, i) => {
-              const { letter, body } = stripLeadingLetter(opt);
-              const realLetter = letter || String.fromCharCode(65 + i);
-              const isSelected = selected.includes(realLetter);
-              const isCorrect = revealed && isAnswerLetter(current.answer, realLetter);
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => onSelect(realLetter)}
-                  disabled={revealed && !isSelected && !isCorrect}
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 14,
-                    padding: '14px 18px', textAlign: 'left',
-                    borderRadius: 14,
-                    background: revealed
-                      ? (isCorrect ? `var(--pbs-mint)` : (isSelected ? '#fde2e2' : 'var(--pbs-paper)'))
-                      : (isSelected ? `var(--pbs-${tone})` : 'var(--pbs-paper)'),
-                    color: 'var(--pbs-ink)',
-                    border: `1.5px solid ${revealed
-                      ? (isCorrect ? '#0f5b2e' : (isSelected ? '#7a2a18' : 'var(--pbs-line-2)'))
-                      : (isSelected ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)')}`,
-                    boxShadow: isSelected || isCorrect ? '0 2px 0 var(--pbs-line-2)' : 'none',
-                    cursor: revealed ? 'default' : 'pointer',
-                    fontSize: 15, fontWeight: 500, lineHeight: 1.45,
-                  }}
-                >
-                  <span style={{
-                    flex: '0 0 32px', height: 32, borderRadius: 10,
-                    background: revealed && isCorrect ? '#0f5b2e' : 'var(--pbs-cream-2)',
-                    color: revealed && isCorrect ? '#fff' : 'var(--pbs-ink)',
-                    border: `1.5px solid ${revealed && isCorrect ? '#0f5b2e' : 'var(--pbs-line-2)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 700,
-                  }}>{realLetter}</span>
-                  <span style={{ flex: 1 }}>{body}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {hasOptions && (() => {
+          const hintSteps = revealed ? parseHintSteps(current.explanation ?? '') : [];
+          const overviewStep = hintSteps[0] ?? null;
+          const perOptionSteps = hintSteps.slice(1);
+          const summaryStep = hintSteps.length > 1 ? hintSteps[hintSteps.length - 1] : null;
 
-        {revealed && (
+          return (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {parsed.options.map((opt, i) => {
+                const { letter, body } = stripLeadingLetter(opt);
+                const realLetter = letter || String.fromCharCode(65 + i);
+                const isSelected = selected.includes(realLetter);
+                const isCorrect = revealed && isAnswerLetter(current.answer, realLetter);
+                const stepForOption = revealed
+                  ? perOptionSteps.find((s) => matchStepToOption(s, body))
+                  : null;
+                return (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(realLetter)}
+                      disabled={revealed && !isSelected && !isCorrect}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 14,
+                        padding: '14px 18px', textAlign: 'left',
+                        borderRadius: stepForOption ? '14px 14px 0 0' : 14,
+                        background: revealed
+                          ? (isCorrect ? 'var(--pbs-mint)' : (isSelected ? '#fde2e2' : 'var(--pbs-paper)'))
+                          : (isSelected ? `var(--pbs-${tone})` : 'var(--pbs-paper)'),
+                        color: 'var(--pbs-ink)',
+                        border: `1.5px solid ${revealed
+                          ? (isCorrect ? '#0f5b2e' : (isSelected ? '#7a2a18' : 'var(--pbs-line-2)'))
+                          : (isSelected ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)')}`,
+                        borderBottom: stepForOption ? 'none' : undefined,
+                        boxShadow: isSelected || isCorrect ? '0 2px 0 var(--pbs-line-2)' : 'none',
+                        cursor: revealed ? 'default' : 'pointer',
+                        fontSize: 15, fontWeight: 500, lineHeight: 1.45,
+                      }}
+                    >
+                      <span style={{
+                        flex: '0 0 32px', height: 32, borderRadius: 10,
+                        background: revealed && isCorrect ? '#0f5b2e' : 'var(--pbs-cream-2)',
+                        color: revealed && isCorrect ? '#fff' : 'var(--pbs-ink)',
+                        border: `1.5px solid ${revealed && isCorrect ? '#0f5b2e' : 'var(--pbs-line-2)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, fontWeight: 700,
+                      }}>{realLetter}</span>
+                      <span style={{ flex: 1 }}>{body}</span>
+                      {revealed && (
+                        <span style={{
+                          flex: '0 0 auto', fontSize: 10.5, fontWeight: 700,
+                          padding: '3px 8px', borderRadius: 999,
+                          background: isCorrect ? '#0f5b2e' : (isSelected ? '#7a2a18' : 'transparent'),
+                          color: isCorrect || isSelected ? '#fff' : 'var(--pbs-ink-muted)',
+                          border: `1.5px solid ${isCorrect ? '#0f5b2e' : (isSelected ? '#7a2a18' : 'var(--pbs-line-2)')}`,
+                          letterSpacing: '0.06em', textTransform: 'uppercase',
+                        }}>
+                          {isCorrect ? '✓ Correct' : isSelected ? '✗ Wrong' : 'Skip'}
+                        </span>
+                      )}
+                    </button>
+                    {stepForOption && (
+                      <div style={{
+                        padding: '10px 18px 12px 64px',
+                        fontSize: 13, lineHeight: 1.55,
+                        color: isCorrect ? '#0f5b2e' : '#7a2a18',
+                        background: isCorrect ? 'rgba(182, 240, 198, 0.5)' : 'rgba(253, 226, 226, 0.5)',
+                        border: `1.5px solid ${isCorrect ? '#0f5b2e' : '#7a2a18'}`,
+                        borderTop: 'none',
+                        borderRadius: '0 0 14px 14px',
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3, opacity: 0.8 }}>
+                          Why {isCorrect ? 'this works' : 'this is wrong'}
+                        </div>
+                        {stepForOption}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {revealed && (overviewStep || summaryStep) && (
+                <div style={{
+                  padding: '14px 18px', borderRadius: 14,
+                  background: 'var(--pbs-cream-2)',
+                  border: '1.5px solid var(--pbs-line-2)',
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', color: `var(--pbs-${tone}-ink)`,
+                  }}>
+                    Answer · {current.answer}
+                  </div>
+                  {overviewStep && (
+                    <div style={{ fontSize: 13.5, color: 'var(--pbs-ink)', lineHeight: 1.55 }}>
+                      {overviewStep}
+                    </div>
+                  )}
+                  {summaryStep && summaryStep !== overviewStep && (
+                    <div style={{ fontSize: 13, color: 'var(--pbs-ink-soft)', lineHeight: 1.55, fontStyle: 'italic' }}>
+                      {summaryStep}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {!hasOptions && revealed && (
           <div style={{
             padding: '16px 20px', borderRadius: 14,
             background: 'var(--pbs-cream-2)',
             border: '1.5px solid var(--pbs-line-2)',
           }}>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: `var(--pbs-${tone}-ink)`, marginBottom: 6 }}>
+            <div style={{
+              fontSize: 12, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: `var(--pbs-${tone}-ink)`, marginBottom: 6,
+            }}>
               Answer
             </div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--pbs-ink)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--pbs-ink)', lineHeight: 1.5, marginBottom: 10 }}>
               {current.answer}
             </div>
-            {current.explanation && (
-              <div style={{ marginTop: 10, fontSize: 13.5, color: 'var(--pbs-ink-soft)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {current.explanation}
+            {parseHintSteps(current.explanation ?? '').map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, marginTop: i === 0 ? 0 : 8, alignItems: 'flex-start' }}>
+                <span style={{
+                  flex: '0 0 20px', height: 20, borderRadius: 6,
+                  background: `var(--pbs-${tone})`, color: `var(--pbs-${tone}-ink)`,
+                  border: `1.5px solid var(--pbs-${tone}-ink)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10.5, fontWeight: 700,
+                }}>{i + 1}</span>
+                <div style={{ flex: 1, fontSize: 13.5, color: 'var(--pbs-ink)', lineHeight: 1.55 }}>
+                  {step}
+                </div>
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>

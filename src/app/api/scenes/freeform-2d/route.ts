@@ -136,3 +136,25 @@ export async function GET(request: NextRequest) {
     })),
   });
 }
+
+export async function DELETE(request: NextRequest) {
+  if (!isServerSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+  const url = new URL(request.url);
+  const name = url.searchParams.get('name');
+  if (!name) return NextResponse.json({ error: 'Missing scene name' }, { status: 400 });
+
+  const user = await getServerUser();
+  const resolvedUserId = user.isAnonymous ? 'local-user' : user.id;
+
+  const supabase = await getServerSupabase();
+  const { error } = await supabase
+    .from('freeform_scenes')
+    .delete()
+    .eq('user_id', resolvedUserId)
+    .eq('name', name);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

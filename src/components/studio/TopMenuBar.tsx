@@ -18,6 +18,9 @@ import {
   MoreVertical,
   Undo2,
   Coins,
+  FolderOpen,
+  X,
+  Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useStudio, type ViewMode } from '@/store/studio-store';
@@ -165,6 +168,7 @@ export function TopMenuBar() {
 
   const [saving, setSaving] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [openSceneOpen, setOpenSceneOpen] = useState(false);
 
   const togglePlay = useCallback(() => {
     const next = !isPlaying;
@@ -311,6 +315,11 @@ export function TopMenuBar() {
   const menuItems: MenuEntry[] = [
     { id: 'new',     label: 'New Game',               icon: Play,   shortcut: '⌘N', onClick: () => openNewGameDialog() },
     { id: 'save',    label: saving ? 'Saving…' : 'Save', icon: Save, shortcut: '⌘S', onClick: () => { void handleSave(); } },
+    // Open scene… is 2D-Freeform only — the picker lists rows from the
+    // freeform_scenes Supabase table the Save action writes to.
+    ...(gameSystem === '2d-freeform'
+      ? [{ id: 'open-scene', label: 'Open scene…', icon: FolderOpen, onClick: () => { setOpenSceneOpen(true); setMenuOpen(false); } } as MenuEntry]
+      : []),
     { id: 'publish', label: sharing ? 'Publishing…' : 'Publish to Marketplace', icon: Upload, shortcut: '⌘P', onClick: () => { void handleShare(); } },
     { separator: true },
     { id: 'marketplace', label: 'Marketplace', icon: Upload,   onClick: () => { window.location.href = '/marketplace'; } },
@@ -555,6 +564,13 @@ export function TopMenuBar() {
           )}
         </div>
       </div>
+      {openSceneOpen && (
+        <OpenSceneDialog
+          onClose={() => setOpenSceneOpen(false)}
+          onLoad={(name) => { setProjectName(name); setOpenSceneOpen(false); }}
+          addToast={addToast}
+        />
+      )}
     </div>
   );
 }
@@ -585,5 +601,266 @@ function CreditsPill({ balance }: { balance: number }) {
       <Coins size={13} strokeWidth={2.2} />
       {balance.toLocaleString()}
     </a>
+  );
+}
+
+interface SavedScene {
+  id: string;
+  name: string;
+  updatedAt: string;
+}
+
+/**
+ * Modal that lists the user's saved 2D Freeform scenes (one row per
+ * scene, sorted by `updated_at desc`) and loads the picked one into
+ * the freeform-2d store. Talks to /api/scenes/freeform-2d.
+ */
+function OpenSceneDialog({
+  onClose,
+  onLoad,
+  addToast,
+}: {
+  onClose: () => void;
+  onLoad: (name: string) => void;
+  addToast: (type: 'success' | 'error' | 'info' | 'warning', msg: string) => void;
+}) {
+  const [scenes, setScenes] = useState<SavedScene[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingName, setLoadingName] = useState<string | null>(null);
+  const [deletingName, setDeletingName] = useState<string | null>(null);
+
+  // Pull the scene list once on mount. Cheap query — server omits the
+  // `data` blob from the listing so we're not pulling MB of base64.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/scenes/freeform-2d');
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          if (!cancelled) setError(body?.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        const body = (await res.json()) as { scenes?: SavedScene[] };
+        if (!cancelled) setScenes(body.scenes ?? []);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Esc dismisses the modal, matching the rest of the studio's
+  // dialog conventions.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function handleLoad(name: string) {
+    if (loadingName) return;
+    setLoadingName(name);
+    try {
+      const res = await fetch(`/api/scenes/freeform-2d?name=${encodeURIComponent(name)}`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        addToast('error', `Open failed: ${body?.error ?? res.statusText}`);
+        return;
+      }
+      const body = (await res.json()) as {
+        data?: {
+          images?: import('@/store/freeform-store').FreeformImage[];
+          characters?: import('@/store/freeform-store').FreeformCharacter[];
+          background?: import('@/store/freeform-store').FreeformBackground;
+          showGrid?: boolean;
+        };
+      };
+      const data = body.data;
+      if (!data) {
+        addToast('error', 'Scene has no data.');
+        return;
+      }
+      // Apply directly to the store. We bypass the per-action history
+      // (no undo across an Open) — clearer mental model than half-merging
+      // the new scene into the current undo stack.
+      useFreeform.setState((prev) => ({
+        ...prev,
+        images: data.images ?? [],
+        characters: data.characters ?? [],
+        assets: [],
+        background: data.background ?? prev.background,
+        showGrid: data.showGrid ?? prev.showGrid,
+        selectedImageId: null,
+        selectedCollisionId: null,
+        selectedCharacterId: null,
+        pendingPenAnchors: [],
+        pendingPenImageId: null,
+        past: [],
+        future: [],
+        historyPaused: 0,
+        pausedSnapshot: null,
+      }));
+      addToast('success', `Opened "${name}".`);
+      onLoad(name);
+    } catch (e) {
+      addToast('error', `Open failed: ${(e as Error).message}`);
+    } finally {
+      setLoadingName(null);
+    }
+  }
+
+  async function handleDelete(name: string) {
+    if (deletingName) return;
+    if (!confirm(`Delete scene "${name}"? This can't be undone.`)) return;
+    setDeletingName(name);
+    try {
+      const res = await fetch(`/api/scenes/freeform-2d?name=${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        addToast('error', `Delete failed: ${body?.error ?? res.statusText}`);
+        return;
+      }
+      setScenes((prev) => (prev ?? []).filter((s) => s.name !== name));
+      addToast('success', `Deleted "${name}".`);
+    } catch (e) {
+      addToast('error', `Delete failed: ${(e as Error).message}`);
+    } finally {
+      setDeletingName(null);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--pb-paper)',
+          border: '1.5px solid var(--pb-ink)',
+          borderRadius: 16,
+          boxShadow: '0 6px 0 var(--pb-ink)',
+          width: 480,
+          maxHeight: '70vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <header
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '14px 16px',
+            borderBottom: '1.5px solid var(--pb-line-2)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FolderOpen size={16} style={{ color: 'var(--pb-ink)' }} />
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--pb-ink)' }}>Open scene</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: 'transparent', border: 0, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--pb-ink-soft)',
+            }}
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+          {error && (
+            <p style={{ padding: 16, fontSize: 12.5, color: 'var(--pb-coral-ink)' }}>
+              {error}
+            </p>
+          )}
+          {!error && scenes === null && (
+            <p style={{ padding: 16, fontSize: 12.5, color: 'var(--pb-ink-muted)' }}>
+              Loading…
+            </p>
+          )}
+          {!error && scenes && scenes.length === 0 && (
+            <p style={{ padding: 16, fontSize: 12.5, color: 'var(--pb-ink-muted)' }}>
+              No saved scenes yet. Use Save (⌘S) to create one.
+            </p>
+          )}
+          {scenes?.map((scene) => (
+            <div
+              key={scene.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                borderRadius: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleLoad(scene.name)}
+                disabled={!!loadingName}
+                style={{
+                  flex: 1,
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 0,
+                  borderRadius: 8,
+                  padding: '6px 8px',
+                  cursor: loadingName ? 'wait' : 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--pb-cream-2, #fff5df)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--pb-ink)' }}>
+                  {scene.name}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}>
+                  {loadingName === scene.name ? 'Loading…' : `Updated ${new Date(scene.updatedAt).toLocaleString()}`}
+                </span>
+              </button>
+              <button
+                type="button"
+                title="Delete"
+                onClick={() => handleDelete(scene.name)}
+                disabled={!!deletingName}
+                style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: 'transparent', border: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--pb-coral-ink)',
+                  cursor: deletingName ? 'wait' : 'pointer',
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ApparatusViz } from './ApparatusViz';
 import { DataTable } from './DataTable';
 import { Icon } from './Icon';
@@ -30,6 +30,34 @@ export function HomeworkDesktop({ frq, onExit }: HomeworkDesktopProps) {
       [partId]: { ...(a[partId] || {}), [microId]: value },
     }));
   };
+
+  // Publish the current homework focus to a window global so the
+  // right-rail tutor chat (TutorChatbot) can grab it without prop
+  // drilling. The chat reads { partLabel, partText, microPrompts,
+  // assignmentTitle } when the student asks for help.
+  useEffect(() => {
+    const part = frq.parts.find((p) => p.id === expandedPart);
+    const w = window as Window & {
+      __homeworkContext?: () => {
+        assignmentTitle: string;
+        partLabel: string;
+        partText: string;
+        microPrompts: string[];
+      } | null;
+    };
+    w.__homeworkContext = () =>
+      part
+        ? {
+            assignmentTitle: frq.source.title,
+            partLabel: part.label,
+            partText: part.apText,
+            microPrompts: part.micros.map((m) => m.prompt),
+          }
+        : null;
+    return () => {
+      delete w.__homeworkContext;
+    };
+  }, [frq, expandedPart]);
 
   const { partScores, totalEarned, totalPossible } = gradeFRQ(frq, answers);
   const mono = 'var(--font-dm-mono), DM Mono, monospace';

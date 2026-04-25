@@ -163,6 +163,30 @@ export function ScribbleOverlay() {
     return () => window.removeEventListener('popstate', onNav);
   }, [paint]);
 
+  // Expose a snapshot helper so other surfaces (e.g. the tutor chat's
+  // "Help me" button) can grab the current annotations as a PNG data
+  // URL. Returns null when nothing has been drawn yet so callers can
+  // skip the upload and avoid asking the model to review a blank
+  // page. The canvas only mounts while `active` is true; outside of
+  // that we still keep the function but it just reports null.
+  useEffect(() => {
+    const w = window as Window & {
+      __scribbleSnapshot?: () => Promise<string | null>;
+    };
+    w.__scribbleSnapshot = async () => {
+      if (strokesRef.current.length === 0) return null;
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      // Force a repaint first so the bitmap reflects the latest stroke
+      // state (paint() also commits any in-flight active stroke).
+      paint();
+      return canvas.toDataURL('image/png');
+    };
+    return () => {
+      delete w.__scribbleSnapshot;
+    };
+  }, [paint]);
+
   // ---- pointer handlers ----
   const pointAt = (e: React.PointerEvent<HTMLCanvasElement>): Pt => ({
     x: e.clientX,

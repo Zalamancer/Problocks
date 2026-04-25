@@ -12,9 +12,41 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { RobloxAvatar, type AvatarOutfit } from '@/components/student/RobloxAvatar';
 import { useTutorSpeech } from './useTutorSpeech';
 import type { TutorMessage } from './tutor-types';
+
+// Pulls homework focus + overlay snapshot from the window globals
+// published by HomeworkDesktop / ScribbleOverlay. Returns nulls when
+// either surface isn't mounted (e.g. quiz pages without homework
+// context).
+async function gatherTutorContext(): Promise<{
+  image: string | null;
+  context: {
+    assignmentTitle?: string;
+    partLabel?: string;
+    partText?: string;
+    microPrompts?: string[];
+  };
+}> {
+  type WGlobal = Window & {
+    __scribbleSnapshot?: () => Promise<string | null>;
+    __homeworkContext?: () => {
+      assignmentTitle: string;
+      partLabel: string;
+      partText: string;
+      microPrompts: string[];
+    } | null;
+  };
+  const w = window as WGlobal;
+  const image = (await w.__scribbleSnapshot?.()) ?? null;
+  const ctx = w.__homeworkContext?.() ?? null;
+  return {
+    image,
+    context: ctx ?? {},
+  };
+}
 
 // Default outfit mirrors the one hardcoded on the student dashboard so the
 // tutor looks like the same cardboard character the student sees on their
@@ -102,33 +134,79 @@ export function TutorChatbot({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, open, revealedText]);
 
+  const askTutor = useCallback(
+    async (questionText: string) => {
+      const studentMsg: TutorMessage = {
+        id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role: 'student',
+        text: questionText,
+        ts: Date.now(),
+      };
+      const updated: TutorMessage[] = [...messages, studentMsg];
+      setMessages(updated);
+      setPending(true);
+
+      let reply: string;
+      try {
+        if (onAsk) {
+          // Caller-supplied stub takes precedence — keeps the chatbot
+          // generic for surfaces that don't want the Gemini call.
+          reply = await onAsk(questionText);
+        } else {
+          // Default homework path: ship overlay snapshot + current
+          // part context + recent history to the Gemini-backed
+          // tutor-help route.
+          const { image, context } = await gatherTutorContext();
+          // Trim history to the last 10 turns so the prompt stays
+          // small. Drop the just-added student message so the API
+          // can re-add it as the final turn.
+          const history = updated.slice(-11, -1).map((m) => ({
+            role: m.role,
+            text: m.text,
+          }));
+          const res = await fetch('/api/tutor-help', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              image,
+              ...context,
+              message: questionText,
+              history,
+            }),
+          });
+          const data = (await res.json()) as { text?: string; error?: string };
+          reply =
+            (res.ok && data.text) ||
+            `I couldn't reach the tutor (${data.error ?? 'unknown'}).`;
+        }
+        const tutorMsg: TutorMessage = {
+          id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          role: 'tutor',
+          text: reply,
+          ts: Date.now(),
+        };
+        setMessages((m) => [...m, tutorMsg]);
+        setSpeakingId(tutorMsg.id);
+        speak(reply, { onDone: () => setSpeakingId(null) });
+      } finally {
+        setPending(false);
+      }
+    },
+    [messages, onAsk, speak],
+  );
+
   const send = useCallback(async () => {
     const q = draft.trim();
     if (!q || pending) return;
     setDraft('');
-    const studentMsg: TutorMessage = {
-      id: `s-${Date.now()}`,
-      role: 'student',
-      text: q,
-      ts: Date.now(),
-    };
-    setMessages((m) => [...m, studentMsg]);
-    setPending(true);
-    try {
-      const reply = onAsk ? await onAsk(q) : DEFAULT_REPLY(q);
-      const tutorMsg: TutorMessage = {
-        id: `t-${Date.now()}`,
-        role: 'tutor',
-        text: reply,
-        ts: Date.now(),
-      };
-      setMessages((m) => [...m, tutorMsg]);
-      setSpeakingId(tutorMsg.id);
-      speak(reply, { onDone: () => setSpeakingId(null) });
-    } finally {
-      setPending(false);
-    }
-  }, [draft, pending, onAsk, speak]);
+    await askTutor(q);
+  }, [draft, pending, askTutor]);
+
+  const askForHelp = useCallback(async () => {
+    if (pending) return;
+    setOpen(true);
+    await askTutor('Help me with this question.');
+  }, [pending, askTutor]);
 
   if (!open) {
     return (
@@ -298,6 +376,41 @@ export function TutorChatbot({
         {pending && <Typing />}
       </div>
 
+      <div
+        style={{
+          padding: '8px 10px 0',
+          borderTop: '1.5px solid var(--pb-line-2, #d6c896)',
+          background: 'var(--pb-paper, #fffaf0)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={askForHelp}
+          disabled={pending}
+          aria-label="Ask the tutor to look at my work and help"
+          style={{
+            width: '100%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: 'var(--pb-grape, #dcc7ff)',
+            color: 'var(--pb-grape-ink, #4d2a8a)',
+            border: '1.5px solid var(--pb-grape-ink, #4d2a8a)',
+            boxShadow: '0 2px 0 var(--pb-grape-ink, #4d2a8a)',
+            fontSize: 12.5,
+            fontWeight: 800,
+            cursor: pending ? 'wait' : 'pointer',
+            opacity: pending ? 0.55 : 1,
+          }}
+        >
+          <Sparkles size={13} strokeWidth={2.4} />
+          Help me — see my work
+        </button>
+      </div>
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -307,7 +420,6 @@ export function TutorChatbot({
           display: 'flex',
           gap: 8,
           padding: 10,
-          borderTop: '1.5px solid var(--pb-line-2, #d6c896)',
           background: 'var(--pb-paper, #fffaf0)',
         }}
       >

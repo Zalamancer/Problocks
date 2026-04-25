@@ -24,6 +24,7 @@ import { TopToolbar } from './freeform3d/TopToolbar';
 import { setSelectionHighlight } from './freeform3d/selection-outline';
 import { setSpawnTargetProvider } from '@/lib/kid-style-3d/spawn-target';
 import { PlayHUD as TycoonHUD } from './freeform3d/PlayHUD';
+import { PlayTicker } from './freeform3d/PlayTicker';
 import { useGameState } from '@/hooks/use-game-state';
 
 /** Convert a user-avatar AvatarOutfit into SceneObject.props for the
@@ -799,6 +800,7 @@ export function FreeformView3D() {
       {!isPlaying && world.showStats && <StatsBadge stats={stats} />}
       {isPlaying ? <PlayHud cameraMode={cameraMode} /> : <HintBadge />}
       {isPlaying && <TycoonHUD />}
+      {isPlaying && <PlayTicker />}
     </div>
   );
 }

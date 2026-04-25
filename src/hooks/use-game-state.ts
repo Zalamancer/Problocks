@@ -62,6 +62,10 @@ export interface BuyUpgradeArgs {
 
 export type BuyArgs = BuyItemArgs | BuyUpgradeArgs;
 
+export type EarnOutcome =
+  | { ok: true; state: PlayerState }
+  | { ok: false; reason: 'auth' | 'rate' | 'network' | 'bad-request' };
+
 export interface UseGameStateResult {
   /** Stable gameId derived from currentSceneName (or '__draft__'). */
   gameId: string;
@@ -75,8 +79,12 @@ export interface UseGameStateResult {
   refresh: () => Promise<void>;
   /** Atomic deduct + grant via /api/game-state/[gameId]/buy. */
   buy: (args: BuyArgs) => Promise<BuyOutcome>;
-  /** Imperative override of local state — used by slice 5's tick batcher
-      after a successful POST /tick to swap in the server's truth. */
+  /** Credit `amount` coins via /api/game-state/[gameId]/tick. The
+      ticker batches per-prefab earnings before calling this so the
+      server only sees one POST per ~5s window. */
+  earn: (amount: number) => Promise<EarnOutcome>;
+  /** Imperative override of local state — used by the tick batcher
+      to apply optimistic credits before the server round-trips back. */
   setState: (next: PlayerState) => void;
 }
 
@@ -162,6 +170,45 @@ export function useGameState(): UseGameStateResult {
     [gameId, isAuthed],
   );
 
+  const earn = useCallback(
+    async (amount: number): Promise<EarnOutcome> => {
+      if (!isAuthed) return { ok: false, reason: 'auth' };
+      const rounded = Math.max(0, Math.floor(amount));
+      if (rounded === 0) {
+        // Empty batch — server has a fast path too, but skipping the
+        // round-trip is cheaper. Return a synthetic success holding
+        // the current local state so the caller's flow doesn't branch.
+        if (state) return { ok: true, state };
+        return { ok: false, reason: 'bad-request' };
+      }
+      try {
+        const res = await fetch(
+          `/api/game-state/${encodeURIComponent(gameId)}/tick`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: rounded }),
+          },
+        );
+        if (res.status === 401) return { ok: false, reason: 'auth' };
+        if (res.status === 429) return { ok: false, reason: 'rate' };
+        if (!res.ok) return { ok: false, reason: 'bad-request' };
+        const next = (await res.json()) as PlayerState;
+        // Server-side may return { ok: true } for the empty-batch case
+        // but we already short-circuit above; if some odd response is
+        // missing fields, fall through without overwriting.
+        if (typeof next.coins === 'number') {
+          setLocalState(next);
+          return { ok: true, state: next };
+        }
+        return { ok: false, reason: 'bad-request' };
+      } catch {
+        return { ok: false, reason: 'network' };
+      }
+    },
+    [gameId, isAuthed, state],
+  );
+
   return {
     gameId,
     state,
@@ -169,6 +216,7 @@ export function useGameState(): UseGameStateResult {
     isAuthed,
     refresh,
     buy,
+    earn,
     setState: setLocalState,
   };
 }

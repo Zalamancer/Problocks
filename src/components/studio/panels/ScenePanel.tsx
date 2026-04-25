@@ -22,6 +22,7 @@ import { useSceneStore, type PartType } from '@/store/scene-store';
 import { useBuildingStore } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 import { useLightingStore } from '@/store/lighting-store';
+import { useFreeform3D } from '@/store/freeform3d-store';
 import { SectionLabel, type PBTone } from '@/components/ui';
 
 // Ported from /tmp/design_bundle2/problocks/project/studio/leftpanel.jsx
@@ -32,7 +33,7 @@ import { SectionLabel, type PBTone } from '@/components/ui';
 interface LayerItem {
   id: string;
   name: string;
-  type: 'part' | 'floor' | 'wall' | 'script';
+  type: 'part' | 'floor' | 'wall' | 'script' | 'prefab';
   icon: typeof Box;
   iconColor: string;        // part: user color hex; others: derived from category tone
   badge: string;
@@ -44,9 +45,12 @@ interface LayerItem {
   onRemove?: () => void;
 }
 
-type SceneCat = 'part' | 'floor' | 'wall' | 'script';
+type SceneCat = 'part' | 'floor' | 'wall' | 'script' | 'prefab';
 
-const CATEGORY_ORDER: SceneCat[] = ['part', 'floor', 'wall', 'script'];
+// Prefab category renders FIRST when there are freeform 3D objects in
+// the scene — that's the active store for kid-style worlds, so the
+// hierarchy view should lead with what the agent actually built.
+const CATEGORY_ORDER: SceneCat[] = ['prefab', 'part', 'floor', 'wall', 'script'];
 
 interface CategoryMeta {
   label: string;
@@ -56,11 +60,21 @@ interface CategoryMeta {
 }
 
 const CATEGORY_META: Record<SceneCat, CategoryMeta> = {
+  prefab: { label: 'Prefabs',   sub: 'Freeform 3D objects', icon: Box,                   tone: 'sky'    },
   part:   { label: 'Workspace', sub: 'Parts in your scene', icon: Folder,                tone: 'sky'    },
   floor:  { label: 'Floors',    sub: 'Floor tiles',         icon: Square,                tone: 'butter' },
   wall:   { label: 'Walls',     sub: 'Wall edges',          icon: RectangleHorizontal,   tone: 'coral'  },
   script: { label: 'Scripts',   sub: 'Game code files',     icon: FileCode,              tone: 'mint'   },
 };
+
+// Map common prefab kinds to icons. Anything not listed falls back to
+// Box; that's fine for rounded-box (the most common kind by far).
+function iconForPrefabKind(kind: string): typeof Box {
+  if (kind === 'sphere' || kind.startsWith('balloon')) return Circle;
+  if (kind === 'cylinder' || kind.startsWith('lamp') || kind.startsWith('stone-column')) return Cylinder;
+  if (kind === 'cone' || kind.startsWith('tree')) return Triangle;
+  return Box;
+}
 
 const PART_TYPE_ICON: Record<PartType, typeof Box> = {
   Block: Box,
@@ -88,6 +102,15 @@ export function ScenePanel({ onSelect }: Props) {
   const setSelectedPart = useSceneStore((s) => s.setSelectedPart);
   const updateSceneObject = useSceneStore((s) => s.updateSceneObject);
   const removePart = useSceneStore((s) => s.removePart);
+
+  // Freeform 3D — separate store, separate selection. The agent emits
+  // its world here, so the Scene panel was previously empty for any
+  // kid-style/freeform-3D project. Surface them as a top-level "Prefabs"
+  // category.
+  const f3dObjects = useFreeform3D((s) => s.scene.objects);
+  const f3dSelectedId = useFreeform3D((s) => s.selectedId);
+  const f3dSelect = useFreeform3D((s) => s.select);
+  const f3dRemoveObject = useFreeform3D((s) => s.removeObject);
 
   const floors = useBuildingStore((s) => s.floors);
   const walls = useBuildingStore((s) => s.walls);
@@ -122,6 +145,26 @@ export function ScenePanel({ onSelect }: Props) {
 
   const layers: LayerItem[] = useMemo(() => {
     const items: LayerItem[] = [];
+
+    // Freeform 3D prefabs first — that's the active store for the
+    // chunky-pastel agent. One row per scene object; name is the
+    // prefab kind (rounded-box, character, tree-pine, …) plus a
+    // short id suffix so a tycoon with 30 cubes is still scannable.
+    f3dObjects.forEach((obj) => {
+      const shortId = obj.id.replace(/^o_/, '').slice(0, 6);
+      items.push({
+        id: `prefab-${obj.id}`,
+        name: `${obj.kind} · ${shortId}`,
+        type: 'prefab',
+        icon: iconForPrefabKind(obj.kind),
+        iconColor: obj.color ?? 'var(--pb-sky-ink)',
+        badge: obj.kind,
+        visible: null,
+        isSelected: f3dSelectedId === obj.id,
+        onSelect: () => f3dSelect(obj.id),
+        onRemove: () => f3dRemoveObject(obj.id),
+      });
+    });
 
     sceneObjects.forEach((part) => {
       items.push({
@@ -215,6 +258,10 @@ export function ScenePanel({ onSelect }: Props) {
 
     return items;
   }, [
+    f3dObjects,
+    f3dSelectedId,
+    f3dSelect,
+    f3dRemoveObject,
     sceneObjects,
     selectedPart,
     floors,

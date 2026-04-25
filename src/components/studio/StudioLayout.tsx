@@ -268,11 +268,10 @@ export function StudioLayout() {
     setBuildingSelection(null);
   }
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts. ⌘1 / ⌘2 / ⌘3 are intentionally NOT bound here —
+  // Chrome (and every other modern browser) uses those for tab switching,
+  // and stealing them is a usability foot-gun more than a feature.
   useHotkeys({
-    'mod+1': () => setViewMode('kanban'),
-    'mod+2': () => setViewMode('canvas'),
-    'mod+3': () => setViewMode('3d'),
     'mod+j': () => setTerminalOpen((o) => !o),
   });
 

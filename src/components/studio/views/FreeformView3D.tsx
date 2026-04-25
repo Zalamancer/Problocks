@@ -264,6 +264,12 @@ export function FreeformView3D() {
     applyWorld(engine, world);
   }, [world]);
 
+  // Track the last applied camera view so we only reset position
+  // when the dropdown actually changes — without this, every Play /
+  // Stop cycle would teleport the orbit camera back to its default
+  // and stomp whatever angle the user had pulled it to.
+  const lastAppliedViewRef = useRef<typeof world.cameraView | null>(null);
+
   /* ---- camera-view preset ----
       Edit-mode only — play mode's controller owns the camera. The
       preset rewrites OrbitControls' target + camera position, then
@@ -283,12 +289,18 @@ export function FreeformView3D() {
     const controls = engine.controls;
     const view = world.cameraView;
 
-    // Force-enable controls + clear any residual sphericalDelta state
-    // by calling update(). Damping with enableDamping=true means the
-    // delta decays toward zero each frame; calling update once is
-    // enough to settle the camera's spherical to the new position
-    // before our preset overrides it below.
+    // Defensive: re-enable controls after any play stop. Cheap, idempotent.
     controls.enabled = true;
+
+    // Skip the position/target stomp when the view didn't actually
+    // change — the user's orbiting / zooming should survive a
+    // Play→Stop cycle.
+    if (lastAppliedViewRef.current === view) return;
+    lastAppliedViewRef.current = view;
+
+    // Damping with enableDamping=true keeps a residual sphericalDelta
+    // for a few frames; calling update() once settles it before we
+    // apply the new preset.
     controls.update();
 
     if (view === 'topdown') {
@@ -306,7 +318,7 @@ export function FreeformView3D() {
       // orbit — restore the engine defaults (kept here in sync with
       // engine.ts's initial setup so toggling back lands cleanly).
       controls.target.set(0, 0, 0);
-      camera.position.set(18, 22, 24);
+      camera.position.set(25, 32, 32);
       controls.enableRotate = true;
     }
     camera.lookAt(controls.target);

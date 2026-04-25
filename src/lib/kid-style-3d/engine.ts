@@ -105,13 +105,14 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   // framing: the whole plot fits comfortably on screen without feeling
   // like a dollhouse. lookAt(0, 2, 0) raises the pivot to roughly the
   // character's head height.
-  // Camera FOV / position match the tile-based BuildingCanvas so the
-  // two studios feel like the same product. The earlier 42°/(14,10,16)
-  // setup landed at near-horizon height which read as first-person on
-  // first load — kid-style worlds want a clear 3/4-perspective overview
-  // of the plot from the start.
+  // Camera FOV / position bumped past the tile-based BuildingCanvas
+  // because freeform-3D scenes can be much larger (80u kick pitches,
+  // 60u tycoon plots) than the building studio's compact tile grids.
+  // (18, 22, 24) felt first-person-ish for those — we sit further out
+  // and a touch higher so the whole plot reads as an overhead view on
+  // first load. The user explicitly asked for the tile-studio feel.
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
-  camera.position.set(18, 22, 24);
+  camera.position.set(25, 32, 32);
   camera.lookAt(0, 0, 0);
 
   // --- three-light rig (bright Adopt-Me) ---
@@ -226,11 +227,14 @@ export function createKidEngine(opts: KidEngineOptions): KidEngine {
   controls.dampingFactor = 0.08;
   controls.screenSpacePanning = false;
   controls.minDistance = 8;
-  // Bumped from 30 → 50 since the higher 3/4-perspective default sits
-  // ~37u from origin; a 30u cap would clamp the user immediately on
-  // first scroll-to-zoom-out.
-  controls.maxDistance = 50;
-  controls.maxPolarAngle = Math.PI * 0.47;
+  // The boot camera sits ~52u from origin; allow a little more headroom
+  // so pinch-out doesn't clamp on the first interaction.
+  controls.maxDistance = 70;
+  // Cap at 0.4π (72° from up axis = 18° above horizon). The earlier
+  // 0.47π let the camera tilt almost to ground-level which read as
+  // first-person to the user. 0.4π keeps the camera always reading
+  // as "above the world".
+  controls.maxPolarAngle = Math.PI * 0.4;
   // Disable OrbitControls' default wheel-to-zoom — we install our own
   // wheel handler below that maps a Mac-style two-finger trackpad
   // swipe to ORBIT (the default OrbitControls behavior is "wheel

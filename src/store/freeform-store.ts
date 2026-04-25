@@ -1,5 +1,78 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+
+/**
+ * localStorage wrapper that survives QuotaExceededError. The freeform
+ * scene embeds every placed image as a base64 data URL, so a few photo
+ * pastes can blow past the 5 MB localStorage quota easily. When that
+ * happens we fall back to writing only the lightweight settings
+ * (background / grid / pan / zoom) without the bitmap arrays — better
+ * than the previous behavior, which crashed the action mid-mutation.
+ *
+ * Flag is module-scoped so once we know we're over quota we don't keep
+ * retrying the full write on every keystroke (parse+stringify of a
+ * multi-MB blob per pointer-move would tank perf).
+ */
+let quotaHit = false;
+
+function isQuotaError(e: unknown): boolean {
+  if (!(e instanceof DOMException)) return false;
+  return (
+    e.name === 'QuotaExceededError'
+    || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    || e.code === 22
+    || e.code === 1014
+  );
+}
+
+const quotaSafeStateStorage: StateStorage = {
+  getItem: (name) => {
+    try { return localStorage.getItem(name); } catch { return null; }
+  },
+  setItem: (name, value) => {
+    if (quotaHit) {
+      // Already over quota this session — only persist the settings
+      // slice. This keeps background/grid/pan/zoom alive across
+      // reloads so the user's environment doesn't reset every time
+      // they refresh, even though the placed images can't fit.
+      writeMinimal(name, value);
+      return;
+    }
+    try {
+      localStorage.setItem(name, value);
+    } catch (err) {
+      if (!isQuotaError(err)) throw err;
+      quotaHit = true;
+      // First hit — log loudly so the user can clear pastes if they
+      // care about persistence. Subsequent writes silently take the
+      // minimal path.
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[freeform-2d] localStorage quota exceeded — placed images / characters will NOT persist on reload this session. Delete some pastes or reload to recover storage.',
+      );
+      writeMinimal(name, value);
+    }
+  },
+  removeItem: (name) => {
+    try { localStorage.removeItem(name); } catch {}
+  },
+};
+
+function writeMinimal(name: string, value: string): void {
+  try {
+    const obj = JSON.parse(value);
+    if (obj && typeof obj === 'object' && obj.state && typeof obj.state === 'object') {
+      obj.state.images = [];
+      obj.state.characters = [];
+    }
+    localStorage.setItem(name, JSON.stringify(obj));
+  } catch {
+    // Even the minimal write failed (browser is in private mode, or the
+    // setting itself is huge) — drop the entry so we don't keep retrying
+    // a value that can't fit.
+    try { localStorage.removeItem(name); } catch {}
+  }
+}
 
 /**
  * 2D Freeform mode — image-based map building.
@@ -629,10 +702,19 @@ export const useFreeform = create<FreeformStore>()(
     }),
     {
       name: 'pb-freeform-2d',
+      // Custom storage wrapper that downgrades to a settings-only write
+      // on QuotaExceededError instead of crashing the mutation. See
+      // quotaSafeStateStorage above for the details.
+      storage: createJSONStorage(() => quotaSafeStateStorage),
       partialize: (state) => ({
         images: state.images,
         characters: state.characters,
-        assets: state.assets,
+        // `assets` is intentionally NOT persisted — every entry duplicates
+        // a `src` already stored on the placed image / character, so
+        // persisting it doubles the localStorage footprint for no benefit.
+        // The asset library is rebuilt on rehydrate (see onRehydrateStorage).
+        // Trade-off: orphan pastes that the user added but never placed on
+        // the canvas don't survive a reload.
         background: state.background,
         showGrid: state.showGrid,
         pan: state.pan,
@@ -652,8 +734,39 @@ export const useFreeform = create<FreeformStore>()(
         if (Array.isArray(state.characters)) {
           state.characters = state.characters.filter((c) => c?.src && !c.src.startsWith('blob:'));
         }
+        // Rebuild the asset library from whatever's actually on the
+        // canvas. We dedupe by src so pasting the same image twice
+        // doesn't show up twice in the panel. Any orphan assets the
+        // user pasted but never placed are intentionally dropped — the
+        // alternative was persisting a duplicate copy of every blob,
+        // which is what blew the quota in the first place.
         if (Array.isArray(state.assets)) {
           state.assets = state.assets.filter((a) => a?.src && !a.src.startsWith('blob:'));
+        } else {
+          state.assets = [];
+        }
+        const seen = new Set(state.assets.map((a) => a.src));
+        for (const i of state.images ?? []) {
+          if (!seen.has(i.src)) {
+            state.assets.push({
+              id: Math.random().toString(36).slice(2, 10),
+              src: i.src,
+              name: i.name,
+              addedAt: Date.now(),
+            });
+            seen.add(i.src);
+          }
+        }
+        for (const c of state.characters ?? []) {
+          if (!seen.has(c.src)) {
+            state.assets.push({
+              id: Math.random().toString(36).slice(2, 10),
+              src: c.src,
+              name: c.name,
+              addedAt: Date.now(),
+            });
+            seen.add(c.src);
+          }
         }
       },
     },

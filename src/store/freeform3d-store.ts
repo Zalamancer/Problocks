@@ -16,6 +16,26 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SceneObject, SceneJson, Vec3 } from '@/lib/kid-style-3d/scene-schema';
 import { EMPTY_SCENE, makeSceneObject } from '@/lib/kid-style-3d/scene-schema';
+import type {
+  Behavior,
+  GameLogic,
+  HUDElement,
+  UpgradeDef,
+  VariableDef,
+} from '@/lib/kid-style-3d/game-logic-schema';
+import { EMPTY_GAME_LOGIC } from '@/lib/kid-style-3d/game-logic-schema';
+import {
+  attachBehavior as attachBehaviorPure,
+  detachBehavior as detachBehaviorPure,
+  clearBehaviors as clearBehaviorsPure,
+  defineVariable as defineVariablePure,
+  removeVariable as removeVariablePure,
+  defineUpgrade as defineUpgradePure,
+  removeUpgrade as removeUpgradePure,
+  addHUDElement as addHUDElementPure,
+  removeHUDElement as removeHUDElementPure,
+  normalizeGameLogic,
+} from '@/lib/kid-style-3d/game-logic';
 import { getPrefabDef, DEFAULT_PREFAB_STYLE, type PrefabStyleId } from '@/lib/kid-style-3d/prefabs';
 import { setGeometryPerfMode, type GeometryPerfMode } from '@/lib/kid-style-3d/geometry';
 import { DEFAULT_THEME, setActiveTheme, type ThemeId } from '@/lib/kid-style-3d/themes';
@@ -221,9 +241,36 @@ interface Freeform3DState {
   exportSceneJSON: () => string;
   importSceneJSON: (json: string, asName?: string) => boolean;
 
+  // Game logic — tycoon scripting layer ---------------------------------
+  /** Attach a click/tick behavior to a prefab. Silently no-ops if the
+      prefab id isn't found (agent stale-id forgiveness). */
+  attachBehavior: (prefabId: string, behavior: Behavior) => void;
+  /** Remove the behavior at `index` from a prefab. */
+  detachBehavior: (prefabId: string, index: number) => void;
+  /** Strip every behavior from a prefab. */
+  clearBehaviors: (prefabId: string) => void;
+
+  /** Declare or replace a game-state variable (coins / wood / xp). */
+  defineVariable: (def: VariableDef) => void;
+  removeVariable: (name: string) => void;
+
+  /** Add or replace a purchasable upgrade in the catalog. */
+  defineUpgrade: (def: UpgradeDef) => void;
+  removeUpgrade: (id: string) => void;
+
+  /** Add or replace a HUD element (coinCounter / inventory / upgradePanel). */
+  addHUDElement: (el: HUDElement) => void;
+  removeHUDElement: (id: string) => void;
+
   // History --------------------------------------------------------------
   undo: () => void;
   redo: () => void;
+}
+
+/** Read the scene's gameLogic, falling back to an empty container when
+    the agent or a legacy save didn't initialize it. */
+function readGameLogic(scene: SceneJson): GameLogic {
+  return scene.gameLogic ?? { ...EMPTY_GAME_LOGIC };
 }
 
 /** Coerce a tuple that may be partially undefined into a complete Vec3. */
@@ -537,6 +584,107 @@ export const useFreeform3D = create<Freeform3DState>()(
         return true;
       },
 
+      // --- Game logic -------------------------------------------------
+
+      attachBehavior: (prefabId, behavior) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            objects: attachBehaviorPure(s.scene.objects, prefabId, behavior),
+          },
+          redoStack: [],
+        }));
+      },
+
+      detachBehavior: (prefabId, index) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            objects: detachBehaviorPure(s.scene.objects, prefabId, index),
+          },
+          redoStack: [],
+        }));
+      },
+
+      clearBehaviors: (prefabId) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            objects: clearBehaviorsPure(s.scene.objects, prefabId),
+          },
+          redoStack: [],
+        }));
+      },
+
+      defineVariable: (def) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            gameLogic: defineVariablePure(readGameLogic(s.scene), def),
+          },
+          redoStack: [],
+        }));
+      },
+
+      removeVariable: (name) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            gameLogic: removeVariablePure(readGameLogic(s.scene), name),
+          },
+          redoStack: [],
+        }));
+      },
+
+      defineUpgrade: (def) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            gameLogic: defineUpgradePure(readGameLogic(s.scene), def),
+          },
+          redoStack: [],
+        }));
+      },
+
+      removeUpgrade: (id) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            gameLogic: removeUpgradePure(readGameLogic(s.scene), id),
+          },
+          redoStack: [],
+        }));
+      },
+
+      addHUDElement: (el) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            gameLogic: addHUDElementPure(readGameLogic(s.scene), el),
+          },
+          redoStack: [],
+        }));
+      },
+
+      removeHUDElement: (id) => {
+        pushHistory(set, get);
+        set((s) => ({
+          scene: {
+            ...s.scene,
+            gameLogic: removeHUDElementPure(readGameLogic(s.scene), id),
+          },
+          redoStack: [],
+        }));
+      },
+
       undo: () => {
         set((s) => {
           const prev = s.undoStack[s.undoStack.length - 1];
@@ -581,12 +729,21 @@ export const useFreeform3D = create<Freeform3DState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         if (state.scene?.objects) {
-          state.scene = { ...state.scene, objects: state.scene.objects.map(normalize) };
+          state.scene = {
+            ...state.scene,
+            objects: state.scene.objects.map(normalize),
+            // Fill in gameLogic for scenes saved before slice 1 shipped.
+            gameLogic: normalizeGameLogic(state.scene.gameLogic),
+          };
         }
         if (state.savedScenes) {
           const fixed: Record<string, SceneJson> = {};
           for (const [name, sc] of Object.entries(state.savedScenes)) {
-            fixed[name] = { ...sc, objects: (sc.objects ?? []).map(normalize) };
+            fixed[name] = {
+              ...sc,
+              objects: (sc.objects ?? []).map(normalize),
+              gameLogic: normalizeGameLogic(sc.gameLogic),
+            };
           }
           state.savedScenes = fixed;
         }

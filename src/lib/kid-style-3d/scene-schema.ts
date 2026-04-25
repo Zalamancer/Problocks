@@ -13,6 +13,8 @@
  * pxEngine.js in the repo for the 2D precedent.
  */
 
+import type { Behavior, GameLogic } from './game-logic-schema';
+
 export type Vec3 = [number, number, number];
 
 export interface SceneObject {
@@ -49,6 +51,13 @@ export interface SceneObject {
   props?: Record<string, unknown>;
 
   /**
+   * Tycoon-style behaviors attached to this object — fire on click or
+   * tick. See game-logic-schema.ts for the action vocabulary. Optional;
+   * pure decoration prefabs (trees, rocks) leave this undefined.
+   */
+  behaviors?: Behavior[];
+
+  /**
    * Roblox-style physics flags. Defaults (when omitted) are true/true —
    * matches the "newly-dropped part" behaviour students expect: stays
    * where placed, blocks the player.
@@ -74,6 +83,12 @@ export interface SceneJson {
     createdAt?: string;
     updatedAt?: string;
   };
+  /**
+   * Optional tycoon-style game logic — variable declarations, upgrade
+   * catalog, HUD overlay. Decoration-only scenes leave this undefined
+   * and the runtime skips its play-mode interpreter entirely.
+   */
+  gameLogic?: GameLogic;
 }
 
 export const EMPTY_SCENE: SceneJson = {

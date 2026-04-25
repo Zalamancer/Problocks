@@ -294,6 +294,18 @@ export function FreeformView3D() {
       engine.setPerFrame(null);
       return;
     }
+    // Blur any focused input before play starts. The play controller's
+    // key handler intentionally bails when event.target is an INPUT /
+    // TEXTAREA / contenteditable so we don't steal keystrokes while
+    // the user types — but after the user hits Play right after a
+    // chat prompt, the chat textarea is still the active element and
+    // WASD ends up typed into it instead of walking. Punting focus
+    // to the body fixes it without any UX surprise.
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      const el = document.activeElement;
+      const t = el.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA' || el.isContentEditable) el.blur();
+    }
     // Find a character in the scene. First one wins — users can put the
     // starter character back in front of the house if the pick feels wrong.
     let characterObj = engine.root.children.find(

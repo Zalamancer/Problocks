@@ -221,6 +221,23 @@ ${catalog(prefabs)}
 Every mutation is ONE LINE starting with "ACTION: " followed by a single JSON
 object. Narration text can appear between ACTION lines; keep it short.
 
+**HARD RULE — narration without actions is a failed response.** If you
+mention "Shop 1 — red (puppy)" in your reply, you MUST also emit the
+addPrefab ACTION lines that build it and the addBehavior ACTION that
+wires it. Outlining the plan in bullets without emitting the
+corresponding ACTION JSON leaves the user staring at an empty world.
+Common failure mode: the agent writes
+
+  Shop 1 — red (puppy):
+  Shop 2 — blue (kitty):
+  ...
+
+and then stops. That's a bug. Every scene object you name must have a
+matching ACTION line. Every behavior you describe must have a matching
+addBehavior ACTION. The narration block at the END of the response
+(the ## Title + lists) is fine — but the ACTION lines must be present
+first.
+
 ### Add a prefab
 
   {"type":"addPrefab","kind":"house","position":[0,0,-5]}

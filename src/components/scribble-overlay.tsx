@@ -14,6 +14,7 @@
 // route change (mount/unmount); user can also hit Clear to reset.
 
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useRef,
@@ -81,6 +82,20 @@ export function ScribbleOverlay() {
   const drawingRef = useRef(false);
   const dprRef = useRef(1);
   const sizeRef = useRef({ w: 0, h: 0 });
+  // Brush-size preview ring that follows the cursor. Updated via direct
+  // DOM mutation so we don't re-render the whole overlay on every
+  // pointermove. Hidden when the cursor leaves the canvas.
+  const cursorRef = useRef<HTMLDivElement | null>(null);
+  const moveCursor = useCallback((x: number, y: number) => {
+    const el = cursorRef.current;
+    if (!el) return;
+    el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    el.style.opacity = '1';
+  }, []);
+  const hideCursor = useCallback(() => {
+    const el = cursorRef.current;
+    if (el) el.style.opacity = '0';
+  }, []);
 
   // ---- canvas sizing & repaint ----
   const paint = useCallback(() => {
@@ -165,6 +180,7 @@ export function ScribbleOverlay() {
       canvas.setPointerCapture(e.pointerId);
       drawingRef.current = true;
       const p = pointAt(e);
+      moveCursor(p.x, p.y);
       if (tool === 'eraser-stroke') {
         if (eraseStrokeAt(p)) {
           paint();
@@ -183,11 +199,15 @@ export function ScribbleOverlay() {
       };
       paint();
     },
-    [active, color, tool, penWidth, smoothing, paint, eraseStrokeAt],
+    [active, color, tool, penWidth, smoothing, paint, eraseStrokeAt, moveCursor],
   );
 
   const extend = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
+      // Track the cursor for the brush-size preview ring whether or not
+      // a stroke is in progress. This means the ring follows the user
+      // around the page, not just while they're drawing.
+      moveCursor(e.clientX, e.clientY);
       if (!drawingRef.current) return;
       const p = pointAt(e);
       if (tool === 'eraser-stroke') {
@@ -214,7 +234,7 @@ export function ScribbleOverlay() {
       s.points.push(p);
       paint();
     },
-    [tool, eraseStrokeAt, paint],
+    [tool, eraseStrokeAt, paint, moveCursor],
   );
 
   const end = useCallback(
@@ -378,20 +398,35 @@ export function ScribbleOverlay() {
             onPointerMove={extend}
             onPointerUp={end}
             onPointerCancel={end}
+            onPointerEnter={(e) => moveCursor(e.clientX, e.clientY)}
+            onPointerLeave={hideCursor}
             style={{
               position: 'fixed',
               inset: 0,
               zIndex: 99999,
               touchAction: 'none',
-              cursor:
-                tool === 'eraser'
-                  ? 'cell'
-                  : tool === 'eraser-stroke'
-                    ? 'not-allowed'
-                    : 'crosshair',
+              // Hide the system cursor in pen / pixel-eraser mode — the
+              // brush ring takes its place. Keep a 'not-allowed' system
+              // cursor for the stroke eraser since it has no size.
+              cursor: tool === 'eraser-stroke' ? 'not-allowed' : 'none',
               background: 'transparent',
             }}
           />
+
+          {/* Brush-size preview ring. Filled with the pen's own color
+              for the pen, hollow with a darker outline for the pixel
+              eraser, hidden entirely for the stroke eraser (which has
+              no meaningful "size"). Position is updated via direct DOM
+              transform on every pointermove so we don't trigger React
+              re-renders 60× per second. */}
+          {tool !== 'eraser-stroke' && (
+            <BrushPreview
+              ref={cursorRef}
+              tool={tool}
+              color={color}
+              size={tool === 'eraser' ? ERASER_WIDTH : penWidth}
+            />
+          )}
         </>
       )}
     </>
@@ -495,6 +530,57 @@ function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
   ctx.stroke();
   ctx.restore();
 }
+
+const BrushPreview = (function makeBrushPreview() {
+  const Inner = (
+    {
+      tool,
+      color,
+      size,
+    }: {
+      tool: 'pen' | 'eraser';
+      color: string;
+      size: number;
+    },
+    ref: React.Ref<HTMLDivElement>,
+  ) => {
+    // Eraser shows a thin grey outlined ring (the patch that gets
+    // wiped); pen shows a filled disc tinted by the current ink color.
+    // A 1 px shadow halo keeps both readable against any page color.
+    const isEraser = tool === 'eraser';
+    return (
+      <div
+        ref={ref}
+        aria-hidden
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          // Initial transform places it off-screen until the first
+          // pointermove sets a real translate. opacity:0 hides it.
+          transform: 'translate(-100px, -100px) translate(-50%, -50%)',
+          width: Math.max(4, size),
+          height: Math.max(4, size),
+          borderRadius: 999,
+          background: isEraser ? 'rgba(255,255,255,0.85)' : color,
+          border: isEraser
+            ? '1.5px solid rgba(15,23,42,0.55)'
+            : '1px solid rgba(15,23,42,0.35)',
+          // Tiny outer halo so the ring stays visible on any page
+          // background color — light or dark.
+          boxShadow:
+            '0 0 0 1px rgba(255,255,255,0.65), 0 1px 3px rgba(15,23,42,0.25)',
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: 100002,
+          transition: 'width 80ms ease, height 80ms ease, background 80ms ease',
+        }}
+      />
+    );
+  };
+  Inner.displayName = 'BrushPreview';
+  return forwardRef(Inner);
+})();
 
 // Single icon-only square button used for every slot in the floating
 // toolbar. White background, dark icon, soft hover lift, accent-blue

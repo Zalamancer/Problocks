@@ -37,12 +37,17 @@ import { GRADE_DATA as ENG_11 }                      from './english/grade-11';
 import { GRADE_DATA as ENG_12 }                      from './english/grade-12';
 
 import { OPENSTAX_BANK } from './openstax-bank';
+import { KHAN_QUESTIONS } from './khan-questions';
 import type { PracticeQuestion } from './types';
 
 export type { DeepGrade, DeepUnit, DeepLesson, PracticeQuestion, KhanItem } from './types';
 
 export function getOpenStaxBank(subjectId: string, gradeKey: string): PracticeQuestion[] {
   return OPENSTAX_BANK[`${subjectId}-${gradeKey}`] ?? [];
+}
+
+export function getKhanQuestionsByHref(href: string): PracticeQuestion[] {
+  return KHAN_QUESTIONS[href] ?? [];
 }
 
 export const DEEP_MATH: DeepGrade[] = [

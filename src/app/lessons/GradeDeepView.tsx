@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { CurriculumSubject } from '@/lib/templates/data/curriculum';
 import type { DeepGrade, DeepUnit, DeepLesson, PracticeQuestion, KhanItem } from '@/lib/templates/data/curriculum-deep';
-import { getOpenStaxBank } from '@/lib/templates/data/curriculum-deep';
+import { getOpenStaxBank, getKhanQuestionsByHref } from '@/lib/templates/data/curriculum-deep';
 import { Block, Pill, Icon } from '@/components/landing/pb-site/primitives';
 
 type Tone = CurriculumSubject['tone'];
@@ -65,12 +65,14 @@ const ItemRow = ({ item, tone }: { item: KhanItem; tone: Tone }) => {
   const [showQ, setShowQ] = useState(false);
   const badge = TYPE_BADGES[item.type];
   const href = item.href.startsWith('http') ? item.href : `https://www.khanacademy.org${item.href}`;
+  const khanQs = getKhanQuestionsByHref(item.href);
+  const hasReal = khanQs.length > 0;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '8px 12px', borderRadius: 10,
-        background: 'var(--pbs-paper)', border: '1.5px solid var(--pbs-line-2)',
+        background: 'var(--pbs-paper)', border: `1.5px solid ${hasReal ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)'}`,
       }}>
         <span style={{
           flex: '0 0 54px', textAlign: 'center',
@@ -90,7 +92,23 @@ const ItemRow = ({ item, tone }: { item: KhanItem; tone: Tone }) => {
         }}>
           {item.label}
         </a>
-        {item.question && (
+        {hasReal && (
+          <button
+            type="button"
+            onClick={() => setShowQ((v) => !v)}
+            style={{
+              flex: '0 0 auto', fontSize: 11.5, fontWeight: 700,
+              padding: '4px 10px', borderRadius: 999,
+              background: showQ ? `var(--pbs-${tone}-ink)` : `var(--pbs-${tone})`,
+              color: showQ ? 'var(--pbs-cream)' : `var(--pbs-${tone}-ink)`,
+              border: `1.5px solid var(--pbs-${tone}-ink)`,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            {showQ ? `Hide ${khanQs.length} Khan Qs` : `Show ${khanQs.length} Khan Qs`}
+          </button>
+        )}
+        {!hasReal && item.question && (
           <button
             type="button"
             onClick={() => setShowQ((v) => !v)}
@@ -114,7 +132,14 @@ const ItemRow = ({ item, tone }: { item: KhanItem; tone: Tone }) => {
           <Icon name="arrow-up-right" size={14} stroke={2.2} />
         </a>
       </div>
-      {showQ && item.question && <QuestionRow question={item.question} tone={tone} label={item.label} />}
+      {showQ && hasReal && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {khanQs.map((q, i) => (
+            <QuestionRow key={i} question={q} tone={tone} label={`Khan Q${i + 1}`} />
+          ))}
+        </div>
+      )}
+      {showQ && !hasReal && item.question && <QuestionRow question={item.question} tone={tone} label={item.label} />}
     </div>
   );
 };

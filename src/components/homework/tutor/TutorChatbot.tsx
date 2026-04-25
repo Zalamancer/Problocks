@@ -73,6 +73,29 @@ export function TutorChatbot({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // External callers (e.g. WhiteboardAnswer's auto-review on submit)
+  // can push a tutor message into this chat by dispatching a
+  // CustomEvent('tutor:push', { detail: { text: string } }) on the
+  // window. Keeps coupling loose — the chat doesn't have to know which
+  // surfaces ask it to talk.
+  useEffect(() => {
+    const onPush = (e: Event) => {
+      const detail = (e as CustomEvent<{ text?: string; role?: 'tutor' | 'student' }>).detail;
+      const text = detail?.text;
+      if (!text) return;
+      const role = detail?.role ?? 'tutor';
+      const id = `${role[0]}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setMessages((m) => [...m, { id, role, text, ts: Date.now() }]);
+      setOpen(true);
+      if (role === 'tutor') {
+        setSpeakingId(id);
+        speak(text, { onDone: () => setSpeakingId(null) });
+      }
+    };
+    window.addEventListener('tutor:push', onPush);
+    return () => window.removeEventListener('tutor:push', onPush);
+  }, [speak]);
+
   // Autoscroll chat log.
   useEffect(() => {
     const el = logRef.current;

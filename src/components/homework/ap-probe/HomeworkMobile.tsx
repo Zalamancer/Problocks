@@ -308,6 +308,7 @@ export function HomeworkMobile({ frq, onExit }: HomeworkMobileProps) {
                           </div>
                           <MicroQuestion
                             micro={m}
+                            partText={p.apText}
                             answered={graded && answered}
                             selected={a}
                             onAnswer={(opt) => !graded && setAnswer(p.id, m.id, opt)}

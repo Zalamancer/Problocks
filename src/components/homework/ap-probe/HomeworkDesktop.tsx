@@ -395,6 +395,7 @@ export function HomeworkDesktop({ frq, onExit }: HomeworkDesktopProps) {
                             </div>
                             <MicroQuestion
                               micro={m}
+                              partText={p.apText}
                               answered={graded && answered}
                               selected={a}
                               onAnswer={(opt) => !graded && setAnswer(p.id, m.id, opt)}

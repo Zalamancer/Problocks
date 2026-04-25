@@ -13,12 +13,16 @@ import type { Answer, ChoiceOption, Micro } from './types';
 
 type MicroQuestionProps = {
   micro: Micro;
+  // Surrounding part's full text, so the whiteboard reviewer can pass
+  // it to the tutor model as additional context. Optional — falls back
+  // to the micro prompt alone when missing.
+  partText?: string;
   answered: boolean;
   selected?: Answer;
   onAnswer: (answer: Answer) => void;
 };
 
-export function MicroQuestion({ micro, answered, selected, onAnswer }: MicroQuestionProps) {
+export function MicroQuestion({ micro, partText, answered, selected, onAnswer }: MicroQuestionProps) {
   return (
     <div>
       <div
@@ -53,6 +57,7 @@ export function MicroQuestion({ micro, answered, selected, onAnswer }: MicroQues
       {micro.kind === 'whiteboard' && (
         <WhiteboardAnswer
           micro={micro}
+          partText={partText}
           answered={answered}
           selected={selected as { id: 'wb'; dataUrl: string; correct: boolean } | undefined}
           onAnswer={onAnswer}
@@ -64,11 +69,13 @@ export function MicroQuestion({ micro, answered, selected, onAnswer }: MicroQues
 
 function WhiteboardAnswer({
   micro,
+  partText,
   answered,
   selected,
   onAnswer,
 }: {
   micro: Extract<Micro, { kind: 'whiteboard' }>;
+  partText?: string;
   answered: boolean;
   selected?: { id: 'wb'; dataUrl: string; correct: boolean };
   onAnswer: (answer: Answer) => void;
@@ -76,6 +83,45 @@ function WhiteboardAnswer({
   const ref = useRef<WhiteboardHandle | null>(null);
   const [busy, setBusy] = useState(false);
   const [warn, setWarn] = useState<string | null>(null);
+
+  const requestTutorReview = useCallback(
+    async (dataUrl: string) => {
+      // Tell the tutor chat we're working on a review so the user
+      // sees something happen the moment they hit Submit.
+      window.dispatchEvent(
+        new CustomEvent('tutor:push', {
+          detail: { text: 'Looking at your drawing now…' },
+        }),
+      );
+      try {
+        const res = await fetch('/api/tutor-review', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            image: dataUrl,
+            microPrompt: micro.prompt,
+            partText: partText ?? '',
+            hint: micro.hint ?? '',
+          }),
+        });
+        const data = (await res.json()) as { text?: string; error?: string };
+        const text =
+          (res.ok && data.text) ||
+          `I couldn't review your drawing (${data.error ?? 'unknown error'}).`;
+        window.dispatchEvent(
+          new CustomEvent('tutor:push', { detail: { text } }),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'unknown';
+        window.dispatchEvent(
+          new CustomEvent('tutor:push', {
+            detail: { text: `Review failed: ${msg}` },
+          }),
+        );
+      }
+    },
+    [micro.prompt, micro.hint, partText],
+  );
 
   const submit = useCallback(async () => {
     if (!ref.current) return;
@@ -98,10 +144,12 @@ function WhiteboardAnswer({
         r.readAsDataURL(blob);
       });
       onAnswer({ id: 'wb', dataUrl, correct: true });
+      // Fire-and-forget so the UI doesn't block on the API call.
+      void requestTutorReview(dataUrl);
     } finally {
       setBusy(false);
     }
-  }, [onAnswer]);
+  }, [onAnswer, requestTutorReview]);
 
   if (selected?.dataUrl) {
     // Once a drawing has been captured, swap the live canvas for the

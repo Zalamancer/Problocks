@@ -412,8 +412,22 @@ export function FreeformView() {
       const local = worldToLocal(world.x, world.y, { x: drag.origCenter.x, y: drag.origCenter.y, rotation: drag.origRot });
       const signX = drag.corner === 'ne' || drag.corner === 'se' ? 1 : -1;
       const signY = drag.corner === 'sw' || drag.corner === 'se' ? 1 : -1;
-      const halfW = Math.max(8, signX * local.x);
-      const halfH = Math.max(8, signY * local.y);
+      let halfW = Math.max(8, signX * local.x);
+      let halfH = Math.max(8, signY * local.y);
+      // Hold Shift to lock aspect ratio — standard Figma / Sketch /
+      // Photoshop convention. Pick whichever axis the user is pushing
+      // harder (relative to the original size) and propagate that scale
+      // to the other so the corner tracks the diagonal through the
+      // original opposite corner.
+      if (e.shiftKey) {
+        const scaleW = (halfW * 2) / drag.startW;
+        const scaleH = (halfH * 2) / drag.startH;
+        // Use the larger scale so growing in one direction grows the
+        // shape; shrinking only on one axis still shrinks proportionally.
+        const s = Math.max(scaleW, scaleH);
+        halfW = (drag.startW * s) / 2;
+        halfH = (drag.startH * s) / 2;
+      }
       const newW = halfW * 2;
       const newH = halfH * 2;
       // Anchor the OPPOSITE corner so the image grows from the dragged side.
@@ -430,12 +444,21 @@ export function FreeformView() {
     if (drag.kind === 'rotate') {
       const ang = (Math.atan2(world.y - drag.centerWY, world.x - drag.centerWX) * 180) / Math.PI;
       let next = drag.origRot + (ang - drag.startAngle);
-      // Hold Shift to constrain to 15° increments — standard Figma /
-      // Sketch / Photoshop convention. (Illustrator uses 45°, but 15° is
-      // far more common and gives finer control over common angles.)
-      if (e.shiftKey) {
-        const STEP = 15;
+      // Modifier-driven snapping. ⌘/Ctrl wins over Shift so users can
+      // override mid-drag.
+      //   ⌘/Ctrl → snap to ABSOLUTE canvas angles (0/15/30/…). Useful
+      //            when aligning with another rotated piece — the
+      //            rotation lands on the same grid no matter where you
+      //            grabbed it.
+      //   Shift  → snap to RELATIVE 15° offsets from the start angle.
+      //            Useful for precise nudges that keep the original
+      //            rotation as the zero.
+      const STEP = 15;
+      if (e.metaKey || e.ctrlKey) {
         next = Math.round(next / STEP) * STEP;
+      } else if (e.shiftKey) {
+        const delta = ang - drag.startAngle;
+        next = drag.origRot + Math.round(delta / STEP) * STEP;
       }
       updateImage(drag.imageId, { rotation: next });
       return;

@@ -29,6 +29,7 @@ import { useCreditsStore } from '@/store/credits-store';
 import { useCurrentUserId } from '@/store/auth-store';
 import { PBButton, PBLogo, AvatarStack } from '@/components/ui';
 import { renderGameHtml, saveGame, saveAndPublish } from '@/lib/studio/save-game';
+import { useFreeform } from '@/store/freeform-store';
 
 // Playdemy Studio top bar — ported from the design bundle's topbar.jsx.
 // Layout: logo mark + breadcrumb (classroom > project) on the left,
@@ -46,6 +47,21 @@ interface MenuItem {
 }
 interface MenuSeparator { separator: true; }
 type MenuEntry = MenuItem | MenuSeparator;
+
+/** Trigger a browser download of a JSON blob without going through any
+ *  server route. Used to "save" 2D Freeform scenes locally — the JSON
+ *  contains data URLs for every image so it's self-contained. */
+function downloadJson(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 // View-switcher pills — mapped to the existing ViewMode values plus "chat"
 // which is a convenience pill that focuses the left-panel Chat tab rather
@@ -127,6 +143,7 @@ export function TopMenuBar() {
     openNewGameDialog,
     gameHistory,
     undoGame,
+    gameSystem,
   } = useStudio();
   const isPlaying = useSceneStore((s) => s.isPlaying);
   const setIsPlaying = useSceneStore((s) => s.setIsPlaying);
@@ -156,6 +173,35 @@ export function TopMenuBar() {
   }, [isPlaying, setIsPlaying, setBuildTool]);
 
   const handleSave = useCallback(async () => {
+    // 2D Freeform mode doesn't have an activeGame — its scene lives in the
+    // freeform-2d store. Save = export the scene to a JSON file the user
+    // can re-import later (download bypasses the localStorage quota that
+    // blocks pasting many high-res images). The same flow can later become
+    // a server-side save once we have a scene-storage backend.
+    if (gameSystem === '2d-freeform') {
+      const ff = useFreeform.getState();
+      if (
+        ff.images.length === 0 &&
+        ff.characters.length === 0 &&
+        ff.assets.length === 0
+      ) {
+        addToast('warning', 'Empty canvas — drop or paste an image first.');
+        return;
+      }
+      const safeName = (projectName || 'scene').replace(/[^a-z0-9-_]+/gi, '-');
+      downloadJson(`${safeName}.problocks2d.json`, {
+        version: 1,
+        type: 'problocks-freeform-2d',
+        savedAt: new Date().toISOString(),
+        images: ff.images,
+        characters: ff.characters,
+        background: ff.background,
+        showGrid: ff.showGrid,
+      });
+      addToast('success', 'Scene saved to Downloads.');
+      return;
+    }
+
     if (!activeGame) {
       addToast('warning', 'Nothing to save yet — generate a game first.');
       return;
@@ -177,7 +223,7 @@ export function TopMenuBar() {
     } finally {
       setSaving(false);
     }
-  }, [activeGame, gameQuality, saving, addToast, currentUserId]);
+  }, [activeGame, gameQuality, saving, addToast, currentUserId, gameSystem, projectName]);
 
   const handleShare = useCallback(async () => {
     if (!activeGame) {

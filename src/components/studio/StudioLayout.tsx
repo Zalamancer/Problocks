@@ -25,6 +25,7 @@ import { TaskDetailPanel } from './panels/TaskDetailPanel';
 import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
 import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
 import { Freeform3DPropertiesPanel } from './panels/Freeform3DPropertiesPanel';
+import { Freeform2DPropertiesPanel } from './panels/Freeform2DPropertiesPanel';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
@@ -603,6 +604,13 @@ export function StudioLayout() {
               // selection which is irrelevant for this viewport).
               if (gameSystem === '3d-freeform') {
                 return <Freeform3DPropertiesPanel headless />;
+              }
+              // 2D Freeform — canvas-wide settings (background, grid). The
+              // image / character selection toolbar lives in the viewport
+              // itself, so this panel intentionally only carries the
+              // non-selection global settings.
+              if (gameSystem === '2d-freeform') {
+                return <Freeform2DPropertiesPanel headless />;
               }
               if (openFileName) {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;

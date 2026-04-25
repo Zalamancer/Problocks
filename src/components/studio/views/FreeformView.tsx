@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MousePointer2, PenTool, Image as ImageIcon, Trash2, Maximize2, Play, Square, User, FlipHorizontal, FlipVertical, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
-import { useFreeform, type FreeformAnchor, type FreeformImage } from '@/store/freeform-store';
+import { useFreeform, type FreeformAnchor, type FreeformBackground, type FreeformImage } from '@/store/freeform-store';
 import {
   screenToWorld, worldToLocal, localToWorld,
   collisionToPath, pickImage, computeSnap, imageAABB, type SnapGuide,
@@ -21,6 +21,77 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Encode raw SVG markup as a base64 data URL so it can be used as an
+ * `<image href>` and survive page reloads. We base64 (not utf8 encodeURI)
+ * because some SVGs include `#` and `&` characters that break inline data
+ * URLs in Safari.
+ */
+function svgMarkupToDataUrl(markup: string): string {
+  // toBase64 — handle UTF-8 chars (e.g. unicode glyphs in <text>).
+  const bytes = new TextEncoder().encode(markup);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return 'data:image/svg+xml;base64,' + btoa(bin);
+}
+
+/** Heuristic — does this string look like a self-contained SVG document? */
+function looksLikeSvgMarkup(text: string): boolean {
+  const t = text.trim();
+  return /^<\?xml[^>]*\?>\s*<svg[\s>]/i.test(t) || /^<svg[\s>]/i.test(t);
+}
+
+/**
+ * Translate the persisted background description into a `style` object the
+ * SVG element can spread. We avoid the `background` shorthand because we
+ * want to composite up to 3 layers (main + 2 grid lines) without dealing
+ * with the shorthand's per-layer sizing rules.
+ */
+function backgroundStyle(bg: FreeformBackground, showGrid: boolean): React.CSSProperties {
+  const gridImage =
+    'repeating-linear-gradient(0deg, transparent 0 39px, rgba(0,0,0,0.04) 39px 40px),' +
+    ' repeating-linear-gradient(90deg, transparent 0 39px, rgba(0,0,0,0.04) 39px 40px)';
+  const grid = showGrid ? `, ${gridImage}` : '';
+  const gridSize = showGrid ? ', 40px 40px, 40px 40px' : '';
+  const gridRepeat = showGrid ? ', repeat, repeat' : '';
+  const gridPos = showGrid ? ', 0 0, 0 0' : '';
+
+  switch (bg.kind) {
+    case 'solid':
+      return {
+        backgroundColor: bg.color,
+        backgroundImage: showGrid ? gridImage : undefined,
+        backgroundSize: showGrid ? '40px 40px, 40px 40px' : undefined,
+        backgroundRepeat: showGrid ? 'repeat, repeat' : undefined,
+        backgroundPosition: showGrid ? '0 0, 0 0' : undefined,
+      };
+    case 'gradient':
+      return {
+        backgroundImage: bg.radial
+          ? `radial-gradient(circle, ${bg.from}, ${bg.to})${grid}`
+          : `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})${grid}`,
+        backgroundSize: `auto${gridSize}`,
+        backgroundRepeat: `no-repeat${gridRepeat}`,
+        backgroundPosition: `center${gridPos}`,
+      };
+    case 'image':
+      return {
+        backgroundColor: '#fff',
+        backgroundImage: `url("${bg.src}")${grid}`,
+        backgroundSize: `${bg.fit}${gridSize}`,
+        backgroundRepeat: `no-repeat${gridRepeat}`,
+        backgroundPosition: `center${gridPos}`,
+      };
+    case 'tile':
+      return {
+        backgroundImage: `url("${bg.src}")${grid}`,
+        backgroundSize: `${bg.tileSize}px ${bg.tileSize}px${gridSize}`,
+        backgroundRepeat: `repeat${gridRepeat}`,
+        backgroundPosition: `0 0${gridPos}`,
+      };
+  }
+}
 import { CharacterLayer, pickCharacter } from './CharacterLayer';
 
 /**
@@ -35,6 +106,8 @@ import { CharacterLayer, pickCharacter } from './CharacterLayer';
 export function FreeformView() {
   const images = useFreeform((s) => s.images);
   const characters = useFreeform((s) => s.characters);
+  const background = useFreeform((s) => s.background);
+  const showGrid = useFreeform((s) => s.showGrid);
   const selectedCharacterId = useFreeform((s) => s.selectedCharacterId);
   const playing = useFreeform((s) => s.playing);
   const selectedImageId = useFreeform((s) => s.selectedImageId);
@@ -523,6 +596,7 @@ export function FreeformView() {
       if (!cd) return;
 
       // Collect Files first; URL fallback is sync and goes straight in.
+      // image/svg+xml is included via startsWith('image/') below.
       const files: File[] = [];
       for (const item of Array.from(cd.items)) {
         if (item.kind === 'file' && item.type.startsWith('image/')) {
@@ -532,20 +606,30 @@ export function FreeformView() {
       }
 
       const httpSources: Array<{ src: string; name: string }> = [];
+      // SVG markup pasted as text — Illustrator, Figma "Copy as SVG",
+      // browser View Source, etc. We sniff for `<svg ...>` so plain text
+      // pastes don't accidentally trigger this.
+      const svgSources: Array<{ src: string; name: string }> = [];
       if (files.length === 0) {
-        const uri = cd.getData('text/uri-list') || cd.getData('text/plain');
-        const trimmed = uri?.trim();
-        if (trimmed && /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?.*)?$/i.test(trimmed)) {
-          httpSources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+        const text = cd.getData('text/plain') || cd.getData('text/html') || '';
+        if (looksLikeSvgMarkup(text)) {
+          svgSources.push({ src: svgMarkupToDataUrl(text), name: 'pasted.svg' });
+        } else {
+          const uri = cd.getData('text/uri-list') || cd.getData('text/plain');
+          const trimmed = uri?.trim();
+          if (trimmed && /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?.*)?$/i.test(trimmed)) {
+            httpSources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+          }
         }
       }
 
-      if (files.length === 0 && httpSources.length === 0) return;
+      if (files.length === 0 && httpSources.length === 0 && svgSources.length === 0) return;
       e.preventDefault();
       const cs = cursorScreenRef.current;
       const drop = cs ? screenToWorld(cs.x, cs.y, pan, zoom) : undefined;
 
       if (httpSources.length > 0) placeImageSources(httpSources, drop);
+      if (svgSources.length > 0) placeImageSources(svgSources, drop);
       if (files.length > 0) {
         Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name || 'pasted' })))
           .then((sources) => placeImageSources(sources, drop))
@@ -572,17 +656,25 @@ export function FreeformView() {
     if (!dt) return;
     const files: File[] = [];
     for (const f of Array.from(dt.files)) {
-      if (f.type.startsWith('image/')) files.push(f);
+      // Some browsers leave .svg files with empty MIME — accept them by
+      // name suffix as a fallback.
+      if (f.type.startsWith('image/') || /\.svg$/i.test(f.name)) files.push(f);
     }
     const httpSources: Array<{ src: string; name: string }> = [];
+    const svgSources: Array<{ src: string; name: string }> = [];
     if (files.length === 0) {
-      const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
-      const trimmed = uri?.trim();
-      if (trimmed && /^https?:\/\//i.test(trimmed)) {
-        httpSources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+      const text = dt.getData('text/plain') || dt.getData('text/html') || '';
+      if (looksLikeSvgMarkup(text)) {
+        svgSources.push({ src: svgMarkupToDataUrl(text), name: 'dropped.svg' });
+      } else {
+        const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
+        const trimmed = uri?.trim();
+        if (trimmed && /^https?:\/\//i.test(trimmed)) {
+          httpSources.push({ src: trimmed, name: trimmed.split('/').pop()?.split('?')[0] ?? 'image' });
+        }
       }
     }
-    if (files.length === 0 && httpSources.length === 0) return;
+    if (files.length === 0 && httpSources.length === 0 && svgSources.length === 0) return;
     const svg = svgRef.current;
     let drop: { x: number; y: number } | undefined;
     if (svg) {
@@ -590,6 +682,7 @@ export function FreeformView() {
       drop = screenToWorld(e.clientX - rect.left, e.clientY - rect.top, pan, zoom);
     }
     if (httpSources.length > 0) placeImageSources(httpSources, drop);
+    if (svgSources.length > 0) placeImageSources(svgSources, drop);
     if (files.length > 0) {
       Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name })))
         .then((sources) => placeImageSources(sources, drop))
@@ -637,7 +730,10 @@ export function FreeformView() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        // image/* covers raster + svg in modern browsers, but some drag-out
+        // saves leave SVG with `application/octet-stream` so we list the
+        // explicit MIME + extension as belt-and-braces.
+        accept="image/*,image/svg+xml,.svg"
         multiple
         className="hidden"
         onChange={onFilesPicked}
@@ -656,9 +752,10 @@ export function FreeformView() {
         style={{
           touchAction: 'none',
           cursor: tool === 'pen' ? 'crosshair' : dragRef.current?.kind === 'pan' ? 'grabbing' : 'default',
-          background:
-            'repeating-linear-gradient(0deg, transparent 0 39px, rgba(0,0,0,0.04) 39px 40px), ' +
-            'repeating-linear-gradient(90deg, transparent 0 39px, rgba(0,0,0,0.04) 39px 40px)',
+          // Background comes from the store (Right panel → Properties → Canvas).
+          // The 40-px grid overlay is layered on top and toggled separately so
+          // it stays visible against any solid/gradient/image fill.
+          ...backgroundStyle(background, showGrid),
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -938,9 +1035,9 @@ export function FreeformView() {
               2D Freeform canvas
             </p>
             <p style={{ fontSize: 12, fontWeight: 500 }}>
-              <strong>Paste</strong> (⌘V), drag-drop, or click the image button to add images.
-              Then move / resize / rotate them, or pick the <strong>Pen tool</strong> to draw
-              collision boundaries that travel with each image.
+              <strong>Paste</strong> (⌘V), drag-drop, or click the image button to add images
+              (PNG, JPG, SVG, or pasted SVG markup). Then move / resize / rotate them, or pick
+              the <strong>Pen tool</strong> to draw collision boundaries that travel with each image.
             </p>
           </div>
         </div>

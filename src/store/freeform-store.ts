@@ -97,10 +97,30 @@ export interface FreeformAsset {
   naturalHeight?: number;
 }
 
+/**
+ * Canvas background — replaces the hardcoded paper-grid look. Stored on
+ * the same store as the rest of the scene so it persists with the project
+ * and the Right-panel "Properties → Canvas" section can edit it live.
+ *
+ * Variants:
+ *   - solid:   single fill color
+ *   - gradient: 2-stop linear/radial gradient
+ *   - image:   single bitmap stretched (cover|contain) over the canvas
+ *   - tile:    bitmap repeated at a fixed tile size (texture)
+ */
+export type FreeformBackground =
+  | { kind: 'solid'; color: string }
+  | { kind: 'gradient'; from: string; to: string; angle: number; radial: boolean }
+  | { kind: 'image'; src: string; fit: 'cover' | 'contain' }
+  | { kind: 'tile'; src: string; tileSize: number };
+
 interface FreeformStore {
   images: FreeformImage[];
   characters: FreeformCharacter[];
   assets: FreeformAsset[];
+  background: FreeformBackground;
+  /** Toggle the soft 40-px grid overlay on top of the background. */
+  showGrid: boolean;
   selectedImageId: string | null;
   selectedCollisionId: string | null;
   selectedCharacterId: string | null;
@@ -156,7 +176,16 @@ interface FreeformStore {
   setZoom: (z: number) => void;
   resetView: () => void;
   clearAll: () => void;
+
+  setBackground: (bg: FreeformBackground) => void;
+  resetBackground: () => void;
+  setShowGrid: (b: boolean) => void;
 }
+
+const DEFAULT_BACKGROUND: FreeformBackground = {
+  kind: 'solid',
+  color: '#fdf6e3',
+};
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -166,6 +195,8 @@ export const useFreeform = create<FreeformStore>()(
       images: [],
       characters: [],
       assets: [],
+      background: DEFAULT_BACKGROUND,
+      showGrid: true,
       selectedImageId: null,
       selectedCollisionId: null,
       selectedCharacterId: null,
@@ -358,6 +389,9 @@ export const useFreeform = create<FreeformStore>()(
       setPan: (x, y) => set({ pan: { x, y } }),
       setZoom: (z) => set({ zoom: Math.max(0.1, Math.min(8, z)) }),
       resetView: () => set({ pan: { x: 0, y: 0 }, zoom: 1 }),
+      setBackground: (bg) => set({ background: bg }),
+      resetBackground: () => set({ background: DEFAULT_BACKGROUND, showGrid: true }),
+      setShowGrid: (b) => set({ showGrid: b }),
       clearAll: () =>
         set({
           images: [],
@@ -376,6 +410,8 @@ export const useFreeform = create<FreeformStore>()(
         images: state.images,
         characters: state.characters,
         assets: state.assets,
+        background: state.background,
+        showGrid: state.showGrid,
         pan: state.pan,
         zoom: state.zoom,
       }),

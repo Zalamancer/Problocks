@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { CurriculumSubject } from '@/lib/templates/data/curriculum';
 import type { DeepGrade, DeepUnit, DeepLesson, PracticeQuestion, KhanItem } from '@/lib/templates/data/curriculum-deep';
 import { getOpenStaxBank, getKhanQuestionsByHref } from '@/lib/templates/data/curriculum-deep';
@@ -62,89 +63,62 @@ const QuestionRow = ({ question, tone, label }: { question: PracticeQuestion; to
 };
 
 const ItemRow = ({ item, tone }: { item: KhanItem; tone: Tone }) => {
-  const [showQ, setShowQ] = useState(false);
   const badge = TYPE_BADGES[item.type];
   const href = item.href.startsWith('http') ? item.href : `https://www.khanacademy.org${item.href}`;
   const khanQs = getKhanQuestionsByHref(item.href);
   const hasReal = khanQs.length > 0;
-  const canToggle = hasReal || !!item.question;
-  const toggleLabel = hasReal
-    ? (showQ ? `Hide ${khanQs.length} Khan Qs` : `Show ${khanQs.length} Khan Qs`)
-    : item.question
-      ? (showQ ? 'Hide Q' : 'Practice')
-      : null;
-
-  const handleRowClick = () => {
-    if (canToggle) setShowQ((v) => !v);
-  };
-
+  const practiceKey = hasReal ? `khan:${item.href}` : null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div
-        onClick={handleRowClick}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 12px', borderRadius: 10,
-          background: 'var(--pbs-paper)', border: `1.5px solid ${hasReal ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)'}`,
-          cursor: canToggle ? 'pointer' : 'default',
-        }}
-      >
-        <span style={{
-          flex: '0 0 54px', textAlign: 'center',
-          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em',
-          padding: '3px 6px', borderRadius: 6,
-          background: `var(--pbs-${tone})`, color: `var(--pbs-${tone}-ink)`,
-          border: `1.5px solid var(--pbs-${tone}-ink)`,
-          textTransform: 'uppercase',
-        }}>
-          <span style={{ marginRight: 3 }}>{badge.glyph}</span>{badge.label}
-        </span>
-        <span style={{
-          flex: 1, minWidth: 0,
-          fontSize: 13.5, fontWeight: 600, color: 'var(--pbs-ink)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {item.label}
-        </span>
-        {toggleLabel && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); }}
-            style={{
-              flex: '0 0 auto', fontSize: 11.5, fontWeight: 700,
-              padding: '4px 10px', borderRadius: 999,
-              background: showQ ? `var(--pbs-${tone}-ink)` : (hasReal ? `var(--pbs-${tone})` : 'transparent'),
-              color: showQ ? 'var(--pbs-cream)' : `var(--pbs-${tone}-ink)`,
-              border: `1.5px solid var(--pbs-${tone}-ink)`,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-            }}
-          >
-            {toggleLabel}
-          </button>
-        )}
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          title="Open on Khan Academy"
-          onClick={(e) => e.stopPropagation()}
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '8px 12px', borderRadius: 10,
+      background: 'var(--pbs-paper)', border: `1.5px solid ${hasReal ? `var(--pbs-${tone}-ink)` : 'var(--pbs-line-2)'}`,
+    }}>
+      <span style={{
+        flex: '0 0 54px', textAlign: 'center',
+        fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em',
+        padding: '3px 6px', borderRadius: 6,
+        background: `var(--pbs-${tone})`, color: `var(--pbs-${tone}-ink)`,
+        border: `1.5px solid var(--pbs-${tone}-ink)`,
+        textTransform: 'uppercase',
+      }}>
+        <span style={{ marginRight: 3 }}>{badge.glyph}</span>{badge.label}
+      </span>
+      <span style={{
+        flex: 1, minWidth: 0,
+        fontSize: 13.5, fontWeight: 600, color: 'var(--pbs-ink)',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {item.label}
+      </span>
+      {practiceKey && (
+        <Link
+          href={`/lessons/practice?key=${encodeURIComponent(practiceKey)}`}
           style={{
-            flex: '0 0 auto', display: 'inline-flex', alignItems: 'center',
-            padding: 6, borderRadius: 8,
-            color: 'var(--pbs-ink-soft)',
+            flex: '0 0 auto', fontSize: 11.5, fontWeight: 700,
+            padding: '5px 14px', borderRadius: 999,
+            background: `var(--pbs-${tone}-ink)`,
+            color: 'var(--pbs-cream)',
+            border: `1.5px solid var(--pbs-${tone}-ink)`,
+            textDecoration: 'none', whiteSpace: 'nowrap',
           }}
         >
-          <Icon name="arrow-up-right" size={14} stroke={2.2} />
-        </a>
-      </div>
-      {showQ && hasReal && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {khanQs.map((q, i) => (
-            <QuestionRow key={i} question={q} tone={tone} label={`Khan Q${i + 1}`} />
-          ))}
-        </div>
+          Start · {khanQs.length} Qs
+        </Link>
       )}
-      {showQ && !hasReal && item.question && <QuestionRow question={item.question} tone={tone} label={item.label} />}
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title="Open on Khan Academy"
+        style={{
+          flex: '0 0 auto', display: 'inline-flex', alignItems: 'center',
+          padding: 6, borderRadius: 8,
+          color: 'var(--pbs-ink-soft)',
+        }}
+      >
+        <Icon name="arrow-up-right" size={14} stroke={2.2} />
+      </a>
     </div>
   );
 };
@@ -273,23 +247,15 @@ const UnitBlock = ({ unit, tone, index }: { unit: DeepUnit; tone: Tone; index: n
   );
 };
 
-const OpenStaxBankSection = ({ bank, tone }: { bank: PracticeQuestion[]; tone: Tone }) => {
-  const [open, setOpen] = useState(false);
+const OpenStaxBankSection = ({ bank, tone, practiceKey }: { bank: PracticeQuestion[]; tone: Tone; practiceKey: string }) => {
   if (bank.length === 0) return null;
   return (
     <Block tone="paper" style={{ padding: 0, overflow: 'hidden' }}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          width: '100%', textAlign: 'left',
-          display: 'flex', alignItems: 'center', gap: 14,
-          padding: '16px 20px',
-          background: 'var(--pbs-cream-2)', color: 'var(--pbs-ink)',
-          border: 'none', cursor: 'pointer',
-          borderBottom: open ? '1.5px solid var(--pbs-line-2)' : 'none',
-        }}
-      >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '16px 20px',
+        background: 'var(--pbs-cream-2)', color: 'var(--pbs-ink)',
+      }}>
         <div style={{
           flex: '0 0 36px', height: 36, borderRadius: 10,
           background: 'var(--pbs-paper)', color: 'var(--pbs-ink)',
@@ -305,22 +271,20 @@ const OpenStaxBankSection = ({ bank, tone }: { bank: PracticeQuestion[]; tone: T
             Real exercises with answers from peer-reviewed OpenStax textbooks (CC BY 4.0).
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
-          <Pill tone={tone} style={{ background: 'var(--pbs-paper)', fontSize: 11.5, padding: '4px 9px' }}>
-            {bank.length} real Qs
-          </Pill>
-          <span style={{ display: 'inline-flex', transform: `rotate(${open ? -90 : 90}deg)`, transition: 'transform 160ms' }}>
-            <Icon name="chevron" size={16} stroke={2.2} />
-          </span>
-        </div>
-      </button>
-      {open && (
-        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {bank.map((q, i) => (
-            <QuestionRow key={i} question={q} tone={tone} label={q.source} />
-          ))}
-        </div>
-      )}
+        <Link
+          href={`/lessons/practice?key=${encodeURIComponent(practiceKey)}`}
+          style={{
+            flex: '0 0 auto', fontSize: 12, fontWeight: 700,
+            padding: '8px 16px', borderRadius: 999,
+            background: `var(--pbs-${tone}-ink)`,
+            color: 'var(--pbs-cream)',
+            border: `1.5px solid var(--pbs-${tone}-ink)`,
+            textDecoration: 'none', whiteSpace: 'nowrap',
+          }}
+        >
+          Start · {bank.length} Qs
+        </Link>
+      </div>
     </Block>
   );
 };
@@ -370,7 +334,13 @@ export const GradeDeepView = ({ grade, subject }: { grade: DeepGrade; subject: C
         </a>
       </div>
 
-      {openstaxBank.length > 0 && <OpenStaxBankSection bank={openstaxBank} tone={subject.tone} />}
+      {openstaxBank.length > 0 && (
+        <OpenStaxBankSection
+          bank={openstaxBank}
+          tone={subject.tone}
+          practiceKey={`openstax:${subject.id}|${grade.grade}`}
+        />
+      )}
 
       {grade.units.map((unit, i) => (
         <UnitBlock key={unit.name} unit={unit} tone={subject.tone} index={i} />

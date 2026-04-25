@@ -20,13 +20,26 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ChevronDown, Eraser, Pen, RotateCcw, Scissors, Trash2, X } from 'lucide-react';
+import {
+  ChevronDown,
+  Eraser,
+  MousePointer,
+  Pen,
+  RotateCcw,
+  Scissors,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 // `eraser` = pixel eraser (uses globalCompositeOperation: destination-out
 // so it carves through anything underneath). `eraser-stroke` = whole-
 // stroke eraser: hovering over a stroke deletes the entire stroke, like
 // Procreate / Notability's object eraser.
-type Tool = 'pen' | 'eraser' | 'eraser-stroke';
+// `cursor` lets the user click through to the page below while keeping
+// the toolbar mounted — same role as Miro's Move/Select tool. The
+// canvas drops pointer-events in this mode so the underlying UI is
+// interactive again without exiting scribble mode entirely.
+type Tool = 'cursor' | 'pen' | 'eraser' | 'eraser-stroke';
 type Pt = { x: number; y: number };
 interface Stroke {
   // Only 'pen' and 'eraser' produce stored strokes. 'eraser-stroke'
@@ -330,6 +343,16 @@ export function ScribbleOverlay() {
             }}
           >
             <ToolButton
+              active={tool === 'cursor'}
+              onClick={() => {
+                setTool('cursor');
+                setPenPopover(false);
+              }}
+              title="Cursor — click through to the page (V)"
+              icon={<MousePointer size={16} strokeWidth={2} />}
+            />
+            <Divider />
+            <ToolButton
               active={tool === 'pen'}
               // Click while pen is already active → toggle the size +
               // smoothing popover. Otherwise → activate the pen and
@@ -405,21 +428,27 @@ export function ScribbleOverlay() {
               inset: 0,
               zIndex: 99999,
               touchAction: 'none',
-              // Hide the system cursor in pen / pixel-eraser mode — the
-              // brush ring takes its place. Keep a 'not-allowed' system
-              // cursor for the stroke eraser since it has no size.
-              cursor: tool === 'eraser-stroke' ? 'not-allowed' : 'none',
+              // Cursor mode: drop pointer-events entirely so clicks /
+              // scrolls go through to the page below. The toolbar stays
+              // mounted because it's a separate fixed element.
+              pointerEvents: tool === 'cursor' ? 'none' : 'auto',
+              cursor:
+                tool === 'cursor'
+                  ? 'default'
+                  : tool === 'eraser-stroke'
+                    ? 'not-allowed'
+                    : 'none',
               background: 'transparent',
             }}
           />
 
           {/* Brush-size preview ring. Filled with the pen's own color
               for the pen, hollow with a darker outline for the pixel
-              eraser, hidden entirely for the stroke eraser (which has
-              no meaningful "size"). Position is updated via direct DOM
-              transform on every pointermove so we don't trigger React
-              re-renders 60× per second. */}
-          {tool !== 'eraser-stroke' && (
+              eraser, hidden entirely for the stroke eraser and cursor
+              modes (no meaningful brush size). Position is updated via
+              direct DOM transform on every pointermove so we don't
+              trigger React re-renders 60× per second. */}
+          {(tool === 'pen' || tool === 'eraser') && (
             <BrushPreview
               ref={cursorRef}
               tool={tool}

@@ -28,9 +28,9 @@ specific feedback in 1–3 sentences:
 - No lecturing. No re-stating the question.
 End with one short next-step suggestion only if something is wrong.`;
 
-// Flash Lite for speed; vision quality on Lite is enough for the
-// short "did they label this correctly?" review we ask for here.
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+// Gemini 3.1 Flash Lite preview — Lite tier for speed but the 3.1
+// base model is smarter on diagrams + handwriting than 2.5 Lite.
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite-preview';
 
 export async function POST(req: NextRequest) {
   let body: Body;

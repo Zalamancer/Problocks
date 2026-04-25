@@ -44,10 +44,10 @@ Style:
 - Match the student's level: they are working through AP Physics 1
   free-response, but encourage them gently rather than lecturing.`;
 
-// Flash Lite gives noticeably faster first-token times than full
-// Flash for short conversational replies. Override with GEMINI_MODEL
-// when you want quality over latency.
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+// Gemini 3.1 Flash Lite (preview) — same low-latency tier as 2.5
+// Flash Lite but with a smarter base model. Override via
+// GEMINI_MODEL in .env.local for testing other variants.
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite-preview';
 
 export async function POST(req: NextRequest) {
   let body: Body;

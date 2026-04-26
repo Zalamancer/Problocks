@@ -85,3 +85,18 @@ export function wangIndexFromBools(ne: boolean, nw: boolean, sw: boolean, se: bo
 export function anyCornerSet(ne: boolean, nw: boolean, sw: boolean, se: boolean): boolean {
   return ne || nw || sw || se;
 }
+
+/**
+ * Reverse map of the lookup: given a tile index 0..15, return the four
+ * quadrants that the renderer expects in the order [NE, NW, SW, SE].
+ * Used by the debug overlay so we can visualise what the code thinks each
+ * tile in the user's PNG encodes.
+ */
+export const TILE_INDEX_TO_QUADRANTS: Record<number, [Quadrant, Quadrant, Quadrant, Quadrant]> = (() => {
+  const out: Record<number, [Quadrant, Quadrant, Quadrant, Quadrant]> = {};
+  for (const [code, idx] of Object.entries(WANG_LOOKUP)) {
+    out[idx] = code.split(',') as [Quadrant, Quadrant, Quadrant, Quadrant];
+  }
+  return out;
+})();
+

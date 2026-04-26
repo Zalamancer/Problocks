@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile } from '@/store/tile-store';
 import { sliceFile } from '@/lib/tile-slicer';
-import { PURE_UPPER_INDEX, PURE_LOWER_INDEX } from '@/lib/wang-tiles';
+import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -221,20 +221,23 @@ function TerrainCard({
 }) {
   const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
+  const [showDebug, setShowDebug] = useState(false);
   return (
     <div
-      onClick={onPick}
       style={{
         background: active ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
         border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
         borderRadius: 10,
         padding: 8,
-        cursor: 'pointer',
         boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : 'none',
       }}
-      title={`Paint with "${tileset.name}" on the active layer`}
     >
-      <div className="flex items-center gap-2">
+      <div
+        onClick={onPick}
+        className="flex items-center gap-2"
+        style={{ cursor: 'pointer' }}
+        title={`Paint with "${tileset.name}" on the active layer`}
+      >
         <div className="flex" style={{ gap: 2 }}>
           <PreviewSwatch tile={upperTile} label="upper" />
           <PreviewSwatch tile={lowerTile} label="lower" />
@@ -270,6 +273,151 @@ function TerrainCard({
           <Trash2 size={11} strokeWidth={2.4} />
         </button>
       </div>
+
+      {/* Debug grid toggle — shows the 16 sliced tiles with hover overlays so
+          we can see what the code thinks each cell encodes. Critical for
+          verifying the WANG_LOOKUP table matches the user's PNG layout. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setShowDebug((v) => !v); }}
+        className="w-full flex items-center justify-center gap-1 mt-2 transition-colors"
+        style={{
+          padding: '4px 6px',
+          background: showDebug ? 'var(--pb-paper)' : 'transparent',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 6,
+          fontSize: 10,
+          fontWeight: 700,
+          color: 'var(--pb-ink-muted)',
+          cursor: 'pointer',
+          letterSpacing: 0.4,
+        }}
+      >
+        {showDebug ? 'HIDE' : 'SHOW'} TILES (DEBUG)
+      </button>
+
+      {showDebug && (
+        <DebugTileGrid tileset={tileset} tiles={tiles} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * 16-tile preview grid with a hover overlay that visualises my (NE,NW,SW,SE)
+ * encoding for each tile. White quadrant = "upper", black = "lower". Use this
+ * to compare against the actual pixels in the source PNG: if a tile shows
+ * upper texture in its top-left quadrant but the overlay shows the top-left
+ * (NW) as black, our encoding is wrong for that index.
+ */
+function DebugTileGrid({ tileset, tiles }: { tileset: Tileset; tiles: Record<string, Tile> }) {
+  const cols = tileset.cols;
+  return (
+    <div
+      className="grid mt-2"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gap: 2,
+        padding: 4,
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 6,
+      }}
+    >
+      {tileset.tileIds.map((id, i) => {
+        const tile = tiles[id];
+        if (!tile) return <div key={i} style={{ aspectRatio: '1 / 1', background: 'rgba(0,0,0,0.05)' }} />;
+        return <DebugTileCell key={id} tile={tile} index={i} />;
+      })}
+    </div>
+  );
+}
+
+function DebugTileCell({ tile, index }: { tile: Tile; index: number }) {
+  const [hover, setHover] = useState(false);
+  const quads = TILE_INDEX_TO_QUADRANTS[index];
+  // Layout the 4 overlay quadrants in screen-space:
+  //   top-left  = NW (Q2)
+  //   top-right = NE (Q1)
+  //   bottom-left  = SW (Q3)
+  //   bottom-right = SE (Q4)
+  const [ne, nw, sw, se] = quads ?? ['l', 'l', 'l', 'l'];
+  const code = `${ne},${nw},${sw},${se}`;
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={`#${index} → NE=${ne} NW=${nw} SW=${sw} SE=${se}`}
+      style={{
+        position: 'relative',
+        aspectRatio: '1 / 1',
+        background: 'rgba(0,0,0,0.05)',
+        borderRadius: 4,
+        overflow: 'hidden',
+        cursor: 'help',
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={tile.dataUrl}
+        alt=""
+        style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+        draggable={false}
+      />
+      {hover && (
+        <>
+          {/* Translucent 2x2 overlay — white = u (upper), black = l (lower) */}
+          <div
+            style={{
+              position: 'absolute', inset: 0,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gridTemplateRows: '1fr 1fr',
+              pointerEvents: 'none',
+              opacity: 0.78,
+            }}
+          >
+            <div style={{ background: nw === 'u' ? '#ffffff' : '#000000', borderRight: '1px solid rgba(128,128,128,0.6)', borderBottom: '1px solid rgba(128,128,128,0.6)' }} />
+            <div style={{ background: ne === 'u' ? '#ffffff' : '#000000', borderBottom: '1px solid rgba(128,128,128,0.6)' }} />
+            <div style={{ background: sw === 'u' ? '#ffffff' : '#000000', borderRight: '1px solid rgba(128,128,128,0.6)' }} />
+            <div style={{ background: se === 'u' ? '#ffffff' : '#000000' }} />
+          </div>
+          {/* Index badge */}
+          <div
+            style={{
+              position: 'absolute', top: 1, left: 1,
+              padding: '0 3px',
+              background: 'var(--pb-ink)',
+              color: 'var(--pb-paper)',
+              fontSize: 8,
+              fontWeight: 800,
+              borderRadius: 3,
+              fontFamily: 'monospace',
+              pointerEvents: 'none',
+            }}
+          >
+            {index}
+          </div>
+          {/* Code badge */}
+          <div
+            style={{
+              position: 'absolute', bottom: 1, left: 1, right: 1,
+              padding: '1px 2px',
+              background: 'var(--pb-ink)',
+              color: 'var(--pb-paper)',
+              fontSize: 7,
+              fontWeight: 800,
+              borderRadius: 3,
+              fontFamily: 'monospace',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              letterSpacing: -0.3,
+            }}
+          >
+            {code}
+          </div>
+        </>
+      )}
     </div>
   );
 }

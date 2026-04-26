@@ -1,23 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
-  Grid3X3, Sparkles, Image as ImageIcon, Box, Plus, FlipHorizontal, FlipVertical,
+  Grid3X3, Sparkles, Box, FlipHorizontal, FlipVertical,
 } from 'lucide-react';
-import { useTile, cellKey, type TileTool, type Tile } from '@/store/tile-store';
+import { useTile, type TileTool } from '@/store/tile-store';
+import { wangIndexFromBools, anyCornerSet, PURE_LOWER_INDEX } from '@/lib/wang-tiles';
 
 /**
- * 2D Tile-based editor canvas — orthogonal grid + free-positioned objects.
+ * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
  *
- * Renders to a single `<canvas>` because layers + grid + brush ghost can
- * easily run into 1000s of draws per frame on big maps; SVG nodes choke.
+ * Painting model: the user clicks a cell; the renderer marks the cell's
+ * 4 corners as "upper" in the active layer's corner map. The visible tile
+ * picked for each cell is computed live from its 4 surrounding corners
+ * via the lookup in `lib/wang-tiles.ts`. Brush size N = an N×N block of
+ * cells gets all corners filled in one click.
  *
  * Inputs:
- *   - Left-click  → paint / fill / eyedrop / select (depends on tool)
- *   - Right-click → erase under brush
+ *   - Left-click  → paint / fill / eyedrop / select / object (depends on tool)
+ *   - Right-click → erase under brush (clears the 4 corners around the cell)
  *   - Middle / space-drag → pan
- *   - Wheel       → zoom (zooms toward cursor)
+ *   - Wheel       → pan (Cmd/Ctrl+wheel = zoom toward cursor)
  *   - 1..6        → tool shortcuts (select/paint/erase/fill/eyedrop/object)
  *   - [ ]         → brush size
  *   - G           → toggle grid
@@ -27,13 +31,9 @@ export function TileView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Live state mirror so the imperative draw loop can read fresh values
-  // without re-binding on every store change.
   const stateRef = useRef(useTile.getState());
   useEffect(() => useTile.subscribe((s) => { stateRef.current = s; }), []);
 
-  // Image cache keyed by data URL — built on demand as tiles enter the
-  // visible viewport. Decoded once, drawn every frame.
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const imgReadyRef = useRef<Set<string>>(new Set());
   const requestRender = useRef<() => void>(() => {});
@@ -51,24 +51,28 @@ export function TileView() {
     return img;
   }, []);
 
-  // ── Pull store slices used in the React tree (toolbar, HUD) ─────
   const tool = useTile((s) => s.tool);
   const setTool = useTile((s) => s.setTool);
-  const tileSize = useTile((s) => s.tileSize);
   const showGrid = useTile((s) => s.showGrid);
   const toggleGrid = useTile((s) => s.toggleGrid);
   const brushSize = useTile((s) => s.brushSize);
   const setBrushSize = useTile((s) => s.setBrushSize);
   const layers = useTile((s) => s.layers);
-  const selectedTileId = useTile((s) => s.selectedTileId);
+  const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const objects = useTile((s) => s.objects);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
+  const activeLayerId = useTile((s) => s.activeLayerId);
   const resetCamera = useTile((s) => s.resetCamera);
   const clearMap = useTile((s) => s.clearMap);
   const camera = useTile((s) => s.camera);
+  const updateObject = useTile((s) => s.updateObject);
+  const removeObject = useTile((s) => s.removeObject);
 
-  // ── Canvas render loop (imperative, RAF-coalesced) ─────────────
+  const activeLayer = layers.find((l) => l.id === activeLayerId);
+  const activeTileset = activeLayer?.tilesetId ? tilesets.find((t) => t.id === activeLayer.tilesetId) : null;
+
+  // ── Imperative canvas render loop ───────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -78,6 +82,12 @@ export function TileView() {
 
     let disposed = false;
     let rafId = 0;
+    const hoverRef = { current: null as { cx: number; cy: number } | null };
+    const objectDragRef = { current: null as { id: string; startWX: number; startWY: number; origX: number; origY: number } | null };
+    let isDrawing: 'paint' | 'erase' | null = null;
+    let isPanning = false;
+    let panStart = { x: 0, y: 0, camX: 0, camY: 0 };
+    let spaceHeld = false;
 
     function scheduleRender() {
       if (disposed) return;
@@ -101,15 +111,14 @@ export function TileView() {
       ctx!.translate(-cam.x, -cam.y);
       ctx!.imageSmoothingEnabled = false;
 
-      // Visible cell range so we don't iterate the entire infinite map.
       const halfW = (W / 2) / cam.zoom;
       const halfH = (H / 2) / cam.zoom;
-      const x0 = Math.floor((cam.x - halfW) / ts) - 1;
-      const y0 = Math.floor((cam.y - halfH) / ts) - 1;
-      const x1 = Math.ceil((cam.x + halfW) / ts) + 1;
-      const y1 = Math.ceil((cam.y + halfH) / ts) + 1;
+      const cx0 = Math.floor((cam.x - halfW) / ts) - 1;
+      const cy0 = Math.floor((cam.y - halfH) / ts) - 1;
+      const cx1 = Math.ceil((cam.x + halfW) / ts) + 1;
+      const cy1 = Math.ceil((cam.y + halfH) / ts) + 1;
 
-      // Origin cross — helps users find (0,0) when starting fresh.
+      // Origin cross.
       ctx!.strokeStyle = 'rgba(29,26,20,0.18)';
       ctx!.lineWidth = 1 / cam.zoom;
       ctx!.beginPath();
@@ -117,30 +126,51 @@ export function TileView() {
       ctx!.moveTo(0, -12); ctx!.lineTo(0, 12);
       ctx!.stroke();
 
-      // Layers, bottom-to-top.
+      // Each layer renders its own Wang tiles, bottom-to-top.
       for (const layer of s.layers) {
         if (!layer.visible) continue;
+        if (!layer.tilesetId) continue;
+        const tileset = s.tilesets.find((t) => t.id === layer.tilesetId);
+        if (!tileset) continue;
+
+        // Pre-warm the layer's tile images so they're ready when needed.
+        for (const tid of tileset.tileIds) {
+          const tile = s.tiles[tid];
+          if (tile) ensureImage(tile.dataUrl);
+        }
+
         ctx!.globalAlpha = layer.opacity;
-        for (const [key, tileId] of Object.entries(layer.cells)) {
-          const tile = s.tiles[tileId];
-          if (!tile) continue;
-          const [cx, cy] = key.split(',').map(Number);
-          if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
-          const img = ensureImage(tile.dataUrl);
-          if (!imgReadyRef.current.has(tile.dataUrl)) continue;
-          ctx!.drawImage(img, cx * ts, cy * ts, ts, ts);
+        const corners = layer.corners;
+
+        for (let cy = cy0; cy <= cy1; cy++) {
+          for (let cx = cx0; cx <= cx1; cx++) {
+            const nw = corners[`${cx},${cy}`] === true;
+            const ne = corners[`${cx + 1},${cy}`] === true;
+            const sw = corners[`${cx},${cy + 1}`] === true;
+            const se = corners[`${cx + 1},${cy + 1}`] === true;
+            if (!anyCornerSet(ne, nw, sw, se)) continue;
+            const idx = wangIndexFromBools(ne, nw, sw, se);
+            if (idx < 0 || idx === PURE_LOWER_INDEX) continue;
+            const tileId = tileset.tileIds[idx];
+            if (!tileId) continue;
+            const tile = s.tiles[tileId];
+            if (!tile) continue;
+            const img = ensureImage(tile.dataUrl);
+            if (!imgReadyRef.current.has(tile.dataUrl)) continue;
+            ctx!.drawImage(img, cx * ts, cy * ts, ts, ts);
+          }
         }
       }
       ctx!.globalAlpha = 1;
 
-      // Free objects, sorted bottom-to-top by y so they overlap predictably.
+      // Free objects, sorted bottom-to-top by y.
       const visibleObjects = s.objects.filter((o) => {
         const layer = s.layers.find((l) => l.id === o.layerId);
         if (layer && !layer.visible) return false;
-        return o.x + o.width / 2 >= x0 * ts
-          && o.x - o.width / 2 <= x1 * ts
-          && o.y + o.height / 2 >= y0 * ts
-          && o.y - o.height / 2 <= y1 * ts;
+        return o.x + o.width / 2 >= cx0 * ts
+          && o.x - o.width / 2 <= cx1 * ts
+          && o.y + o.height / 2 >= cy0 * ts
+          && o.y - o.height / 2 <= cy1 * ts;
       }).sort((a, b) => a.y - b.y);
 
       for (const obj of visibleObjects) {
@@ -169,66 +199,46 @@ export function TileView() {
       }
       ctx!.globalAlpha = 1;
 
-      // Grid — drawn after tiles so the lines sit on top.
+      // Grid overlay.
       if (s.showGrid && cam.zoom > 0.25) {
         const fade = Math.min(1, (cam.zoom - 0.25) * 2);
         ctx!.strokeStyle = `rgba(29,26,20,${(0.10 * fade).toFixed(3)})`;
         ctx!.lineWidth = 1 / cam.zoom;
         ctx!.beginPath();
-        for (let cx = x0; cx <= x1; cx++) {
+        for (let cx = cx0; cx <= cx1; cx++) {
           const px = cx * ts;
-          ctx!.moveTo(px, y0 * ts);
-          ctx!.lineTo(px, y1 * ts);
+          ctx!.moveTo(px, cy0 * ts);
+          ctx!.lineTo(px, cy1 * ts);
         }
-        for (let cy = y0; cy <= y1; cy++) {
+        for (let cy = cy0; cy <= cy1; cy++) {
           const py = cy * ts;
-          ctx!.moveTo(x0 * ts, py);
-          ctx!.lineTo(x1 * ts, py);
+          ctx!.moveTo(cx0 * ts, py);
+          ctx!.lineTo(cx1 * ts, py);
         }
         ctx!.stroke();
       }
 
-      // Brush ghost.
+      // Brush ghost — outline the cells the brush will affect.
       const hover = hoverRef.current;
       if (hover && (s.tool === 'paint' || s.tool === 'erase' || s.tool === 'fill')) {
-        const cells = brushCells(hover.x, hover.y, s.brushSize);
-        if (s.tool === 'paint' && s.selectedTileId) {
-          const tile = s.tiles[s.selectedTileId];
-          if (tile) {
-            const img = ensureImage(tile.dataUrl);
-            if (imgReadyRef.current.has(tile.dataUrl)) {
-              ctx!.globalAlpha = 0.55;
-              for (const [cx, cy] of cells) {
-                ctx!.drawImage(img, cx * ts, cy * ts, ts, ts);
-              }
-              ctx!.globalAlpha = 1;
-            }
-          }
-        } else if (s.tool === 'erase') {
-          ctx!.fillStyle = 'rgba(231, 76, 60, 0.22)';
-          ctx!.strokeStyle = 'rgba(231, 76, 60, 0.6)';
-          ctx!.lineWidth = 1 / cam.zoom;
-          for (const [cx, cy] of cells) {
-            ctx!.fillRect(cx * ts, cy * ts, ts, ts);
-            ctx!.strokeRect(cx * ts, cy * ts, ts, ts);
-          }
-        } else {
-          // Fill — single-cell ghost outline.
-          ctx!.strokeStyle = '#0ea5e9';
-          ctx!.lineWidth = 2 / cam.zoom;
-          ctx!.strokeRect(hover.x * ts, hover.y * ts, ts, ts);
+        const cells = brushCells(hover.cx, hover.cy, s.brushSize);
+        const fill = s.tool === 'erase' ? 'rgba(231,76,60,0.18)'
+          : s.tool === 'fill' ? 'rgba(14,165,233,0.18)'
+          : 'rgba(110,180,90,0.22)';
+        const stroke = s.tool === 'erase' ? 'rgba(231,76,60,0.7)'
+          : s.tool === 'fill' ? 'rgba(14,165,233,0.7)'
+          : 'rgba(60,140,40,0.7)';
+        ctx!.fillStyle = fill;
+        ctx!.strokeStyle = stroke;
+        ctx!.lineWidth = 1.5 / cam.zoom;
+        for (const [cx, cy] of cells) {
+          ctx!.fillRect(cx * ts, cy * ts, ts, ts);
+          ctx!.strokeRect(cx * ts, cy * ts, ts, ts);
         }
       }
 
       ctx!.restore();
     }
-
-    // ── Input handling ─────────────────────────────────────────────
-    let isDrawing: 'paint' | 'erase' | null = null;
-    let isPanning = false;
-    let panStart = { x: 0, y: 0, camX: 0, camY: 0 };
-    const hoverRef = { current: null as { x: number; y: number } | null };
-    let spaceHeld = false;
 
     function screenToWorld(sx: number, sy: number) {
       const cam = stateRef.current.camera;
@@ -240,7 +250,7 @@ export function TileView() {
 
     function worldToCell(wx: number, wy: number) {
       const ts = stateRef.current.tileSize;
-      return { x: Math.floor(wx / ts), y: Math.floor(wy / ts) };
+      return { cx: Math.floor(wx / ts), cy: Math.floor(wy / ts) };
     }
 
     function eventCanvasCoords(e: MouseEvent | WheelEvent | PointerEvent) {
@@ -252,83 +262,106 @@ export function TileView() {
     }
 
     function brushCells(cx: number, cy: number, size: number): Array<[number, number]> {
-      if (size <= 1) return [[cx, cy]];
-      const r = Math.floor(size / 2);
       const cells: Array<[number, number]> = [];
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
+      // Brush of size N = NxN block centered on the cursor cell.
+      const half = Math.floor(size / 2);
+      for (let dy = -half; dy < size - half; dy++) {
+        for (let dx = -half; dx < size - half; dx++) {
           cells.push([cx + dx, cy + dy]);
         }
       }
       return cells;
     }
 
-    function applyPaint(cell: { x: number; y: number }) {
+    /** Paint a cell = mark its 4 corners as upper. */
+    function paintCell(layerId: string, cx: number, cy: number, corners: Record<string, true>) {
+      corners[`${cx},${cy}`] = true;
+      corners[`${cx + 1},${cy}`] = true;
+      corners[`${cx},${cy + 1}`] = true;
+      corners[`${cx + 1},${cy + 1}`] = true;
+    }
+
+    /** Erase a cell = clear its 4 corners (which removes the upper texture
+     *  in the painted region). Note this also affects the 8 surrounding
+     *  cells' Wang tiles, since corners are shared. */
+    function eraseCell(corners: Record<string, true>, cx: number, cy: number) {
+      delete corners[`${cx},${cy}`];
+      delete corners[`${cx + 1},${cy}`];
+      delete corners[`${cx},${cy + 1}`];
+      delete corners[`${cx + 1},${cy + 1}`];
+    }
+
+    function applyPaint(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
-      if (!layer) return;
-      const tileId = s.selectedTileId;
-      if (!tileId) return;
-      const cells = brushCells(cell.x, cell.y, s.brushSize);
-      s.mutateCells(layer.id, (c) => {
-        for (const [x, y] of cells) c[`${x},${y}`] = tileId;
+      if (!layer || !layer.tilesetId) return;
+      const cells = brushCells(cell.cx, cell.cy, s.brushSize);
+      s.mutateCorners(layer.id, (c) => {
+        for (const [cx, cy] of cells) paintCell(layer.id, cx, cy, c);
       });
     }
 
-    function applyErase(cell: { x: number; y: number }) {
+    function applyErase(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
       if (!layer) return;
-      const cells = brushCells(cell.x, cell.y, s.brushSize);
-      s.mutateCells(layer.id, (c) => {
-        for (const [x, y] of cells) delete c[`${x},${y}`];
+      const cells = brushCells(cell.cx, cell.cy, s.brushSize);
+      s.mutateCorners(layer.id, (c) => {
+        for (const [cx, cy] of cells) eraseCell(c, cx, cy);
       });
     }
 
-    function applyFill(cell: { x: number; y: number }) {
+    /** Flood-fill connected empty cells (no upper corners) with upper. */
+    function applyFill(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
-      if (!layer) return;
-      const tileId = s.selectedTileId;
-      if (!tileId) return;
-      const startKey = `${cell.x},${cell.y}`;
-      const target = layer.cells[startKey] ?? '';
-      if (target === tileId) return;
+      if (!layer || !layer.tilesetId) return;
+      // A cell is "empty" if all 4 of its corners are NOT set.
+      function isEmpty(corners: Record<string, true>, cx: number, cy: number): boolean {
+        return !(corners[`${cx},${cy}`] || corners[`${cx + 1},${cy}`]
+          || corners[`${cx},${cy + 1}`] || corners[`${cx + 1},${cy + 1}`]);
+      }
+      const start = cell;
+      if (!isEmpty(layer.corners, start.cx, start.cy)) return;
       const visited = new Set<string>();
-      const stack: Array<[number, number]> = [[cell.x, cell.y]];
-      const MAX = 5000;
-      let n = 0;
+      const stack: Array<[number, number]> = [[start.cx, start.cy]];
       const writes: Array<[number, number]> = [];
-      while (stack.length && n < MAX) {
-        const [x, y] = stack.pop()!;
-        const k = `${x},${y}`;
+      const MAX = 4000;
+      while (stack.length && writes.length < MAX) {
+        const [cx, cy] = stack.pop()!;
+        const k = `${cx},${cy}`;
         if (visited.has(k)) continue;
         visited.add(k);
-        const here = layer.cells[k] ?? '';
-        if (here !== target) continue;
-        writes.push([x, y]);
-        n++;
-        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+        if (!isEmpty(layer.corners, cx, cy)) continue;
+        writes.push([cx, cy]);
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
       }
-      s.mutateCells(layer.id, (c) => {
-        for (const [x, y] of writes) c[`${x},${y}`] = tileId;
+      s.mutateCorners(layer.id, (c) => {
+        for (const [cx, cy] of writes) paintCell(layer.id, cx, cy, c);
       });
     }
 
-    function applyEyedropper(cell: { x: number; y: number }) {
+    /** Pick the topmost layer's tileset under cursor → set as the active layer's tileset. */
+    function applyEyedropper(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
-      const layer = s.layers.find((l) => l.id === s.activeLayerId);
-      if (!layer) return;
-      const id = layer.cells[`${cell.x},${cell.y}`];
-      if (id) {
-        s.setSelectedTileId(id);
-        s.setTool('paint');
+      // Iterate layers top-to-bottom (last visible-with-tile wins).
+      for (let i = s.layers.length - 1; i >= 0; i--) {
+        const l = s.layers[i];
+        if (!l.visible || !l.tilesetId) continue;
+        const ne = l.corners[`${cell.cx + 1},${cell.cy}`] === true;
+        const nw = l.corners[`${cell.cx},${cell.cy}`] === true;
+        const sw = l.corners[`${cell.cx},${cell.cy + 1}`] === true;
+        const se = l.corners[`${cell.cx + 1},${cell.cy + 1}`] === true;
+        if (anyCornerSet(ne, nw, sw, se)) {
+          s.setLayerTileset(s.activeLayerId, l.tilesetId);
+          s.setTool('paint');
+          return;
+        }
       }
     }
 
     function pickObjectAt(wx: number, wy: number) {
       const s = stateRef.current;
-      // Iterate top-to-bottom (objects sorted bottom-to-top in render).
       const sorted = [...s.objects].sort((a, b) => b.y - a.y);
       for (const o of sorted) {
         const layer = s.layers.find((l) => l.id === o.layerId);
@@ -365,7 +398,6 @@ export function TileView() {
       if (e.button !== 0) return;
 
       if (s.tool === 'object') {
-        // Place a sprite at cursor — uses the active tile and tileSize.
         if (!s.selectedTileId) return;
         const tile = s.tiles[s.selectedTileId];
         if (!tile) return;
@@ -388,8 +420,6 @@ export function TileView() {
         const hit = pickObjectAt(w.x, w.y);
         s.selectObject(hit?.id ?? null);
         if (hit) {
-          isDrawing = null;
-          // Drag the selected object — track via a separate move handler.
           objectDragRef.current = {
             id: hit.id,
             startWX: w.x, startWY: w.y,
@@ -408,8 +438,6 @@ export function TileView() {
       canvas!.setPointerCapture(e.pointerId);
       scheduleRender();
     }
-
-    const objectDragRef = { current: null as { id: string; startWX: number; startWY: number; origX: number; origY: number } | null };
 
     function onPointerMove(e: PointerEvent) {
       const cc = eventCanvasCoords(e);
@@ -439,7 +467,7 @@ export function TileView() {
       }
 
       const prev = hoverRef.current;
-      if (!prev || prev.x !== cell.x || prev.y !== cell.y) {
+      if (!prev || prev.cx !== cell.cx || prev.cy !== cell.cy) {
         hoverRef.current = cell;
         scheduleRender();
       }
@@ -467,8 +495,6 @@ export function TileView() {
       const cc = eventCanvasCoords(e);
       const wxBefore = (cc.x - canvas!.width / 2) / cam.zoom + cam.x;
       const wyBefore = (cc.y - canvas!.height / 2) / cam.zoom + cam.y;
-      // Trackpad pinch comes through as ctrlKey-wheel; either way, deltaY
-      // controls zoom magnitude. Plain wheel = pan, Cmd/Ctrl = zoom.
       if (e.ctrlKey || e.metaKey) {
         const factor = Math.exp(-e.deltaY * 0.005);
         const newZoom = Math.max(0.1, Math.min(8, cam.zoom * factor));
@@ -525,10 +551,7 @@ export function TileView() {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas!.width = Math.floor(rect.width * dpr);
       canvas!.height = Math.floor(rect.height * dpr);
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // Re-undo the dpr scale because our render uses width/height directly
-      // (we set translate/scale ourselves). Easier to just use the
-      // device-pixel canvas as-is and not touch the DPR transform.
+      // We use device-pixel coords directly, no DPR transform on the context.
       ctx!.setTransform(1, 0, 0, 1, 0, 0);
       scheduleRender();
     }
@@ -547,7 +570,6 @@ export function TileView() {
     ro.observe(container);
     resize();
 
-    // Re-render on any store change. Cheap because render is O(visible cells).
     const unsub = useTile.subscribe(() => scheduleRender());
 
     return () => {
@@ -567,17 +589,14 @@ export function TileView() {
     };
   }, [ensureImage]);
 
-  // Drive the canvas cursor from the live tool selection.
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
     c.style.cursor = cursorForTool(tool, false);
   }, [tool]);
 
-  const selectedTile = selectedTileId ? tiles[selectedTileId] : null;
   const selectedObject = selectedObjectId ? objects.find((o) => o.id === selectedObjectId) : null;
-  const updateObject = useTile((s) => s.updateObject);
-  const removeObject = useTile((s) => s.removeObject);
+  const totalCorners = activeLayer ? Object.keys(activeLayer.corners).length : 0;
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden" style={{ background: '#fafaf7' }}>
@@ -586,7 +605,6 @@ export function TileView() {
         style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
       />
 
-      {/* Floating toolbar — chunky-pastel matching the rest of the studio. */}
       <div
         className="absolute top-3 left-3 z-10 flex items-center gap-1 p-1.5"
         onMouseDown={(e) => e.stopPropagation()}
@@ -600,16 +618,16 @@ export function TileView() {
         <ToolBtn active={tool === 'select'} title="Select / move objects (1)" onClick={() => setTool('select')}>
           <MousePointer2 size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'paint'} title="Paint tile (2)" onClick={() => setTool('paint')}>
+        <ToolBtn active={tool === 'paint'} title="Paint (2)" onClick={() => setTool('paint')}>
           <Paintbrush size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'erase'} title="Erase tile (3)" onClick={() => setTool('erase')}>
+        <ToolBtn active={tool === 'erase'} title="Erase (3)" onClick={() => setTool('erase')}>
           <Eraser size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'fill'} title="Fill (4)" onClick={() => setTool('fill')}>
+        <ToolBtn active={tool === 'fill'} title="Fill connected empty area (4)" onClick={() => setTool('fill')}>
           <PaintBucket size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'eyedropper'} title="Eyedropper (5)" onClick={() => setTool('eyedropper')}>
+        <ToolBtn active={tool === 'eyedropper'} title="Eyedropper — pick tileset under cursor (5)" onClick={() => setTool('eyedropper')}>
           <Pipette size={14} strokeWidth={2.2} />
         </ToolBtn>
         <ToolBtn active={tool === 'object'} title="Place object (6)" onClick={() => setTool('object')}>
@@ -626,14 +644,35 @@ export function TileView() {
         </ToolBtn>
         <Separator />
         <ToolBtn destructive title="Clear map" onClick={() => {
-          if (confirm('Clear all tiles and objects?')) clearMap();
+          if (confirm('Clear all painted cells and objects?')) clearMap();
         }}>
           <Trash2 size={14} strokeWidth={2.2} />
         </ToolBtn>
       </div>
 
-      {/* Object inspector — appears when an object is selected. Floating so it
-          doesn't fight the right-panel system, which is shared with other modes. */}
+      {/* Active terrain badge — tells the user which tileset their next paint will use. */}
+      {activeTileset && (
+        <div
+          className="absolute top-3 z-10 flex items-center gap-2 px-3 py-1.5"
+          style={{
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-ink)',
+            borderRadius: 12,
+            boxShadow: '0 3px 0 var(--pb-ink)',
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>
+            PAINTING WITH
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
+            {activeTileset.name}
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}>on {activeLayer?.name}</span>
+        </div>
+      )}
+
       {selectedObject && (
         <div
           className="absolute top-3 right-3 z-10 p-3"
@@ -676,7 +715,6 @@ export function TileView() {
         </div>
       )}
 
-      {/* Empty state — only when no tilesets are loaded yet. */}
       {Object.keys(tiles).length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ color: 'var(--pb-ink-muted)' }}>
           <div className="flex flex-col items-center gap-3 text-center" style={{ maxWidth: 380 }}>
@@ -692,16 +730,34 @@ export function TileView() {
               <Sparkles size={24} strokeWidth={2.2} style={{ color: 'var(--pb-butter-ink)' }} />
             </div>
             <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--pb-ink)' }}>
-              2D Tile-based editor
+              2D Tile-based — auto-tiling
             </p>
             <p style={{ fontSize: 12, fontWeight: 500 }}>
-              Open <strong>Assets</strong> in the left panel and upload a PNG. We&apos;ll slice it into a 4×4 tile sheet (16 tiles) and load it into your palette. Then click a tile and paint on the grid.
+              Open <strong>Assets</strong> in the left panel and upload a 4×4 Wang sheet (one upper texture, one lower, plus 14 transitions). Then just click on the canvas — the right tile is picked automatically based on what you&apos;ve painted nearby.
             </p>
           </div>
         </div>
       )}
 
-      {/* HUD strip */}
+      {Object.keys(tiles).length > 0 && !activeLayer?.tilesetId && (
+        <div className="absolute inset-x-0 bottom-12 flex items-center justify-center pointer-events-none">
+          <div
+            className="px-3 py-1.5"
+            style={{
+              background: 'var(--pb-coral)',
+              border: '1.5px solid var(--pb-coral-ink)',
+              borderRadius: 10,
+              boxShadow: '0 2px 0 var(--pb-coral-ink)',
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--pb-coral-ink)',
+            }}
+          >
+            Pick a tileset in the left panel to paint with on this layer.
+          </div>
+        </div>
+      )}
+
       <div
         className="absolute bottom-3 left-3 z-10 pointer-events-none"
         style={{
@@ -717,12 +773,8 @@ export function TileView() {
         <span>Zoom <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{Math.round(camera.zoom * 100)}%</span></span>
         <Sep />
         <span>Layers <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{layers.length}</span></span>
-        {selectedTile && (
-          <>
-            <Sep />
-            <span>Active <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>tile #{selectedTile.index + 1}</span></span>
-          </>
-        )}
+        <Sep />
+        <span>Corners <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{totalCorners}</span></span>
       </div>
     </div>
   );

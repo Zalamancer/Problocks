@@ -3,34 +3,35 @@
 import { useRef, useState } from 'react';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
-  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown,
+  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check,
 } from 'lucide-react';
-import { useTile, type Tileset, type Tile, type TileLayer } from '@/store/tile-store';
+import { useTile, type Tileset, type Tile } from '@/store/tile-store';
 import { sliceFile } from '@/lib/tile-slicer';
+import { PURE_UPPER_INDEX, PURE_LOWER_INDEX } from '@/lib/wang-tiles';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
  *
- * Three stacked sections, each collapsible:
- *   1. Palette  — uploaded tilesets, sliced tiles, click to select.
- *   2. Layers   — visibility, opacity, ordering, active layer.
- *   3. Objects  — placed sprites that aren't grid-aligned.
- *
- * The "upload a PNG → 4×4 slice → 16 tiles" flow lives at the top of the
- * Palette section. We default to 4×4 because that's the user's standard
- * sheet shape; the inputs below the button let them override before the
- * upload (e.g. 8×8 for a pixel-art set).
+ * Three stacked, collapsible sections:
+ *   1. Terrains — uploaded 4×4 Wang tilesets shown as cards. Clicking a
+ *      card sets it as the active layer's tileset (no per-tile selection
+ *      needed because the renderer auto-picks the right transition tile
+ *      from the 4 surrounding corners).
+ *   2. Layers — visibility, opacity, ordering, active layer.
+ *   3. Objects — manually-placed sprites (free-positioned, not auto-tiled).
+ *      Picking an object sprite still requires choosing one of the tiles.
  */
 export function TileAssetsView() {
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const addTileset = useTile((s) => s.addTileset);
   const removeTileset = useTile((s) => s.removeTileset);
-  const selectedTileId = useTile((s) => s.selectedTileId);
-  const setSelectedTileId = useTile((s) => s.setSelectedTileId);
-  const setTool = useTile((s) => s.setTool);
   const tileSize = useTile((s) => s.tileSize);
   const setTileSize = useTile((s) => s.setTileSize);
+  const layers = useTile((s) => s.layers);
+  const activeLayerId = useTile((s) => s.activeLayerId);
+  const setLayerTileset = useTile((s) => s.setLayerTileset);
+  const setTool = useTile((s) => s.setTool);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [cols, setCols] = useState(4);
@@ -38,9 +39,12 @@ export function TileAssetsView() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [paletteOpen, setPaletteOpen] = useState(true);
+  const [terrainsOpen, setTerrainsOpen] = useState(true);
   const [layersOpen, setLayersOpen] = useState(true);
   const [objectsOpen, setObjectsOpen] = useState(false);
+
+  const activeLayer = layers.find((l) => l.id === activeLayerId);
+  const activeTilesetId = activeLayer?.tilesetId ?? null;
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -68,6 +72,12 @@ export function TileAssetsView() {
     }
   }
 
+  function pickTileset(tilesetId: string) {
+    if (!activeLayer) return;
+    setLayerTileset(activeLayer.id, tilesetId);
+    setTool('paint');
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
       <input
@@ -79,12 +89,11 @@ export function TileAssetsView() {
         className="hidden"
       />
 
-      {/* ── Palette ──────────────────────────────────────────── */}
       <Section
-        title="Palette"
+        title="Terrains"
         icon={<Sparkles size={13} strokeWidth={2.4} />}
-        open={paletteOpen}
-        onToggle={() => setPaletteOpen(!paletteOpen)}
+        open={terrainsOpen}
+        onToggle={() => setTerrainsOpen(!terrainsOpen)}
       >
         <div className="space-y-2 px-3 pb-3">
           <div className="flex items-center gap-1.5">
@@ -98,7 +107,7 @@ export function TileAssetsView() {
             kind="butter"
           >
             <Upload size={12} strokeWidth={2.4} />
-            {uploading ? 'Slicing…' : `Upload PNG → ${cols}×${rows}`}
+            {uploading ? 'Slicing…' : `Upload Wang sheet → ${cols}×${rows}`}
           </ChunkyButton>
           {error && (
             <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600 }}>
@@ -115,24 +124,20 @@ export function TileAssetsView() {
               }}
             >
               <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-                Drop a PNG sheet to slice it into tiles. The grid above
-                (default <strong>4×4</strong> = 16 tiles) controls how it&apos;s diced.
+                Drop a 4×4 Wang sheet (one upper texture, one lower, plus 14 transitions). The right tile is picked automatically based on the corners painted around each cell — you never pick a tile yourself.
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {tilesets.map((ts) => (
-                <TilesetGroup
+                <TerrainCard
                   key={ts.id}
                   tileset={ts}
                   tiles={tiles}
-                  selectedTileId={selectedTileId}
-                  onSelect={(id) => {
-                    setSelectedTileId(id);
-                    setTool('paint');
-                  }}
+                  active={ts.id === activeTilesetId}
+                  onPick={() => pickTileset(ts.id)}
                   onRemove={() => {
-                    if (confirm(`Delete tileset "${ts.name}"? This will erase any tiles painted from it.`)) {
+                    if (confirm(`Delete tileset "${ts.name}"? Layers using it will be detached.`)) {
                       removeTileset(ts.id);
                     }
                   }}
@@ -143,7 +148,6 @@ export function TileAssetsView() {
         </div>
       </Section>
 
-      {/* ── Layers ──────────────────────────────────────────── */}
       <Section
         title="Layers"
         icon={<LayersIcon size={13} strokeWidth={2.4} />}
@@ -153,14 +157,13 @@ export function TileAssetsView() {
         <LayerList />
       </Section>
 
-      {/* ── Objects ─────────────────────────────────────────── */}
       <Section
         title="Objects"
         icon={<Box size={13} strokeWidth={2.4} />}
         open={objectsOpen}
         onToggle={() => setObjectsOpen(!objectsOpen)}
       >
-        <ObjectList />
+        <ObjectsSection />
       </Section>
     </div>
   );
@@ -201,95 +204,97 @@ function Section({
   );
 }
 
-function TilesetGroup({
-  tileset, tiles, selectedTileId, onSelect, onRemove,
+/**
+ * A terrain card — the user clicks it to bind that tileset to the active
+ * layer. Shows the upper + lower base textures so you can tell terrains apart
+ * without staring at the source sheet thumbnail. Active terrain gets the
+ * butter highlight + a checkmark.
+ */
+function TerrainCard({
+  tileset, tiles, active, onPick, onRemove,
 }: {
   tileset: Tileset;
   tiles: Record<string, Tile>;
-  selectedTileId: string | null;
-  onSelect: (tileId: string) => void;
+  active: boolean;
+  onPick: () => void;
   onRemove: () => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  const tileObjs = tileset.tileIds.map((id) => tiles[id]).filter(Boolean);
-
+  const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
+  const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
   return (
     <div
+      onClick={onPick}
       style={{
-        background: 'var(--pb-cream-2)',
-        border: '1.5px solid var(--pb-line-2)',
+        background: active ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+        border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
         borderRadius: 10,
-        overflow: 'hidden',
+        padding: 8,
+        cursor: 'pointer',
+        boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : 'none',
       }}
+      title={`Paint with "${tileset.name}" on the active layer`}
     >
-      <div
-        className="flex items-center gap-2"
-        style={{
-          padding: '6px 8px',
-          borderBottom: expanded ? '1.5px solid var(--pb-line-2)' : 0,
-        }}
-      >
+      <div className="flex items-center gap-2">
+        <div className="flex" style={{ gap: 2 }}>
+          <PreviewSwatch tile={upperTile} label="upper" />
+          <PreviewSwatch tile={lowerTile} label="lower" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {tileset.name}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+            {tileset.cols}×{tileset.rows} · {tileset.tileWidth}px
+          </div>
+        </div>
+        {active && (
+          <div
+            style={{
+              width: 18, height: 18,
+              borderRadius: 999,
+              background: 'var(--pb-butter-ink)',
+              color: 'var(--pb-paper)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Check size={11} strokeWidth={3} />
+          </div>
+        )}
         <button
           type="button"
-          onClick={() => setExpanded(!expanded)}
-          style={{ background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--pb-ink-muted)' }}
-        >
-          {expanded ? <ChevDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
-        </button>
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {tileset.name}
-        </span>
-        <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-          {tileset.cols}×{tileset.rows}
-        </span>
-        <button
-          type="button"
-          onClick={onRemove}
-          title="Remove tileset"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
           style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center' }}
+          title="Remove tileset"
         >
           <Trash2 size={11} strokeWidth={2.4} />
         </button>
       </div>
-      {expanded && (
-        <div
-          className="grid gap-1"
-          style={{
-            gridTemplateColumns: `repeat(${Math.min(tileset.cols, 6)}, 1fr)`,
-            padding: 6,
-            background: 'var(--pb-paper)',
-          }}
-        >
-          {tileObjs.map((tile) => {
-            const isSel = tile.id === selectedTileId;
-            return (
-              <button
-                key={tile.id}
-                type="button"
-                onClick={() => onSelect(tile.id)}
-                title={`Tile #${tile.index + 1}`}
-                className="aspect-square transition-colors"
-                style={{
-                  background: 'rgba(0,0,0,0.04)',
-                  border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'transparent'}`,
-                  borderRadius: 6,
-                  padding: 2,
-                  cursor: 'pointer',
-                  boxShadow: isSel ? '0 2px 0 var(--pb-butter-ink)' : 'none',
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={tile.dataUrl}
-                  alt={`Tile ${tile.index + 1}`}
-                  className="w-full h-full"
-                  style={{ objectFit: 'contain', imageRendering: 'pixelated' }}
-                  draggable={false}
-                />
-              </button>
-            );
-          })}
-        </div>
+    </div>
+  );
+}
+
+function PreviewSwatch({ tile, label }: { tile: Tile | undefined; label: string }) {
+  return (
+    <div
+      title={label}
+      style={{
+        width: 28, height: 28,
+        borderRadius: 6,
+        background: 'rgba(0,0,0,0.06)',
+        border: '1.5px solid var(--pb-line-2)',
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}
+    >
+      {tile && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={tile.dataUrl}
+          alt={label}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+          draggable={false}
+        />
       )}
     </div>
   );
@@ -298,6 +303,8 @@ function TilesetGroup({
 function LayerList() {
   const layers = useTile((s) => s.layers);
   const activeLayerId = useTile((s) => s.activeLayerId);
+  const tilesets = useTile((s) => s.tilesets);
+  const tiles = useTile((s) => s.tiles);
   const addLayer = useTile((s) => s.addLayer);
   const removeLayer = useTile((s) => s.removeLayer);
   const renameLayer = useTile((s) => s.renameLayer);
@@ -305,15 +312,16 @@ function LayerList() {
   const reorderLayer = useTile((s) => s.reorderLayer);
   const setActiveLayer = useTile((s) => s.setActiveLayer);
   const setLayerOpacity = useTile((s) => s.setLayerOpacity);
+  const setLayerTileset = useTile((s) => s.setLayerTileset);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
     <div className="space-y-1.5 px-3 pb-3">
-      {/* Render top-to-bottom by reversing the array — paint order is
-          bottom-up but users think top-down ("foreground at the top"). */}
       {[...layers].reverse().map((layer, revIdx) => {
         const idx = layers.length - 1 - revIdx;
         const isActive = layer.id === activeLayerId;
+        const layerTileset = layer.tilesetId ? tilesets.find((t) => t.id === layer.tilesetId) : null;
+        const upperTile = layerTileset ? tiles[layerTileset.tileIds[PURE_UPPER_INDEX]] : null;
         return (
           <div
             key={layer.id}
@@ -335,6 +343,24 @@ function LayerList() {
               >
                 {layer.visible ? <Eye size={12} strokeWidth={2.4} /> : <EyeOff size={12} strokeWidth={2.4} />}
               </button>
+
+              {/* Tiny preview of the layer's terrain so you can tell layers apart at a glance. */}
+              <div
+                style={{
+                  width: 18, height: 18, borderRadius: 4,
+                  background: 'rgba(0,0,0,0.05)',
+                  border: '1.5px solid var(--pb-line-2)',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}
+                title={layerTileset ? `Painting with ${layerTileset.name}` : 'No terrain assigned'}
+              >
+                {upperTile && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={upperTile.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                )}
+              </div>
+
               {editingId === layer.id ? (
                 <input
                   autoFocus
@@ -394,6 +420,32 @@ function LayerList() {
                 <Trash2 size={11} strokeWidth={2.4} />
               </button>
             </div>
+
+            {/* Per-layer terrain picker — small dropdown so users can re-bind without scrolling up. */}
+            <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>TERRAIN</span>
+              <select
+                value={layer.tilesetId ?? ''}
+                onChange={(e) => setLayerTileset(layer.id, e.target.value || null)}
+                style={{
+                  flex: 1,
+                  background: 'var(--pb-paper)',
+                  border: '1.5px solid var(--pb-line-2)',
+                  borderRadius: 6,
+                  padding: '3px 6px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--pb-ink)',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <option value="">— none —</option>
+                {tilesets.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
               <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>OPACITY</span>
               <input
@@ -418,68 +470,135 @@ function LayerList() {
   );
 }
 
-function ObjectList() {
-  const objects = useTile((s) => s.objects);
+/**
+ * Object placement section: lists all uploaded tiles (across every tileset)
+ * so users can pick a single sprite to drop as a free object. Auto-tiling
+ * doesn't apply to objects — they're just sprites.
+ */
+function ObjectsSection() {
+  const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
+  const objects = useTile((s) => s.objects);
   const selectObject = useTile((s) => s.selectObject);
   const removeObject = useTile((s) => s.removeObject);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
-
-  if (objects.length === 0) {
-    return (
-      <div className="px-3 pb-3">
-        <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-          Switch to the <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>) and click on the canvas to place a free sprite. Objects can move, rotate, and scale independently of the grid.
-        </p>
-      </div>
-    );
-  }
+  const selectedTileId = useTile((s) => s.selectedTileId);
+  const setSelectedTileId = useTile((s) => s.setSelectedTileId);
+  const setTool = useTile((s) => s.setTool);
 
   return (
-    <div className="space-y-1 px-3 pb-3">
-      {objects.map((obj) => {
-        const tile = tiles[obj.tileId];
-        const isSel = obj.id === selectedObjectId;
-        return (
-          <div
-            key={obj.id}
-            onClick={() => selectObject(obj.id)}
-            className="flex items-center gap-2 cursor-pointer transition-colors"
-            style={{
-              padding: '4px 6px',
-              borderRadius: 6,
-              background: isSel ? 'var(--pb-butter)' : 'transparent',
-              border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-            }}
-          >
+    <div className="space-y-3 px-3 pb-3">
+      <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
+        Pick a sprite below, switch to <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), and click on the canvas to place a free object. Objects ignore the auto-tile grid.
+      </p>
+
+      {tilesets.length === 0 ? (
+        <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}>
+          Upload a tileset above to get sprite options.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {tilesets.map((ts) => (
             <div
+              key={ts.id}
               style={{
-                width: 22, height: 22, flexShrink: 0,
-                background: 'rgba(0,0,0,0.05)',
-                borderRadius: 4,
-                overflow: 'hidden',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--pb-cream-2)',
+                border: '1.5px solid var(--pb-line-2)',
+                borderRadius: 8,
+                padding: 4,
               }}
             >
-              {tile && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={tile.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
-              )}
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', padding: '2px 4px 4px' }}>
+                {ts.name}
+              </div>
+              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(ts.cols, 6)}, 1fr)` }}>
+                {ts.tileIds.map((tid, i) => {
+                  const tile = tiles[tid];
+                  if (!tile) return null;
+                  const isSel = tid === selectedTileId;
+                  return (
+                    <button
+                      key={tid}
+                      type="button"
+                      onClick={() => { setSelectedTileId(tid); setTool('object'); }}
+                      title={`Tile #${i + 1}`}
+                      className="aspect-square"
+                      style={{
+                        background: 'rgba(0,0,0,0.04)',
+                        border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'transparent'}`,
+                        borderRadius: 6,
+                        padding: 2,
+                        cursor: 'pointer',
+                        boxShadow: isSel ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={tile.dataUrl}
+                        alt=""
+                        className="w-full h-full"
+                        style={{ objectFit: 'contain', imageRendering: 'pixelated' }}
+                        draggable={false}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {obj.name}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center' }}
-              title="Delete object"
-            >
-              <Trash2 size={11} strokeWidth={2.4} />
-            </button>
+          ))}
+        </div>
+      )}
+
+      {objects.length > 0 && (
+        <div className="space-y-1">
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
+            PLACED ({objects.length})
           </div>
-        );
-      })}
+          {objects.map((obj) => {
+            const tile = tiles[obj.tileId];
+            const isSel = obj.id === selectedObjectId;
+            return (
+              <div
+                key={obj.id}
+                onClick={() => selectObject(obj.id)}
+                className="flex items-center gap-2 cursor-pointer transition-colors"
+                style={{
+                  padding: '4px 6px',
+                  borderRadius: 6,
+                  background: isSel ? 'var(--pb-butter)' : 'transparent',
+                  border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+                }}
+              >
+                <div
+                  style={{
+                    width: 22, height: 22, flexShrink: 0,
+                    background: 'rgba(0,0,0,0.05)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {tile && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={tile.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                  )}
+                </div>
+                <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {obj.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}
+                  style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center' }}
+                  title="Delete object"
+                >
+                  <Trash2 size={11} strokeWidth={2.4} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,21 +2,28 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /**
- * 2D Tile-based editor state. Two modes of authoring share the same canvas:
+ * 2D Tile-based editor state — Wang/dual-grid auto-tiling.
  *
- *   1. Tile painting — left-click stamps the active tile into the active
- *      layer's grid cell. Layers are dense 2D maps stored as a sparse
- *      `Record<"x,y", tileId>` so empty cells cost zero memory.
+ * Two complementary authoring modes share the same canvas:
  *
- *   2. Free objects — sprite instances (props, decoration, NPCs, etc.) that
- *      sit at a free pixel position with their own scale + rotation, on top
- *      of any layer. Useful for things that shouldn't snap to the grid:
- *      trees, signposts, items.
+ *   1. Wang painting — each layer carries a single 4×4 Wang tileset (one
+ *      "upper" + one "lower" texture + 14 transitions). The user paints
+ *      cells; the renderer reads each cell's 4 surrounding corners and
+ *      auto-picks the matching tile from the layer's tileset. There is no
+ *      manual tile selection — that's the whole point of the system.
  *
- * Tilesets are uploaded PNGs sliced via the slicer in `lib/tile-slicer.ts`;
- * the resulting `tiles[]` array of data URLs is what every layer / object
- * references by id. Persisting data URLs (rather than blob URLs) keeps the
- * editor working across reloads.
+ *      Storage: per layer, a sparse `corners: Record<"x,y", true>` map.
+ *      Painting cell (cx, cy) sets the 4 corners (cx,cy), (cx+1,cy),
+ *      (cx,cy+1), (cx+1,cy+1). Erasing clears them.
+ *
+ *   2. Free objects — sprite instances (props, decoration) sitting at a
+ *      free pixel position with their own scale + rotation, on top of any
+ *      layer. These DO need a manual tile pick, since each object refers
+ *      to one specific tile by id.
+ *
+ * Tilesets are uploaded PNGs sliced via `lib/tile-slicer.ts` into 16 tile
+ * data URLs (one per quadrant pattern). Persisting data URLs (rather than
+ * blob URLs) keeps the editor working across reloads.
  */
 
 export type TileTool =
@@ -35,7 +42,7 @@ export interface Tile {
   index: number;
   /** PNG data URL — the actual sprite. */
   dataUrl: string;
-  /** Pixel size of the sliced tile (matches the tileset's tile dims). */
+  /** Pixel size of the sliced tile. */
   width: number;
   height: number;
 }
@@ -49,8 +56,7 @@ export interface Tileset {
   rows: number;
   tileWidth: number;
   tileHeight: number;
-  /** Tile ids in this tileset, in slice order. Not the tile objects themselves
-   *  — those live in the global `tiles` map so cross-tileset lookups stay O(1). */
+  /** Tile ids in this tileset, in slice order. */
   tileIds: string[];
   addedAt: number;
 }
@@ -60,8 +66,11 @@ export interface TileLayer {
   name: string;
   visible: boolean;
   opacity: number;
-  /** Sparse map: "x,y" → tile id. Empty cells aren't stored. */
-  cells: Record<string, string>;
+  /** Tileset used for Wang painting on this layer. null = no painting yet. */
+  tilesetId: string | null;
+  /** Sparse map of filled corners. Key "cx,cy" → present means upper, absent
+   *  means lower. The renderer derives the visible Wang tile from groups of 4. */
+  corners: Record<string, true>;
 }
 
 export interface TileObject {
@@ -97,9 +106,9 @@ export interface TileStore {
   removeTileset: (tilesetId: string) => void;
 
   // ── Map state ───────────────────────────────────────────────────
-  /** Pixel size of one grid cell in the editor (independent of tile native size).
-   *  Tiles are scaled to fit this size so a 16×16 tileset and a 32×32 tileset
-   *  can coexist without one dwarfing the other. */
+  /** Pixel size of one grid cell in the editor (independent of tile native
+   *  size). Tiles are scaled to fit so 16×16 and 32×32 sheets look the same
+   *  size on the canvas. */
   tileSize: number;
   setTileSize: (size: number) => void;
 
@@ -112,10 +121,10 @@ export interface TileStore {
   setLayerOpacity: (id: string, opacity: number) => void;
   reorderLayer: (id: string, direction: 'up' | 'down') => void;
   setActiveLayer: (id: string) => void;
-  setCell: (layerId: string, x: number, y: number, tileId: string) => void;
-  eraseCell: (layerId: string, x: number, y: number) => void;
-  /** Bulk-mutate cells in a single update (paint stroke, fill, etc.). */
-  mutateCells: (layerId: string, mutator: (cells: Record<string, string>) => void) => void;
+  /** Assign a tileset to a layer (the texture used for Wang painting). */
+  setLayerTileset: (layerId: string, tilesetId: string | null) => void;
+  /** Bulk-mutate corners in a single update (paint stroke, fill, etc.). */
+  mutateCorners: (layerId: string, mutator: (corners: Record<string, true>) => void) => void;
 
   // ── Free objects (props on top of grid) ─────────────────────────
   objects: TileObject[];
@@ -130,6 +139,8 @@ export interface TileStore {
   setTool: (t: TileTool) => void;
   brushSize: number;
   setBrushSize: (size: number) => void;
+  /** Used only by the OBJECT tool — pick a tile to drop as a free sprite.
+   *  Wang painting ignores this; it uses the active layer's tilesetId. */
   selectedTileId: string | null;
   setSelectedTileId: (id: string | null) => void;
 
@@ -150,7 +161,8 @@ function defaultLayer(name = 'Ground'): TileLayer {
     name,
     visible: true,
     opacity: 1,
-    cells: {},
+    tilesetId: null,
+    corners: {},
   };
 }
 
@@ -178,6 +190,13 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     set((s) => {
       const nextTiles: Record<string, Tile> = { ...s.tiles };
       for (const t of tileObjs) nextTiles[t.id] = t;
+      // Auto-bind the new tileset to the active layer if it doesn't have one
+      // yet — that way "upload then click on canvas" Just Works without
+      // requiring an extra selection step.
+      const activeLayer = s.layers.find((l) => l.id === s.activeLayerId);
+      const nextLayers = activeLayer && !activeLayer.tilesetId
+        ? s.layers.map((l) => l.id === s.activeLayerId ? { ...l, tilesetId } : l)
+        : s.layers;
       return {
         tilesets: [...s.tilesets, {
           id: tilesetId,
@@ -188,10 +207,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
           addedAt: Date.now(),
         }],
         tiles: nextTiles,
-        // Auto-select the first tile of a freshly uploaded sheet so the
-        // user can immediately start painting.
+        layers: nextLayers,
+        // The first tile of the new sheet becomes the default object-tool sprite
+        // so the user can immediately switch to Object tool and drop props.
         selectedTileId: s.selectedTileId ?? tileIds[0] ?? null,
-        tool: s.selectedTileId ? s.tool : 'paint',
       };
     });
     return tilesetId;
@@ -204,14 +223,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     for (const [id, t] of Object.entries(s.tiles)) {
       if (!removeIds.has(id)) nextTiles[id] = t;
     }
-    // Strip dead references from layer cells.
-    const nextLayers = s.layers.map((l) => {
-      const cells: Record<string, string> = {};
-      for (const [k, tileId] of Object.entries(l.cells)) {
-        if (!removeIds.has(tileId)) cells[k] = tileId;
-      }
-      return { ...l, cells };
-    });
+    // Detach this tileset from any layer that's painting with it. The corner
+    // data sticks around so re-assigning a different tileset re-uses it.
+    const nextLayers = s.layers.map((l) =>
+      l.tilesetId === tilesetId ? { ...l, tilesetId: null } : l,
+    );
     const nextObjects = s.objects.filter((o) => !removeIds.has(o.tileId));
     const selectedTileId = s.selectedTileId && removeIds.has(s.selectedTileId)
       ? null
@@ -261,30 +277,15 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     return { layers };
   }),
   setActiveLayer: (id) => set({ activeLayerId: id }),
-  setCell: (layerId, x, y, tileId) => set((s) => ({
-    layers: s.layers.map((l) => {
-      if (l.id !== layerId) return l;
-      const key = `${x},${y}`;
-      if (l.cells[key] === tileId) return l;
-      return { ...l, cells: { ...l.cells, [key]: tileId } };
-    }),
+  setLayerTileset: (layerId, tilesetId) => set((s) => ({
+    layers: s.layers.map((l) => l.id === layerId ? { ...l, tilesetId } : l),
   })),
-  eraseCell: (layerId, x, y) => set((s) => ({
+  mutateCorners: (layerId, mutator) => set((s) => ({
     layers: s.layers.map((l) => {
       if (l.id !== layerId) return l;
-      const key = `${x},${y}`;
-      if (!(key in l.cells)) return l;
-      const next = { ...l.cells };
-      delete next[key];
-      return { ...l, cells: next };
-    }),
-  })),
-  mutateCells: (layerId, mutator) => set((s) => ({
-    layers: s.layers.map((l) => {
-      if (l.id !== layerId) return l;
-      const next = { ...l.cells };
+      const next = { ...l.corners };
       mutator(next);
-      return { ...l, cells: next };
+      return { ...l, corners: next };
     }),
   })),
 
@@ -318,11 +319,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   resetCamera: () => set({ camera: { x: 0, y: 0, zoom: 1 } }),
 
   clearMap: () => set((s) => ({
-    layers: s.layers.map((l) => ({ ...l, cells: {} })),
+    layers: s.layers.map((l) => ({ ...l, corners: {} })),
     objects: [],
   })),
 }), {
-  name: 'problocks-tile-v1',
+  // v2 — bumped from v1 (cells → corners), so old persisted maps are dropped.
+  name: 'problocks-tile-v2',
   partialize: (s) => ({
     tilesets: s.tilesets,
     tiles: s.tiles,
@@ -333,7 +335,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     selectedTileId: s.selectedTileId,
     showGrid: s.showGrid,
   }),
-  // Heal an empty / corrupted persisted state (e.g. user nuked layers).
+  // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {
     if (!state) return;
     if (!state.layers || state.layers.length === 0) {
@@ -343,15 +345,35 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     } else if (!state.layers.find((l) => l.id === state.activeLayerId)) {
       state.activeLayerId = state.layers[0].id;
     }
+    // Forward-compat: ensure every layer has a corners map (older shapes had
+    // a `cells` field instead, which we silently drop).
+    for (const l of state.layers) {
+      if (!l.corners) l.corners = {};
+      if (l.tilesetId === undefined) l.tilesetId = null;
+    }
   },
 }));
 
 /** Helper: parse "x,y" → {x, y}. */
-export function parseCellKey(key: string): { x: number; y: number } {
+export function parseCornerKey(key: string): { x: number; y: number } {
   const [x, y] = key.split(',').map(Number);
   return { x, y };
 }
 
-export function cellKey(x: number, y: number): string {
+export function cornerKey(x: number, y: number): string {
   return `${x},${y}`;
+}
+
+/**
+ * Compute the four corner coords (NE, NW, SW, SE) for visible cell (cx, cy).
+ * NW=(cx,cy), NE=(cx+1,cy), SW=(cx,cy+1), SE=(cx+1,cy+1). Used by the renderer
+ * and by hit-testing.
+ */
+export function cellCorners(cx: number, cy: number) {
+  return {
+    nw: cornerKey(cx,     cy),
+    ne: cornerKey(cx + 1, cy),
+    sw: cornerKey(cx,     cy + 1),
+    se: cornerKey(cx + 1, cy + 1),
+  };
 }

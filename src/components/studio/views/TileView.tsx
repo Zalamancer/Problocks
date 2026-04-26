@@ -1,0 +1,849 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
+  Grid3X3, Sparkles, Image as ImageIcon, Box, Plus, FlipHorizontal, FlipVertical,
+} from 'lucide-react';
+import { useTile, cellKey, type TileTool, type Tile } from '@/store/tile-store';
+
+/**
+ * 2D Tile-based editor canvas — orthogonal grid + free-positioned objects.
+ *
+ * Renders to a single `<canvas>` because layers + grid + brush ghost can
+ * easily run into 1000s of draws per frame on big maps; SVG nodes choke.
+ *
+ * Inputs:
+ *   - Left-click  → paint / fill / eyedrop / select (depends on tool)
+ *   - Right-click → erase under brush
+ *   - Middle / space-drag → pan
+ *   - Wheel       → zoom (zooms toward cursor)
+ *   - 1..6        → tool shortcuts (select/paint/erase/fill/eyedrop/object)
+ *   - [ ]         → brush size
+ *   - G           → toggle grid
+ *   - Delete      → remove selected object
+ */
+export function TileView() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Live state mirror so the imperative draw loop can read fresh values
+  // without re-binding on every store change.
+  const stateRef = useRef(useTile.getState());
+  useEffect(() => useTile.subscribe((s) => { stateRef.current = s; }), []);
+
+  // Image cache keyed by data URL — built on demand as tiles enter the
+  // visible viewport. Decoded once, drawn every frame.
+  const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const imgReadyRef = useRef<Set<string>>(new Set());
+  const requestRender = useRef<() => void>(() => {});
+
+  const ensureImage = useCallback((dataUrl: string) => {
+    let img = imgCacheRef.current.get(dataUrl);
+    if (img) return img;
+    img = new Image();
+    img.onload = () => {
+      imgReadyRef.current.add(dataUrl);
+      requestRender.current();
+    };
+    img.src = dataUrl;
+    imgCacheRef.current.set(dataUrl, img);
+    return img;
+  }, []);
+
+  // ── Pull store slices used in the React tree (toolbar, HUD) ─────
+  const tool = useTile((s) => s.tool);
+  const setTool = useTile((s) => s.setTool);
+  const tileSize = useTile((s) => s.tileSize);
+  const showGrid = useTile((s) => s.showGrid);
+  const toggleGrid = useTile((s) => s.toggleGrid);
+  const brushSize = useTile((s) => s.brushSize);
+  const setBrushSize = useTile((s) => s.setBrushSize);
+  const layers = useTile((s) => s.layers);
+  const selectedTileId = useTile((s) => s.selectedTileId);
+  const tiles = useTile((s) => s.tiles);
+  const objects = useTile((s) => s.objects);
+  const selectedObjectId = useTile((s) => s.selectedObjectId);
+  const resetCamera = useTile((s) => s.resetCamera);
+  const clearMap = useTile((s) => s.clearMap);
+  const camera = useTile((s) => s.camera);
+
+  // ── Canvas render loop (imperative, RAF-coalesced) ─────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let disposed = false;
+    let rafId = 0;
+
+    function scheduleRender() {
+      if (disposed) return;
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(render);
+    }
+    requestRender.current = scheduleRender;
+
+    function render() {
+      const s = stateRef.current;
+      const cam = s.camera;
+      const ts = s.tileSize;
+      const W = canvas!.width;
+      const H = canvas!.height;
+      ctx!.fillStyle = '#fafaf7';
+      ctx!.fillRect(0, 0, W, H);
+
+      ctx!.save();
+      ctx!.translate(W / 2, H / 2);
+      ctx!.scale(cam.zoom, cam.zoom);
+      ctx!.translate(-cam.x, -cam.y);
+      ctx!.imageSmoothingEnabled = false;
+
+      // Visible cell range so we don't iterate the entire infinite map.
+      const halfW = (W / 2) / cam.zoom;
+      const halfH = (H / 2) / cam.zoom;
+      const x0 = Math.floor((cam.x - halfW) / ts) - 1;
+      const y0 = Math.floor((cam.y - halfH) / ts) - 1;
+      const x1 = Math.ceil((cam.x + halfW) / ts) + 1;
+      const y1 = Math.ceil((cam.y + halfH) / ts) + 1;
+
+      // Origin cross — helps users find (0,0) when starting fresh.
+      ctx!.strokeStyle = 'rgba(29,26,20,0.18)';
+      ctx!.lineWidth = 1 / cam.zoom;
+      ctx!.beginPath();
+      ctx!.moveTo(-12, 0); ctx!.lineTo(12, 0);
+      ctx!.moveTo(0, -12); ctx!.lineTo(0, 12);
+      ctx!.stroke();
+
+      // Layers, bottom-to-top.
+      for (const layer of s.layers) {
+        if (!layer.visible) continue;
+        ctx!.globalAlpha = layer.opacity;
+        for (const [key, tileId] of Object.entries(layer.cells)) {
+          const tile = s.tiles[tileId];
+          if (!tile) continue;
+          const [cx, cy] = key.split(',').map(Number);
+          if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+          const img = ensureImage(tile.dataUrl);
+          if (!imgReadyRef.current.has(tile.dataUrl)) continue;
+          ctx!.drawImage(img, cx * ts, cy * ts, ts, ts);
+        }
+      }
+      ctx!.globalAlpha = 1;
+
+      // Free objects, sorted bottom-to-top by y so they overlap predictably.
+      const visibleObjects = s.objects.filter((o) => {
+        const layer = s.layers.find((l) => l.id === o.layerId);
+        if (layer && !layer.visible) return false;
+        return o.x + o.width / 2 >= x0 * ts
+          && o.x - o.width / 2 <= x1 * ts
+          && o.y + o.height / 2 >= y0 * ts
+          && o.y - o.height / 2 <= y1 * ts;
+      }).sort((a, b) => a.y - b.y);
+
+      for (const obj of visibleObjects) {
+        const tile = s.tiles[obj.tileId];
+        if (!tile) continue;
+        const img = ensureImage(tile.dataUrl);
+        if (!imgReadyRef.current.has(tile.dataUrl)) continue;
+        const layer = s.layers.find((l) => l.id === obj.layerId);
+        ctx!.globalAlpha = layer?.opacity ?? 1;
+        ctx!.save();
+        ctx!.translate(obj.x, obj.y);
+        if (obj.rotation) ctx!.rotate(obj.rotation * Math.PI / 180);
+        const sx = obj.flipX ? -1 : 1;
+        const sy = obj.flipY ? -1 : 1;
+        if (sx !== 1 || sy !== 1) ctx!.scale(sx, sy);
+        ctx!.drawImage(img, -obj.width / 2, -obj.height / 2, obj.width, obj.height);
+        ctx!.restore();
+
+        if (obj.id === s.selectedObjectId) {
+          ctx!.strokeStyle = '#0ea5e9';
+          ctx!.lineWidth = 1.5 / cam.zoom;
+          ctx!.setLineDash([4 / cam.zoom, 3 / cam.zoom]);
+          ctx!.strokeRect(obj.x - obj.width / 2, obj.y - obj.height / 2, obj.width, obj.height);
+          ctx!.setLineDash([]);
+        }
+      }
+      ctx!.globalAlpha = 1;
+
+      // Grid — drawn after tiles so the lines sit on top.
+      if (s.showGrid && cam.zoom > 0.25) {
+        const fade = Math.min(1, (cam.zoom - 0.25) * 2);
+        ctx!.strokeStyle = `rgba(29,26,20,${(0.10 * fade).toFixed(3)})`;
+        ctx!.lineWidth = 1 / cam.zoom;
+        ctx!.beginPath();
+        for (let cx = x0; cx <= x1; cx++) {
+          const px = cx * ts;
+          ctx!.moveTo(px, y0 * ts);
+          ctx!.lineTo(px, y1 * ts);
+        }
+        for (let cy = y0; cy <= y1; cy++) {
+          const py = cy * ts;
+          ctx!.moveTo(x0 * ts, py);
+          ctx!.lineTo(x1 * ts, py);
+        }
+        ctx!.stroke();
+      }
+
+      // Brush ghost.
+      const hover = hoverRef.current;
+      if (hover && (s.tool === 'paint' || s.tool === 'erase' || s.tool === 'fill')) {
+        const cells = brushCells(hover.x, hover.y, s.brushSize);
+        if (s.tool === 'paint' && s.selectedTileId) {
+          const tile = s.tiles[s.selectedTileId];
+          if (tile) {
+            const img = ensureImage(tile.dataUrl);
+            if (imgReadyRef.current.has(tile.dataUrl)) {
+              ctx!.globalAlpha = 0.55;
+              for (const [cx, cy] of cells) {
+                ctx!.drawImage(img, cx * ts, cy * ts, ts, ts);
+              }
+              ctx!.globalAlpha = 1;
+            }
+          }
+        } else if (s.tool === 'erase') {
+          ctx!.fillStyle = 'rgba(231, 76, 60, 0.22)';
+          ctx!.strokeStyle = 'rgba(231, 76, 60, 0.6)';
+          ctx!.lineWidth = 1 / cam.zoom;
+          for (const [cx, cy] of cells) {
+            ctx!.fillRect(cx * ts, cy * ts, ts, ts);
+            ctx!.strokeRect(cx * ts, cy * ts, ts, ts);
+          }
+        } else {
+          // Fill — single-cell ghost outline.
+          ctx!.strokeStyle = '#0ea5e9';
+          ctx!.lineWidth = 2 / cam.zoom;
+          ctx!.strokeRect(hover.x * ts, hover.y * ts, ts, ts);
+        }
+      }
+
+      ctx!.restore();
+    }
+
+    // ── Input handling ─────────────────────────────────────────────
+    let isDrawing: 'paint' | 'erase' | null = null;
+    let isPanning = false;
+    let panStart = { x: 0, y: 0, camX: 0, camY: 0 };
+    const hoverRef = { current: null as { x: number; y: number } | null };
+    let spaceHeld = false;
+
+    function screenToWorld(sx: number, sy: number) {
+      const cam = stateRef.current.camera;
+      return {
+        x: (sx - canvas!.width / 2) / cam.zoom + cam.x,
+        y: (sy - canvas!.height / 2) / cam.zoom + cam.y,
+      };
+    }
+
+    function worldToCell(wx: number, wy: number) {
+      const ts = stateRef.current.tileSize;
+      return { x: Math.floor(wx / ts), y: Math.floor(wy / ts) };
+    }
+
+    function eventCanvasCoords(e: MouseEvent | WheelEvent | PointerEvent) {
+      const rect = canvas!.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (canvas!.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas!.height / rect.height),
+      };
+    }
+
+    function brushCells(cx: number, cy: number, size: number): Array<[number, number]> {
+      if (size <= 1) return [[cx, cy]];
+      const r = Math.floor(size / 2);
+      const cells: Array<[number, number]> = [];
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          cells.push([cx + dx, cy + dy]);
+        }
+      }
+      return cells;
+    }
+
+    function applyPaint(cell: { x: number; y: number }) {
+      const s = stateRef.current;
+      const layer = s.layers.find((l) => l.id === s.activeLayerId);
+      if (!layer) return;
+      const tileId = s.selectedTileId;
+      if (!tileId) return;
+      const cells = brushCells(cell.x, cell.y, s.brushSize);
+      s.mutateCells(layer.id, (c) => {
+        for (const [x, y] of cells) c[`${x},${y}`] = tileId;
+      });
+    }
+
+    function applyErase(cell: { x: number; y: number }) {
+      const s = stateRef.current;
+      const layer = s.layers.find((l) => l.id === s.activeLayerId);
+      if (!layer) return;
+      const cells = brushCells(cell.x, cell.y, s.brushSize);
+      s.mutateCells(layer.id, (c) => {
+        for (const [x, y] of cells) delete c[`${x},${y}`];
+      });
+    }
+
+    function applyFill(cell: { x: number; y: number }) {
+      const s = stateRef.current;
+      const layer = s.layers.find((l) => l.id === s.activeLayerId);
+      if (!layer) return;
+      const tileId = s.selectedTileId;
+      if (!tileId) return;
+      const startKey = `${cell.x},${cell.y}`;
+      const target = layer.cells[startKey] ?? '';
+      if (target === tileId) return;
+      const visited = new Set<string>();
+      const stack: Array<[number, number]> = [[cell.x, cell.y]];
+      const MAX = 5000;
+      let n = 0;
+      const writes: Array<[number, number]> = [];
+      while (stack.length && n < MAX) {
+        const [x, y] = stack.pop()!;
+        const k = `${x},${y}`;
+        if (visited.has(k)) continue;
+        visited.add(k);
+        const here = layer.cells[k] ?? '';
+        if (here !== target) continue;
+        writes.push([x, y]);
+        n++;
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+      s.mutateCells(layer.id, (c) => {
+        for (const [x, y] of writes) c[`${x},${y}`] = tileId;
+      });
+    }
+
+    function applyEyedropper(cell: { x: number; y: number }) {
+      const s = stateRef.current;
+      const layer = s.layers.find((l) => l.id === s.activeLayerId);
+      if (!layer) return;
+      const id = layer.cells[`${cell.x},${cell.y}`];
+      if (id) {
+        s.setSelectedTileId(id);
+        s.setTool('paint');
+      }
+    }
+
+    function pickObjectAt(wx: number, wy: number) {
+      const s = stateRef.current;
+      // Iterate top-to-bottom (objects sorted bottom-to-top in render).
+      const sorted = [...s.objects].sort((a, b) => b.y - a.y);
+      for (const o of sorted) {
+        const layer = s.layers.find((l) => l.id === o.layerId);
+        if (layer && !layer.visible) continue;
+        if (
+          wx >= o.x - o.width / 2 && wx <= o.x + o.width / 2 &&
+          wy >= o.y - o.height / 2 && wy <= o.y + o.height / 2
+        ) return o;
+      }
+      return null;
+    }
+
+    function onPointerDown(e: PointerEvent) {
+      if (e.button === 1 || (e.button === 0 && (spaceHeld || e.altKey))) {
+        isPanning = true;
+        const cam = stateRef.current.camera;
+        panStart = { x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y };
+        canvas!.style.cursor = 'grabbing';
+        canvas!.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        return;
+      }
+      const cc = eventCanvasCoords(e);
+      const w = screenToWorld(cc.x, cc.y);
+      const cell = worldToCell(w.x, w.y);
+      const s = stateRef.current;
+      if (e.button === 2) {
+        isDrawing = 'erase';
+        applyErase(cell);
+        canvas!.setPointerCapture(e.pointerId);
+        scheduleRender();
+        return;
+      }
+      if (e.button !== 0) return;
+
+      if (s.tool === 'object') {
+        // Place a sprite at cursor — uses the active tile and tileSize.
+        if (!s.selectedTileId) return;
+        const tile = s.tiles[s.selectedTileId];
+        if (!tile) return;
+        const id = s.addObject({
+          layerId: s.activeLayerId,
+          x: w.x, y: w.y,
+          tileId: s.selectedTileId,
+          width: s.tileSize,
+          height: s.tileSize,
+          rotation: 0,
+          flipX: false, flipY: false,
+          name: `Object ${s.objects.length + 1}`,
+        });
+        s.selectObject(id);
+        scheduleRender();
+        return;
+      }
+
+      if (s.tool === 'select') {
+        const hit = pickObjectAt(w.x, w.y);
+        s.selectObject(hit?.id ?? null);
+        if (hit) {
+          isDrawing = null;
+          // Drag the selected object — track via a separate move handler.
+          objectDragRef.current = {
+            id: hit.id,
+            startWX: w.x, startWY: w.y,
+            origX: hit.x, origY: hit.y,
+          };
+          canvas!.setPointerCapture(e.pointerId);
+        }
+        scheduleRender();
+        return;
+      }
+
+      if (s.tool === 'paint') { isDrawing = 'paint'; applyPaint(cell); }
+      else if (s.tool === 'erase') { isDrawing = 'erase'; applyErase(cell); }
+      else if (s.tool === 'fill') { applyFill(cell); }
+      else if (s.tool === 'eyedropper') { applyEyedropper(cell); }
+      canvas!.setPointerCapture(e.pointerId);
+      scheduleRender();
+    }
+
+    const objectDragRef = { current: null as { id: string; startWX: number; startWY: number; origX: number; origY: number } | null };
+
+    function onPointerMove(e: PointerEvent) {
+      const cc = eventCanvasCoords(e);
+      if (isPanning) {
+        const cam = stateRef.current.camera;
+        const dx = (e.clientX - panStart.x) * (canvas!.width / canvas!.getBoundingClientRect().width);
+        const dy = (e.clientY - panStart.y) * (canvas!.height / canvas!.getBoundingClientRect().height);
+        stateRef.current.setCamera({
+          x: panStart.camX - dx / cam.zoom,
+          y: panStart.camY - dy / cam.zoom,
+        });
+        scheduleRender();
+        return;
+      }
+
+      const w = screenToWorld(cc.x, cc.y);
+      const cell = worldToCell(w.x, w.y);
+
+      if (objectDragRef.current) {
+        const drag = objectDragRef.current;
+        stateRef.current.updateObject(drag.id, {
+          x: drag.origX + (w.x - drag.startWX),
+          y: drag.origY + (w.y - drag.startWY),
+        });
+        scheduleRender();
+        return;
+      }
+
+      const prev = hoverRef.current;
+      if (!prev || prev.x !== cell.x || prev.y !== cell.y) {
+        hoverRef.current = cell;
+        scheduleRender();
+      }
+
+      if (isDrawing === 'paint') applyPaint(cell);
+      else if (isDrawing === 'erase') applyErase(cell);
+    }
+
+    function onPointerUp(e: PointerEvent) {
+      if (canvas!.hasPointerCapture(e.pointerId)) canvas!.releasePointerCapture(e.pointerId);
+      isDrawing = null;
+      isPanning = false;
+      objectDragRef.current = null;
+      canvas!.style.cursor = cursorForTool(stateRef.current.tool, spaceHeld);
+    }
+
+    function onPointerLeave() {
+      hoverRef.current = null;
+      scheduleRender();
+    }
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const cam = stateRef.current.camera;
+      const cc = eventCanvasCoords(e);
+      const wxBefore = (cc.x - canvas!.width / 2) / cam.zoom + cam.x;
+      const wyBefore = (cc.y - canvas!.height / 2) / cam.zoom + cam.y;
+      // Trackpad pinch comes through as ctrlKey-wheel; either way, deltaY
+      // controls zoom magnitude. Plain wheel = pan, Cmd/Ctrl = zoom.
+      if (e.ctrlKey || e.metaKey) {
+        const factor = Math.exp(-e.deltaY * 0.005);
+        const newZoom = Math.max(0.1, Math.min(8, cam.zoom * factor));
+        stateRef.current.setCamera({
+          zoom: newZoom,
+          x: wxBefore - (cc.x - canvas!.width / 2) / newZoom,
+          y: wyBefore - (cc.y - canvas!.height / 2) / newZoom,
+        });
+      } else {
+        stateRef.current.setCamera({
+          x: cam.x + e.deltaX / cam.zoom,
+          y: cam.y + e.deltaY / cam.zoom,
+        });
+      }
+      scheduleRender();
+    }
+
+    function onContextMenu(e: MouseEvent) { e.preventDefault(); }
+
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      const s = stateRef.current;
+      if (e.code === 'Space' && !spaceHeld) {
+        spaceHeld = true;
+        canvas!.style.cursor = 'grab';
+        e.preventDefault();
+        return;
+      }
+      if (e.key === '1') s.setTool('select');
+      else if (e.key === '2') s.setTool('paint');
+      else if (e.key === '3') s.setTool('erase');
+      else if (e.key === '4') s.setTool('fill');
+      else if (e.key === '5') s.setTool('eyedropper');
+      else if (e.key === '6') s.setTool('object');
+      else if (e.key === '[') s.setBrushSize(s.brushSize - 1);
+      else if (e.key === ']') s.setBrushSize(s.brushSize + 1);
+      else if (e.key === 'g' || e.key === 'G') s.toggleGrid();
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selectedObjectId) {
+        s.removeObject(s.selectedObjectId);
+        scheduleRender();
+      }
+    }
+
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.code === 'Space') {
+        spaceHeld = false;
+        canvas!.style.cursor = cursorForTool(stateRef.current.tool, spaceHeld);
+      }
+    }
+
+    function resize() {
+      const rect = container!.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas!.width = Math.floor(rect.width * dpr);
+      canvas!.height = Math.floor(rect.height * dpr);
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Re-undo the dpr scale because our render uses width/height directly
+      // (we set translate/scale ourselves). Easier to just use the
+      // device-pixel canvas as-is and not touch the DPR transform.
+      ctx!.setTransform(1, 0, 0, 1, 0, 0);
+      scheduleRender();
+    }
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerUp);
+    canvas.addEventListener('pointerleave', onPointerLeave);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    resize();
+
+    // Re-render on any store change. Cheap because render is O(visible cells).
+    const unsub = useTile.subscribe(() => scheduleRender());
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(rafId);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      ro.disconnect();
+      unsub();
+    };
+  }, [ensureImage]);
+
+  // Drive the canvas cursor from the live tool selection.
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    c.style.cursor = cursorForTool(tool, false);
+  }, [tool]);
+
+  const selectedTile = selectedTileId ? tiles[selectedTileId] : null;
+  const selectedObject = selectedObjectId ? objects.find((o) => o.id === selectedObjectId) : null;
+  const updateObject = useTile((s) => s.updateObject);
+  const removeObject = useTile((s) => s.removeObject);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden" style={{ background: '#fafaf7' }}>
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
+      />
+
+      {/* Floating toolbar — chunky-pastel matching the rest of the studio. */}
+      <div
+        className="absolute top-3 left-3 z-10 flex items-center gap-1 p-1.5"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--pb-paper)',
+          border: '1.5px solid var(--pb-ink)',
+          borderRadius: 12,
+          boxShadow: '0 3px 0 var(--pb-ink)',
+        }}
+      >
+        <ToolBtn active={tool === 'select'} title="Select / move objects (1)" onClick={() => setTool('select')}>
+          <MousePointer2 size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn active={tool === 'paint'} title="Paint tile (2)" onClick={() => setTool('paint')}>
+          <Paintbrush size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn active={tool === 'erase'} title="Erase tile (3)" onClick={() => setTool('erase')}>
+          <Eraser size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn active={tool === 'fill'} title="Fill (4)" onClick={() => setTool('fill')}>
+          <PaintBucket size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn active={tool === 'eyedropper'} title="Eyedropper (5)" onClick={() => setTool('eyedropper')}>
+          <Pipette size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn active={tool === 'object'} title="Place object (6)" onClick={() => setTool('object')}>
+          <Box size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <Separator />
+        <BrushPill value={brushSize} onChange={setBrushSize} />
+        <Separator />
+        <ToolBtn active={showGrid} title="Toggle grid (G)" onClick={toggleGrid}>
+          <Grid3X3 size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn title="Reset view" onClick={resetCamera}>
+          <Maximize2 size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <Separator />
+        <ToolBtn destructive title="Clear map" onClick={() => {
+          if (confirm('Clear all tiles and objects?')) clearMap();
+        }}>
+          <Trash2 size={14} strokeWidth={2.2} />
+        </ToolBtn>
+      </div>
+
+      {/* Object inspector — appears when an object is selected. Floating so it
+          doesn't fight the right-panel system, which is shared with other modes. */}
+      {selectedObject && (
+        <div
+          className="absolute top-3 right-3 z-10 p-3"
+          style={{
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-ink)',
+            borderRadius: 12,
+            boxShadow: '0 3px 0 var(--pb-ink)',
+            minWidth: 200,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
+              {selectedObject.name}
+            </span>
+            <button
+              onClick={() => removeObject(selectedObject.id)}
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)' }}
+              title="Delete object"
+            >
+              <Trash2 size={14} strokeWidth={2.2} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 mb-2">
+            <NumField label="X" value={Math.round(selectedObject.x)} onChange={(v) => updateObject(selectedObject.id, { x: v })} />
+            <NumField label="Y" value={Math.round(selectedObject.y)} onChange={(v) => updateObject(selectedObject.id, { y: v })} />
+            <NumField label="W" value={Math.round(selectedObject.width)} min={1} onChange={(v) => updateObject(selectedObject.id, { width: v })} />
+            <NumField label="H" value={Math.round(selectedObject.height)} min={1} onChange={(v) => updateObject(selectedObject.id, { height: v })} />
+            <NumField label="°" value={Math.round(selectedObject.rotation)} onChange={(v) => updateObject(selectedObject.id, { rotation: v })} />
+          </div>
+          <div className="flex gap-1.5">
+            <ToolBtn active={selectedObject.flipX} title="Flip X" onClick={() => updateObject(selectedObject.id, { flipX: !selectedObject.flipX })}>
+              <FlipHorizontal size={14} strokeWidth={2.2} />
+            </ToolBtn>
+            <ToolBtn active={selectedObject.flipY} title="Flip Y" onClick={() => updateObject(selectedObject.id, { flipY: !selectedObject.flipY })}>
+              <FlipVertical size={14} strokeWidth={2.2} />
+            </ToolBtn>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state — only when no tilesets are loaded yet. */}
+      {Object.keys(tiles).length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ color: 'var(--pb-ink-muted)' }}>
+          <div className="flex flex-col items-center gap-3 text-center" style={{ maxWidth: 380 }}>
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: 56, height: 56, borderRadius: 16,
+                background: 'var(--pb-butter)',
+                border: '1.5px solid var(--pb-butter-ink)',
+                boxShadow: '0 2px 0 var(--pb-butter-ink)',
+              }}
+            >
+              <Sparkles size={24} strokeWidth={2.2} style={{ color: 'var(--pb-butter-ink)' }} />
+            </div>
+            <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--pb-ink)' }}>
+              2D Tile-based editor
+            </p>
+            <p style={{ fontSize: 12, fontWeight: 500 }}>
+              Open <strong>Assets</strong> in the left panel and upload a PNG. We&apos;ll slice it into a 4×4 tile sheet (16 tiles) and load it into your palette. Then click a tile and paint on the grid.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* HUD strip */}
+      <div
+        className="absolute bottom-3 left-3 z-10 pointer-events-none"
+        style={{
+          padding: '5px 12px', borderRadius: 10,
+          background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+          fontSize: 11, color: 'var(--pb-ink-soft)', fontWeight: 500,
+        }}
+      >
+        <span>Tool <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{tool}</span></span>
+        <Sep />
+        <span>Brush <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{brushSize}</span></span>
+        <Sep />
+        <span>Zoom <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{Math.round(camera.zoom * 100)}%</span></span>
+        <Sep />
+        <span>Layers <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{layers.length}</span></span>
+        {selectedTile && (
+          <>
+            <Sep />
+            <span>Active <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>tile #{selectedTile.index + 1}</span></span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function cursorForTool(tool: TileTool, spaceHeld: boolean): string {
+  if (spaceHeld) return 'grab';
+  switch (tool) {
+    case 'select': return 'default';
+    case 'paint': return 'crosshair';
+    case 'erase': return 'crosshair';
+    case 'fill': return 'crosshair';
+    case 'eyedropper': return 'crosshair';
+    case 'object': return 'copy';
+  }
+}
+
+function ToolBtn({
+  active = false, destructive = false, disabled = false, title, onClick, children,
+}: {
+  active?: boolean; destructive?: boolean; disabled?: boolean; title: string;
+  onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="flex items-center justify-center transition-colors"
+      style={{
+        height: 30, width: 30, borderRadius: 8,
+        background: active ? 'var(--pb-butter)' : 'var(--pb-paper)',
+        color: disabled
+          ? 'var(--pb-ink-muted)'
+          : destructive
+          ? 'var(--pb-coral-ink)'
+          : active
+          ? 'var(--pb-butter-ink)'
+          : 'var(--pb-ink-soft)',
+        border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        opacity: disabled ? 0.45 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        boxShadow: active ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Separator() {
+  return <div style={{ width: 1.5, height: 18, background: 'var(--pb-line-2)', margin: '0 2px' }} />;
+}
+
+function Sep() {
+  return <span style={{ color: 'var(--pb-ink-muted)', margin: '0 6px' }}>·</span>;
+}
+
+function BrushPill({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        height: 30,
+        padding: '0 8px',
+        borderRadius: 8,
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        gap: 6,
+      }}
+    >
+      <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 700, letterSpacing: 0.5 }}>BRUSH</span>
+      <input
+        type="number"
+        min={1}
+        max={16}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value) || 1)}
+        style={{
+          width: 30,
+          background: 'transparent',
+          border: 0,
+          outline: 'none',
+          fontSize: 12,
+          fontWeight: 700,
+          color: 'var(--pb-ink)',
+          textAlign: 'center',
+        }}
+      />
+    </div>
+  );
+}
+
+function NumField({
+  label, value, onChange, min,
+}: { label: string; value: number; onChange: (v: number) => void; min?: number }) {
+  return (
+    <label className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 700 }}>
+      {label}
+      <input
+        type="number"
+        value={value}
+        min={min}
+        onChange={(e) => {
+          const v = parseFloat(e.target.value);
+          if (!Number.isNaN(v)) onChange(v);
+        }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          padding: '4px 6px',
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 6,
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--pb-ink)',
+        }}
+      />
+    </label>
+  );
+}

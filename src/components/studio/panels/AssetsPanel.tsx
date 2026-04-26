@@ -12,6 +12,7 @@ import { usePartStudio } from '@/store/part-studio-store';
 import { useFreeform } from '@/store/freeform-store';
 import { Trash2 } from 'lucide-react';
 import { Freeform3DAssetsView } from './Freeform3DAssetsView';
+import { TileAssetsView } from './TileAssetsView';
 
 interface AssetInfo {
   name: string;
@@ -138,12 +139,19 @@ export function AssetsPanel() {
     );
   }
 
-  if (gameSystem === '2d' || gameSystem === 'topdown') {
-    const label = gameSystem === '2d' ? '2D sprite browser' : 'Top-down tileset browser';
+  if (gameSystem === '2d') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <TileAssetsView />
+      </div>
+    );
+  }
+
+  if (gameSystem === 'topdown') {
     return (
       <div className="flex-1 flex items-center justify-center px-6 text-center">
         <p className="text-xs" style={{ color: 'var(--pb-ink-muted)' }}>
-          {label}
+          Top-down tileset browser
           <br />coming soon.
         </p>
       </div>

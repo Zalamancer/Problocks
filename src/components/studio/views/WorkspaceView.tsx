@@ -11,6 +11,7 @@ import { VoxelView } from './VoxelView';
 import { QuizView } from './QuizView';
 import { FreeformView } from './FreeformView';
 import { FreeformView3D } from './FreeformView3D';
+import { TileView } from './TileView';
 
 /**
  * Studio workspace — the always-on 3D scene with baseplate and a minimal
@@ -59,6 +60,18 @@ export function WorkspaceView() {
     return (
       <div className="relative w-full h-full">
         <FreeformView />
+      </div>
+    );
+  }
+
+  // 2D Tile-based — orthogonal grid editor with PNG slicing, palette, layers,
+  // and free-positioned objects. Lives in its own viewport so the canvas
+  // input handling (paint / erase / fill / eyedropper) doesn't fight the
+  // freeform pen tool or the 3D building canvas.
+  if (gameSystem === '2d') {
+    return (
+      <div className="relative w-full h-full">
+        <TileView />
       </div>
     );
   }

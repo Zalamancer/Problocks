@@ -148,8 +148,8 @@ export function TileView() {
             const ne = corners[`${cx + 1},${cy}`] === true;
             const sw = corners[`${cx},${cy + 1}`] === true;
             const se = corners[`${cx + 1},${cy + 1}`] === true;
-            if (!anyCornerSet(ne, nw, sw, se)) continue;
-            const idx = wangIndexFromBools(ne, nw, sw, se);
+            if (!anyCornerSet(nw, ne, sw, se)) continue;
+            const idx = wangIndexFromBools(nw, ne, sw, se);
             if (idx < 0 || idx === PURE_LOWER_INDEX) continue;
             const tileId = tileset.tileIds[idx];
             if (!tileId) continue;
@@ -348,11 +348,11 @@ export function TileView() {
       for (let i = s.layers.length - 1; i >= 0; i--) {
         const l = s.layers[i];
         if (!l.visible || !l.tilesetId) continue;
-        const ne = l.corners[`${cell.cx + 1},${cell.cy}`] === true;
         const nw = l.corners[`${cell.cx},${cell.cy}`] === true;
+        const ne = l.corners[`${cell.cx + 1},${cell.cy}`] === true;
         const sw = l.corners[`${cell.cx},${cell.cy + 1}`] === true;
         const se = l.corners[`${cell.cx + 1},${cell.cy + 1}`] === true;
-        if (anyCornerSet(ne, nw, sw, se)) {
+        if (anyCornerSet(nw, ne, sw, se)) {
           s.setLayerTileset(s.activeLayerId, l.tilesetId);
           s.setTool('paint');
           return;

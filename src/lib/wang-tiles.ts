@@ -4,22 +4,19 @@
  * A Wang tileset is a 4×4 sheet with two base textures — UPPER (the painted
  * "fill") and LOWER (the empty background) — plus 14 transition tiles. Each
  * cell in the source sheet is encoded by which texture occupies its 4
- * quadrants:
+ * quadrants, in **reading order** of the 2×2 quadrant grid:
  *
- *   Q1 = NE (top-right)
- *   Q2 = NW (top-left)
+ *   Q1 = NW (top-left)
+ *   Q2 = NE (top-right)
  *   Q3 = SW (bottom-left)
  *   Q4 = SE (bottom-right)
  *
- * The user's reference layout (1-indexed, row-major) is hard-coded below. The
- * "pure lower" tile lives at (col=3, row=2) → idx 6 and the "pure upper" tile
- * at (col=1, row=4) → idx 12 — we pull those out so the renderer can short-
- * circuit fully-empty cells.
- *
- * The map data model is corner-based: the editor stores a sparse set of
- * "filled corners" per layer. To pick a tile for visible cell (cx, cy) the
- * renderer reads the 4 surrounding corners — (cx,cy), (cx+1,cy), (cx,cy+1),
- * (cx+1,cy+1) — encodes them as a quadrant string, and looks up the index.
+ * NB this is NOT the (NE, NW, SW, SE) convention used by the older
+ * Problocks_Light code — the user's PNGs are encoded TL → TR → BL → BR
+ * (row-major), so we swap the first two quadrants compared to that. The
+ * keys themselves are the same strings; only the field they're mapped to
+ * differs. The "Pure lower" tile sits at (col=3, row=2) → idx 6 and the
+ * "Pure upper" at (col=1, row=4) → idx 12.
  */
 
 export type Quadrant = 'u' | 'l';
@@ -30,67 +27,66 @@ export const PURE_LOWER_INDEX = 6;
 export const PURE_UPPER_INDEX = 12;
 
 /**
- * Map of "Q1,Q2,Q3,Q4" (NE,NW,SW,SE) to the index in the 4×4 sheet
+ * Map of "Q1,Q2,Q3,Q4" (NW, NE, SW, SE) to the index in the 4×4 sheet
  * (row-major, 0..15). Derived from the user's reference layout.
  */
 export const WANG_LOOKUP: Record<string, number> = {
   // Row 0
-  'u,u,l,u':  0,  // (col=1, row=1) — outer corner SW
-  'u,l,u,l':  1,  // (col=2, row=1) — diagonal NE-SW
-  'l,u,l,l':  2,  // (col=3, row=1) — inner corner NE
-  'u,u,l,l':  3,  // (col=4, row=1) — edge S
+  'u,u,l,u':  0,  // (col=1, row=1)
+  'u,l,u,l':  1,  // (col=2, row=1) — vertical stripe (left=upper, right=lower)
+  'l,u,l,l':  2,  // (col=3, row=1)
+  'u,u,l,l':  3,  // (col=4, row=1) — horizontal: upper top, lower bottom
   // Row 1
-  'l,u,u,l':  4,  // (col=1, row=2) — diagonal (mirror)
-  'u,l,l,l':  5,  // (col=2, row=2) — outer corner NW (small upper at NE)
+  'l,u,u,l':  4,  // (col=1, row=2) — diagonal NE-SW
+  'u,l,l,l':  5,  // (col=2, row=2) — outer corner: just NW is upper
   'l,l,l,l':  6,  // (col=3, row=2) — pure lower
-  'l,l,l,u':  7,  // (col=4, row=2) — outer corner NW
+  'l,l,l,u':  7,  // (col=4, row=2) — outer corner: just SE is upper
   // Row 2
-  'u,l,u,u':  8,  // (col=1, row=3) — inner corner SE
-  'l,l,u,u':  9,  // (col=2, row=3) — edge N
-  'l,l,u,l': 10,  // (col=3, row=3) — outer corner SW
-  'l,u,l,u': 11,  // (col=4, row=3) — diagonal
+  'u,l,u,u':  8,  // (col=1, row=3)
+  'l,l,u,u':  9,  // (col=2, row=3) — horizontal: lower top, upper bottom
+  'l,l,u,l': 10,  // (col=3, row=3)
+  'l,u,l,u': 11,  // (col=4, row=3) — vertical stripe (right=upper, left=lower)
   // Row 3
   'u,u,u,u': 12,  // (col=1, row=4) — pure upper
-  'u,u,u,l': 13,  // (col=2, row=4) — inner corner SW
-  'u,l,l,u': 14,  // (col=3, row=4) — diagonal
-  'l,u,u,u': 15,  // (col=4, row=4) — inner corner NW
+  'u,u,u,l': 13,  // (col=2, row=4)
+  'u,l,l,u': 14,  // (col=3, row=4) — diagonal NW-SE
+  'l,u,u,u': 15,  // (col=4, row=4)
 };
 
 /**
  * Look up the Wang tile index for a 4-corner pattern. Quadrants are passed
- * in the order (NE, NW, SW, SE). Returns -1 if no tile matches (defensive —
- * the table is exhaustive over u/l combinations so this should not fire).
+ * in the order (NW, NE, SW, SE) — reading order of a 2×2 grid. Returns -1
+ * if no tile matches (defensive — the table is exhaustive over u/l combos
+ * so this should not fire).
  */
-export function wangIndex(ne: Quadrant, nw: Quadrant, sw: Quadrant, se: Quadrant): number {
-  const key = `${ne},${nw},${sw},${se}`;
+export function wangIndex(nw: Quadrant, ne: Quadrant, sw: Quadrant, se: Quadrant): number {
+  const key = `${nw},${ne},${sw},${se}`;
   const idx = WANG_LOOKUP[key];
   return idx === undefined ? -1 : idx;
 }
 
 /**
  * Pick the Wang tile index given booleans for the 4 corners (true = upper).
- * Convenience wrapper so the renderer doesn't have to map booleans → 'u'/'l'
- * by hand on every cell.
+ * Order is (NW, NE, SW, SE) — reading order of a 2×2 grid.
  */
-export function wangIndexFromBools(ne: boolean, nw: boolean, sw: boolean, se: boolean): number {
+export function wangIndexFromBools(nw: boolean, ne: boolean, sw: boolean, se: boolean): number {
   return wangIndex(
-    ne ? 'u' : 'l',
     nw ? 'u' : 'l',
+    ne ? 'u' : 'l',
     sw ? 'u' : 'l',
     se ? 'u' : 'l',
   );
 }
 
 /** True when at least one corner is "upper" (i.e., the cell needs to render). */
-export function anyCornerSet(ne: boolean, nw: boolean, sw: boolean, se: boolean): boolean {
-  return ne || nw || sw || se;
+export function anyCornerSet(nw: boolean, ne: boolean, sw: boolean, se: boolean): boolean {
+  return nw || ne || sw || se;
 }
 
 /**
  * Reverse map of the lookup: given a tile index 0..15, return the four
- * quadrants that the renderer expects in the order [NE, NW, SW, SE].
- * Used by the debug overlay so we can visualise what the code thinks each
- * tile in the user's PNG encodes.
+ * quadrants in the order [NW, NE, SW, SE]. Used by the debug overlay so
+ * we can visualise what the code thinks each tile in the user's PNG encodes.
  */
 export const TILE_INDEX_TO_QUADRANTS: Record<number, [Quadrant, Quadrant, Quadrant, Quadrant]> = (() => {
   const out: Record<number, [Quadrant, Quadrant, Quadrant, Quadrant]> = {};
@@ -99,4 +95,3 @@ export const TILE_INDEX_TO_QUADRANTS: Record<number, [Quadrant, Quadrant, Quadra
   }
   return out;
 })();
-

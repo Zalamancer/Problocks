@@ -336,18 +336,15 @@ function DebugTileGrid({ tileset, tiles }: { tileset: Tileset; tiles: Record<str
 function DebugTileCell({ tile, index }: { tile: Tile; index: number }) {
   const [hover, setHover] = useState(false);
   const quads = TILE_INDEX_TO_QUADRANTS[index];
-  // Layout the 4 overlay quadrants in screen-space:
-  //   top-left  = NW (Q2)
-  //   top-right = NE (Q1)
-  //   bottom-left  = SW (Q3)
-  //   bottom-right = SE (Q4)
-  const [ne, nw, sw, se] = quads ?? ['l', 'l', 'l', 'l'];
-  const code = `${ne},${nw},${sw},${se}`;
+  // Stored quadrant order is (NW, NE, SW, SE) — reading order of the 2×2 grid,
+  // which matches how the user types the codes in their reference table.
+  const [nw, ne, sw, se] = quads ?? ['l', 'l', 'l', 'l'];
+  const code = `${nw},${ne},${sw},${se}`;
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      title={`#${index} → NE=${ne} NW=${nw} SW=${sw} SE=${se}`}
+      title={`#${index} → NW=${nw} NE=${ne} SW=${sw} SE=${se}`}
       style={{
         position: 'relative',
         aspectRatio: '1 / 1',

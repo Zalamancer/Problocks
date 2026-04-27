@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
@@ -1760,6 +1761,24 @@ function AssetCard({
   const cardDragArmedRef = useRef(false);
   /** Style row currently being dragged; the handler reads this on drop. */
   const dragStyleIdRef = useRef<string | null>(null);
+  /** Floating preview that pops up next to the lg card on hover. Holds the
+   *  card's bounding rect so the portal can position itself; null = closed.
+   *  The 180ms delay avoids flicker when the user is just sweeping past. */
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  function openHoverPreview() {
+    if (size !== 'lg') return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = window.setTimeout(() => {
+      if (cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
+    }, 180);
+  }
+  function closeHoverPreview() {
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    setHoverRect(null);
+  }
+  useEffect(() => () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }, []);
 
   function commitName(value: string) {
     setEditingName(false);
@@ -1783,6 +1802,7 @@ function AssetCard({
 
   return (
     <div
+      ref={cardRef}
       draggable
       onDragStart={(e) => {
         if (!cardDragArmedRef.current) { e.preventDefault(); return; }
@@ -1791,11 +1811,14 @@ function AssetCard({
         // is fine because the parent uses a ref instead.
         try { e.dataTransfer.setData('text/plain', asset.id); } catch { /* ignore */ }
         onDragStart();
+        closeHoverPreview();
       }}
       onDragEnd={() => { cardDragArmedRef.current = false; }}
       onDragOver={onDragOverCard}
       onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
       onClick={() => { onFocusAsset?.(); }}
+      onMouseEnter={openHoverPreview}
+      onMouseLeave={closeHoverPreview}
       style={{
         background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
         // Focus ring uses a thicker accent border so it reads at a glance
@@ -2099,10 +2122,82 @@ function AssetCard({
           </button>
         </div>
       )}
+      {hoverRect && headerStyle && size === 'lg' && (
+        <HoverPreview asset={asset} headerStyle={headerStyle} anchorRect={hoverRect} />
+      )}
     </div>
   );
 }
 
+/** Floating zoomed preview that pops up next to a hovered lg AssetCard.
+ *  Renders via portal at document.body and is pointer-events: none so it
+ *  never steals hover from the underlying card. Position prefers the
+ *  right side of the card; falls back to the left when the right edge
+ *  would clip the viewport, and clamps the top so it never spills off
+ *  screen. */
+function HoverPreview({
+  asset, headerStyle, anchorRect,
+}: {
+  asset: ObjectAsset;
+  headerStyle: ObjectStyle;
+  anchorRect: DOMRect;
+}) {
+  const PREVIEW_W = 360;
+  const margin = 12;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+  let left = anchorRect.right + margin;
+  if (left + PREVIEW_W > vw - margin) {
+    left = Math.max(margin, anchorRect.left - PREVIEW_W - margin);
+  }
+  // Approximate height = thumb (square) + footer. Used only for clamping
+  // so the preview doesn't fall below the viewport on short windows.
+  const approxH = PREVIEW_W + 64;
+  const top = Math.max(margin, Math.min(anchorRect.top, vh - approxH - margin));
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        left,
+        top,
+        width: PREVIEW_W,
+        background: 'var(--pb-paper)',
+        border: '2px solid var(--pb-ink)',
+        borderRadius: 14,
+        boxShadow: '0 6px 0 var(--pb-ink), 0 18px 36px rgba(29,26,20,0.20)',
+        overflow: 'hidden',
+        zIndex: 1000,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          aspectRatio: '1 / 1',
+          background: 'rgba(0,0,0,0.04)',
+          padding: 12,
+          borderBottom: '1.5px solid var(--pb-line-2)',
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={headerStyle.dataUrl}
+          alt={asset.name}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+        />
+      </div>
+      <div style={{ padding: '10px 14px' }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {asset.name}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600, marginTop: 2 }}>
+          {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle.width}×{headerStyle.height}px
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 /** Pick the next free label inside an asset's style list. Used to keep
  *  the server's (user_id, group_id, label) upsert key from accidentally

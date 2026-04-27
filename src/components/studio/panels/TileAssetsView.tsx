@@ -1437,15 +1437,16 @@ function ObjectsSection() {
       if (newIdx === idx) return;
 
       if (isHoriz) {
-        // Navigate to prev/next card and force its preview open.
+        // Navigate to prev/next card and force its preview open. Use instant
+        // scroll (not smooth) so the new card is at its final position
+        // before the AssetCard's keyboardOpen effect captures the rect for
+        // the floating preview portal — otherwise the preview anchors to
+        // the pre-scroll location and the user sees a stale popup.
         const newAssetId = order[newIdx];
+        const node = listRef.current?.querySelector<HTMLDivElement>(`[data-asset-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(newAssetId) : newAssetId}"]`);
+        node?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         setFocused({ kind: 'asset', assetId: newAssetId });
         setKeyboardPreviewAssetId(newAssetId);
-        // Scroll the new card into view inside the horizontal list.
-        requestAnimationFrame(() => {
-          const node = listRef.current?.querySelector<HTMLDivElement>(`[data-asset-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(newAssetId) : newAssetId}"]`);
-          node?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-        });
       } else {
         // Vertical → reorder.
         const next = order.slice();
@@ -1631,7 +1632,26 @@ function ObjectsSection() {
               ref={listRef}
               tabIndex={0}
               onKeyDown={handleListKeyDown}
-              onPointerDown={() => setKeyboardPreviewAssetId(null)}
+              onPointerDown={(e) => {
+                setKeyboardPreviewAssetId(null);
+                const t = e.target as HTMLElement;
+                // Don't steal focus from inputs/textareas — they need it to
+                // accept typing for inline rename. For everything else
+                // (card divs, buttons), defer one frame so the click
+                // target's own focus settles, then move focus to the list
+                // so subsequent ArrowLeft/Right reach handleListKeyDown.
+                if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+                requestAnimationFrame(() => listRef.current?.focus({ preventScroll: true }));
+              }}
+              onFocus={() => {
+                // First time the list gains focus (e.g. via Tab) without any
+                // selection yet — pick the first asset so arrow keys have a
+                // starting point. Avoids the "press an arrow, nothing
+                // happens" dead state.
+                if (!focused && assetList.length > 0) {
+                  setFocused({ kind: 'asset', assetId: assetList[0].id });
+                }
+              }}
               className="flex gap-3 overflow-x-auto"
               style={{ paddingBottom: 6, outline: 'none', scrollbarGutter: 'stable' }}
             >
@@ -1644,6 +1664,7 @@ function ObjectsSection() {
                   selectedStyleId={selectedStyleId}
                   size="lg"
                   keyboardOpen={keyboardPreviewAssetId === asset.id}
+                  suppressHover={keyboardPreviewAssetId !== null && keyboardPreviewAssetId !== asset.id}
                   isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
                   focusedStyleId={focused?.kind === 'style' && focused.assetId === asset.id ? focused.styleId : null}
                   onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
@@ -1747,7 +1768,7 @@ function AssetCard({
   onRenameStyle, onAddStyle, onRenameAsset, onReorderStyles,
   onDragStart, onDragOverCard, onDropCard,
   size = 'sm', isFocused = false, focusedStyleId = null,
-  onFocusAsset, onFocusStyle, keyboardOpen = false,
+  onFocusAsset, onFocusStyle, keyboardOpen = false, suppressHover = false,
 }: {
   asset: ObjectAsset;
   expanded: boolean;
@@ -1778,6 +1799,11 @@ function AssetCard({
   /** When true, the parent (ObjectsSection) wants the floating preview
    *  forced open — used by ArrowLeft/Right keyboard navigation. */
   keyboardOpen?: boolean;
+  /** When true, ignore mouse-hover for opening the floating preview.
+   *  Set on every card that's NOT the keyboard-open one so the user
+   *  doesn't see two previews while arrow-keying past a still-hovered
+   *  neighbour. */
+  suppressHover?: boolean;
 }) {
   const headerStyle = isSelected
     ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
@@ -1809,7 +1835,8 @@ function AssetCard({
   useEffect(() => {
     if (size !== 'lg') return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
-    const wantOpen = isMouseInside || keyboardOpen;
+    const mouseShouldOpen = isMouseInside && !suppressHover;
+    const wantOpen = keyboardOpen || mouseShouldOpen;
     if (!wantOpen) {
       setHoverRect(null);
       return;
@@ -1821,7 +1848,7 @@ function AssetCard({
     return () => {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     };
-  }, [isMouseInside, keyboardOpen, size]);
+  }, [isMouseInside, keyboardOpen, suppressHover, size]);
 
   function commitName(value: string) {
     setEditingName(false);

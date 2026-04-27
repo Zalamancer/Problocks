@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
-  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
+  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, ChevronLeft, Check, Cloud, Link2,
   Pencil, GripVertical, X, Maximize2,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
@@ -262,7 +263,7 @@ export function TileAssetsView() {
         className="hidden"
       />
 
-      <TileTabBar active={activeTab} onChange={setActiveTab} />
+      <TileGroupHeader active={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'terrain' && (
         <div className="space-y-2 px-3 py-3">
@@ -1819,48 +1820,169 @@ function AssetCard({
 }
 
 /**
- * Top tab bar for the 2D Tile panel. Replaces the previous accordion of
- * collapsible sections. Tabs use the chunky-pastel pill treatment so the
- * active tab gets a butter background with the standard 2px ink shadow,
- * while inactive tabs are flat cream-2.
+ * Sub-group header for the 2D Tile panel. Matches the dropdown style of
+ * `LeftPanel.tsx`'s `MainGroupHeader` (the pager + central dropdown that
+ * shows My Games / Scene / Assets / Connectors) so the inner navigation
+ * feels native to the rest of the studio. Click the centre button to open
+ * the dropdown; click an item to switch tab. Chevron arrows on either side
+ * cycle through tabs without needing the dropdown.
  */
-function TileTabBar({ active, onChange }: { active: TileTabKey; onChange: (k: TileTabKey) => void }) {
-  const tabs: Array<{ key: TileTabKey; label: string; icon: React.ReactNode }> = [
-    { key: 'terrain', label: 'Terrain', icon: <Sparkles size={11} strokeWidth={2.4} /> },
-    { key: 'scene',   label: 'Scene',   icon: <LayersIcon size={11} strokeWidth={2.4} /> },
-    { key: 'objects', label: 'Objects', icon: <Box size={11} strokeWidth={2.4} /> },
-    { key: 'layers',  label: 'Layers',  icon: <LayersIcon size={11} strokeWidth={2.4} /> },
+function TileGroupHeader({ active, onChange }: { active: TileTabKey; onChange: (k: TileTabKey) => void }) {
+  const tabs: Array<{ key: TileTabKey; label: string; icon: LucideIcon }> = [
+    { key: 'terrain', label: 'Terrain', icon: Sparkles },
+    { key: 'scene',   label: 'Scene',   icon: LayersIcon },
+    { key: 'objects', label: 'Objects', icon: Box },
+    { key: 'layers',  label: 'Layers',  icon: LayersIcon },
   ];
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const currentIndex = Math.max(0, tabs.findIndex((t) => t.key === active));
+  const current = tabs[currentIndex];
+  const Icon = current.icon;
+
+  // Close on outside click — same pattern as MainGroupHeader so behaviour
+  // stays predictable across both dropdowns.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const goPrev = () => onChange(tabs[(currentIndex - 1 + tabs.length) % tabs.length].key);
+  const goNext = () => onChange(tabs[(currentIndex + 1) % tabs.length].key);
+
+  const pagerBtnStyle: React.CSSProperties = {
+    width: 30,
+    height: 30,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    background: 'var(--pb-paper)',
+    border: '1.5px solid var(--pb-line-2)',
+    color: 'var(--pb-ink-soft)',
+    cursor: 'pointer',
+  };
+
   return (
     <div
-      className="flex items-center gap-1"
-      style={{ padding: '8px 8px 6px', borderBottom: '1.5px solid var(--pb-line-2)' }}
+      className="shrink-0 relative"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '10px 12px',
+        borderBottom: '1.5px solid var(--pb-line-2)',
+      }}
     >
-      {tabs.map((t) => {
-        const isActive = t.key === active;
-        return (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => onChange(t.key)}
-            className="flex-1 flex items-center justify-center gap-1.5"
+      <button type="button" onClick={goPrev} aria-label="Previous tab" style={pagerBtnStyle}>
+        <ChevronLeft size={13} strokeWidth={2.4} />
+      </button>
+
+      <div ref={dropdownRef} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: 10,
+            background: open ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+            border: `1.5px solid ${open ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+            boxShadow: open ? '0 2px 0 var(--pb-ink)' : 'none',
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            transition: 'background 120ms ease, border-color 120ms ease',
+          }}
+        >
+          <Icon size={14} strokeWidth={2.2} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {current.label}
+          </span>
+          <ChevronDown
+            size={11}
+            strokeWidth={2.4}
             style={{
-              padding: '6px 4px',
-              background: isActive ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-              border: `1.5px solid ${isActive ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-              borderRadius: 8,
-              color: isActive ? 'var(--pb-butter-ink)' : 'var(--pb-ink-soft)',
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow: isActive ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
+              color: 'var(--pb-ink-muted)',
+              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s',
+              flexShrink: 0,
+            }}
+          />
+        </button>
+
+        {open && (
+          <div
+            className="z-dropdown"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: 0,
+              right: 0,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-ink)',
+              borderRadius: 12,
+              boxShadow: '0 4px 0 var(--pb-ink), 0 12px 28px rgba(29,26,20,0.12)',
+              padding: 6,
             }}
           >
-            {t.icon}
-            {t.label}
-          </button>
-        );
-      })}
+            {tabs.map((t) => {
+              const ItemIcon = t.icon;
+              const isActive = t.key === active;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => { onChange(t.key); setOpen(false); }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '9px 10px',
+                    borderRadius: 8,
+                    background: isActive ? 'var(--pb-cream-2)' : 'transparent',
+                    color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink)',
+                    fontSize: 13,
+                    fontWeight: isActive ? 700 : 500,
+                    fontFamily: 'inherit',
+                    textAlign: 'left',
+                    border: 0,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <ItemIcon
+                    size={15}
+                    strokeWidth={2.2}
+                    style={{ color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink-muted)', flexShrink: 0 }}
+                  />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.label}
+                  </span>
+                  {isActive && <Check size={12} strokeWidth={2.6} style={{ color: 'var(--pb-mint-ink)', flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <button type="button" onClick={goNext} aria-label="Next tab" style={pagerBtnStyle}>
+        <ChevronRight size={13} strokeWidth={2.4} />
+      </button>
     </div>
   );
 }

@@ -60,6 +60,11 @@ export interface Tileset {
   /** Tile ids in this tileset, in slice order. */
   tileIds: string[];
   addedAt: number;
+  /** Server-side row id (Supabase) once this sheet has been saved. Lets us
+   *  DELETE remotely when the user removes the tileset, and de-dupe on
+   *  hydrate. Absent for not-yet-saved or anonymous sessions where the
+   *  save call failed. */
+  cloudId?: string;
 }
 
 export interface TileLayer {
@@ -106,9 +111,10 @@ export interface TileStore {
   tilesets: Tileset[];
   tiles: Record<string, Tile>;
   addTileset: (
-    sheet: { name: string; sheetDataUrl: string; cols: number; rows: number; tileWidth: number; tileHeight: number; tiles: string[] },
+    sheet: { name: string; sheetDataUrl: string; cols: number; rows: number; tileWidth: number; tileHeight: number; tiles: string[]; cloudId?: string },
   ) => string;
   removeTileset: (tilesetId: string) => void;
+  setTilesetCloudId: (tilesetId: string, cloudId: string) => void;
 
   // ── Map state ───────────────────────────────────────────────────
   /** Pixel size of one grid cell in the editor (independent of tile native
@@ -185,7 +191,7 @@ const INITIAL_LAYER = defaultLayer('Ground');
 export const useTile = create<TileStore>()(persist((set, get) => ({
   tilesets: [],
   tiles: {},
-  addTileset: ({ name, sheetDataUrl, cols, rows, tileWidth, tileHeight, tiles }) => {
+  addTileset: ({ name, sheetDataUrl, cols, rows, tileWidth, tileHeight, tiles, cloudId }) => {
     const tilesetId = cryptoId();
     const tileObjs: Tile[] = tiles.map((dataUrl, index) => ({
       id: cryptoId(),
@@ -214,6 +220,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
           cols, rows, tileWidth, tileHeight,
           tileIds,
           addedAt: Date.now(),
+          cloudId,
         }],
         tiles: nextTiles,
         layers: nextLayers,
@@ -224,6 +231,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     });
     return tilesetId;
   },
+  setTilesetCloudId: (tilesetId, cloudId) => set((s) => ({
+    tilesets: s.tilesets.map((t) => t.id === tilesetId ? { ...t, cloudId } : t),
+  })),
   removeTileset: (tilesetId) => set((s) => {
     const ts = s.tilesets.find((t) => t.id === tilesetId);
     if (!ts) return {};

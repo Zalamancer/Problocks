@@ -1,13 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
-  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check,
+  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile } from '@/store/tile-store';
-import { sliceFile } from '@/lib/tile-slicer';
+import { sliceFile, loadImage, sliceImage } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
+import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -26,6 +27,7 @@ export function TileAssetsView() {
   const tiles = useTile((s) => s.tiles);
   const addTileset = useTile((s) => s.addTileset);
   const removeTileset = useTile((s) => s.removeTileset);
+  const setTilesetCloudId = useTile((s) => s.setTilesetCloudId);
   const tileSize = useTile((s) => s.tileSize);
   const setTileSize = useTile((s) => s.setTileSize);
   const layers = useTile((s) => s.layers);
@@ -38,6 +40,7 @@ export function TileAssetsView() {
   const [rows, setRows] = useState(4);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
 
   const [terrainsOpen, setTerrainsOpen] = useState(true);
   const [layersOpen, setLayersOpen] = useState(true);
@@ -45,6 +48,53 @@ export function TileAssetsView() {
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const activeTilesetId = activeLayer?.tilesetId ?? null;
+
+  // Hydrate from Supabase on mount. We re-slice each saved sheet client-side
+  // (cheap canvas blits) rather than persisting the 16 derived tiles. Names
+  // already in the local store are skipped — the persisted Zustand copy is
+  // assumed canonical for the current session.
+  useEffect(() => {
+    let cancelled = false;
+    setCloudStatus('syncing');
+    listTileSheets()
+      .then(async (sheets) => {
+        if (cancelled) return;
+        const localNames = new Set(useTile.getState().tilesets.map((t) => t.name));
+        for (const sheet of sheets) {
+          if (cancelled) return;
+          if (localNames.has(sheet.name)) {
+            // Already in store; just stamp the cloudId so future deletes
+            // can clean up server-side.
+            const existing = useTile.getState().tilesets.find((t) => t.name === sheet.name);
+            if (existing && !existing.cloudId) setTilesetCloudId(existing.id, sheet.id);
+            continue;
+          }
+          try {
+            const img = await loadImage(sheet.sheetDataUrl);
+            const sliced = sliceImage(img, { cols: sheet.cols, rows: sheet.rows });
+            addTileset({
+              name: sheet.name,
+              sheetDataUrl: sheet.sheetDataUrl,
+              cols: sheet.cols,
+              rows: sheet.rows,
+              tileWidth: sliced.tileWidth,
+              tileHeight: sliced.tileHeight,
+              tiles: sliced.tiles,
+              cloudId: sheet.id,
+            });
+          } catch (err) {
+            console.error('[tile-cloud] failed to hydrate sheet', sheet.name, err);
+          }
+        }
+        if (!cancelled) setCloudStatus('synced');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[tile-cloud] list failed; running in local-only mode', err);
+        setCloudStatus('offline');
+      });
+    return () => { cancelled = true; };
+  }, [addTileset, setTilesetCloudId]);
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -54,15 +104,33 @@ export function TileAssetsView() {
     setError(null);
     try {
       for (const file of files) {
+        const name = file.name.replace(/\.[^.]+$/, '');
         const result = await sliceFile(file, { cols, rows });
-        addTileset({
-          name: file.name.replace(/\.[^.]+$/, ''),
+        // Add locally first so the user sees the sheet immediately. The
+        // Supabase save runs in the background and stamps cloudId on
+        // success — failure leaves the sheet local-only.
+        const localId = addTileset({
+          name,
           sheetDataUrl: result.sheetDataUrl,
           cols,
           rows,
           tileWidth: result.tileWidth,
           tileHeight: result.tileHeight,
           tiles: result.tiles,
+        });
+        saveTileSheet({
+          name,
+          sheetDataUrl: result.sheetDataUrl,
+          cols,
+          rows,
+          tileWidth: result.tileWidth,
+          tileHeight: result.tileHeight,
+        }).then((cloud) => {
+          setTilesetCloudId(localId, cloud.id);
+          setCloudStatus('synced');
+        }).catch((err) => {
+          console.warn('[tile-cloud] save failed; sheet kept local-only', err);
+          setCloudStatus('offline');
         });
       }
     } catch (err) {
@@ -76,6 +144,18 @@ export function TileAssetsView() {
     if (!activeLayer) return;
     setLayerTileset(activeLayer.id, tilesetId);
     setTool('paint');
+  }
+
+  function handleRemoveTileset(t: Tileset) {
+    if (!confirm(`Delete tileset "${t.name}"? Layers using it will be detached.`)) return;
+    removeTileset(t.id);
+    if (t.cloudId) {
+      // Fire-and-forget — local removal is the source of truth in the UI;
+      // a server failure surfaces in the console but doesn't roll back.
+      deleteTileSheet(t.cloudId).catch((err) => {
+        console.warn('[tile-cloud] delete failed', err);
+      });
+    }
   }
 
   return (
@@ -109,6 +189,7 @@ export function TileAssetsView() {
             <Upload size={12} strokeWidth={2.4} />
             {uploading ? 'Slicing…' : `Upload Wang sheet → ${cols}×${rows}`}
           </ChunkyButton>
+          <CloudStatusPill status={cloudStatus} />
           {error && (
             <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600 }}>
               {error}
@@ -136,11 +217,7 @@ export function TileAssetsView() {
                   tiles={tiles}
                   active={ts.id === activeTilesetId}
                   onPick={() => pickTileset(ts.id)}
-                  onRemove={() => {
-                    if (confirm(`Delete tileset "${ts.name}"? Layers using it will be detached.`)) {
-                      removeTileset(ts.id);
-                    }
-                  }}
+                  onRemove={() => handleRemoveTileset(ts)}
                 />
               ))}
             </div>
@@ -800,6 +877,34 @@ function NumField({
         }}
       />
     </label>
+  );
+}
+
+function CloudStatusPill({ status }: { status: 'idle' | 'syncing' | 'synced' | 'offline' }) {
+  if (status === 'idle') return null;
+  const map = {
+    syncing: { label: 'Syncing with Supabase…', color: 'var(--pb-ink-muted)', bg: 'transparent' },
+    synced:  { label: 'Saved to Supabase',       color: 'rgb(40,100,30)',     bg: 'rgba(110,180,90,0.12)' },
+    offline: { label: 'Local-only (Supabase offline)', color: 'rgb(150,80,40)', bg: 'rgba(231,148,76,0.16)' },
+  } as const;
+  const cfg = map[status];
+  return (
+    <div
+      className="flex items-center gap-1.5"
+      style={{
+        padding: '4px 8px',
+        background: cfg.bg,
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 6,
+        fontSize: 10,
+        fontWeight: 700,
+        color: cfg.color,
+        letterSpacing: 0.3,
+      }}
+    >
+      <Cloud size={10} strokeWidth={2.6} />
+      <span>{cfg.label}</span>
+    </div>
   );
 }
 

@@ -99,11 +99,20 @@ export const TILE_INDEX_TO_QUADRANTS: Record<number, [Quadrant, Quadrant, Quadra
 /**
  * Minimal tileset shape needed by the resolver. Defined here (instead of
  * importing the store's full Tileset) so this lib stays free of store deps.
+ *
+ * Optional `name` + per-side labels feed the sibling-aware brush remap so
+ * two independently-uploaded sheets can be treated as sharing a texture
+ * even when their pure-tile bytes differ (PixelLab generations etc.).
+ * `upperLabel`/`lowerLabel` win when present; otherwise the parser
+ * derives them from `name` (e.g. "grass-water" → "grass" + "water").
  */
 export interface TilesetForResolve {
   upperTextureId: string;
   lowerTextureId: string;
   tileIds: string[];
+  name?: string;
+  upperLabel?: string;
+  lowerLabel?: string;
 }
 
 /**
@@ -128,6 +137,21 @@ export interface ResolveResult {
   index: number;
 }
 
+/**
+ * Build a label-based canonical key for a texture id. When two different
+ * texture ids carry the same terrain label (own `upperLabel`/`lowerLabel`
+ * or parsed sheet name), they collapse to the same canonical key —
+ * letting the resolver treat them as one texture even though their
+ * underlying ids differ.
+ *
+ * Returns the texture id itself when no label is known, so unlabeled
+ * textures still behave exactly like before.
+ */
+function canonicalTextureKey(texId: string, tilesets: TilesetForResolve[]): string {
+  const label = getTextureLabel(texId, tilesets);
+  return label ? `__label__:${label}` : texId;
+}
+
 export function resolveCellTile(
   nw: string | undefined,
   ne: string | undefined,
@@ -138,26 +162,40 @@ export function resolveCellTile(
   const corners = [nw, ne, sw, se].filter((c): c is string => !!c);
   if (corners.length === 0) return null;
 
-  const unique = Array.from(new Set(corners));
+  // Collapse texture ids by label so two independently-uploaded sheets
+  // both labelled "grass" act as a single texture. Tilesets are similarly
+  // re-keyed so bridge lookups happen on canonical keys, not raw UUIDs.
+  const canonicalCorners = corners.map((c) => canonicalTextureKey(c, tilesets));
+  const cnw = nw ? canonicalTextureKey(nw, tilesets) : undefined;
+  const cne = ne ? canonicalTextureKey(ne, tilesets) : undefined;
+  const csw = sw ? canonicalTextureKey(sw, tilesets) : undefined;
+  const cse = se ? canonicalTextureKey(se, tilesets) : undefined;
+  const canonicalTilesets = tilesets.map((t) => ({
+    raw: t,
+    upperKey: canonicalTextureKey(t.upperTextureId, tilesets),
+    lowerKey: canonicalTextureKey(t.lowerTextureId, tilesets),
+  }));
+
+  const unique = Array.from(new Set(canonicalCorners));
 
   if (unique.length === 1) {
     const tex = unique[0];
-    const upperHit = tilesets.find((t) => t.upperTextureId === tex);
-    if (upperHit) return { tileset: upperHit, index: PURE_UPPER_INDEX };
-    const lowerHit = tilesets.find((t) => t.lowerTextureId === tex);
-    if (lowerHit) return { tileset: lowerHit, index: PURE_LOWER_INDEX };
+    const upperHit = canonicalTilesets.find((t) => t.upperKey === tex);
+    if (upperHit) return { tileset: upperHit.raw, index: PURE_UPPER_INDEX };
+    const lowerHit = canonicalTilesets.find((t) => t.lowerKey === tex);
+    if (lowerHit) return { tileset: lowerHit.raw, index: PURE_LOWER_INDEX };
     return null;
   }
 
   if (unique.length === 2) {
     const [a, b] = unique;
-    const bridge = tilesets.find((t) =>
-      (t.upperTextureId === a && t.lowerTextureId === b)
-      || (t.upperTextureId === b && t.lowerTextureId === a),
+    const bridge = canonicalTilesets.find((t) =>
+      (t.upperKey === a && t.lowerKey === b)
+      || (t.upperKey === b && t.lowerKey === a),
     );
     if (!bridge) {
-      // No tileset bridges these two textures — fall back to the dominant
-      // corner's pure tile so the user at least sees something.
+      // No tileset bridges these two textures (raw or canonical) — fall back
+      // to the dominant corner's pure tile.
       const counts: Record<string, number> = {};
       for (const c of corners) counts[c] = (counts[c] ?? 0) + 1;
       const dominant = Object.entries(counts).sort((x, y) => y[1] - x[1])[0][0];
@@ -165,10 +203,10 @@ export function resolveCellTile(
     }
     const isUpper = (t: string | undefined): Quadrant => {
       if (!t) return 'l';
-      return t === bridge.upperTextureId ? 'u' : 'l';
+      return t === bridge.upperKey ? 'u' : 'l';
     };
-    const idx = wangIndex(isUpper(nw), isUpper(ne), isUpper(sw), isUpper(se));
-    return idx >= 0 ? { tileset: bridge, index: idx } : null;
+    const idx = wangIndex(isUpper(cnw), isUpper(cne), isUpper(csw), isUpper(cse));
+    return idx >= 0 ? { tileset: bridge.raw, index: idx } : null;
   }
 
   // 3+ unique textures in one cell — pick the dominant and fall back.
@@ -196,6 +234,73 @@ export function resolveCellTile(
 export type TileSpriteMap = Record<string, { dataUrl: string }>;
 
 /**
+ * Parse a sheet name into its [upper, lower] terrain labels by splitting
+ * on common separators (`->`, `→`, `-`, `_`, `/`, `|`, ` to `). Returns
+ * null when the name has no recognisable two-part shape. Lowercased so
+ * "Grass" and "grass" count as the same label.
+ *
+ * Examples:
+ *   "grass-water" → ["grass", "water"]
+ *   "Grass → Dirt" → ["grass", "dirt"]
+ *   "grass to water" → ["grass", "water"]
+ *   "tileset1" → null
+ */
+export function parseSheetName(name: string | undefined | null): [string, string] | null {
+  if (!name) return null;
+  const norm = name.toLowerCase().trim();
+  if (!norm) return null;
+  const patterns: RegExp[] = [
+    /^(.+?)\s*->\s*(.+)$/,
+    /^(.+?)\s*→\s*(.+)$/,
+    /^(.+?)\s+to\s+(.+)$/i,
+    /^(.+?)\s*[-_/|]\s*(.+)$/,
+  ];
+  for (const p of patterns) {
+    const m = norm.match(p);
+    if (!m) continue;
+    const a = m[1].trim();
+    const b = m[2].trim();
+    if (a && b && a !== b) return [a, b];
+  }
+  return null;
+}
+
+/**
+ * Resolve a tileset's UPPER and LOWER terrain labels: explicit
+ * `upperLabel`/`lowerLabel` win, falling back to parsed sheet name. Returns
+ * `[null, null]` when nothing is set or parseable.
+ */
+export function getTilesetLabels(
+  ts: Pick<TilesetForResolve, 'name' | 'upperLabel' | 'lowerLabel'>,
+): [string | null, string | null] {
+  const upper = ts.upperLabel?.trim().toLowerCase() || null;
+  const lower = ts.lowerLabel?.trim().toLowerCase() || null;
+  if (upper && lower) return [upper, lower];
+  const parsed = parseSheetName(ts.name);
+  return [
+    upper ?? parsed?.[0] ?? null,
+    lower ?? parsed?.[1] ?? null,
+  ];
+}
+
+/**
+ * Resolve the terrain label for a single texture id by finding which
+ * tileset / side it occupies and returning that side's label. Null when
+ * no tileset claims the id or the side has no label.
+ */
+export function getTextureLabel(
+  texId: string,
+  tilesets: TilesetForResolve[],
+): string | null {
+  for (const ts of tilesets) {
+    const [u, l] = getTilesetLabels(ts);
+    if (ts.upperTextureId === texId) return u;
+    if (ts.lowerTextureId === texId) return l;
+  }
+  return null;
+}
+
+/**
  * Resolve a texture id to the dataUrl of its representative pure-tile —
  * `PURE_UPPER_INDEX` (12) when the texture sits in the upper slot of its
  * tileset, `PURE_LOWER_INDEX` (6) when in the lower slot. Returns null if
@@ -219,26 +324,36 @@ export function getTextureSpriteUrl(
 }
 
 /**
- * Find every texture id whose tileset's pure-tile sprite (at the slot it
- * occupies) is byte-identical to `texId`'s. Two grass→water and
- * grass→dirt sheets uploaded from the same source PNG end up with
- * different `upperTextureId`s for grass, but their pure-upper tiles are
- * the same dataUrl — siblings. Always includes `texId` itself when its
- * sprite is resolvable.
+ * Find every texture id that should be treated as the "same texture" as
+ * `texId` for the auto-tile painter:
+ *   - Sprite-byte siblings: another texture id whose tileset's pure-tile
+ *     dataUrl matches `texId`'s. Catches "same source PNG re-uploaded".
+ *   - Label siblings: another texture id whose terrain label matches
+ *     `texId`'s. Catches PixelLab-style independent generations sharing
+ *     a name (sheet "grass-water" + sheet "grass-dirt", or two sheets
+ *     where the user typed `upperLabel = "grass"` on both).
+ * Always includes `texId` itself.
  */
 export function getSiblingTextures(
   texId: string,
   tilesets: TilesetForResolve[],
   tiles: TileSpriteMap,
 ): string[] {
-  const sprite = getTextureSpriteUrl(texId, tilesets, tiles);
-  if (!sprite) return [texId];
   const out = new Set<string>([texId]);
+  const sprite = getTextureSpriteUrl(texId, tilesets, tiles);
+  const label = getTextureLabel(texId, tilesets);
   for (const ts of tilesets) {
-    const upperSprite = tiles[ts.tileIds[PURE_UPPER_INDEX]]?.dataUrl;
-    const lowerSprite = tiles[ts.tileIds[PURE_LOWER_INDEX]]?.dataUrl;
-    if (upperSprite === sprite) out.add(ts.upperTextureId);
-    if (lowerSprite === sprite) out.add(ts.lowerTextureId);
+    const [upperLabel, lowerLabel] = getTilesetLabels(ts);
+    if (sprite) {
+      const upperSprite = tiles[ts.tileIds[PURE_UPPER_INDEX]]?.dataUrl;
+      const lowerSprite = tiles[ts.tileIds[PURE_LOWER_INDEX]]?.dataUrl;
+      if (upperSprite === sprite) out.add(ts.upperTextureId);
+      if (lowerSprite === sprite) out.add(ts.lowerTextureId);
+    }
+    if (label) {
+      if (upperLabel && upperLabel === label) out.add(ts.upperTextureId);
+      if (lowerLabel && lowerLabel === label) out.add(ts.lowerTextureId);
+    }
   }
   return Array.from(out);
 }

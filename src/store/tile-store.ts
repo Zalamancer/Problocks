@@ -73,6 +73,16 @@ export interface Tileset {
    */
   upperTextureId: string;
   lowerTextureId: string;
+  /**
+   * Optional terrain labels used by the sibling-aware brush remap and
+   * renderer canonicalisation. Two sheets with the same `upperLabel`
+   * (e.g. both "grass") collapse to one texture even when their
+   * `upperTextureId`s differ — the system treats them as the same
+   * "grass". Auto-derived from `name` at upload (e.g. "grass-water" →
+   * upper="grass", lower="water"); the user can override via the panel.
+   */
+  upperLabel?: string;
+  lowerLabel?: string;
 }
 
 export interface TileLayer {
@@ -174,10 +184,16 @@ export interface TileStore {
       cloudId?: string;
       upperTextureId?: string;
       lowerTextureId?: string;
+      upperLabel?: string;
+      lowerLabel?: string;
     },
   ) => string;
   removeTileset: (tilesetId: string) => void;
   setTilesetCloudId: (tilesetId: string, cloudId: string) => void;
+  /** Set or clear the terrain label on one side of a tileset. Empty
+   *  string clears the label so sibling detection falls back to the
+   *  parsed sheet name (or sprite-byte match). */
+  setTilesetLabel: (tilesetId: string, side: 'u' | 'l', label: string) => void;
   /**
    * Replace every reference to `sourceTextureId` with `targetTextureId` —
    * across all tilesets' upper/lower slots, all layer corners, and the
@@ -309,7 +325,7 @@ const INITIAL_LAYER = defaultLayer('Ground');
 export const useTile = create<TileStore>()(persist((set, get) => ({
   tilesets: [],
   tiles: {},
-  addTileset: ({ name, sheetDataUrl, cols, rows, tileWidth, tileHeight, tiles, cloudId, upperTextureId, lowerTextureId }) => {
+  addTileset: ({ name, sheetDataUrl, cols, rows, tileWidth, tileHeight, tiles, cloudId, upperTextureId, lowerTextureId, upperLabel, lowerLabel }) => {
     const tilesetId = cryptoId();
     // Texture ids default to fresh UUIDs when the caller doesn't pass one
     // (i.e., a stand-alone upload). When the caller is "connecting" a new
@@ -317,6 +333,35 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // matching side.
     const upperTexId = upperTextureId ?? cryptoId();
     const lowerTexId = lowerTextureId ?? cryptoId();
+    // Default labels parse out of the sheet name when the caller didn't
+    // specify them — "grass-water" → upper="grass", lower="water". Two
+    // sheets sharing a label collapse to one terrain at paint AND render
+    // time, so independently-uploaded grass→water + grass→dirt sheets
+    // automatically blend through their shared "grass" label.
+    let derivedUpper: string | undefined;
+    let derivedLower: string | undefined;
+    if (!upperLabel || !lowerLabel) {
+      const lower = name.toLowerCase().trim();
+      const patterns: RegExp[] = [
+        /^(.+?)\s*->\s*(.+)$/,
+        /^(.+?)\s*→\s*(.+)$/,
+        /^(.+?)\s+to\s+(.+)$/i,
+        /^(.+?)\s*[-_/|]\s*(.+)$/,
+      ];
+      for (const p of patterns) {
+        const m = lower.match(p);
+        if (!m) continue;
+        const a = m[1].trim();
+        const b = m[2].trim();
+        if (a && b && a !== b) {
+          derivedUpper = a;
+          derivedLower = b;
+          break;
+        }
+      }
+    }
+    const finalUpperLabel = upperLabel ?? derivedUpper;
+    const finalLowerLabel = lowerLabel ?? derivedLower;
     const tileObjs: Tile[] = tiles.map((dataUrl, index) => ({
       id: cryptoId(),
       tilesetId,
@@ -348,6 +393,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
           cloudId,
           upperTextureId: upperTexId,
           lowerTextureId: lowerTexId,
+          upperLabel: finalUpperLabel,
+          lowerLabel: finalLowerLabel,
         }],
         tiles: nextTiles,
         layers: nextLayers,
@@ -360,6 +407,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   },
   setTilesetCloudId: (tilesetId, cloudId) => set((s) => ({
     tilesets: s.tilesets.map((t) => t.id === tilesetId ? { ...t, cloudId } : t),
+  })),
+  setTilesetLabel: (tilesetId, side, label) => set((s) => ({
+    tilesets: s.tilesets.map((t) => {
+      if (t.id !== tilesetId) return t;
+      const trimmed = label.trim();
+      const value = trimmed === '' ? undefined : trimmed;
+      return side === 'u' ? { ...t, upperLabel: value } : { ...t, lowerLabel: value };
+    }),
   })),
   mergeTextures: (sourceTextureId, targetTextureId) => {
     if (sourceTextureId === targetTextureId) return [];
@@ -704,6 +759,30 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     for (const t of state.tilesets ?? []) {
       if (!t.upperTextureId) t.upperTextureId = cryptoId();
       if (!t.lowerTextureId) t.lowerTextureId = cryptoId();
+      // Tilesets persisted before terrain labels existed get a one-shot
+      // auto-parse from `name` so previously-uploaded sheets like
+      // "grass-water" + "grass-dirt" gain the shared "grass" label and the
+      // sibling-aware brush kicks in without re-uploading.
+      if (t.upperLabel === undefined && t.lowerLabel === undefined && t.name) {
+        const norm = t.name.toLowerCase().trim();
+        const patterns: RegExp[] = [
+          /^(.+?)\s*->\s*(.+)$/,
+          /^(.+?)\s*→\s*(.+)$/,
+          /^(.+?)\s+to\s+(.+)$/i,
+          /^(.+?)\s*[-_/|]\s*(.+)$/,
+        ];
+        for (const p of patterns) {
+          const m = norm.match(p);
+          if (!m) continue;
+          const a = m[1].trim();
+          const b = m[2].trim();
+          if (a && b && a !== b) {
+            t.upperLabel = a;
+            t.lowerLabel = b;
+            break;
+          }
+        }
+      }
     }
     // v6: objectAssets is new; default to empty if missing.
     if (!state.objectAssets) state.objectAssets = {};

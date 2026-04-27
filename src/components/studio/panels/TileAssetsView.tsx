@@ -420,10 +420,34 @@ function TerrainCard({
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
   const brushTextureId = useTile((s) => s.brushTextureId);
   const setBrushTextureId = useTile((s) => s.setBrushTextureId);
+  const setTilesetLabel = useTile((s) => s.setTilesetLabel);
   const setTool = useTile((s) => s.setTool);
 
   // Which swatch (if any) currently has its "connect" popover open.
   const [linkingSide, setLinkingSide] = useState<null | 'u' | 'l'>(null);
+
+  // Auto-derive labels from the sheet name when the user hasn't set them
+  // explicitly — kept in sync via the placeholder in the inputs below.
+  function parsedFromName(): { upper?: string; lower?: string } {
+    const norm = tileset.name.toLowerCase().trim();
+    const patterns: RegExp[] = [
+      /^(.+?)\s*->\s*(.+)$/,
+      /^(.+?)\s*→\s*(.+)$/,
+      /^(.+?)\s+to\s+(.+)$/i,
+      /^(.+?)\s*[-_/|]\s*(.+)$/,
+    ];
+    for (const p of patterns) {
+      const m = norm.match(p);
+      if (!m) continue;
+      const a = m[1].trim();
+      const b = m[2].trim();
+      if (a && b && a !== b) return { upper: a, lower: b };
+    }
+    return {};
+  }
+  const parsed = parsedFromName();
+  const upperLabelDisplay = tileset.upperLabel ?? parsed.upper ?? '';
+  const lowerLabelDisplay = tileset.lowerLabel ?? parsed.lower ?? '';
 
   function pickBrush(side: 'u' | 'l') {
     onPick();
@@ -509,6 +533,27 @@ function TerrainCard({
           linking={linkingSide === 'l'}
           onClick={() => pickBrush('l')}
           onChainClick={() => setLinkingSide(linkingSide === 'l' ? null : 'l')}
+        />
+      </div>
+
+      {/* Terrain labels — two sheets sharing a label (e.g. both "grass")
+          collapse to one terrain, so the painter and renderer treat
+          independently-uploaded grass→water and grass→dirt sheets as a
+          single grass that auto-bridges through whichever sheet matches
+          the local boundary. Auto-filled from the sheet name on upload;
+          edit here to override. */}
+      <div className="flex items-center gap-2 mt-2">
+        <LabelInput
+          placeholder="upper name"
+          value={upperLabelDisplay}
+          isOverride={tileset.upperLabel !== undefined}
+          onChange={(v) => setTilesetLabel(tileset.id, 'u', v)}
+        />
+        <LabelInput
+          placeholder="lower name"
+          value={lowerLabelDisplay}
+          isOverride={tileset.lowerLabel !== undefined}
+          onChange={(v) => setTilesetLabel(tileset.id, 'l', v)}
         />
       </div>
 
@@ -626,6 +671,56 @@ function BrushSwatch({
           : <Link2 size={10} strokeWidth={2.6} />}
       </button>
     </div>
+  );
+}
+
+/**
+ * Small editable text input for a tileset's per-side terrain label. Two
+ * tilesets sharing a label collapse to one terrain at paint + render
+ * time, so this is the canonical way to tell the editor "this 'grass'
+ * is the same 'grass' as the other sheet's 'grass'".
+ *
+ * `value` is the label currently being shown (override OR auto-parsed
+ * from the sheet name); `isOverride` controls the muted styling for
+ * auto-derived placeholders so the user can tell what's been edited.
+ */
+function LabelInput({
+  value, placeholder, isOverride, onChange,
+}: {
+  value: string;
+  placeholder: string;
+  isOverride: boolean;
+  onChange: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  // Keep local draft synced when the upstream value changes (e.g. another
+  // edit committed). Avoids the input "freezing" if the parent rerenders.
+  useEffect(() => { setDraft(value); }, [value]);
+  return (
+    <input
+      type="text"
+      value={draft}
+      placeholder={placeholder}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => { if (draft !== value) onChange(draft); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        if (e.key === 'Escape') { setDraft(value); (e.target as HTMLInputElement).blur(); }
+      }}
+      className="flex-1 min-w-0"
+      style={{
+        fontSize: 11,
+        fontWeight: 700,
+        padding: '4px 6px',
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 6,
+        color: isOverride ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
+        outline: 'none',
+        width: 0, // let flex grow handle width without overflow
+      }}
+    />
   );
 }
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
@@ -1572,17 +1571,9 @@ function ObjectsSection() {
   const assetList = Object.values(objectAssets)
     .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
 
-  /** Asset id whose preview should be force-open because the user just
-   *  arrow-keyed to it. Cleared on Escape or any mouse click in the list. */
-  const [keyboardPreviewAssetId, setKeyboardPreviewAssetId] = useState<string | null>(null);
-
   function handleListKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-    if (e.key === 'Escape') {
-      setKeyboardPreviewAssetId(null);
-      return;
-    }
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if (!focused) return;
     e.preventDefault();
@@ -1597,16 +1588,13 @@ function ObjectsSection() {
       if (newIdx === idx) return;
 
       if (isHoriz) {
-        // Navigate to prev/next card and force its preview open. Use instant
-        // scroll (not smooth) so the new card is at its final position
-        // before the AssetCard's keyboardOpen effect captures the rect for
-        // the floating preview portal — otherwise the preview anchors to
-        // the pre-scroll location and the user sees a stale popup.
+        // Navigate to prev/next card. Each card is 100% of the visible
+        // panel width, so scrollIntoView lands the new card flush in view —
+        // its own thumbnail IS the preview, no floating popup needed.
         const newAssetId = order[newIdx];
         const node = listRef.current?.querySelector<HTMLDivElement>(`[data-asset-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(newAssetId) : newAssetId}"]`);
         node?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         setFocused({ kind: 'asset', assetId: newAssetId });
-        setKeyboardPreviewAssetId(newAssetId);
       } else {
         // Vertical → reorder.
         const next = order.slice();
@@ -1793,7 +1781,6 @@ function ObjectsSection() {
               tabIndex={0}
               onKeyDown={handleListKeyDown}
               onPointerDown={(e) => {
-                setKeyboardPreviewAssetId(null);
                 const t = e.target as HTMLElement;
                 // Don't steal focus from inputs/textareas — they need it to
                 // accept typing for inline rename. For everything else
@@ -1823,8 +1810,6 @@ function ObjectsSection() {
                   isSelected={asset.id === selectedAssetId}
                   selectedStyleId={selectedStyleId}
                   size="lg"
-                  keyboardOpen={keyboardPreviewAssetId === asset.id}
-                  suppressHover={keyboardPreviewAssetId !== null && keyboardPreviewAssetId !== asset.id}
                   isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
                   focusedStyleId={focused?.kind === 'style' && focused.assetId === asset.id ? focused.styleId : null}
                   onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
@@ -1928,7 +1913,7 @@ function AssetCard({
   onRenameStyle, onAddStyle, onRenameAsset, onReorderStyles,
   onDragStart, onDragOverCard, onDropCard,
   size = 'sm', isFocused = false, focusedStyleId = null,
-  onFocusAsset, onFocusStyle, keyboardOpen = false, suppressHover = false,
+  onFocusAsset, onFocusStyle,
 }: {
   asset: ObjectAsset;
   expanded: boolean;
@@ -1956,14 +1941,6 @@ function AssetCard({
   focusedStyleId?: string | null;
   onFocusAsset?: () => void;
   onFocusStyle?: (styleId: string) => void;
-  /** When true, the parent (ObjectsSection) wants the floating preview
-   *  forced open — used by ArrowLeft/Right keyboard navigation. */
-  keyboardOpen?: boolean;
-  /** When true, ignore mouse-hover for opening the floating preview.
-   *  Set on every card that's NOT the keyboard-open one so the user
-   *  doesn't see two previews while arrow-keying past a still-hovered
-   *  neighbour. */
-  suppressHover?: boolean;
 }) {
   const headerStyle = isSelected
     ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
@@ -1983,32 +1960,6 @@ function AssetCard({
   const cardDragArmedRef = useRef(false);
   /** Style row currently being dragged; the handler reads this on drop. */
   const dragStyleIdRef = useRef<string | null>(null);
-  /** Floating preview that pops up next to the lg card on hover OR while
-   *  the parent's `keyboardOpen` prop is true (arrow-key navigation).
-   *  hoverRect carries the card's bounding rect so the portal positions
-   *  itself; null = closed. The 180ms mouse delay avoids flicker on quick
-   *  sweeps; the keyboard path opens immediately. */
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
-  const [isMouseInside, setIsMouseInside] = useState(false);
-  const hoverTimerRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (size !== 'lg') return;
-    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
-    const mouseShouldOpen = isMouseInside && !suppressHover;
-    const wantOpen = keyboardOpen || mouseShouldOpen;
-    if (!wantOpen) {
-      setHoverRect(null);
-      return;
-    }
-    const delay = keyboardOpen ? 0 : 180;
-    hoverTimerRef.current = window.setTimeout(() => {
-      if (cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
-    }, delay);
-    return () => {
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    };
-  }, [isMouseInside, keyboardOpen, suppressHover, size]);
 
   function commitName(value: string) {
     setEditingName(false);
@@ -2032,7 +1983,6 @@ function AssetCard({
 
   return (
     <div
-      ref={cardRef}
       data-asset-id={asset.id}
       draggable
       onDragStart={(e) => {
@@ -2042,14 +1992,11 @@ function AssetCard({
         // is fine because the parent uses a ref instead.
         try { e.dataTransfer.setData('text/plain', asset.id); } catch { /* ignore */ }
         onDragStart();
-        setIsMouseInside(false);
       }}
       onDragEnd={() => { cardDragArmedRef.current = false; }}
       onDragOver={onDragOverCard}
       onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
       onClick={() => { onFocusAsset?.(); }}
-      onMouseEnter={() => setIsMouseInside(true)}
-      onMouseLeave={() => setIsMouseInside(false)}
       style={{
         background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
         // Focus ring uses a thicker accent border so it reads at a glance
@@ -2353,82 +2300,10 @@ function AssetCard({
           </button>
         </div>
       )}
-      {hoverRect && headerStyle && size === 'lg' && (
-        <HoverPreview asset={asset} headerStyle={headerStyle} anchorRect={hoverRect} />
-      )}
     </div>
   );
 }
 
-/** Floating zoomed preview that pops up next to a hovered lg AssetCard.
- *  Renders via portal at document.body and is pointer-events: none so it
- *  never steals hover from the underlying card. Position prefers the
- *  right side of the card; falls back to the left when the right edge
- *  would clip the viewport, and clamps the top so it never spills off
- *  screen. */
-function HoverPreview({
-  asset, headerStyle, anchorRect,
-}: {
-  asset: ObjectAsset;
-  headerStyle: ObjectStyle;
-  anchorRect: DOMRect;
-}) {
-  const PREVIEW_W = 360;
-  const margin = 12;
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
-  let left = anchorRect.right + margin;
-  if (left + PREVIEW_W > vw - margin) {
-    left = Math.max(margin, anchorRect.left - PREVIEW_W - margin);
-  }
-  // Approximate height = thumb (square) + footer. Used only for clamping
-  // so the preview doesn't fall below the viewport on short windows.
-  const approxH = PREVIEW_W + 64;
-  const top = Math.max(margin, Math.min(anchorRect.top, vh - approxH - margin));
-  return createPortal(
-    <div
-      style={{
-        position: 'fixed',
-        left,
-        top,
-        width: PREVIEW_W,
-        background: 'var(--pb-paper)',
-        border: '2px solid var(--pb-ink)',
-        borderRadius: 14,
-        boxShadow: '0 6px 0 var(--pb-ink), 0 18px 36px rgba(29,26,20,0.20)',
-        overflow: 'hidden',
-        zIndex: 1000,
-        pointerEvents: 'none',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          aspectRatio: '1 / 1',
-          background: 'rgba(0,0,0,0.04)',
-          padding: 12,
-          borderBottom: '1.5px solid var(--pb-line-2)',
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={headerStyle.dataUrl}
-          alt={asset.name}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-        />
-      </div>
-      <div style={{ padding: '10px 14px' }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {asset.name}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600, marginTop: 2 }}>
-          {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle.width}×{headerStyle.height}px
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 /** Pick the next free label inside an asset's style list. Used to keep
  *  the server's (user_id, group_id, label) upsert key from accidentally

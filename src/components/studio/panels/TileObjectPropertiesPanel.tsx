@@ -147,3 +147,209 @@ export function TileObjectPropertiesPanel({ headless }: { headless?: boolean } =
   );
 }
 
+/**
+ * Style picker shaped like the left-panel asset list: the trigger button
+ * shows the current style's thumb + label, and clicking opens a portal-
+ * positioned popover with one row per style (thumb + label, current row
+ * checked). Mirrors the row layout from `AssetCard`'s expanded styles
+ * list in TileAssetsView so the two surfaces feel like the same widget.
+ */
+function StylePreviewDropdown({
+  asset, currentStyleId, onPick,
+}: {
+  asset: ObjectAsset;
+  currentStyleId: string;
+  onPick: (styleId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [popStyle, setPopStyle] = useState<React.CSSProperties>({});
+
+  const current: ObjectStyle =
+    asset.styles.find((s) => s.id === currentStyleId) ?? asset.styles[0];
+
+  // Position the portal popover under the trigger; flip up when there's
+  // more space above (mirrors PanelSelect's behaviour). Keeps the panel
+  // from spilling off-screen in narrow right-panel layouts.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const r = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const dropUp = spaceBelow < 280 && r.top > spaceBelow;
+    setPopStyle({
+      position: 'fixed',
+      left: r.left,
+      width: r.width,
+      ...(dropUp
+        ? { bottom: window.innerHeight - r.top + 4 }
+        : { top: r.bottom + 4 }),
+    });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2"
+        style={{
+          padding: '4px 8px 4px 4px',
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 8,
+          cursor: 'pointer',
+        }}
+      >
+        <StyleThumb style={current} size={28} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 11,
+            fontWeight: 800,
+            color: 'var(--pb-ink)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            textAlign: 'left',
+          }}
+        >
+          {current.label || 'Style 1'}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)' }}>
+          {asset.styles.length}
+        </span>
+        <ChevronDown
+          size={14}
+          strokeWidth={2.4}
+          style={{
+            color: 'var(--pb-ink-muted)',
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 120ms',
+          }}
+        />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            style={{
+              ...popStyle,
+              zIndex: 999,
+              maxHeight: 280,
+              overflowY: 'auto',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+              padding: 4,
+            }}
+          >
+            {asset.styles.map((st, i) => {
+              const isCurrent = st.id === currentStyleId;
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => {
+                    onPick(st.id);
+                    setOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2"
+                  style={{
+                    padding: '4px 6px 4px 4px',
+                    background: isCurrent ? 'var(--pb-butter)' : 'transparent',
+                    border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'transparent'}`,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    marginBottom: i === asset.styles.length - 1 ? 0 : 2,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isCurrent) e.currentTarget.style.background = 'var(--pb-cream-2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isCurrent) e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <StyleThumb style={st} size={32} />
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: 'var(--pb-ink)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {st.label || `Style ${i + 1}`}
+                  </span>
+                  {isCurrent && (
+                    <Check size={12} strokeWidth={2.6} style={{ color: 'var(--pb-butter-ink)' }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function StyleThumb({ style, size }: { style: ObjectStyle; size: number }) {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        background: 'rgba(0,0,0,0.06)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 5,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={style.dataUrl}
+        alt=""
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          imageRendering: 'pixelated',
+        }}
+        draggable={false}
+      />
+    </span>
+  );
+}

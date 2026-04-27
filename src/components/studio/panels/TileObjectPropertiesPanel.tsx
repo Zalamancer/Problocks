@@ -5,6 +5,7 @@ import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { useTile } from '@/store/tile-store';
+import { TransformControls2D } from './TransformControls2D';
 
 /**
  * Right-panel Properties view for a selected free-positioned tile object.
@@ -55,48 +56,18 @@ export function TileObjectPropertiesPanel({ headless }: { headless?: boolean } =
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         <PanelSection title="Transform" collapsible defaultOpen>
-          <PanelSlider
-            label="X"
-            value={Math.round(obj.x)}
-            onChange={(v) => updateObject(obj.id, { x: v })}
-            min={-10000}
-            max={10000}
-            step={1}
-          />
-          <PanelSlider
-            label="Y"
-            value={Math.round(obj.y)}
-            onChange={(v) => updateObject(obj.id, { y: v })}
-            min={-10000}
-            max={10000}
-            step={1}
-          />
-          <PanelSlider
-            label="Width"
-            value={Math.round(obj.width)}
-            onChange={(v) => updateObject(obj.id, { width: Math.max(1, v) })}
-            min={1}
-            max={2048}
-            step={1}
-            suffix="px"
-          />
-          <PanelSlider
-            label="Height"
-            value={Math.round(obj.height)}
-            onChange={(v) => updateObject(obj.id, { height: Math.max(1, v) })}
-            min={1}
-            max={2048}
-            step={1}
-            suffix="px"
-          />
-          <PanelSlider
-            label="Rotation"
-            value={Math.round(obj.rotation)}
-            onChange={(v) => updateObject(obj.id, { rotation: v })}
-            min={-180}
-            max={180}
-            step={1}
-            suffix="°"
+          <TransformControls2D
+            position={{ x: Math.round(obj.x), y: Math.round(obj.y) }}
+            rotation={Math.round(obj.rotation)}
+            size={{ x: Math.round(obj.width), y: Math.round(obj.height) }}
+            onPositionChange={(v) => updateObject(obj.id, { x: v.x, y: v.y })}
+            onRotationChange={(v) => updateObject(obj.id, { rotation: v })}
+            onSizeChange={(v) =>
+              updateObject(obj.id, {
+                width: Math.max(1, v.x),
+                height: Math.max(1, v.y),
+              })
+            }
           />
         </PanelSection>
 

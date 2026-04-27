@@ -13,6 +13,8 @@ import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/l
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
 
+type TileTabKey = 'terrain' | 'scene' | 'objects' | 'layers';
+
 /**
  * Left-panel content for the 2D Tile-based game system.
  *
@@ -53,9 +55,11 @@ export function TileAssetsView() {
     newSide: 'u' | 'l';      // where to place the shared id in the new sheet
   } | null>(null);
 
-  const [terrainsOpen, setTerrainsOpen] = useState(true);
-  const [layersOpen, setLayersOpen] = useState(true);
-  const [objectsOpen, setObjectsOpen] = useState(false);
+  // Top-level tab routing for the 2D tile panel. Replaced the old
+  // accordion (Terrains / Layers / Objects collapsibles) so the placed-
+  // object list — which can run dozens of rows on a built-out scene —
+  // gets its own dedicated screen instead of being buried below uploads.
+  const [activeTab, setActiveTab] = useState<TileTabKey>('terrain');
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const brushTextureId = useTile((s) => s.brushTextureId);
@@ -258,13 +262,10 @@ export function TileAssetsView() {
         className="hidden"
       />
 
-      <Section
-        title="Terrains"
-        icon={<Sparkles size={13} strokeWidth={2.4} />}
-        open={terrainsOpen}
-        onToggle={() => setTerrainsOpen(!terrainsOpen)}
-      >
-        <div className="space-y-2 px-3 pb-3">
+      <TileTabBar active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'terrain' && (
+        <div className="space-y-2 px-3 py-3">
           <div className="flex items-center gap-1.5">
             <NumField label="Cols" value={cols} onChange={setCols} min={1} max={32} />
             <NumField label="Rows" value={rows} onChange={setRows} min={1} max={32} />
@@ -318,25 +319,11 @@ export function TileAssetsView() {
             </div>
           )}
         </div>
-      </Section>
+      )}
 
-      <Section
-        title="Layers"
-        icon={<LayersIcon size={13} strokeWidth={2.4} />}
-        open={layersOpen}
-        onToggle={() => setLayersOpen(!layersOpen)}
-      >
-        <LayerList />
-      </Section>
-
-      <Section
-        title="Objects"
-        icon={<Box size={13} strokeWidth={2.4} />}
-        open={objectsOpen}
-        onToggle={() => setObjectsOpen(!objectsOpen)}
-      >
-        <ObjectsSection />
-      </Section>
+      {activeTab === 'scene' && <SceneSection />}
+      {activeTab === 'objects' && <ObjectsSection />}
+      {activeTab === 'layers' && <LayerList />}
     </div>
   );
 }
@@ -1092,10 +1079,6 @@ function ObjectsSection() {
   const renameAsset = useTile((s) => s.renameAsset);
   const reorderAssets = useTile((s) => s.reorderAssets);
   const reorderStyles = useTile((s) => s.reorderStyles);
-  const objects = useTile((s) => s.objects);
-  const selectObject = useTile((s) => s.selectObject);
-  const removeObject = useTile((s) => s.removeObject);
-  const selectedObjectId = useTile((s) => s.selectedObjectId);
   const selectedAssetId = useTile((s) => s.selectedAssetId);
   const setSelectedAssetId = useTile((s) => s.setSelectedAssetId);
   const selectedStyleId = useTile((s) => s.selectedStyleId);
@@ -1386,61 +1369,6 @@ function ObjectsSection() {
           <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
             No sprites yet. Upload PNG/WebP files to drop on the canvas as free objects.
           </p>
-        </div>
-      )}
-
-      {objects.length > 0 && (
-        <div className="space-y-1">
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
-            PLACED ({objects.length})
-          </div>
-          {objects.map((obj) => {
-            const asset = objectAssets[obj.assetId];
-            const style = asset?.styles.find((st) => st.id === obj.styleId);
-            const isSel = obj.id === selectedObjectId;
-            return (
-              <div
-                key={obj.id}
-                onClick={() => selectObject(obj.id)}
-                className="flex items-center gap-2 cursor-pointer transition-colors"
-                style={{
-                  padding: '4px 6px',
-                  borderRadius: 6,
-                  background: isSel ? 'var(--pb-butter)' : 'transparent',
-                  border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-                }}
-              >
-                <div
-                  style={{
-                    width: 22, height: 22, flexShrink: 0,
-                    background: 'rgba(0,0,0,0.05)',
-                    borderRadius: 4,
-                    overflow: 'hidden',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  {style && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
-                  )}
-                </div>
-                <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {obj.name}
-                  {style && asset && asset.styles.length > 1 && (
-                    <span style={{ color: 'var(--pb-ink-muted)', fontWeight: 600 }}> · {style.label || `Style ${asset.styles.findIndex((s) => s.id === style.id) + 1}`}</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}
-                  style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center' }}
-                  title="Delete object"
-                >
-                  <Trash2 size={11} strokeWidth={2.4} />
-                </button>
-              </div>
-            );
-          })}
         </div>
       )}
 
@@ -1886,6 +1814,140 @@ function AssetCard({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Top tab bar for the 2D Tile panel. Replaces the previous accordion of
+ * collapsible sections. Tabs use the chunky-pastel pill treatment so the
+ * active tab gets a butter background with the standard 2px ink shadow,
+ * while inactive tabs are flat cream-2.
+ */
+function TileTabBar({ active, onChange }: { active: TileTabKey; onChange: (k: TileTabKey) => void }) {
+  const tabs: Array<{ key: TileTabKey; label: string; icon: React.ReactNode }> = [
+    { key: 'terrain', label: 'Terrain', icon: <Sparkles size={11} strokeWidth={2.4} /> },
+    { key: 'scene',   label: 'Scene',   icon: <LayersIcon size={11} strokeWidth={2.4} /> },
+    { key: 'objects', label: 'Objects', icon: <Box size={11} strokeWidth={2.4} /> },
+    { key: 'layers',  label: 'Layers',  icon: <LayersIcon size={11} strokeWidth={2.4} /> },
+  ];
+  return (
+    <div
+      className="flex items-center gap-1"
+      style={{ padding: '8px 8px 6px', borderBottom: '1.5px solid var(--pb-line-2)' }}
+    >
+      {tabs.map((t) => {
+        const isActive = t.key === active;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            className="flex-1 flex items-center justify-center gap-1.5"
+            style={{
+              padding: '6px 4px',
+              background: isActive ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+              border: `1.5px solid ${isActive ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+              borderRadius: 8,
+              color: isActive ? 'var(--pb-butter-ink)' : 'var(--pb-ink-soft)',
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: isActive ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
+            }}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Scene tab — the placed-objects list, formerly the bottom of the
+ * Objects accordion. Showing it on its own dedicated tab gives it the
+ * full panel height to scroll, which matters once a built-out scene
+ * has dozens of placed sprites.
+ */
+function SceneSection() {
+  const objects = useTile((s) => s.objects);
+  const objectAssets = useTile((s) => s.objectAssets);
+  const selectObject = useTile((s) => s.selectObject);
+  const removeObject = useTile((s) => s.removeObject);
+  const selectedObjectId = useTile((s) => s.selectedObjectId);
+
+  if (objects.length === 0) {
+    return (
+      <div className="px-3 py-3">
+        <div
+          className="rounded-lg p-4 text-center"
+          style={{
+            background: 'var(--pb-cream-2)',
+            border: '1.5px dashed var(--pb-line-2)',
+          }}
+        >
+          <p style={{ fontSize: 12, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
+            No objects placed yet. Switch to the <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), pick a style from the library, and click on the canvas to drop sprites.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 px-3 py-3">
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
+        PLACED ({objects.length})
+      </div>
+      {objects.map((obj) => {
+        const asset = objectAssets[obj.assetId];
+        const style = asset?.styles.find((st) => st.id === obj.styleId);
+        const isSel = obj.id === selectedObjectId;
+        return (
+          <div
+            key={obj.id}
+            onClick={() => selectObject(obj.id)}
+            className="flex items-center gap-2 cursor-pointer transition-colors"
+            style={{
+              padding: '4px 6px',
+              borderRadius: 6,
+              background: isSel ? 'var(--pb-butter)' : 'transparent',
+              border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+            }}
+          >
+            <div
+              style={{
+                width: 22, height: 22, flexShrink: 0,
+                background: 'rgba(0,0,0,0.05)',
+                borderRadius: 4,
+                overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {style && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+              )}
+            </div>
+            <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {obj.name}
+              {style && asset && asset.styles.length > 1 && (
+                <span style={{ color: 'var(--pb-ink-muted)', fontWeight: 600 }}> · {style.label || `Style ${asset.styles.findIndex((s) => s.id === style.id) + 1}`}</span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center' }}
+              title="Delete object"
+            >
+              <Trash2 size={11} strokeWidth={2.4} />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -174,16 +174,25 @@ export function TileView() {
       for (const ts of state.tilesets) {
         const adj = tilesetTints[ts.id];
         if (!hasActiveAdjustments(adj)) continue;
-        // Stable hash for cache lookup — bucket id + numeric values.
-        const hash = JSON.stringify(adj);
-        for (const tileId of ts.tileIds) {
+        // Stable hash for cache lookup — bucket id + numeric values, plus
+        // the active variant index so switching style sheets while a tint
+        // is live invalidates the cache instead of pinning the recoloured
+        // base sheet under the new variant's tileId.
+        const variantIdx = ts.activeVariantIndex ?? 0;
+        const hash = `${variantIdx}:${JSON.stringify(adj)}`;
+        for (let i = 0; i < ts.tileIds.length; i++) {
+          const tileId = ts.tileIds[i];
           const tile = state.tiles[tileId];
           if (!tile) continue;
+          // Recolour the *active variant's* dataUrl, not the base. Otherwise
+          // a tint locks the canvas to the base sheet's recoloured pixels
+          // and variant switches become invisible.
+          const sourceDataUrl = tileDataUrlFor(ts, i, tile.dataUrl);
           const cacheKey = `${tileId}:${hash}`;
           let recolored = recolorCacheRef.current.get(cacheKey);
           if (!recolored) {
             try {
-              recolored = await recolorTile(tile.dataUrl, adj);
+              recolored = await recolorTile(sourceDataUrl, adj);
               if (cancelled) return;
               recolorCacheRef.current.set(cacheKey, recolored);
             } catch (err) {
@@ -212,7 +221,7 @@ export function TileView() {
     }
     void rebuild();
     return () => { cancelled = true; };
-  }, [tilesetTints, tiles]);
+  }, [tilesetTints, tiles, tilesets]);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 

@@ -371,6 +371,23 @@ export interface TileStore {
    *  id and all its siblings (sprite-byte or label) are added to the
    *  list; when false, the id and all its siblings are removed. */
   setWavyTexture: (textureId: string, on: boolean) => void;
+  /**
+   * Per-texture render tint applied via ctx.filter at draw time. Each
+   * value is a CSS-filter compatible scalar:
+   *   - hue: degrees, applied as `hue-rotate(${hue}deg)` (default 0)
+   *   - saturation: multiplier, `saturate(${saturation})` (default 1)
+   *   - brightness: multiplier, `brightness(${brightness})` (default 1)
+   * Cells whose dominant corner texture has a non-identity tint render
+   * with that filter; identity tints fall through the fast path with no
+   * filter overhead.
+   */
+  textureTints: Record<string, { hue: number; saturation: number; brightness: number }>;
+  /** Patch a texture's tint. Pass partial — unspecified fields keep
+   *  their current value. Pass `null` to clear the tint entirely. */
+  setTextureTint: (
+    textureId: string,
+    patch: Partial<{ hue: number; saturation: number; brightness: number }> | null,
+  ) => void;
   /** Used only by the OBJECT tool — picks the asset whose style brush is
    *  active. The actual sprite to place is `selectedStyleId` within this
    *  asset (defaults to the asset's first style on selection). */
@@ -945,6 +962,28 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     else for (const id of family) current.delete(id);
     return { wavyTextureIds: Array.from(current) };
   }),
+  textureTints: {},
+  setTextureTint: (textureId, patch) => set((s) => {
+    const next = { ...s.textureTints };
+    if (patch === null) {
+      delete next[textureId];
+      return { textureTints: next };
+    }
+    const current = next[textureId] ?? { hue: 0, saturation: 1, brightness: 1 };
+    const merged = {
+      hue: patch.hue ?? current.hue,
+      saturation: patch.saturation ?? current.saturation,
+      brightness: patch.brightness ?? current.brightness,
+    };
+    // Drop the entry when it returns to identity so the fast path in
+    // the renderer kicks back in.
+    if (merged.hue === 0 && merged.saturation === 1 && merged.brightness === 1) {
+      delete next[textureId];
+    } else {
+      next[textureId] = merged;
+    }
+    return { textureTints: next };
+  }),
   selectedAssetId: null,
   setSelectedAssetId: (id) => set((s) => {
     // When switching assets, reset the style brush to the new asset's first
@@ -1000,6 +1039,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomFlipV: s.brushRandomFlipV,
     brushRandomRotate: s.brushRandomRotate,
     wavyTextureIds: s.wavyTextureIds,
+    textureTints: s.textureTints,
     showGrid: s.showGrid,
   }),
   // Heal an empty / corrupted persisted state.

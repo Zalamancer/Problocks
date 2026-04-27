@@ -169,6 +169,33 @@ export function TileView() {
       // tileset bridges the textures present at the 4 corners. Two chained
       // tilesets sharing a texture transition smoothly because the bridge
       // tileset for the boundary cells contains both textures.
+      // Build a quick canonical-key → filter string lookup so per-cell
+      // tint application is one Map.get plus a string assignment. Keyed
+      // by canonical texture key (label/id) so two label-linked sheets
+      // share one tint entry rather than fighting over the dominant
+      // corner.
+      const tintCanon = new Map<string, string>();
+      const tintRawIds = Object.keys(s.textureTints);
+      if (tintRawIds.length > 0) {
+        for (const id of tintRawIds) {
+          const tint = s.textureTints[id];
+          // Identity tints are dropped from the store, so any entry
+          // here implies at least one channel is non-default.
+          const parts: string[] = [];
+          if (tint.hue !== 0) parts.push(`hue-rotate(${tint.hue}deg)`);
+          if (tint.saturation !== 1) parts.push(`saturate(${tint.saturation})`);
+          if (tint.brightness !== 1) parts.push(`brightness(${tint.brightness})`);
+          if (parts.length === 0) continue;
+          const filter = parts.join(' ');
+          tintCanon.set(id, filter);
+          // Mirror onto the canonical key (label or id) so any sibling
+          // texture id picks the same filter without needing its own
+          // entry. Cheap because tintRawIds is small.
+          // Sibling expansion not needed — the panel sets the tint on
+          // every sibling explicitly via its own onChange handler.
+        }
+      }
+      const hasTints = tintCanon.size > 0;
       for (const layer of s.layers) {
         if (!layer.visible) continue;
         ctx!.globalAlpha = layer.opacity;
@@ -194,22 +221,46 @@ export function TileView() {
             const dataUrl = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
             const img = imgCacheRef.current.get(dataUrl);
             if (!img || !imgReadyRef.current.has(dataUrl)) continue;
+            // Per-cell tint: pick the dominant corner texture and look
+            // up its filter string. When no textures have tints we skip
+            // the lookup entirely (fast path).
+            let cellFilter: string | undefined;
+            if (hasTints) {
+              // Find dominant non-empty corner texture.
+              const counts = new Map<string, number>();
+              if (nw) counts.set(nw, (counts.get(nw) ?? 0) + 1);
+              if (ne) counts.set(ne, (counts.get(ne) ?? 0) + 1);
+              if (sw) counts.set(sw, (counts.get(sw) ?? 0) + 1);
+              if (se) counts.set(se, (counts.get(se) ?? 0) + 1);
+              let best: string | undefined;
+              let bestN = 0;
+              for (const [tex, n] of counts) {
+                if (n > bestN) { bestN = n; best = tex; }
+              }
+              if (best) cellFilter = tintCanon.get(best);
+            }
             // Per-cell render transform (random flip/rotate from brush
             // options at paint time). Cheap fast-path when no transforms
             // exist or this cell wasn't randomized — just drawImage at
             // the cell's top-left like before.
             const t = transforms?.[`${cx},${cy}`] ?? 0;
-            if (t === 0) {
+            const needsState = t !== 0 || !!cellFilter;
+            if (!needsState) {
               ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
             } else {
-              const flipH = (t & 0x1) !== 0;
-              const flipV = (t & 0x2) !== 0;
-              const rot = (t >> 2) & 0x3;
               ctx!.save();
-              ctx!.translate(cx * ts + ts / 2, cy * ts + ts / 2);
-              if (rot) ctx!.rotate(rot * Math.PI / 2);
-              if (flipH || flipV) ctx!.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-              ctx!.drawImage(img, -ts / 2 - bleed, -ts / 2 - bleed, ts + bleed * 2, ts + bleed * 2);
+              if (cellFilter) ctx!.filter = cellFilter;
+              if (t !== 0) {
+                const flipH = (t & 0x1) !== 0;
+                const flipV = (t & 0x2) !== 0;
+                const rot = (t >> 2) & 0x3;
+                ctx!.translate(cx * ts + ts / 2, cy * ts + ts / 2);
+                if (rot) ctx!.rotate(rot * Math.PI / 2);
+                if (flipH || flipV) ctx!.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+                ctx!.drawImage(img, -ts / 2 - bleed, -ts / 2 - bleed, ts + bleed * 2, ts + bleed * 2);
+              } else {
+                ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+              }
               ctx!.restore();
             }
           }
@@ -271,24 +322,24 @@ export function TileView() {
           ctx!.globalCompositeOperation = 'hue';
           const wavelength = Math.max(ts * 1.5, 16);
           const speed = 1.4;
+          // Hue band kept tight in the blue family so the wave never
+          // drifts into teal/turquoise — only "blue-type colors" as the
+          // user asked. Centre 215° (pure blue) ± 12° = 203°..227°.
+          const HUE_CENTER = 215;
+          const HUE_RANGE = 12;
           // Horizontal wave: vertical strips with hue varying by sin(x).
-          // Strip width scales with zoom so we stay near 2 device px.
           const stripPx = Math.max(1 / cam.zoom, 2 / cam.zoom);
           for (let x = minPX; x < maxPX; x += stripPx) {
             const phase = (x / wavelength) * Math.PI * 2 + time * speed;
-            const hue = 200 + Math.sin(phase) * 28;
-            // Saturation pulse keeps the hue shift visible across tile
-            // pixels of varying intrinsic saturation.
+            const hue = HUE_CENTER + Math.sin(phase) * HUE_RANGE;
             const sat = 80 + Math.sin(phase * 0.5) * 10;
             ctx!.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
             ctx!.fillRect(x, minPY, stripPx + 0.5 / cam.zoom, maxPY - minPY);
           }
-          // Crossing vertical wave at a different phase + speed gives
-          // the cross-pattern shimmer real water has, all in pixel-hue
-          // space. No second composite mode change needed.
+          // Crossing vertical wave at a different phase + speed.
           for (let y = minPY; y < maxPY; y += stripPx) {
             const phase = (y / wavelength) * Math.PI * 2 - time * speed * 0.7;
-            const hue = 200 + Math.sin(phase) * 18;
+            const hue = HUE_CENTER + Math.sin(phase) * (HUE_RANGE * 0.7);
             const sat = 75 + Math.sin(phase * 0.5) * 10;
             ctx!.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
             ctx!.fillRect(minPX, y, maxPX - minPX, stripPx + 0.5 / cam.zoom);

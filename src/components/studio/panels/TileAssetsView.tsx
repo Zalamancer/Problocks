@@ -780,6 +780,20 @@ function TerrainCard({
         />
       )}
 
+      {/* Per-texture tint — hue/saturation/brightness applied at render
+          via ctx.filter. Two rows, one per side, each binding to the
+          corresponding texture id. The renderer uses the dominant
+          corner texture's tint for each cell, so transition tiles
+          inherit the more-prevalent side's filter. */}
+      <TintRow
+        title="UPPER tint"
+        textureId={tileset.upperTextureId}
+      />
+      <TintRow
+        title="LOWER tint"
+        textureId={tileset.lowerTextureId}
+      />
+
       {/* All 16 sliced tiles, always visible. Hover to see the (NW,NE,SW,SE)
           encoding overlay so the user can sanity-check the auto-tile lookup.
           Variant-aware — `tileDataUrls` substitutes in for the base slices
@@ -2601,6 +2615,119 @@ function nextUniqueLabel(asset: ObjectAsset, base: string): string {
     if (!taken.has(candidate)) return candidate;
   }
   return `${base} ${Date.now()}`;
+}
+
+/**
+ * Per-texture HSL tint sliders. Reads the current tint from the store
+ * for the given `textureId` and writes patches via setTextureTint. The
+ * row collapses by default; clicking the title toggles. A small "reset"
+ * link clears the tint back to identity (which removes the entry from
+ * the store, restoring the renderer's fast path).
+ */
+function TintRow({ title, textureId }: { title: string; textureId: string }) {
+  const tint = useTile((s) => s.textureTints[textureId]);
+  const setTextureTint = useTile((s) => s.setTextureTint);
+  const [open, setOpen] = useState(false);
+  const hue = tint?.hue ?? 0;
+  const saturation = tint?.saturation ?? 1;
+  const brightness = tint?.brightness ?? 1;
+  const isCustom = !!tint;
+  return (
+    <div className="mt-2" style={{ borderTop: '1.5px solid var(--pb-line-2)', paddingTop: 8 }}>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          style={{
+            background: 'transparent', border: 0, cursor: 'pointer',
+            fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
+            color: isCustom ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: 0,
+          }}
+        >
+          {open ? <ChevDown size={10} strokeWidth={2.6} /> : <ChevronRight size={10} strokeWidth={2.6} />}
+          {title}{isCustom ? ' ●' : ''}
+        </button>
+        {isCustom && (
+          <button
+            type="button"
+            onClick={() => setTextureTint(textureId, null)}
+            style={{
+              marginLeft: 'auto', padding: '2px 6px',
+              background: 'transparent', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 5, cursor: 'pointer',
+              fontSize: 9, fontWeight: 700, color: 'var(--pb-ink-muted)',
+            }}
+          >
+            reset
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="mt-1.5 space-y-1.5">
+          <TintSlider
+            label="hue"
+            value={hue}
+            min={-180}
+            max={180}
+            step={1}
+            unit="°"
+            onChange={(v) => setTextureTint(textureId, { hue: v })}
+          />
+          <TintSlider
+            label="sat"
+            value={saturation}
+            min={0}
+            max={2}
+            step={0.05}
+            onChange={(v) => setTextureTint(textureId, { saturation: v })}
+            display={(v) => `${(v * 100).toFixed(0)}%`}
+          />
+          <TintSlider
+            label="bri"
+            value={brightness}
+            min={0.4}
+            max={1.6}
+            step={0.05}
+            onChange={(v) => setTextureTint(textureId, { brightness: v })}
+            display={(v) => `${(v * 100).toFixed(0)}%`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TintSlider({
+  label, value, min, max, step, unit, onChange, display,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  onChange: (v: number) => void;
+  display?: (v: number) => string;
+}) {
+  return (
+    <label className="flex items-center gap-2" style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)' }}>
+      <span style={{ width: 24 }}>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{ flex: 1, height: 14, accentColor: 'var(--pb-butter-ink)' }}
+      />
+      <span style={{ width: 36, textAlign: 'right', color: 'var(--pb-ink)', fontWeight: 700 }}>
+        {display ? display(value) : `${value}${unit ?? ''}`}
+      </span>
+    </label>
+  );
 }
 
 function NumField({

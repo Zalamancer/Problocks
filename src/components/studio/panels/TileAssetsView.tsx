@@ -146,6 +146,13 @@ export function TileAssetsView() {
           upperTextureId: sharedUpper,
           lowerTextureId: sharedLower,
         });
+        // Read the local tileset back so we send Supabase the SAME texture
+        // ids that addTileset resolved (either the shared ones from a chain
+        // upload, or the freshly-generated ones for a stand-alone upload).
+        // Without this the DB would assign its own ids, leaving local and
+        // cloud out of sync — and the "merge textures" feature would
+        // re-hydrate stale ids on reload.
+        const local = useTile.getState().tilesets.find((t) => t.id === localId);
         saveTileSheet({
           name,
           sheetDataUrl: result.sheetDataUrl,
@@ -153,8 +160,8 @@ export function TileAssetsView() {
           rows,
           tileWidth: result.tileWidth,
           tileHeight: result.tileHeight,
-          upperTextureId: sharedUpper,
-          lowerTextureId: sharedLower,
+          upperTextureId: local?.upperTextureId,
+          lowerTextureId: local?.lowerTextureId,
         }).then((cloud) => {
           setTilesetCloudId(localId, cloud.id);
           setCloudStatus('synced');
@@ -182,6 +189,40 @@ export function TileAssetsView() {
   function startLink(sourceTilesetId: string, sourceSide: 'u' | 'l', newSide: 'u' | 'l') {
     linkContextRef.current = { sourceTilesetId, sourceSide, newSide };
     fileInputRef.current?.click();
+  }
+
+  /**
+   * Merge `sourceTextureId` (the swatch the user clicked the chain icon on)
+   * with `targetTextureId` (an existing texture from another tileset they
+   * picked). After the in-memory swap, every tileset row whose texture
+   * columns changed is re-saved to Supabase so a reload doesn't restore
+   * the pre-merge ids.
+   */
+  async function mergeWithExisting(sourceTextureId: string, targetTextureId: string) {
+    const changedIds = useTile.getState().mergeTextures(sourceTextureId, targetTextureId);
+    if (changedIds.length === 0) return;
+    // Persist each affected sheet's new texture columns. The route's POST
+    // upserts on (user_id, name), so passing the same name with new
+    // texture ids updates the existing row in place.
+    const state = useTile.getState();
+    for (const tid of changedIds) {
+      const t = state.tilesets.find((x) => x.id === tid);
+      if (!t) continue;
+      try {
+        await saveTileSheet({
+          name: t.name,
+          sheetDataUrl: t.sheetDataUrl,
+          cols: t.cols,
+          rows: t.rows,
+          tileWidth: t.tileWidth,
+          tileHeight: t.tileHeight,
+          upperTextureId: t.upperTextureId,
+          lowerTextureId: t.lowerTextureId,
+        });
+      } catch (err) {
+        console.warn('[tile-cloud] post-merge resave failed', t.name, err);
+      }
+    }
   }
 
   function pickTileset(_tilesetId: string) {
@@ -265,6 +306,10 @@ export function TileAssetsView() {
                   onPick={() => pickTileset(ts.id)}
                   onRemove={() => handleRemoveTileset(ts)}
                   onConnect={(sourceSide, newSide) => startLink(ts.id, sourceSide, newSide)}
+                  onMerge={(sourceSide, targetTextureId) => {
+                    const sourceId = sourceSide === 'u' ? ts.upperTextureId : ts.lowerTextureId;
+                    void mergeWithExisting(sourceId, targetTextureId);
+                  }}
                 />
               ))}
             </div>
@@ -335,7 +380,7 @@ function Section({
  * butter highlight + a checkmark.
  */
 function TerrainCard({
-  tileset, tiles, allTilesets, active, onPick, onRemove, onConnect,
+  tileset, tiles, allTilesets, active, onPick, onRemove, onConnect, onMerge,
 }: {
   tileset: Tileset;
   tiles: Record<string, Tile>;
@@ -348,6 +393,9 @@ function TerrainCard({
   /** Open the file picker for a sheet that shares this tileset's texture
    *  on `sourceSide` and places it on `newSide` of the new sheet. */
   onConnect: (sourceSide: 'u' | 'l', newSide: 'u' | 'l') => void;
+  /** Merge this card's `sourceSide` texture with an existing texture id
+   *  picked from another tileset's swatch. */
+  onMerge: (sourceSide: 'u' | 'l', targetTextureId: string) => void;
 }) {
   const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
@@ -448,9 +496,16 @@ function TerrainCard({
       {linkingSide && (
         <ConnectPopover
           sourceLabel={linkingSide === 'u' ? 'UPPER' : 'LOWER'}
+          tileset={tileset}
+          allTilesets={allTilesets}
+          tiles={tiles}
           onChoose={(newSide) => {
             setLinkingSide(null);
             onConnect(linkingSide, newSide);
+          }}
+          onMerge={(targetTextureId) => {
+            setLinkingSide(null);
+            onMerge(linkingSide, targetTextureId);
           }}
           onCancel={() => setLinkingSide(null)}
         />
@@ -556,15 +611,48 @@ function BrushSwatch({
 }
 
 function ConnectPopover({
-  sourceLabel, onChoose, onCancel,
+  sourceLabel, tileset, allTilesets, tiles, onChoose, onMerge, onCancel,
 }: {
   sourceLabel: 'UPPER' | 'LOWER';
+  tileset: Tileset;
+  allTilesets: Tileset[];
+  tiles: Record<string, Tile>;
   onChoose: (newSide: 'u' | 'l') => void;
+  onMerge: (targetTextureId: string) => void;
   onCancel: () => void;
 }) {
+  // Build the list of "merge target" candidates: every UPPER and LOWER
+  // swatch from ANY OTHER tileset that doesn't already share this texture
+  // id. Cross-tileset transitions only work when the meeting textures are
+  // the same id, so this is the bread-and-butter UX for fixing a forgotten
+  // chain after the fact.
+  const sourceTexId = sourceLabel === 'UPPER' ? tileset.upperTextureId : tileset.lowerTextureId;
+  const candidates: Array<{ key: string; tileset: Tileset; side: 'u' | 'l'; textureId: string; tile: Tile | undefined }> = [];
+  for (const other of allTilesets) {
+    if (other.id === tileset.id) continue;
+    if (other.upperTextureId !== sourceTexId) {
+      candidates.push({
+        key: `${other.id}-u`,
+        tileset: other,
+        side: 'u',
+        textureId: other.upperTextureId,
+        tile: tiles[other.tileIds[PURE_UPPER_INDEX]],
+      });
+    }
+    if (other.lowerTextureId !== sourceTexId) {
+      candidates.push({
+        key: `${other.id}-l`,
+        tileset: other,
+        side: 'l',
+        textureId: other.lowerTextureId,
+        tile: tiles[other.tileIds[PURE_LOWER_INDEX]],
+      });
+    }
+  }
+
   return (
     <div
-      className="mt-2 p-2"
+      className="mt-2 p-2 space-y-2"
       style={{
         background: 'var(--pb-paper)',
         border: '1.5px solid var(--pb-ink)',
@@ -572,14 +660,14 @@ function ConnectPopover({
         boxShadow: '0 2px 0 var(--pb-ink)',
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4, marginBottom: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
         UPLOAD A NEW TILESET WHERE THIS {sourceLabel} BECOMES…
       </div>
       <div className="flex gap-1.5">
         <button
           type="button"
           onClick={() => onChoose('u')}
-          className="flex-1 transition-colors"
+          className="flex-1"
           style={{
             padding: '6px 8px',
             background: 'var(--pb-cream-2)',
@@ -596,7 +684,7 @@ function ConnectPopover({
         <button
           type="button"
           onClick={() => onChoose('l')}
-          className="flex-1 transition-colors"
+          className="flex-1"
           style={{
             padding: '6px 8px',
             background: 'var(--pb-cream-2)',
@@ -623,10 +711,63 @@ function ConnectPopover({
             color: 'var(--pb-ink-muted)',
             cursor: 'pointer',
           }}
+          title="Cancel"
         >
           ×
         </button>
       </div>
+
+      {candidates.length > 0 && (
+        <>
+          <div style={{ borderTop: '1.5px solid var(--pb-line-2)' }} />
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
+            …OR MERGE WITH AN EXISTING TEXTURE
+          </div>
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))' }}>
+            {candidates.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => onMerge(c.textureId)}
+                title={`Merge with ${c.tileset.name} ${c.side === 'u' ? 'UPPER' : 'LOWER'} — every reference to this ${sourceLabel} will be replaced.`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 2,
+                  padding: 4,
+                  background: 'var(--pb-cream-2)',
+                  border: '1.5px solid var(--pb-line-2)',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    aspectRatio: '1 / 1',
+                    background: 'rgba(0,0,0,0.06)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    border: '1.5px solid var(--pb-line-2)',
+                  }}
+                >
+                  {c.tile && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={c.tile.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                  )}
+                </div>
+                <span style={{ fontSize: 8, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.3, lineHeight: 1, textAlign: 'center' }}>
+                  {c.tileset.name.length > 8 ? c.tileset.name.slice(0, 6) + '…' : c.tileset.name}
+                </span>
+                <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--pb-ink-muted)', lineHeight: 1 }}>
+                  {c.side === 'u' ? '↑U' : '↓L'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

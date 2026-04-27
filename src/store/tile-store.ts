@@ -132,6 +132,16 @@ export interface TileStore {
   ) => string;
   removeTileset: (tilesetId: string) => void;
   setTilesetCloudId: (tilesetId: string, cloudId: string) => void;
+  /**
+   * Replace every reference to `sourceTextureId` with `targetTextureId` —
+   * across all tilesets' upper/lower slots, all layer corners, and the
+   * brush. Used by the panel's "merge with existing texture" flow so two
+   * visually-identical textures across separate tilesets can be fused
+   * after-the-fact (without re-uploading via the chain feature). Returns
+   * the list of tileset ids whose texture columns changed so the caller
+   * can re-save them to Supabase.
+   */
+  mergeTextures: (sourceTextureId: string, targetTextureId: string) => string[];
 
   // ── Map state ───────────────────────────────────────────────────
   /** Pixel size of one grid cell in the editor (independent of tile native
@@ -264,6 +274,37 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setTilesetCloudId: (tilesetId, cloudId) => set((s) => ({
     tilesets: s.tilesets.map((t) => t.id === tilesetId ? { ...t, cloudId } : t),
   })),
+  mergeTextures: (sourceTextureId, targetTextureId) => {
+    if (sourceTextureId === targetTextureId) return [];
+    const changedIds: string[] = [];
+    set((s) => {
+      const tilesets = s.tilesets.map((t) => {
+        const upperHit = t.upperTextureId === sourceTextureId;
+        const lowerHit = t.lowerTextureId === sourceTextureId;
+        if (!upperHit && !lowerHit) return t;
+        changedIds.push(t.id);
+        return {
+          ...t,
+          upperTextureId: upperHit ? targetTextureId : t.upperTextureId,
+          lowerTextureId: lowerHit ? targetTextureId : t.lowerTextureId,
+        };
+      });
+      const layers = s.layers.map((l) => {
+        let touched = false;
+        const corners = { ...l.corners };
+        for (const k of Object.keys(corners)) {
+          if (corners[k] === sourceTextureId) {
+            corners[k] = targetTextureId;
+            touched = true;
+          }
+        }
+        return touched ? { ...l, corners } : l;
+      });
+      const brushTextureId = s.brushTextureId === sourceTextureId ? targetTextureId : s.brushTextureId;
+      return { tilesets, layers, brushTextureId };
+    });
+    return changedIds;
+  },
   removeTileset: (tilesetId) => set((s) => {
     const ts = s.tilesets.find((t) => t.id === tilesetId);
     if (!ts) return {};

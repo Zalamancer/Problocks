@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
-  Pencil, GripVertical,
+  Pencil, GripVertical, X, Maximize2,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
@@ -1115,6 +1116,18 @@ function ObjectsSection() {
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
   const [expandedAssets, setExpandedAssets] = useState<Record<string, boolean>>({});
+  /** True when the full-screen library overlay is mounted. The left-panel
+   *  view stays minimal (just a launcher) — all browsing/management lives
+   *  in the overlay because the cards are far too small in a sidebar. */
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  /** What the user last clicked inside the overlay. Arrow keys move THIS
+   *  item up/down within its parent list (asset → asset list, style →
+   *  the asset's style[] array). Click sets it; reorder keeps it. */
+  const [focused, setFocused] = useState<
+    | { kind: 'asset'; assetId: string }
+    | { kind: 'style'; assetId: string; styleId: string }
+    | null
+  >(null);
 
   // Hydrate uploaded sprites from Supabase on mount. Group by groupId so
   // each asset gets its full style list. Skip any group that's already
@@ -1337,7 +1350,7 @@ function ObjectsSection() {
       />
 
       <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-        Upload a sprite to make a new <strong>asset</strong>. Add more sprites to the same asset as <strong>styles</strong> (e.g. level&nbsp;1 / level&nbsp;2). Switch to <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), pick a style, and click on the canvas. Placed objects can swap styles from the right panel.
+        Upload sprites and group them into <strong>assets</strong> with multiple <strong>styles</strong>. Open the library for big thumbs, drag-reorder, and arrow-key shuffle.
       </p>
 
       <ChunkyButton
@@ -1348,6 +1361,13 @@ function ObjectsSection() {
         <Upload size={12} strokeWidth={2.4} />
         {uploading ? 'Uploading…' : 'Upload sprite'}
       </ChunkyButton>
+      <ChunkyButton
+        onClick={() => setLibraryOpen(true)}
+        kind="cream"
+      >
+        <Maximize2 size={12} strokeWidth={2.4} />
+        Open library{assetList.length > 0 ? ` (${assetList.length})` : ''}
+      </ChunkyButton>
       <CloudStatusPill status={cloudStatus} />
       {error && (
         <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600 }}>
@@ -1355,7 +1375,7 @@ function ObjectsSection() {
         </p>
       )}
 
-      {assetList.length === 0 ? (
+      {assetList.length === 0 && (
         <div
           className="rounded-lg p-3 text-center"
           style={{
@@ -1364,84 +1384,8 @@ function ObjectsSection() {
           }}
         >
           <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-            No sprites yet. Upload PNG/WebP files (trees, rocks, characters, anything) to drop on the canvas as free objects.
+            No sprites yet. Upload PNG/WebP files to drop on the canvas as free objects.
           </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {assetList.map((asset, index) => (
-            <AssetCard
-              key={asset.id}
-              asset={asset}
-              expanded={!!expandedAssets[asset.id]}
-              isSelected={asset.id === selectedAssetId}
-              selectedStyleId={selectedStyleId}
-              onSelect={() => handleSelectAsset(asset)}
-              onToggleExpand={() => setExpandedAssets((m) => ({ ...m, [asset.id]: !m[asset.id] }))}
-              onPickStyle={(styleId) => {
-                setSelectedAssetId(asset.id);
-                setSelectedStyleId(styleId);
-                setTool('object');
-              }}
-              onRemoveAsset={() => handleRemoveAsset(asset)}
-              onRemoveStyle={(style) => handleRemoveStyle(asset, style)}
-              onRenameStyle={(styleId, label) => {
-                setStyleLabel(asset.id, styleId, label);
-                // Persist the label change so a reload doesn't revert. We
-                // only fire this for styles that actually made it to cloud.
-                const style = asset.styles.find((s) => s.id === styleId);
-                if (style?.cloudId) {
-                  updateTileObject({ id: style.cloudId, label }).catch((err) => {
-                    console.warn('[object-cloud] style rename failed', err);
-                  });
-                }
-              }}
-              onAddStyle={() => handleAddStyleClick(asset.id)}
-              onRenameAsset={(name) => {
-                renameAsset(asset.id, name);
-                if (asset.styles.some((s) => s.cloudId)) {
-                  // Asset.id IS the server group_id (we stamp it on save), so
-                  // a single PATCH renames every style row in one round-trip.
-                  updateTileObject({ groupId: asset.id, name }).catch((err) => {
-                    console.warn('[object-cloud] asset rename failed', err);
-                  });
-                }
-              }}
-              onReorderStyles={(orderedStyleIds) => {
-                const newOrder = reorderStyles(asset.id, orderedStyleIds);
-                // Push each style's new sort_index in parallel — small N, so
-                // the fan-out is fine. Failures stay local-only.
-                newOrder.forEach((style, i) => {
-                  if (style.cloudId) {
-                    updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
-                      console.warn('[object-cloud] style reorder failed', err);
-                    });
-                  }
-                });
-              }}
-              onDragStart={() => { dragAssetIdRef.current = asset.id; }}
-              onDragOverCard={(e) => {
-                if (!dragAssetIdRef.current || dragAssetIdRef.current === asset.id) return;
-                e.preventDefault();
-              }}
-              onDropCard={(e) => {
-                e.preventDefault();
-                const fromId = dragAssetIdRef.current;
-                dragAssetIdRef.current = null;
-                if (!fromId || fromId === asset.id) return;
-                const order = assetList.map((a) => a.id);
-                const fromIdx = order.indexOf(fromId);
-                const toIdx = order.indexOf(asset.id);
-                if (fromIdx < 0 || toIdx < 0) return;
-                const next = order.slice();
-                next.splice(fromIdx, 1);
-                next.splice(toIdx, 0, fromId);
-                reorderAssets(next);
-              }}
-              isDropTarget={false}
-              dragIndex={index}
-            />
-          ))}
         </div>
       )}
 
@@ -1499,6 +1443,62 @@ function ObjectsSection() {
           })}
         </div>
       )}
+
+      {libraryOpen && (
+        <ObjectLibraryOverlay
+          assetList={assetList}
+          objectAssets={objectAssets}
+          uploading={uploading}
+          cloudStatus={cloudStatus}
+          error={error}
+          expandedAssets={expandedAssets}
+          selectedAssetId={selectedAssetId}
+          selectedStyleId={selectedStyleId}
+          focused={focused}
+          onClose={() => setLibraryOpen(false)}
+          onUploadClick={() => fileInputRef.current?.click()}
+          onAddStyleClick={(assetId) => handleAddStyleClick(assetId)}
+          onSelectAsset={(asset) => handleSelectAsset(asset)}
+          onPickStyle={(asset, styleId) => {
+            setSelectedAssetId(asset.id);
+            setSelectedStyleId(styleId);
+            setTool('object');
+          }}
+          onRemoveAsset={(asset) => handleRemoveAsset(asset)}
+          onRemoveStyle={(asset, style) => handleRemoveStyle(asset, style)}
+          onRenameStyle={(asset, styleId, label) => {
+            setStyleLabel(asset.id, styleId, label);
+            const style = asset.styles.find((s) => s.id === styleId);
+            if (style?.cloudId) {
+              updateTileObject({ id: style.cloudId, label }).catch((err) => {
+                console.warn('[object-cloud] style rename failed', err);
+              });
+            }
+          }}
+          onRenameAsset={(asset, name) => {
+            renameAsset(asset.id, name);
+            if (asset.styles.some((s) => s.cloudId)) {
+              updateTileObject({ groupId: asset.id, name }).catch((err) => {
+                console.warn('[object-cloud] asset rename failed', err);
+              });
+            }
+          }}
+          onReorderStyles={(asset, orderedStyleIds) => {
+            const newOrder = reorderStyles(asset.id, orderedStyleIds);
+            newOrder.forEach((style, i) => {
+              if (style.cloudId) {
+                updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
+                  console.warn('[object-cloud] style reorder failed', err);
+                });
+              }
+            });
+          }}
+          onReorderAssets={(orderedIds) => reorderAssets(orderedIds)}
+          onToggleExpand={(assetId) => setExpandedAssets((m) => ({ ...m, [assetId]: !m[assetId] }))}
+          onFocus={(next) => setFocused(next)}
+          dragAssetIdRef={dragAssetIdRef}
+        />
+      )}
     </div>
   );
 }
@@ -1530,6 +1530,8 @@ function AssetCard({
   onSelect, onToggleExpand, onPickStyle, onRemoveAsset, onRemoveStyle,
   onRenameStyle, onAddStyle, onRenameAsset, onReorderStyles,
   onDragStart, onDragOverCard, onDropCard,
+  size = 'sm', isFocused = false, focusedStyleId = null,
+  onFocusAsset, onFocusStyle,
 }: {
   asset: ObjectAsset;
   expanded: boolean;
@@ -1549,10 +1551,24 @@ function AssetCard({
   onDropCard: (e: React.DragEvent) => void;
   isDropTarget?: boolean;
   dragIndex?: number;
+  /** 'sm' = sidebar (default); 'lg' = library overlay (bigger thumbs). */
+  size?: 'sm' | 'lg';
+  /** Whether this whole card is the keyboard-reorder target. */
+  isFocused?: boolean;
+  /** Style id within this asset that's the keyboard-reorder target. */
+  focusedStyleId?: string | null;
+  onFocusAsset?: () => void;
+  onFocusStyle?: (styleId: string) => void;
 }) {
   const headerStyle = isSelected
     ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
     : asset.styles[0];
+
+  // Layout dims that change with size — kept here so the JSX below stays
+  // readable instead of branching on `size` inline.
+  const dims = size === 'lg'
+    ? { thumb: 84, styleThumb: 44, headerFont: 16, labelFont: 13, gripIcon: 14, padding: 10 }
+    : { thumb: 36, styleThumb: 24, headerFont: 12, labelFont: 11, gripIcon: 12, padding: 6 };
 
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -1597,15 +1613,25 @@ function AssetCard({
       onDragEnd={() => { cardDragArmedRef.current = false; }}
       onDragOver={onDragOverCard}
       onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
+      onClick={() => { onFocusAsset?.(); }}
       style={{
         background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-        border: `1.5px solid ${isSelected ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        // Focus ring uses a thicker accent border so it reads at a glance
+        // and never collides with the selection styling. Selection still
+        // wins on the chunky butter-ink border + drop shadow.
+        border: `${isFocused && !isSelected ? 2 : 1.5}px solid ${
+          isSelected ? 'var(--pb-butter-ink)' : isFocused ? '#0ea5e9' : 'var(--pb-line-2)'
+        }`,
         borderRadius: 10,
-        boxShadow: isSelected ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+        boxShadow: isSelected
+          ? '0 2px 0 var(--pb-butter-ink)'
+          : isFocused
+            ? '0 0 0 2px rgba(14,165,233,0.18)'
+            : 'none',
         overflow: 'hidden',
       }}
     >
-      <div className="flex items-center gap-1.5" style={{ padding: 6 }}>
+      <div className="flex items-center gap-1.5" style={{ padding: dims.padding }}>
         <span
           // Mouse-down on the grip arms the card-level drag. Without this,
           // an HTML5 drag on the rest of the card (e.g. accidental from
@@ -1620,14 +1646,14 @@ function AssetCard({
             padding: '2px 0',
           }}
         >
-          <GripVertical size={12} strokeWidth={2.4} />
+          <GripVertical size={dims.gripIcon} strokeWidth={2.4} />
         </span>
         <button
           type="button"
-          onClick={onSelect}
+          onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
           title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
           style={{
-            width: 36, height: 36,
+            width: dims.thumb, height: dims.thumb,
             background: 'rgba(0,0,0,0.04)',
             border: '1.5px solid var(--pb-line-2)',
             borderRadius: 6,
@@ -1662,8 +1688,8 @@ function AssetCard({
                 background: 'var(--pb-paper)',
                 border: '1.5px solid var(--pb-line-2)',
                 borderRadius: 5,
-                padding: '2px 6px',
-                fontSize: 12,
+                padding: '4px 8px',
+                fontSize: dims.headerFont,
                 fontWeight: 800,
                 color: 'var(--pb-ink)',
               }}
@@ -1672,10 +1698,10 @@ function AssetCard({
           ) : (
             <div className="flex items-center gap-1">
               <span
-                onClick={onSelect}
-                onDoubleClick={() => setEditingName(true)}
+                onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
+                onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
                 title="Click to select · double-click to rename"
-                style={{ flex: 1, fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                style={{ flex: 1, fontSize: dims.headerFont, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
               >
                 {asset.name}
               </span>
@@ -1685,11 +1711,11 @@ function AssetCard({
                 title="Rename asset"
                 style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
               >
-                <Pencil size={10} strokeWidth={2.4} />
+                <Pencil size={size === 'lg' ? 12 : 10} strokeWidth={2.4} />
               </button>
             </div>
           )}
-          <div style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+          <div style={{ fontSize: size === 'lg' ? 11 : 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
             {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
           </div>
         </div>
@@ -1719,11 +1745,13 @@ function AssetCard({
           <div className="space-y-1">
             {asset.styles.map((style, i) => {
               const isCurrent = isSelected && style.id === selectedStyleId;
+              const isStyleFocused = focusedStyleId === style.id;
               const isEditing = editingStyleId === style.id;
               return (
                 <div
                   key={style.id}
                   draggable
+                  onClick={(e) => { e.stopPropagation(); onFocusStyle?.(style.id); }}
                   onDragStart={(e) => {
                     // Stop the asset-card drag from also firing when the
                     // user grabs a style row.
@@ -1745,9 +1773,11 @@ function AssetCard({
                   }}
                   className="flex items-center gap-1.5"
                   style={{
-                    padding: 3,
-                    background: isCurrent ? 'var(--pb-paper)' : 'transparent',
-                    border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'transparent'}`,
+                    padding: size === 'lg' ? 6 : 3,
+                    background: isCurrent ? 'var(--pb-paper)' : isStyleFocused ? 'rgba(14,165,233,0.10)' : 'transparent',
+                    border: `${isStyleFocused && !isCurrent ? 2 : 1.5}px solid ${
+                      isCurrent ? 'var(--pb-butter-ink)' : isStyleFocused ? '#0ea5e9' : 'transparent'
+                    }`,
                     borderRadius: 6,
                   }}
                 >
@@ -1759,14 +1789,14 @@ function AssetCard({
                       cursor: 'grab',
                     }}
                   >
-                    <GripVertical size={11} strokeWidth={2.4} />
+                    <GripVertical size={size === 'lg' ? 13 : 11} strokeWidth={2.4} />
                   </span>
                   <button
                     type="button"
-                    onClick={() => onPickStyle(style.id)}
+                    onClick={(e) => { e.stopPropagation(); onFocusStyle?.(style.id); onPickStyle(style.id); }}
                     title={`Use "${style.label || `Style ${i + 1}`}" as the brush`}
                     style={{
-                      width: 24, height: 24, flexShrink: 0,
+                      width: dims.styleThumb, height: dims.styleThumb, flexShrink: 0,
                       background: 'rgba(0,0,0,0.06)',
                       border: '1.5px solid var(--pb-line-2)',
                       borderRadius: 5,
@@ -1792,19 +1822,19 @@ function AssetCard({
                         background: 'var(--pb-paper)',
                         border: '1.5px solid var(--pb-line-2)',
                         borderRadius: 5,
-                        padding: '2px 6px',
-                        fontSize: 11,
+                        padding: '4px 8px',
+                        fontSize: dims.labelFont,
                         fontWeight: 700,
                         color: 'var(--pb-ink)',
                       }}
                     />
                   ) : (
                     <span
-                      onDoubleClick={() => setEditingStyleId(style.id)}
+                      onDoubleClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
                       title="Double-click to rename"
                       style={{
                         flex: 1,
-                        fontSize: 11,
+                        fontSize: dims.labelFont,
                         fontWeight: 700,
                         color: 'var(--pb-ink)',
                         overflow: 'hidden',
@@ -1818,19 +1848,19 @@ function AssetCard({
                   )}
                   <button
                     type="button"
-                    onClick={() => setEditingStyleId(style.id)}
+                    onClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
                     title="Rename style"
                     style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
                   >
-                    <Pencil size={9} strokeWidth={2.4} />
+                    <Pencil size={size === 'lg' ? 11 : 9} strokeWidth={2.4} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => onRemoveStyle(style)}
+                    onClick={(e) => { e.stopPropagation(); onRemoveStyle(style); }}
                     title="Delete this style"
                     style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
                   >
-                    <Trash2 size={10} strokeWidth={2.4} />
+                    <Trash2 size={size === 'lg' ? 12 : 10} strokeWidth={2.4} />
                   </button>
                 </div>
               );
@@ -1857,6 +1887,318 @@ function AssetCard({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Full-screen modal for browsing + managing object assets. Mounted via
+ * portal at document.body so it covers the whole viewport, not just the
+ * left panel rectangle. Renders the same `AssetCard` rows the panel used
+ * to render inline, but at a much larger size and in a 2-column grid.
+ *
+ * Keyboard reorder
+ * ----------------
+ * The overlay div is focusable (tabIndex=-1) and grabs focus when it
+ * mounts. Keydown:
+ *   - Escape       → close the modal
+ *   - ArrowUp/Down → if `focused` points at an asset, swap it with its
+ *                    neighbour in the asset list. If `focused` points at a
+ *                    style, swap within that asset's `styles[]`. Either way
+ *                    the rendered grid resorts on the same frame, and the
+ *                    cloud sync round-trip happens for styles (asset
+ *                    ordering is local-only — no per-row sortIndex on the
+ *                    server for asset rank).
+ */
+function ObjectLibraryOverlay({
+  assetList, objectAssets, uploading, cloudStatus, error,
+  expandedAssets, selectedAssetId, selectedStyleId, focused,
+  onClose, onUploadClick, onAddStyleClick, onSelectAsset, onPickStyle,
+  onRemoveAsset, onRemoveStyle, onRenameStyle, onRenameAsset,
+  onReorderStyles, onReorderAssets, onToggleExpand, onFocus,
+  dragAssetIdRef,
+}: {
+  assetList: ObjectAsset[];
+  objectAssets: Record<string, ObjectAsset>;
+  uploading: boolean;
+  cloudStatus: 'idle' | 'syncing' | 'synced' | 'offline';
+  error: string | null;
+  expandedAssets: Record<string, boolean>;
+  selectedAssetId: string | null;
+  selectedStyleId: string | null;
+  focused:
+    | { kind: 'asset'; assetId: string }
+    | { kind: 'style'; assetId: string; styleId: string }
+    | null;
+  onClose: () => void;
+  onUploadClick: () => void;
+  onAddStyleClick: (assetId: string) => void;
+  onSelectAsset: (asset: ObjectAsset) => void;
+  onPickStyle: (asset: ObjectAsset, styleId: string) => void;
+  onRemoveAsset: (asset: ObjectAsset) => void;
+  onRemoveStyle: (asset: ObjectAsset, style: ObjectStyle) => void;
+  onRenameStyle: (asset: ObjectAsset, styleId: string, label: string) => void;
+  onRenameAsset: (asset: ObjectAsset, name: string) => void;
+  onReorderStyles: (asset: ObjectAsset, orderedStyleIds: string[]) => void;
+  onReorderAssets: (orderedIds: string[]) => void;
+  onToggleExpand: (assetId: string) => void;
+  onFocus: (next:
+    | { kind: 'asset'; assetId: string }
+    | { kind: 'style'; assetId: string; styleId: string }
+    | null,
+  ) => void;
+  dragAssetIdRef: React.RefObject<string | null>;
+}) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  // Grab focus when we mount so arrow keys go to our handler instead of
+  // the page below. Re-focus on every assetList change too — otherwise a
+  // reorder can shift focus into the resorted card and the next keystroke
+  // misses the overlay.
+  useEffect(() => {
+    overlayRef.current?.focus();
+  }, [assetList.length, focused?.assetId, (focused as { styleId?: string } | null)?.styleId]);
+  // Close on Escape from anywhere (in case focus drifted to a child input).
+  useEffect(() => {
+    function onWindowKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onWindowKey);
+    return () => window.removeEventListener('keydown', onWindowKey);
+  }, [onClose]);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    // Don't hijack arrow keys when the user is editing a name in an input.
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (!focused) return;
+    e.preventDefault();
+    const dir = e.key === 'ArrowUp' ? -1 : 1;
+
+    if (focused.kind === 'asset') {
+      const order = assetList.map((a) => a.id);
+      const idx = order.indexOf(focused.assetId);
+      if (idx < 0) return;
+      const newIdx = clamp(idx + dir, 0, order.length - 1);
+      if (newIdx === idx) return;
+      const next = order.slice();
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      onReorderAssets(next);
+    } else {
+      const asset = objectAssets[focused.assetId];
+      if (!asset) return;
+      const order = asset.styles.map((s) => s.id);
+      const idx = order.indexOf(focused.styleId);
+      if (idx < 0) return;
+      const newIdx = clamp(idx + dir, 0, order.length - 1);
+      if (newIdx === idx) return;
+      const next = order.slice();
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      onReorderStyles(asset, next);
+    }
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-stretch justify-center"
+      style={{ background: 'rgba(20, 14, 8, 0.65)', zIndex: 999 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={overlayRef}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className="m-6 flex-1 flex flex-col"
+        style={{
+          maxWidth: 1100,
+          background: 'var(--pb-paper)',
+          border: '2px solid var(--pb-ink)',
+          borderRadius: 16,
+          boxShadow: '0 6px 0 var(--pb-ink)',
+          outline: 'none',
+          overflow: 'hidden',
+        }}
+      >
+        <header
+          className="flex items-center gap-3"
+          style={{ padding: '14px 18px', borderBottom: '1.5px solid var(--pb-line-2)' }}
+        >
+          <Box size={18} strokeWidth={2.4} style={{ color: 'var(--pb-ink)' }} />
+          <h2 style={{ flex: 1, fontSize: 16, fontWeight: 800, color: 'var(--pb-ink)', margin: 0 }}>
+            Object Library
+          </h2>
+          <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+            {assetList.length} asset{assetList.length === 1 ? '' : 's'}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close (Esc)"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 32, height: 32,
+              background: 'var(--pb-cream-2)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 8,
+              cursor: 'pointer',
+              color: 'var(--pb-ink)',
+            }}
+          >
+            <X size={14} strokeWidth={2.4} />
+          </button>
+        </header>
+
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          style={{ padding: '10px 18px', borderBottom: '1.5px solid var(--pb-line-2)', background: 'var(--pb-cream-2)' }}
+        >
+          <button
+            type="button"
+            onClick={onUploadClick}
+            disabled={uploading}
+            className="flex items-center gap-1.5"
+            style={{
+              padding: '7px 12px',
+              background: 'var(--pb-butter)',
+              border: '1.5px solid var(--pb-butter-ink)',
+              borderRadius: 8,
+              color: 'var(--pb-butter-ink)',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              opacity: uploading ? 0.55 : 1,
+              boxShadow: '0 2px 0 var(--pb-butter-ink)',
+            }}
+          >
+            <Upload size={12} strokeWidth={2.4} />
+            {uploading ? 'Uploading…' : 'Upload sprite'}
+          </button>
+          <CloudStatusPill status={cloudStatus} />
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+            Click an asset or style → press <Kbd>↑</Kbd>/<Kbd>↓</Kbd> to reorder
+          </span>
+        </div>
+        {error && (
+          <p style={{ fontSize: 12, color: 'var(--pb-coral-ink)', fontWeight: 600, padding: '8px 18px 0' }}>
+            {error}
+          </p>
+        )}
+
+        <div className="flex-1 overflow-y-auto" style={{ padding: 18 }}>
+          {assetList.length === 0 ? (
+            <div
+              className="rounded-lg p-6 text-center"
+              style={{
+                background: 'var(--pb-cream-2)',
+                border: '1.5px dashed var(--pb-line-2)',
+              }}
+            >
+              <p style={{ fontSize: 13, color: 'var(--pb-ink-muted)', lineHeight: 1.5, marginBottom: 12 }}>
+                No sprites yet. Upload a PNG/WebP to get started — each asset can hold multiple style variants you can swap on placed instances.
+              </p>
+              <button
+                type="button"
+                onClick={onUploadClick}
+                disabled={uploading}
+                className="inline-flex items-center gap-1.5"
+                style={{
+                  padding: '8px 14px',
+                  background: 'var(--pb-butter)',
+                  border: '1.5px solid var(--pb-butter-ink)',
+                  borderRadius: 8,
+                  color: 'var(--pb-butter-ink)',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 0 var(--pb-butter-ink)',
+                }}
+              >
+                <Upload size={14} strokeWidth={2.4} />
+                Upload sprite
+              </button>
+            </div>
+          ) : (
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
+            >
+              {assetList.map((asset) => (
+                <AssetCard
+                  key={asset.id}
+                  asset={asset}
+                  expanded={!!expandedAssets[asset.id]}
+                  isSelected={asset.id === selectedAssetId}
+                  selectedStyleId={selectedStyleId}
+                  size="lg"
+                  isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
+                  focusedStyleId={focused?.kind === 'style' && focused.assetId === asset.id ? focused.styleId : null}
+                  onFocusAsset={() => onFocus({ kind: 'asset', assetId: asset.id })}
+                  onFocusStyle={(styleId) => onFocus({ kind: 'style', assetId: asset.id, styleId })}
+                  onSelect={() => { onFocus({ kind: 'asset', assetId: asset.id }); onSelectAsset(asset); }}
+                  onToggleExpand={() => onToggleExpand(asset.id)}
+                  onPickStyle={(styleId) => {
+                    onFocus({ kind: 'style', assetId: asset.id, styleId });
+                    onPickStyle(asset, styleId);
+                  }}
+                  onRemoveAsset={() => onRemoveAsset(asset)}
+                  onRemoveStyle={(style) => onRemoveStyle(asset, style)}
+                  onRenameStyle={(styleId, label) => onRenameStyle(asset, styleId, label)}
+                  onAddStyle={() => onAddStyleClick(asset.id)}
+                  onRenameAsset={(name) => onRenameAsset(asset, name)}
+                  onReorderStyles={(orderedStyleIds) => onReorderStyles(asset, orderedStyleIds)}
+                  onDragStart={() => { dragAssetIdRef.current = asset.id; }}
+                  onDragOverCard={(e) => {
+                    if (!dragAssetIdRef.current || dragAssetIdRef.current === asset.id) return;
+                    e.preventDefault();
+                  }}
+                  onDropCard={(e) => {
+                    e.preventDefault();
+                    const fromId = dragAssetIdRef.current;
+                    dragAssetIdRef.current = null;
+                    if (!fromId || fromId === asset.id) return;
+                    const order = assetList.map((a) => a.id);
+                    const fromIdx = order.indexOf(fromId);
+                    const toIdx = order.indexOf(asset.id);
+                    if (fromIdx < 0 || toIdx < 0) return;
+                    const next = order.slice();
+                    next.splice(fromIdx, 1);
+                    next.splice(toIdx, 0, fromId);
+                    onReorderAssets(next);
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd
+      style={{
+        padding: '1px 6px',
+        margin: '0 1px',
+        borderRadius: 4,
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        fontSize: 10,
+        fontWeight: 800,
+        color: 'var(--pb-ink)',
+        fontFamily: 'inherit',
+      }}
+    >
+      {children}
+    </kbd>
   );
 }
 

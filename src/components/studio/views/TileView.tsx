@@ -217,12 +217,15 @@ export function TileView() {
       }
       ctx!.globalAlpha = 1;
 
-      // ── Water-effect overlay ──────────────────────────────────────
-      // After the tiles are laid down, draw an animated sine-wave shimmer
-      // + hue tint over every cell whose corners reference a "wavy"
-      // texture. Drawn in ONE clipped pass across the union of all wavy
-      // cells — the waves visually flow across the region as a whole
-      // instead of restarting at every tile boundary.
+      // ── Water-effect: pixel-level hue wave ───────────────────────
+      // After the tiles are laid down, push the wavy region's pixels
+      // through a sine-modulated hue shift. Implemented with
+      // globalCompositeOperation='hue': the colored fill we draw acts
+      // as the SOURCE hue, the underlying water tiles act as DESTINATION
+      // saturation+lightness, and the browser blends only the hue
+      // channel. So the actual tile pixels ripple through the wave's
+      // colors (cyan → teal → blue) — it isn't an overlay sitting on
+      // top, it's a live re-hueing of what was already drawn.
       if (s.wavyTextureIds.length > 0) {
         const wavySet = new Set(s.wavyTextureIds);
         function isWavy(cx: number, cy: number): boolean {
@@ -258,45 +261,39 @@ export function TileView() {
         if (any) {
           ctx!.clip();
           const time = performance.now() / 1000;
-          // Hue-shifting tint — slowly oscillates around cyan (~200°) by
-          // ±18° so the region "breathes" colour without ever leaving the
-          // water-blue family. Low opacity so the tile texture still
-          // reads through.
-          const hue = 200 + Math.sin(time * 0.6) * 18;
-          ctx!.fillStyle = `hsla(${hue}, 70%, 65%, 0.22)`;
-          ctx!.fillRect(minPX, minPY, maxPX - minPX, maxPY - minPY);
-          // Sine-wave shimmer — multiple horizontal lines spaced at a
-          // fraction of the cell size, phase-shifted by time + y so the
-          // pattern looks like flowing water rather than static stripes.
-          ctx!.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-          ctx!.lineWidth = Math.max(1, ts * 0.05) / cam.zoom;
-          ctx!.lineCap = 'round';
-          ctx!.lineJoin = 'round';
-          ctx!.beginPath();
-          const stepY = Math.max(4, ts * 0.35);
-          const ampY = Math.max(1, ts * 0.06);
-          const stepX = Math.max(2, ts / 12);
-          for (let y = Math.floor(minPY / stepY) * stepY; y <= maxPY; y += stepY) {
-            const phase = y * 0.04 + time * 1.6;
-            ctx!.moveTo(minPX, y + Math.sin(minPX * 0.05 + phase) * ampY);
-            for (let x = minPX; x <= maxPX; x += stepX) {
-              ctx!.lineTo(x, y + Math.sin(x * 0.05 + phase) * ampY);
-            }
+          const prevComposite = ctx!.globalCompositeOperation;
+          // 'hue' composite = keep destination saturation + lightness,
+          // replace destination hue with source hue. Tiles whose pixels
+          // already carry colour will visibly shift hue along the wave;
+          // grey/desaturated pixels won't accept hue (by spec) — that's
+          // expected, water tiles are colourful so this is the right
+          // mode for the user's "hue change in pixels" ask.
+          ctx!.globalCompositeOperation = 'hue';
+          const wavelength = Math.max(ts * 1.5, 16);
+          const speed = 1.4;
+          // Horizontal wave: vertical strips with hue varying by sin(x).
+          // Strip width scales with zoom so we stay near 2 device px.
+          const stripPx = Math.max(1 / cam.zoom, 2 / cam.zoom);
+          for (let x = minPX; x < maxPX; x += stripPx) {
+            const phase = (x / wavelength) * Math.PI * 2 + time * speed;
+            const hue = 200 + Math.sin(phase) * 28;
+            // Saturation pulse keeps the hue shift visible across tile
+            // pixels of varying intrinsic saturation.
+            const sat = 80 + Math.sin(phase * 0.5) * 10;
+            ctx!.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
+            ctx!.fillRect(x, minPY, stripPx + 0.5 / cam.zoom, maxPY - minPY);
           }
-          ctx!.stroke();
-          // A second softer wave layer at half-amplitude and offset phase
-          // adds depth without doubling render cost.
-          ctx!.strokeStyle = 'rgba(255, 255, 255, 0.28)';
-          ctx!.lineWidth = Math.max(1, ts * 0.035) / cam.zoom;
-          ctx!.beginPath();
-          for (let y = Math.floor(minPY / stepY) * stepY + stepY * 0.5; y <= maxPY; y += stepY) {
-            const phase = y * 0.04 - time * 1.1;
-            ctx!.moveTo(minPX, y + Math.sin(minPX * 0.07 + phase) * ampY * 0.6);
-            for (let x = minPX; x <= maxPX; x += stepX) {
-              ctx!.lineTo(x, y + Math.sin(x * 0.07 + phase) * ampY * 0.6);
-            }
+          // Crossing vertical wave at a different phase + speed gives
+          // the cross-pattern shimmer real water has, all in pixel-hue
+          // space. No second composite mode change needed.
+          for (let y = minPY; y < maxPY; y += stripPx) {
+            const phase = (y / wavelength) * Math.PI * 2 - time * speed * 0.7;
+            const hue = 200 + Math.sin(phase) * 18;
+            const sat = 75 + Math.sin(phase * 0.5) * 10;
+            ctx!.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
+            ctx!.fillRect(minPX, y, maxPX - minPX, stripPx + 0.5 / cam.zoom);
           }
-          ctx!.stroke();
+          ctx!.globalCompositeOperation = prevComposite;
         }
         ctx!.restore();
       }

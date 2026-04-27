@@ -6,7 +6,7 @@ import {
   Grid3X3, Sparkles, Box, FlipHorizontal, FlipVertical,
 } from 'lucide-react';
 import { useTile, type TileTool } from '@/store/tile-store';
-import { wangIndexFromBools, anyCornerSet, PURE_LOWER_INDEX } from '@/lib/wang-tiles';
+import { wangIndex, type Quadrant } from '@/lib/wang-tiles';
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
@@ -71,6 +71,7 @@ export function TileView() {
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const activeTileset = activeLayer?.tilesetId ? tilesets.find((t) => t.id === activeLayer.tilesetId) : null;
+  const brushTexture = useTile((s) => s.brushTexture);
 
   // ── Imperative canvas render loop ───────────────────────────────
   useEffect(() => {
@@ -144,13 +145,24 @@ export function TileView() {
 
         for (let cy = cy0; cy <= cy1; cy++) {
           for (let cx = cx0; cx <= cx1; cx++) {
-            const nw = corners[`${cx},${cy}`] === true;
-            const ne = corners[`${cx + 1},${cy}`] === true;
-            const sw = corners[`${cx},${cy + 1}`] === true;
-            const se = corners[`${cx + 1},${cy + 1}`] === true;
-            if (!anyCornerSet(nw, ne, sw, se)) continue;
-            const idx = wangIndexFromBools(nw, ne, sw, se);
-            if (idx < 0 || idx === PURE_LOWER_INDEX) continue;
+            const nw = corners[`${cx},${cy}`];
+            const ne = corners[`${cx + 1},${cy}`];
+            const sw = corners[`${cx},${cy + 1}`];
+            const se = corners[`${cx + 1},${cy + 1}`];
+            // Skip cells where no corner has been painted at all — keeps
+            // empty regions transparent so background layers show through.
+            if (!nw && !ne && !sw && !se) continue;
+            // Undefined corners default to 'l' (lower) so the upper region
+            // softens out to lower at its boundary, even if the user only
+            // painted upper. Pure-lower cells now ARE rendered (they show
+            // the lower base texture) — that's the point of the lower brush.
+            const idx = wangIndex(
+              (nw ?? 'l') as Quadrant,
+              (ne ?? 'l') as Quadrant,
+              (sw ?? 'l') as Quadrant,
+              (se ?? 'l') as Quadrant,
+            );
+            if (idx < 0) continue;
             const tileId = tileset.tileIds[idx];
             if (!tileId) continue;
             const tile = s.tiles[tileId];
@@ -218,16 +230,18 @@ export function TileView() {
         ctx!.stroke();
       }
 
-      // Brush ghost — outline the cells the brush will affect.
+      // Brush ghost — outline the cells the brush will affect. Color reflects
+      // the active brush texture so users can tell upper vs lower at a glance.
       const hover = hoverRef.current;
       if (hover && (s.tool === 'paint' || s.tool === 'erase' || s.tool === 'fill')) {
         const cells = brushCells(hover.cx, hover.cy, s.brushSize);
+        const isUpper = s.brushTexture === 'u';
         const fill = s.tool === 'erase' ? 'rgba(231,76,60,0.18)'
-          : s.tool === 'fill' ? 'rgba(14,165,233,0.18)'
-          : 'rgba(110,180,90,0.22)';
+          : s.tool === 'fill'
+            ? (isUpper ? 'rgba(110,180,90,0.20)' : 'rgba(180,140,90,0.20)')
+            : (isUpper ? 'rgba(110,180,90,0.22)' : 'rgba(180,140,90,0.22)');
         const stroke = s.tool === 'erase' ? 'rgba(231,76,60,0.7)'
-          : s.tool === 'fill' ? 'rgba(14,165,233,0.7)'
-          : 'rgba(60,140,40,0.7)';
+          : isUpper ? 'rgba(60,140,40,0.7)' : 'rgba(150,110,60,0.7)';
         ctx!.fillStyle = fill;
         ctx!.strokeStyle = stroke;
         ctx!.lineWidth = 1.5 / cam.zoom;
@@ -273,18 +287,17 @@ export function TileView() {
       return cells;
     }
 
-    /** Paint a cell = mark its 4 corners as upper. */
-    function paintCell(layerId: string, cx: number, cy: number, corners: Record<string, true>) {
-      corners[`${cx},${cy}`] = true;
-      corners[`${cx + 1},${cy}`] = true;
-      corners[`${cx},${cy + 1}`] = true;
-      corners[`${cx + 1},${cy + 1}`] = true;
+    /** Paint a cell = mark its 4 corners with the active brush texture. */
+    function paintCell(corners: Record<string, Quadrant>, cx: number, cy: number, tex: Quadrant) {
+      corners[`${cx},${cy}`] = tex;
+      corners[`${cx + 1},${cy}`] = tex;
+      corners[`${cx},${cy + 1}`] = tex;
+      corners[`${cx + 1},${cy + 1}`] = tex;
     }
 
-    /** Erase a cell = clear its 4 corners (which removes the upper texture
-     *  in the painted region). Note this also affects the 8 surrounding
-     *  cells' Wang tiles, since corners are shared. */
-    function eraseCell(corners: Record<string, true>, cx: number, cy: number) {
+    /** Erase a cell = clear all 4 corners (back to "transparent"). Also
+     *  affects the 8 surrounding cells' Wang tiles since corners are shared. */
+    function eraseCell(corners: Record<string, Quadrant>, cx: number, cy: number) {
       delete corners[`${cx},${cy}`];
       delete corners[`${cx + 1},${cy}`];
       delete corners[`${cx},${cy + 1}`];
@@ -296,8 +309,9 @@ export function TileView() {
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
       if (!layer || !layer.tilesetId) return;
       const cells = brushCells(cell.cx, cell.cy, s.brushSize);
+      const tex = s.brushTexture;
       s.mutateCorners(layer.id, (c) => {
-        for (const [cx, cy] of cells) paintCell(layer.id, cx, cy, c);
+        for (const [cx, cy] of cells) paintCell(c, cx, cy, tex);
       });
     }
 
@@ -311,13 +325,13 @@ export function TileView() {
       });
     }
 
-    /** Flood-fill connected empty cells (no upper corners) with upper. */
+    /** Flood-fill connected empty cells (no painted corners) with the brush. */
     function applyFill(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
       if (!layer || !layer.tilesetId) return;
-      // A cell is "empty" if all 4 of its corners are NOT set.
-      function isEmpty(corners: Record<string, true>, cx: number, cy: number): boolean {
+      const tex = s.brushTexture;
+      function isEmpty(corners: Record<string, Quadrant>, cx: number, cy: number): boolean {
         return !(corners[`${cx},${cy}`] || corners[`${cx + 1},${cy}`]
           || corners[`${cx},${cy + 1}`] || corners[`${cx + 1},${cy + 1}`]);
       }
@@ -337,23 +351,27 @@ export function TileView() {
         stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
       }
       s.mutateCorners(layer.id, (c) => {
-        for (const [cx, cy] of writes) paintCell(layer.id, cx, cy, c);
+        for (const [cx, cy] of writes) paintCell(c, cx, cy, tex);
       });
     }
 
     /** Pick the topmost layer's tileset under cursor → set as the active layer's tileset. */
     function applyEyedropper(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
-      // Iterate layers top-to-bottom (last visible-with-tile wins).
+      // Iterate layers top-to-bottom (last visible-with-tile wins). Pick
+      // the one whose corner under the cursor is defined; copy its tileset
+      // AND the texture (u or l) onto the brush.
       for (let i = s.layers.length - 1; i >= 0; i--) {
         const l = s.layers[i];
         if (!l.visible || !l.tilesetId) continue;
-        const nw = l.corners[`${cell.cx},${cell.cy}`] === true;
-        const ne = l.corners[`${cell.cx + 1},${cell.cy}`] === true;
-        const sw = l.corners[`${cell.cx},${cell.cy + 1}`] === true;
-        const se = l.corners[`${cell.cx + 1},${cell.cy + 1}`] === true;
-        if (anyCornerSet(nw, ne, sw, se)) {
+        const nw = l.corners[`${cell.cx},${cell.cy}`];
+        const ne = l.corners[`${cell.cx + 1},${cell.cy}`];
+        const sw = l.corners[`${cell.cx},${cell.cy + 1}`];
+        const se = l.corners[`${cell.cx + 1},${cell.cy + 1}`];
+        const sample = nw ?? ne ?? sw ?? se;
+        if (sample) {
           s.setLayerTileset(s.activeLayerId, l.tilesetId);
+          s.setBrushTexture(sample);
           s.setTool('paint');
           return;
         }
@@ -664,7 +682,18 @@ export function TileView() {
           }}
         >
           <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>
-            PAINTING WITH
+            PAINTING
+          </span>
+          <span
+            style={{
+              fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 999,
+              background: brushTexture === 'u' ? 'rgba(110,180,90,0.18)' : 'rgba(180,140,90,0.18)',
+              border: `1.5px solid ${brushTexture === 'u' ? 'rgba(60,140,40,0.55)' : 'rgba(150,110,60,0.55)'}`,
+              color: brushTexture === 'u' ? 'rgb(40,100,30)' : 'rgb(120,80,40)',
+              letterSpacing: 0.4,
+            }}
+          >
+            {brushTexture === 'u' ? 'UPPER' : 'LOWER'}
           </span>
           <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
             {activeTileset.name}

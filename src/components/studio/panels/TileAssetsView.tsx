@@ -221,7 +221,16 @@ function TerrainCard({
 }) {
   const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
-  const [showDebug, setShowDebug] = useState(false);
+  const brushTexture = useTile((s) => s.brushTexture);
+  const setBrushTexture = useTile((s) => s.setBrushTexture);
+  const setTool = useTile((s) => s.setTool);
+
+  function pickBrush(tex: 'u' | 'l') {
+    onPick();
+    setBrushTexture(tex);
+    setTool('paint');
+  }
+
   return (
     <div
       style={{
@@ -238,10 +247,6 @@ function TerrainCard({
         style={{ cursor: 'pointer' }}
         title={`Paint with "${tileset.name}" on the active layer`}
       >
-        <div className="flex" style={{ gap: 2 }}>
-          <PreviewSwatch tile={upperTile} label="upper" />
-          <PreviewSwatch tile={lowerTile} label="lower" />
-        </div>
         <div className="flex-1 min-w-0">
           <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {tileset.name}
@@ -274,32 +279,73 @@ function TerrainCard({
         </button>
       </div>
 
-      {/* Debug grid toggle — shows the 16 sliced tiles with hover overlays so
-          we can see what the code thinks each cell encodes. Critical for
-          verifying the WANG_LOOKUP table matches the user's PNG layout. */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setShowDebug((v) => !v); }}
-        className="w-full flex items-center justify-center gap-1 mt-2 transition-colors"
+      {/* Brush picker — choose which of the two base textures the paint tool
+          lays down. Bigger swatches than the old preview so they're clearly
+          interactive. The active swatch (only when this terrain is bound to
+          the active layer) gets the butter ring. */}
+      <div className="flex items-center gap-2 mt-2">
+        <BrushSwatch
+          tile={upperTile}
+          label="UPPER"
+          active={active && brushTexture === 'u'}
+          onClick={() => pickBrush('u')}
+        />
+        <BrushSwatch
+          tile={lowerTile}
+          label="LOWER"
+          active={active && brushTexture === 'l'}
+          onClick={() => pickBrush('l')}
+        />
+      </div>
+
+      {/* All 16 sliced tiles, always visible. Hover to see the (NW,NE,SW,SE)
+          encoding overlay so the user can sanity-check the auto-tile lookup. */}
+      <DebugTileGrid tileset={tileset} tiles={tiles} />
+    </div>
+  );
+}
+
+function BrushSwatch({
+  tile, label, active, onClick,
+}: {
+  tile: Tile | undefined;
+  label: 'UPPER' | 'LOWER';
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="flex-1 flex items-center gap-2 transition-colors"
+      style={{
+        padding: 4,
+        background: active ? 'var(--pb-paper)' : 'transparent',
+        border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        borderRadius: 8,
+        cursor: 'pointer',
+        boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+      }}
+      title={`Brush with ${label.toLowerCase()} texture`}
+    >
+      <div
         style={{
-          padding: '4px 6px',
-          background: showDebug ? 'var(--pb-paper)' : 'transparent',
+          width: 26, height: 26, flexShrink: 0,
+          background: 'rgba(0,0,0,0.06)',
+          borderRadius: 5,
           border: '1.5px solid var(--pb-line-2)',
-          borderRadius: 6,
-          fontSize: 10,
-          fontWeight: 700,
-          color: 'var(--pb-ink-muted)',
-          cursor: 'pointer',
-          letterSpacing: 0.4,
+          overflow: 'hidden',
         }}
       >
-        {showDebug ? 'HIDE' : 'SHOW'} TILES (DEBUG)
-      </button>
-
-      {showDebug && (
-        <DebugTileGrid tileset={tileset} tiles={tiles} />
-      )}
-    </div>
+        {tile && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={tile.dataUrl} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+        )}
+      </div>
+      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.5 }}>
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -414,32 +460,6 @@ function DebugTileCell({ tile, index }: { tile: Tile; index: number }) {
             {code}
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-function PreviewSwatch({ tile, label }: { tile: Tile | undefined; label: string }) {
-  return (
-    <div
-      title={label}
-      style={{
-        width: 28, height: 28,
-        borderRadius: 6,
-        background: 'rgba(0,0,0,0.06)',
-        border: '1.5px solid var(--pb-line-2)',
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}
-    >
-      {tile && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={tile.dataUrl}
-          alt={label}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-          draggable={false}
-        />
       )}
     </div>
   );

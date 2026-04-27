@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Quadrant } from '@/lib/wang-tiles';
 
 /**
  * 2D Tile-based editor state — Wang/dual-grid auto-tiling.
@@ -68,9 +69,13 @@ export interface TileLayer {
   opacity: number;
   /** Tileset used for Wang painting on this layer. null = no painting yet. */
   tilesetId: string | null;
-  /** Sparse map of filled corners. Key "cx,cy" → present means upper, absent
-   *  means lower. The renderer derives the visible Wang tile from groups of 4. */
-  corners: Record<string, true>;
+  /**
+   * Sparse map of painted corners. Key "cx,cy" → 'u' (upper texture) or 'l'
+   * (lower texture). Absent = transparent (cell renders nothing if all 4 of
+   * its corners are absent). The renderer derives the visible Wang tile by
+   * reading 4 corners and looking up the (NW,NE,SW,SE) pattern.
+   */
+  corners: Record<string, Quadrant>;
 }
 
 export interface TileObject {
@@ -124,7 +129,7 @@ export interface TileStore {
   /** Assign a tileset to a layer (the texture used for Wang painting). */
   setLayerTileset: (layerId: string, tilesetId: string | null) => void;
   /** Bulk-mutate corners in a single update (paint stroke, fill, etc.). */
-  mutateCorners: (layerId: string, mutator: (corners: Record<string, true>) => void) => void;
+  mutateCorners: (layerId: string, mutator: (corners: Record<string, Quadrant>) => void) => void;
 
   // ── Free objects (props on top of grid) ─────────────────────────
   objects: TileObject[];
@@ -139,6 +144,10 @@ export interface TileStore {
   setTool: (t: TileTool) => void;
   brushSize: number;
   setBrushSize: (size: number) => void;
+  /** Which texture the paint tool lays down — 'u' (upper) or 'l' (lower).
+   *  Erase always clears the corner regardless of this. */
+  brushTexture: Quadrant;
+  setBrushTexture: (t: Quadrant) => void;
   /** Used only by the OBJECT tool — pick a tile to drop as a free sprite.
    *  Wang painting ignores this; it uses the active layer's tilesetId. */
   selectedTileId: string | null;
@@ -309,6 +318,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setTool: (t) => set({ tool: t }),
   brushSize: 1,
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(16, Math.round(size))) }),
+  brushTexture: 'u',
+  setBrushTexture: (t) => set({ brushTexture: t }),
   selectedTileId: null,
   setSelectedTileId: (id) => set({ selectedTileId: id }),
 
@@ -323,8 +334,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     objects: [],
   })),
 }), {
-  // v2 — bumped from v1 (cells → corners), so old persisted maps are dropped.
-  name: 'problocks-tile-v2',
+  // v3 — bumped from v2 (corner value: true → 'u'|'l'), so old persisted
+  // maps are dropped. Painting now lays down either the upper or the lower
+  // texture instead of just toggling on/off.
+  name: 'problocks-tile-v3',
   partialize: (s) => ({
     tilesets: s.tilesets,
     tiles: s.tiles,
@@ -333,6 +346,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     activeLayerId: s.activeLayerId,
     objects: s.objects,
     selectedTileId: s.selectedTileId,
+    brushTexture: s.brushTexture,
     showGrid: s.showGrid,
   }),
   // Heal an empty / corrupted persisted state.

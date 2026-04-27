@@ -724,14 +724,21 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   // so we let the persist key bump drop them. Cloud rehydrate will repopulate
   // assets/styles.
   name: 'problocks-tile-v7',
+  // Big blobs (sheet PNG dataUrls, sliced tile dataUrls, object-style
+  // dataUrls) are NOT persisted — Supabase is the source of truth and
+  // they rehydrate when the panel mounts. Persisting them used to blow
+  // through the ~5 MB localStorage cap on accounts with several sheets,
+  // throwing QuotaExceededError on every paint stroke. Map state
+  // (layers/corners/objects) and small selections still persist so an
+  // online reload looks the same after cloud rehydrate. An OFFLINE
+  // reload will see corners/objects with no tilesets/assets behind them
+  // until the user re-uploads — corners referencing missing texture ids
+  // simply don't render, no crash.
   partialize: (s) => ({
-    tilesets: s.tilesets,
-    tiles: s.tiles,
     tileSize: s.tileSize,
     layers: s.layers,
     activeLayerId: s.activeLayerId,
     objects: s.objects,
-    objectAssets: s.objectAssets,
     selectedAssetId: s.selectedAssetId,
     selectedStyleId: s.selectedStyleId,
     brushTextureId: s.brushTextureId,

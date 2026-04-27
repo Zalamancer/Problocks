@@ -59,7 +59,6 @@ export function TileView() {
   const brushSize = useTile((s) => s.brushSize);
   const setBrushSize = useTile((s) => s.setBrushSize);
   const layers = useTile((s) => s.layers);
-  const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
   const activeLayerId = useTile((s) => s.activeLayerId);
@@ -77,15 +76,6 @@ export function TileView() {
   }, [selectedObjectId, setRightPanelGroup]);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
-  const brushTextureId = useTile((s) => s.brushTextureId);
-  // Resolve the brush back to its tileset + which side it lives on so the
-  // header and ghost can colour-code by upper/lower visually.
-  const brushTileset = brushTextureId
-    ? tilesets.find((t) => t.upperTextureId === brushTextureId || t.lowerTextureId === brushTextureId)
-    : null;
-  const brushSide: 'u' | 'l' | null = brushTileset && brushTextureId
-    ? (brushTileset.upperTextureId === brushTextureId ? 'u' : 'l')
-    : null;
 
   // ── Imperative canvas render loop ───────────────────────────────
   useEffect(() => {
@@ -915,40 +905,6 @@ export function TileView() {
           <Trash2 size={14} strokeWidth={2.2} />
         </ToolBtn>
       </div>
-
-      {/* Active terrain badge — shows the brush's tileset + side. */}
-      {brushTileset && brushSide && (
-        <div
-          className="absolute top-3 z-10 flex items-center gap-2 px-3 py-1.5"
-          style={{
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-ink)',
-            borderRadius: 12,
-            boxShadow: '0 3px 0 var(--pb-ink)',
-          }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>
-            PAINTING
-          </span>
-          <span
-            style={{
-              fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 999,
-              background: brushSide === 'u' ? 'rgba(110,180,90,0.18)' : 'rgba(180,140,90,0.18)',
-              border: `1.5px solid ${brushSide === 'u' ? 'rgba(60,140,40,0.55)' : 'rgba(150,110,60,0.55)'}`,
-              color: brushSide === 'u' ? 'rgb(40,100,30)' : 'rgb(120,80,40)',
-              letterSpacing: 0.4,
-            }}
-          >
-            {brushSide === 'u' ? 'UPPER' : 'LOWER'}
-          </span>
-          <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
-            {brushTileset.name}
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}>on {activeLayer?.name}</span>
-        </div>
-      )}
 
       {Object.keys(tiles).length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ color: 'var(--pb-ink-muted)' }}>

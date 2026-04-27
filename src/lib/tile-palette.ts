@@ -265,3 +265,48 @@ export function hasActiveAdjustments(
   }
   return false;
 }
+
+/**
+ * Generate a masked copy of an image where only pixels classified into
+ * the listed buckets remain — every other pixel becomes fully transparent.
+ *
+ * Used by the water-effect renderer: the wave's hue shift is composited
+ * against this mask so it lands on blue/cyan pixels only, leaving any
+ * connected dirt/grass pixels in transition tiles untouched.
+ */
+export async function maskTileByBuckets(
+  sourceDataUrl: string,
+  keepBuckets: BucketId[],
+): Promise<string> {
+  const keepSet = new Set(keepBuckets);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const cv = document.createElement('canvas');
+        cv.width = img.naturalWidth;
+        cv.height = img.naturalHeight;
+        const ctx = cv.getContext('2d');
+        if (!ctx) throw new Error('no 2d context');
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, cv.width, cv.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+          if (a < 10) continue;
+          const id = classifyPixel(r, g, b);
+          if (!keepSet.has(id)) {
+            data[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        resolve(cv.toDataURL('image/png'));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error('mask: image load failed'));
+    img.src = sourceDataUrl;
+  });
+}

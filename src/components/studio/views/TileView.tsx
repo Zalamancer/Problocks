@@ -8,7 +8,7 @@ import {
 import { useTile, type TileTool, findStyle, tileDataUrlFor } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
-import { recolorTile, hasActiveAdjustments } from '@/lib/tile-palette';
+import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
@@ -51,6 +51,21 @@ export function TileView() {
   /** Inverse lookup so the renderer can ask "is there a recolour for
    *  this base tile in this tileset right now?" without re-hashing. */
   const tileRecolorRef = useRef<Map<string, string>>(new Map());
+  /**
+   * Per-tile blue-mask dataUrl cache. Built once per tile that lives in
+   * a tileset whose upper or lower texture is in `wavyTextureIds`. The
+   * mask keeps pixels classified as blue or cyan (water palette) and
+   * makes every other pixel transparent, so the wave-effect renderer
+   * can clip its hue shift to water-coloured pixels only and leave
+   * connected dirt / grass / sand alone in transition tiles.
+   */
+  const blueMaskCacheRef = useRef<Map<string, string>>(new Map());
+  /**
+   * Pooled offscreen canvas the wave effect draws into. Reused across
+   * frames; resized when the wavy bounding box grows. Allocating fresh
+   * canvases per frame would thrash the GPU on the Chromebook target.
+   */
+  const waveOffscreenRef = useRef<HTMLCanvasElement | null>(null);
 
   const ensureImage = useCallback((dataUrl: string) => {
     let img = imgCacheRef.current.get(dataUrl);
@@ -80,6 +95,7 @@ export function TileView() {
   const wavyTextureIds = useTile((s) => s.wavyTextureIds);
   const setWavyTexture = useTile((s) => s.setWavyTexture);
   const tilesetTints = useTile((s) => s.tilesetTints);
+  const tilesets = useTile((s) => s.tilesets);
   const layers = useTile((s) => s.layers);
   const tiles = useTile((s) => s.tiles);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
@@ -96,6 +112,52 @@ export function TileView() {
   useEffect(() => {
     if (selectedObjectId) setRightPanelGroup('properties');
   }, [selectedObjectId, setRightPanelGroup]);
+
+  // ── Blue-mask cache for the water effect ──────────────────────
+  // Build once per tile when a tileset becomes "wavy" (water effect on
+  // for either side). The mask keeps blue + cyan pixels and zeroes the
+  // alpha on everything else; the renderer composites the wave's hue
+  // shift through the mask so connected dirt/grass pixels in the same
+  // transition tile stay untouched.
+  useEffect(() => {
+    let cancelled = false;
+    if (wavyTextureIds.length === 0) return;
+    const wavySet = new Set(wavyTextureIds);
+    async function build() {
+      const state = useTile.getState();
+      const targets = state.tilesets.filter((ts) =>
+        wavySet.has(ts.upperTextureId) || wavySet.has(ts.lowerTextureId),
+      );
+      for (const ts of targets) {
+        for (const tileId of ts.tileIds) {
+          if (blueMaskCacheRef.current.has(tileId)) continue;
+          const tile = state.tiles[tileId];
+          if (!tile) continue;
+          try {
+            const masked = await maskTileByBuckets(tile.dataUrl, ['blue', 'cyan']);
+            if (cancelled) return;
+            blueMaskCacheRef.current.set(tileId, masked);
+            // Pre-warm the image cache so the first wave frame doesn't
+            // miss while the masked PNG is still decoding.
+            if (!imgCacheRef.current.has(masked)) {
+              const img = new Image();
+              img.onload = () => {
+                imgReadyRef.current.add(masked);
+                requestRender.current();
+              };
+              img.src = masked;
+              imgCacheRef.current.set(masked, img);
+            }
+          } catch (err) {
+            console.warn('[water-mask] failed', err);
+          }
+        }
+      }
+      if (!cancelled) requestRender.current();
+    }
+    void build();
+    return () => { cancelled = true; };
+  }, [wavyTextureIds, tiles]);
 
   // ── Per-tileset palette recolouring ─────────────────────────────
   // Each time `tilesetTints` (or the underlying tileset list) changes,
@@ -295,18 +357,26 @@ export function TileView() {
       }
       ctx!.globalAlpha = 1;
 
-      // ── Water-effect: pixel-level hue wave ───────────────────────
-      // After the tiles are laid down, push the wavy region's pixels
-      // through a sine-modulated hue shift. Implemented with
-      // globalCompositeOperation='hue': the colored fill we draw acts
-      // as the SOURCE hue, the underlying water tiles act as DESTINATION
-      // saturation+lightness, and the browser blends only the hue
-      // channel. So the actual tile pixels ripple through the wave's
-      // colors (cyan → teal → blue) — it isn't an overlay sitting on
-      // top, it's a live re-hueing of what was already drawn.
+      // ── Water-effect: blue-pixels-only hue wave ─────────────────
+      // The wave shouldn't touch dirt / sand / grass pixels in the
+      // transition tiles where water meets land. To enforce that we
+      // route the whole effect through a pooled offscreen canvas:
+      //   1. For each wavy cell, blit the tile's PRE-COMPUTED blue mask
+      //      into the offscreen at the cell's world coords. The mask
+      //      is just the tile with non-blue/cyan pixels' alpha zeroed
+      //      out (see `maskTileByBuckets` + `blueMaskCacheRef`).
+      //   2. With the offscreen now containing only the blue tile
+      //      pixels, run the sine-modulated hue strips on it using
+      //      globalCompositeOperation='hue'. The hue channel is
+      //      replaced ONLY where the offscreen has opaque pixels — i.e.
+      //      only the water pixels.
+      //   3. Composite the offscreen back onto the main canvas with
+      //      'source-over'. Transparent (non-water) pixels in the
+      //      offscreen leave the main canvas untouched, so connected
+      //      dirt / grass stays exactly as it was.
       if (s.wavyTextureIds.length > 0) {
         const wavySet = new Set(s.wavyTextureIds);
-        function isWavy(cx: number, cy: number): boolean {
+        function isWavyCell(cx: number, cy: number): boolean {
           for (const layer of s.layers) {
             if (!layer.visible) continue;
             const c = layer.corners;
@@ -319,16 +389,13 @@ export function TileView() {
           }
           return false;
         }
-        ctx!.save();
-        ctx!.beginPath();
         let any = false;
         let minPX = Infinity, minPY = Infinity, maxPX = -Infinity, maxPY = -Infinity;
         for (let cy = cy0; cy <= cy1; cy++) {
           for (let cx = cx0; cx <= cx1; cx++) {
-            if (!isWavy(cx, cy)) continue;
+            if (!isWavyCell(cx, cy)) continue;
             const x = cx * ts;
             const y = cy * ts;
-            ctx!.rect(x, y, ts, ts);
             any = true;
             if (x < minPX) minPX = x;
             if (y < minPY) minPY = y;
@@ -337,43 +404,79 @@ export function TileView() {
           }
         }
         if (any) {
-          ctx!.clip();
-          const time = performance.now() / 1000;
-          const prevComposite = ctx!.globalCompositeOperation;
-          // 'hue' composite = keep destination saturation + lightness,
-          // replace destination hue with source hue. Tiles whose pixels
-          // already carry colour will visibly shift hue along the wave;
-          // grey/desaturated pixels won't accept hue (by spec) — that's
-          // expected, water tiles are colourful so this is the right
-          // mode for the user's "hue change in pixels" ask.
-          ctx!.globalCompositeOperation = 'hue';
-          const wavelength = Math.max(ts * 1.5, 16);
-          const speed = 1.4;
-          // Hue band kept tight in the blue family so the wave never
-          // drifts into teal/turquoise — only "blue-type colors" as the
-          // user asked. Centre 215° (pure blue) ± 12° = 203°..227°.
-          const HUE_CENTER = 215;
-          const HUE_RANGE = 12;
-          // Horizontal wave: vertical strips with hue varying by sin(x).
-          const stripPx = Math.max(1 / cam.zoom, 2 / cam.zoom);
-          for (let x = minPX; x < maxPX; x += stripPx) {
-            const phase = (x / wavelength) * Math.PI * 2 + time * speed;
-            const hue = HUE_CENTER + Math.sin(phase) * HUE_RANGE;
-            const sat = 80 + Math.sin(phase * 0.5) * 10;
-            ctx!.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
-            ctx!.fillRect(x, minPY, stripPx + 0.5 / cam.zoom, maxPY - minPY);
+          const offW = Math.max(1, Math.round((maxPX - minPX) * cam.zoom));
+          const offH = Math.max(1, Math.round((maxPY - minPY) * cam.zoom));
+          let off = waveOffscreenRef.current;
+          if (!off || off.width !== offW || off.height !== offH) {
+            off = document.createElement('canvas');
+            off.width = offW;
+            off.height = offH;
+            waveOffscreenRef.current = off;
           }
-          // Crossing vertical wave at a different phase + speed.
-          for (let y = minPY; y < maxPY; y += stripPx) {
-            const phase = (y / wavelength) * Math.PI * 2 - time * speed * 0.7;
-            const hue = HUE_CENTER + Math.sin(phase) * (HUE_RANGE * 0.7);
-            const sat = 75 + Math.sin(phase * 0.5) * 10;
-            ctx!.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
-            ctx!.fillRect(minPX, y, maxPX - minPX, stripPx + 0.5 / cam.zoom);
+          const offCtx = off.getContext('2d');
+          if (offCtx) {
+            offCtx.clearRect(0, 0, offW, offH);
+            offCtx.imageSmoothingEnabled = false;
+            // Match main world transform but offset so (minPX, minPY)
+            // maps to (0, 0). Tile draws below use the same world
+            // coordinates as the main pass would.
+            offCtx.setTransform(cam.zoom, 0, 0, cam.zoom, -minPX * cam.zoom, -minPY * cam.zoom);
+            // Step 1: stamp every wavy cell's BLUE-MASK tile onto the
+            // offscreen. We re-resolve each cell to find the right tile
+            // — same logic as the main render loop above.
+            for (const layer of s.layers) {
+              if (!layer.visible) continue;
+              const corners = layer.corners;
+              for (let cy = cy0; cy <= cy1; cy++) {
+                for (let cx = cx0; cx <= cx1; cx++) {
+                  if (!isWavyCell(cx, cy)) continue;
+                  const nw = corners[`${cx},${cy}`];
+                  const ne = corners[`${cx + 1},${cy}`];
+                  const sw = corners[`${cx},${cy + 1}`];
+                  const se = corners[`${cx + 1},${cy + 1}`];
+                  if (!nw && !ne && !sw && !se) continue;
+                  const resolved = resolveCellTile(nw, ne, sw, se, s.tilesets);
+                  if (!resolved) continue;
+                  const tileId = resolved.tileset.tileIds[resolved.index];
+                  if (!tileId) continue;
+                  const maskedUrl = blueMaskCacheRef.current.get(tileId);
+                  if (!maskedUrl) continue;
+                  const mImg = imgCacheRef.current.get(maskedUrl);
+                  if (!mImg || !imgReadyRef.current.has(maskedUrl)) continue;
+                  offCtx.drawImage(mImg, cx * ts, cy * ts, ts, ts);
+                }
+              }
+            }
+            // Step 2: re-hue offscreen blue pixels via sine strips.
+            const time = performance.now() / 1000;
+            offCtx.globalCompositeOperation = 'hue';
+            const wavelength = Math.max(ts * 1.5, 16);
+            const speed = 1.4;
+            const HUE_CENTER = 215;
+            const HUE_RANGE = 12;
+            const stripPx = Math.max(1 / cam.zoom, 2 / cam.zoom);
+            for (let x = minPX; x < maxPX; x += stripPx) {
+              const phase = (x / wavelength) * Math.PI * 2 + time * speed;
+              const hue = HUE_CENTER + Math.sin(phase) * HUE_RANGE;
+              const sat = 80 + Math.sin(phase * 0.5) * 10;
+              offCtx.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
+              offCtx.fillRect(x, minPY, stripPx + 0.5 / cam.zoom, maxPY - minPY);
+            }
+            for (let y = minPY; y < maxPY; y += stripPx) {
+              const phase = (y / wavelength) * Math.PI * 2 - time * speed * 0.7;
+              const hue = HUE_CENTER + Math.sin(phase) * (HUE_RANGE * 0.7);
+              const sat = 75 + Math.sin(phase * 0.5) * 10;
+              offCtx.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
+              offCtx.fillRect(minPX, y, maxPX - minPX, stripPx + 0.5 / cam.zoom);
+            }
+            offCtx.globalCompositeOperation = 'source-over';
+            // Step 3: composite offscreen back onto main. Transparent
+            // (non-water) pixels in the offscreen leave the main canvas
+            // exactly as it was — connected dirt / grass survives.
+            offCtx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx!.drawImage(off, 0, 0, offW, offH, minPX, minPY, maxPX - minPX, maxPY - minPY);
           }
-          ctx!.globalCompositeOperation = prevComposite;
         }
-        ctx!.restore();
       }
 
       // Free objects, sorted bottom-to-top by y.

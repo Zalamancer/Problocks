@@ -1412,22 +1412,46 @@ function ObjectsSection() {
   const assetList = Object.values(objectAssets)
     .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
 
+  /** Asset id whose preview should be force-open because the user just
+   *  arrow-keyed to it. Cleared on Escape or any mouse click in the list. */
+  const [keyboardPreviewAssetId, setKeyboardPreviewAssetId] = useState<string | null>(null);
+
   function handleListKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+    if (e.key === 'Escape') {
+      setKeyboardPreviewAssetId(null);
+      return;
+    }
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if (!focused) return;
     e.preventDefault();
+    const isHoriz = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
     const dir = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
+
     if (focused.kind === 'asset') {
       const order = assetList.map((a) => a.id);
       const idx = order.indexOf(focused.assetId);
       if (idx < 0) return;
       const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
       if (newIdx === idx) return;
-      const next = order.slice();
-      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-      reorderAssets(next);
+
+      if (isHoriz) {
+        // Navigate to prev/next card and force its preview open.
+        const newAssetId = order[newIdx];
+        setFocused({ kind: 'asset', assetId: newAssetId });
+        setKeyboardPreviewAssetId(newAssetId);
+        // Scroll the new card into view inside the horizontal list.
+        requestAnimationFrame(() => {
+          const node = listRef.current?.querySelector<HTMLDivElement>(`[data-asset-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(newAssetId) : newAssetId}"]`);
+          node?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        });
+      } else {
+        // Vertical → reorder.
+        const next = order.slice();
+        [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+        reorderAssets(next);
+      }
     } else {
       const asset = objectAssets[focused.assetId];
       if (!asset) return;
@@ -1436,16 +1460,23 @@ function ObjectsSection() {
       if (idx < 0) return;
       const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
       if (newIdx === idx) return;
-      const next = order.slice();
-      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-      const newOrder = reorderStyles(asset.id, next);
-      newOrder.forEach((style, i) => {
-        if (style.cloudId) {
-          updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
-            console.warn('[object-cloud] style reorder failed', err);
-          });
-        }
-      });
+
+      if (isHoriz) {
+        // Navigate styles within the asset (no preview — styles are tiny rows).
+        setFocused({ kind: 'style', assetId: asset.id, styleId: order[newIdx] });
+      } else {
+        // Vertical → reorder styles.
+        const next = order.slice();
+        [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+        const newOrder = reorderStyles(asset.id, next);
+        newOrder.forEach((style, i) => {
+          if (style.cloudId) {
+            updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
+              console.warn('[object-cloud] style reorder failed', err);
+            });
+          }
+        });
+      }
     }
   }
 
@@ -1600,6 +1631,7 @@ function ObjectsSection() {
               ref={listRef}
               tabIndex={0}
               onKeyDown={handleListKeyDown}
+              onPointerDown={() => setKeyboardPreviewAssetId(null)}
               className="flex gap-3 overflow-x-auto"
               style={{ paddingBottom: 6, outline: 'none', scrollbarGutter: 'stable' }}
             >
@@ -1611,6 +1643,7 @@ function ObjectsSection() {
                   isSelected={asset.id === selectedAssetId}
                   selectedStyleId={selectedStyleId}
                   size="lg"
+                  keyboardOpen={keyboardPreviewAssetId === asset.id}
                   isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
                   focusedStyleId={focused?.kind === 'style' && focused.assetId === asset.id ? focused.styleId : null}
                   onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
@@ -1714,7 +1747,7 @@ function AssetCard({
   onRenameStyle, onAddStyle, onRenameAsset, onReorderStyles,
   onDragStart, onDragOverCard, onDropCard,
   size = 'sm', isFocused = false, focusedStyleId = null,
-  onFocusAsset, onFocusStyle,
+  onFocusAsset, onFocusStyle, keyboardOpen = false,
 }: {
   asset: ObjectAsset;
   expanded: boolean;
@@ -1742,6 +1775,9 @@ function AssetCard({
   focusedStyleId?: string | null;
   onFocusAsset?: () => void;
   onFocusStyle?: (styleId: string) => void;
+  /** When true, the parent (ObjectsSection) wants the floating preview
+   *  forced open — used by ArrowLeft/Right keyboard navigation. */
+  keyboardOpen?: boolean;
 }) {
   const headerStyle = isSelected
     ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
@@ -1761,24 +1797,31 @@ function AssetCard({
   const cardDragArmedRef = useRef(false);
   /** Style row currently being dragged; the handler reads this on drop. */
   const dragStyleIdRef = useRef<string | null>(null);
-  /** Floating preview that pops up next to the lg card on hover. Holds the
-   *  card's bounding rect so the portal can position itself; null = closed.
-   *  The 180ms delay avoids flicker when the user is just sweeping past. */
+  /** Floating preview that pops up next to the lg card on hover OR while
+   *  the parent's `keyboardOpen` prop is true (arrow-key navigation).
+   *  hoverRect carries the card's bounding rect so the portal positions
+   *  itself; null = closed. The 180ms mouse delay avoids flicker on quick
+   *  sweeps; the keyboard path opens immediately. */
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
+  const [isMouseInside, setIsMouseInside] = useState(false);
   const hoverTimerRef = useRef<number | null>(null);
-  function openHoverPreview() {
+  useEffect(() => {
     if (size !== 'lg') return;
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+    const wantOpen = isMouseInside || keyboardOpen;
+    if (!wantOpen) {
+      setHoverRect(null);
+      return;
+    }
+    const delay = keyboardOpen ? 0 : 180;
     hoverTimerRef.current = window.setTimeout(() => {
       if (cardRef.current) setHoverRect(cardRef.current.getBoundingClientRect());
-    }, 180);
-  }
-  function closeHoverPreview() {
-    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
-    setHoverRect(null);
-  }
-  useEffect(() => () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }, []);
+    }, delay);
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, [isMouseInside, keyboardOpen, size]);
 
   function commitName(value: string) {
     setEditingName(false);
@@ -1803,6 +1846,7 @@ function AssetCard({
   return (
     <div
       ref={cardRef}
+      data-asset-id={asset.id}
       draggable
       onDragStart={(e) => {
         if (!cardDragArmedRef.current) { e.preventDefault(); return; }
@@ -1811,14 +1855,14 @@ function AssetCard({
         // is fine because the parent uses a ref instead.
         try { e.dataTransfer.setData('text/plain', asset.id); } catch { /* ignore */ }
         onDragStart();
-        closeHoverPreview();
+        setIsMouseInside(false);
       }}
       onDragEnd={() => { cardDragArmedRef.current = false; }}
       onDragOver={onDragOverCard}
       onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
       onClick={() => { onFocusAsset?.(); }}
-      onMouseEnter={openHoverPreview}
-      onMouseLeave={closeHoverPreview}
+      onMouseEnter={() => setIsMouseInside(true)}
+      onMouseLeave={() => setIsMouseInside(false)}
       style={{
         background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
         // Focus ring uses a thicker accent border so it reads at a glance

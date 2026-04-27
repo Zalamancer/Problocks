@@ -1,10 +1,12 @@
 'use client';
-import { Trash2 } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Trash2, ChevronDown, Check } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
-import { useTile } from '@/store/tile-store';
+import { useTile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { TransformControls2D } from './TransformControls2D';
 
 /**
@@ -115,70 +117,11 @@ export function TileObjectPropertiesPanel({ headless }: { headless?: boolean } =
 
         {asset && asset.styles.length > 1 && (
           <PanelSection title="Style" collapsible defaultOpen>
-            <div className="flex flex-wrap gap-1">
-              {asset.styles.map((st, i) => {
-                const isCurrent = st.id === obj.styleId;
-                return (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => setObjectStyle(obj.id, st.id)}
-                    title={st.label || `Style ${i + 1}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '3px 6px 3px 3px',
-                      background: isCurrent ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-                      border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-                      borderRadius: 999,
-                      cursor: 'pointer',
-                      boxShadow: isCurrent ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 999,
-                        overflow: 'hidden',
-                        background: 'rgba(0,0,0,0.06)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={st.dataUrl}
-                        alt=""
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                          imageRendering: 'pixelated',
-                        }}
-                        draggable={false}
-                      />
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 800,
-                        color: 'var(--pb-ink)',
-                        maxWidth: 90,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {st.label || `Style ${i + 1}`}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <StylePreviewDropdown
+              asset={asset}
+              currentStyleId={obj.styleId}
+              onPick={(styleId) => setObjectStyle(obj.id, styleId)}
+            />
           </PanelSection>
         )}
       </div>

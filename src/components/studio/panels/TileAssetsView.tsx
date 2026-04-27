@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
+  Pencil, GripVertical,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
-import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, type CloudObject } from '@/lib/object-cloud';
+import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -1087,6 +1088,9 @@ function ObjectsSection() {
   const removeStyle = useTile((s) => s.removeStyle);
   const setStyleLabel = useTile((s) => s.setStyleLabel);
   const setStyleCloudId = useTile((s) => s.setStyleCloudId);
+  const renameAsset = useTile((s) => s.renameAsset);
+  const reorderAssets = useTile((s) => s.reorderAssets);
+  const reorderStyles = useTile((s) => s.reorderStyles);
   const objects = useTile((s) => s.objects);
   const selectObject = useTile((s) => s.selectObject);
   const removeObject = useTile((s) => s.removeObject);
@@ -1103,6 +1107,10 @@ function ObjectsSection() {
    *  id here so the next file the picker returns is appended to that asset
    *  rather than creating a new one. Cleared after the upload completes. */
   const targetAssetForStyleRef = useRef<string | null>(null);
+  /** Drag source for asset-card reorder. Native HTML5 DnD would let us
+   *  serialise this through dataTransfer, but a ref is simpler and avoids
+   *  the dataTransfer.types restrictions on dragover. */
+  const dragAssetIdRef = useRef<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
@@ -1303,7 +1311,11 @@ function ObjectsSection() {
     }
   }
 
-  const assetList = Object.values(objectAssets).sort((a, b) => b.addedAt - a.addedAt);
+  // Display order honours the user's drag-reorder (sortIndex). addedAt is
+  // a stable tie-breaker for the rare case two cards share an index — e.g.
+  // mid-reorder before the action commits.
+  const assetList = Object.values(objectAssets)
+    .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
 
   return (
     <div className="space-y-3 px-3 pb-3">
@@ -1357,7 +1369,7 @@ function ObjectsSection() {
         </div>
       ) : (
         <div className="space-y-2">
-          {assetList.map((asset) => (
+          {assetList.map((asset, index) => (
             <AssetCard
               key={asset.id}
               asset={asset}
@@ -1373,8 +1385,61 @@ function ObjectsSection() {
               }}
               onRemoveAsset={() => handleRemoveAsset(asset)}
               onRemoveStyle={(style) => handleRemoveStyle(asset, style)}
-              onRenameStyle={(styleId, label) => setStyleLabel(asset.id, styleId, label)}
+              onRenameStyle={(styleId, label) => {
+                setStyleLabel(asset.id, styleId, label);
+                // Persist the label change so a reload doesn't revert. We
+                // only fire this for styles that actually made it to cloud.
+                const style = asset.styles.find((s) => s.id === styleId);
+                if (style?.cloudId) {
+                  updateTileObject({ id: style.cloudId, label }).catch((err) => {
+                    console.warn('[object-cloud] style rename failed', err);
+                  });
+                }
+              }}
               onAddStyle={() => handleAddStyleClick(asset.id)}
+              onRenameAsset={(name) => {
+                renameAsset(asset.id, name);
+                if (asset.styles.some((s) => s.cloudId)) {
+                  // Asset.id IS the server group_id (we stamp it on save), so
+                  // a single PATCH renames every style row in one round-trip.
+                  updateTileObject({ groupId: asset.id, name }).catch((err) => {
+                    console.warn('[object-cloud] asset rename failed', err);
+                  });
+                }
+              }}
+              onReorderStyles={(orderedStyleIds) => {
+                const newOrder = reorderStyles(asset.id, orderedStyleIds);
+                // Push each style's new sort_index in parallel — small N, so
+                // the fan-out is fine. Failures stay local-only.
+                newOrder.forEach((style, i) => {
+                  if (style.cloudId) {
+                    updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
+                      console.warn('[object-cloud] style reorder failed', err);
+                    });
+                  }
+                });
+              }}
+              onDragStart={() => { dragAssetIdRef.current = asset.id; }}
+              onDragOverCard={(e) => {
+                if (!dragAssetIdRef.current || dragAssetIdRef.current === asset.id) return;
+                e.preventDefault();
+              }}
+              onDropCard={(e) => {
+                e.preventDefault();
+                const fromId = dragAssetIdRef.current;
+                dragAssetIdRef.current = null;
+                if (!fromId || fromId === asset.id) return;
+                const order = assetList.map((a) => a.id);
+                const fromIdx = order.indexOf(fromId);
+                const toIdx = order.indexOf(asset.id);
+                if (fromIdx < 0 || toIdx < 0) return;
+                const next = order.slice();
+                next.splice(fromIdx, 1);
+                next.splice(toIdx, 0, fromId);
+                reorderAssets(next);
+              }}
+              isDropTarget={false}
+              dragIndex={index}
             />
           ))}
         </div>
@@ -1443,10 +1508,28 @@ function ObjectsSection() {
  * + style count badge. Expanded: list of every style (thumb + label edit +
  * delete) plus an "Add style" upload button. Picking a style sets the
  * OBJECT-tool brush to that exact sprite.
+ *
+ * Drag interactions
+ * -----------------
+ * - The grip-handle on the LEFT initiates HTML5 drag for the WHOLE card
+ *   (asset reorder). Hovering another card while dragging fires the
+ *   parent's onDragOver/onDrop, which calls reorderAssets.
+ * - Inside the expanded styles list, each row has its own grip-handle
+ *   for intra-asset style reorder. The card-level drag handlers ignore
+ *   the style drags so there's no cross-talk (style drags don't bubble
+ *   up to a card reorder).
+ *
+ * Inline rename
+ * -------------
+ * - Pencil icon next to the asset name → click toggles edit mode (an
+ *   inline input). Same pattern for each style label. Save on blur or
+ *   Enter; Escape cancels.
  */
 function AssetCard({
   asset, expanded, isSelected, selectedStyleId,
-  onSelect, onToggleExpand, onPickStyle, onRemoveAsset, onRemoveStyle, onRenameStyle, onAddStyle,
+  onSelect, onToggleExpand, onPickStyle, onRemoveAsset, onRemoveStyle,
+  onRenameStyle, onAddStyle, onRenameAsset, onReorderStyles,
+  onDragStart, onDragOverCard, onDropCard,
 }: {
   asset: ObjectAsset;
   expanded: boolean;
@@ -1459,18 +1542,61 @@ function AssetCard({
   onRemoveStyle: (style: ObjectStyle) => void;
   onRenameStyle: (styleId: string, label: string) => void;
   onAddStyle: () => void;
+  onRenameAsset: (name: string) => void;
+  onReorderStyles: (orderedStyleIds: string[]) => void;
+  onDragStart: () => void;
+  onDragOverCard: (e: React.DragEvent) => void;
+  onDropCard: (e: React.DragEvent) => void;
+  isDropTarget?: boolean;
+  dragIndex?: number;
 }) {
-  // Show the currently picked style's thumb when this asset is the active
-  // brush target — otherwise fall back to the first style. Keeps the card
-  // visually in sync with what would actually be placed on click.
   const headerStyle = isSelected
     ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
     : asset.styles[0];
 
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  // Whether the asset card itself is being dragged (vs a style row inside).
+  // Native HTML5 drag bubbles, so we use this to suppress card-drag start
+  // when the user grabs a style handle.
+  const cardDragArmedRef = useRef(false);
+  /** Style row currently being dragged; the handler reads this on drop. */
+  const dragStyleIdRef = useRef<string | null>(null);
+
+  function commitName(value: string) {
+    setEditingName(false);
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== asset.name) onRenameAsset(trimmed);
+  }
+
+  function reorderStylesViaDrop(targetStyleId: string) {
+    const fromId = dragStyleIdRef.current;
+    dragStyleIdRef.current = null;
+    if (!fromId || fromId === targetStyleId) return;
+    const order = asset.styles.map((s) => s.id);
+    const fromIdx = order.indexOf(fromId);
+    const toIdx = order.indexOf(targetStyleId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = order.slice();
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, fromId);
+    onReorderStyles(next);
+  }
 
   return (
     <div
+      draggable
+      onDragStart={(e) => {
+        if (!cardDragArmedRef.current) { e.preventDefault(); return; }
+        e.dataTransfer.effectAllowed = 'move';
+        // Some browsers ignore dragstart without setData — empty payload
+        // is fine because the parent uses a ref instead.
+        try { e.dataTransfer.setData('text/plain', asset.id); } catch { /* ignore */ }
+        onDragStart();
+      }}
+      onDragEnd={() => { cardDragArmedRef.current = false; }}
+      onDragOver={onDragOverCard}
+      onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
       style={{
         background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
         border: `1.5px solid ${isSelected ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
@@ -1479,7 +1605,23 @@ function AssetCard({
         overflow: 'hidden',
       }}
     >
-      <div className="flex items-center gap-2" style={{ padding: 6 }}>
+      <div className="flex items-center gap-1.5" style={{ padding: 6 }}>
+        <span
+          // Mouse-down on the grip arms the card-level drag. Without this,
+          // an HTML5 drag on the rest of the card (e.g. accidental from
+          // the thumbnail button) would also try to reorder.
+          onMouseDown={() => { cardDragArmedRef.current = true; }}
+          onMouseUp={() => { /* keep armed until dragEnd */ }}
+          title="Drag to reorder"
+          style={{
+            display: 'flex', alignItems: 'center',
+            color: 'var(--pb-ink-muted)',
+            cursor: 'grab',
+            padding: '2px 0',
+          }}
+        >
+          <GripVertical size={12} strokeWidth={2.4} />
+        </span>
         <button
           type="button"
           onClick={onSelect}
@@ -1505,10 +1647,48 @@ function AssetCard({
             />
           )}
         </button>
-        <div className="flex-1 min-w-0" onClick={onSelect} style={{ cursor: 'pointer' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {asset.name}
-          </div>
+        <div className="flex-1 min-w-0">
+          {editingName ? (
+            <input
+              autoFocus
+              defaultValue={asset.name}
+              onBlur={(e) => commitName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                if (e.key === 'Escape') setEditingName(false);
+              }}
+              style={{
+                width: '100%',
+                background: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-line-2)',
+                borderRadius: 5,
+                padding: '2px 6px',
+                fontSize: 12,
+                fontWeight: 800,
+                color: 'var(--pb-ink)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <div className="flex items-center gap-1">
+              <span
+                onClick={onSelect}
+                onDoubleClick={() => setEditingName(true)}
+                title="Click to select · double-click to rename"
+                style={{ flex: 1, fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+              >
+                {asset.name}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+                title="Rename asset"
+                style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
+              >
+                <Pencil size={10} strokeWidth={2.4} />
+              </button>
+            </div>
+          )}
           <div style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
             {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
           </div>
@@ -1539,9 +1719,30 @@ function AssetCard({
           <div className="space-y-1">
             {asset.styles.map((style, i) => {
               const isCurrent = isSelected && style.id === selectedStyleId;
+              const isEditing = editingStyleId === style.id;
               return (
                 <div
                   key={style.id}
+                  draggable
+                  onDragStart={(e) => {
+                    // Stop the asset-card drag from also firing when the
+                    // user grabs a style row.
+                    e.stopPropagation();
+                    cardDragArmedRef.current = false;
+                    dragStyleIdRef.current = style.id;
+                    e.dataTransfer.effectAllowed = 'move';
+                    try { e.dataTransfer.setData('text/plain', style.id); } catch { /* ignore */ }
+                  }}
+                  onDragOver={(e) => {
+                    if (!dragStyleIdRef.current || dragStyleIdRef.current === style.id) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    reorderStylesViaDrop(style.id);
+                  }}
                   className="flex items-center gap-1.5"
                   style={{
                     padding: 3,
@@ -1550,6 +1751,16 @@ function AssetCard({
                     borderRadius: 6,
                   }}
                 >
+                  <span
+                    title="Drag to reorder"
+                    style={{
+                      display: 'flex', alignItems: 'center',
+                      color: 'var(--pb-ink-muted)',
+                      cursor: 'grab',
+                    }}
+                  >
+                    <GripVertical size={11} strokeWidth={2.4} />
+                  </span>
                   <button
                     type="button"
                     onClick={() => onPickStyle(style.id)}
@@ -1567,7 +1778,7 @@ function AssetCard({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
                   </button>
-                  {editingStyleId === style.id ? (
+                  {isEditing ? (
                     <input
                       autoFocus
                       defaultValue={style.label}
@@ -1605,6 +1816,14 @@ function AssetCard({
                       {style.label || `Style ${i + 1}`}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setEditingStyleId(style.id)}
+                    title="Rename style"
+                    style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
+                  >
+                    <Pencil size={9} strokeWidth={2.4} />
+                  </button>
                   <button
                     type="button"
                     onClick={() => onRemoveStyle(style)}

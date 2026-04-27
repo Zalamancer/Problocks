@@ -78,6 +78,37 @@ export async function deleteTileObjectGroup(groupId: string): Promise<void> {
   }
 }
 
+export interface UpdateObjectInput {
+  /** Either id (single row) or groupId (every row in the group) — not both. */
+  id?: string;
+  groupId?: string;
+  /** Bulk-rename the asset (only meaningful with `groupId`). */
+  name?: string;
+  /** Single-row label rename (only meaningful with `id`). */
+  label?: string;
+  /** Single-row drag-reorder index (only meaningful with `id`). */
+  sortIndex?: number;
+}
+
+/**
+ * PATCH a row or every row of a group. Used for asset rename
+ * (`{ groupId, name }`), style label rename (`{ id, label }`), and
+ * drag-reorder of styles (`{ id, sortIndex }`).
+ */
+export async function updateTileObject(input: UpdateObjectInput): Promise<CloudObject[]> {
+  const res = await fetch('/api/tile-objects', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const msg = await safeMsg(res);
+    throw new Error(`updateTileObject failed (${res.status}): ${msg}`);
+  }
+  const json = await res.json();
+  return (json.objects ?? []) as CloudObject[];
+}
+
 async function safeMsg(res: Response): Promise<string> {
   try {
     const j = await res.json();

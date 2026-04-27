@@ -136,6 +136,11 @@ export interface ObjectStyle {
  * Logical "object" the user places — a group of one or more sprite styles.
  * Distinct from `Tile` (a Wang-tileset slice) because objects are whole
  * images uploaded as-is — no auto-tiling, no shared texture identity.
+ *
+ * Style ORDER inside `styles[]` is the user-controlled drag order; the
+ * panel preserves it on rename / add / remove. Asset order across the
+ * sidebar is controlled by `sortIndex` (lower = earlier), so dragging an
+ * asset card up just decreases its sortIndex relative to its neighbours.
  */
 export interface ObjectAsset {
   id: string;
@@ -144,6 +149,9 @@ export interface ObjectAsset {
    *  the last style is). styles[0] is the default for new placements. */
   styles: ObjectStyle[];
   addedAt: number;
+  /** Display order in the asset list. Reorder action assigns sequential
+   *  indices, so a stable sort by this field gives the user-visible order. */
+  sortIndex: number;
 }
 
 export interface TileCamera {
@@ -230,6 +238,17 @@ export interface TileStore {
   removeStyle: (assetId: string, styleId: string) => void;
   setStyleLabel: (assetId: string, styleId: string, label: string) => void;
   setStyleCloudId: (assetId: string, styleId: string, cloudId: string) => void;
+  /** Rename an asset. Every style row inherits the new name on the
+   *  cloud side via the panel's batch save — store-side it's just a
+   *  single field update. */
+  renameAsset: (assetId: string, name: string) => void;
+  /** Drag-reorder action: pass the full ordered list of asset ids. Any
+   *  asset not in the list keeps its current index but is appended after
+   *  the explicitly-ordered ones (defensive — usually all ids are listed). */
+  reorderAssets: (orderedAssetIds: string[]) => void;
+  /** Drag-reorder action for styles within one asset. Returns the new
+   *  ordered list of styles so the caller can persist sort_index to cloud. */
+  reorderStyles: (assetId: string, orderedStyleIds: string[]) => ObjectStyle[];
   /** Switch the style on a placed instance ("upgrade"). */
   setObjectStyle: (objectId: string, styleId: string) => void;
 
@@ -461,16 +480,24 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const assetId = providedAssetId ?? cryptoId();
     const styleId = cryptoId();
     const style: ObjectStyle = { id: styleId, label: label ?? '', dataUrl, width, height, cloudId };
-    set((s) => ({
-      objectAssets: {
-        ...s.objectAssets,
-        [assetId]: { id: assetId, name, styles: [style], addedAt: Date.now() },
-      },
-      // Default the OBJECT-tool brush to the first sprite the user uploads
-      // so they can start placing immediately.
-      selectedAssetId: s.selectedAssetId ?? assetId,
-      selectedStyleId: s.selectedStyleId ?? styleId,
-    }));
+    set((s) => {
+      // New assets land at the end of the visible list (highest sortIndex
+      // among existing assets + 1). Empty store starts at 0.
+      const maxIdx = Object.values(s.objectAssets).reduce(
+        (m, a) => Math.max(m, a.sortIndex ?? -1),
+        -1,
+      );
+      return {
+        objectAssets: {
+          ...s.objectAssets,
+          [assetId]: { id: assetId, name, styles: [style], addedAt: Date.now(), sortIndex: maxIdx + 1 },
+        },
+        // Default the OBJECT-tool brush to the first sprite the user uploads
+        // so they can start placing immediately.
+        selectedAssetId: s.selectedAssetId ?? assetId,
+        selectedStyleId: s.selectedStyleId ?? styleId,
+      };
+    });
     return { assetId, styleId };
   },
   addStyleToAsset: (assetId, { label, dataUrl, width, height, cloudId }) => {
@@ -556,6 +583,55 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setObjectStyle: (objectId, styleId) => set((s) => ({
     objects: s.objects.map((o) => o.id === objectId ? { ...o, styleId } : o),
   })),
+  renameAsset: (assetId, name) => set((s) => {
+    const asset = s.objectAssets[assetId];
+    if (!asset) return {};
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === asset.name) return {};
+    return { objectAssets: { ...s.objectAssets, [assetId]: { ...asset, name: trimmed } } };
+  }),
+  reorderAssets: (orderedAssetIds) => set((s) => {
+    const seen = new Set<string>();
+    const next: Record<string, ObjectAsset> = {};
+    let idx = 0;
+    // Apply the explicit order first.
+    for (const id of orderedAssetIds) {
+      const a = s.objectAssets[id];
+      if (!a || seen.has(id)) continue;
+      seen.add(id);
+      next[id] = { ...a, sortIndex: idx++ };
+    }
+    // Append any asset the caller forgot to mention so we never drop assets
+    // silently — they keep their relative addedAt ordering at the tail.
+    const trailing = Object.values(s.objectAssets)
+      .filter((a) => !seen.has(a.id))
+      .sort((a, b) => a.addedAt - b.addedAt);
+    for (const a of trailing) next[a.id] = { ...a, sortIndex: idx++ };
+    return { objectAssets: next };
+  }),
+  reorderStyles: (assetId, orderedStyleIds) => {
+    const stateBefore = get();
+    const asset = stateBefore.objectAssets[assetId];
+    if (!asset) return [];
+    const byId = new Map(asset.styles.map((st) => [st.id, st]));
+    const newStyles: ObjectStyle[] = [];
+    const seen = new Set<string>();
+    for (const id of orderedStyleIds) {
+      const st = byId.get(id);
+      if (!st || seen.has(id)) continue;
+      seen.add(id);
+      newStyles.push(st);
+    }
+    // Defensive: append any styles missing from the caller's order so we
+    // never delete styles via reorder.
+    for (const st of asset.styles) {
+      if (!seen.has(st.id)) newStyles.push(st);
+    }
+    set((s) => ({
+      objectAssets: { ...s.objectAssets, [assetId]: { ...asset, styles: newStyles } },
+    }));
+    return newStyles;
+  },
 
   tool: 'paint',
   setTool: (t) => set({ tool: t }),
@@ -628,6 +704,17 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     }
     // v6: objectAssets is new; default to empty if missing.
     if (!state.objectAssets) state.objectAssets = {};
+    // v7+: backfill sortIndex for assets that pre-date drag-reorder. Use
+    // addedAt as a stable tie-breaker so the displayed order doesn't
+    // jitter on first load after the upgrade.
+    let needsBackfill = false;
+    for (const a of Object.values(state.objectAssets)) {
+      if (typeof a.sortIndex !== 'number') { needsBackfill = true; break; }
+    }
+    if (needsBackfill) {
+      const sorted = Object.values(state.objectAssets).sort((a, b) => (a.addedAt ?? 0) - (b.addedAt ?? 0));
+      sorted.forEach((a, i) => { a.sortIndex = i; });
+    }
   },
 }));
 

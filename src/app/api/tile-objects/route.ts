@@ -17,6 +17,12 @@ import { getServerSupabase, getServerUser, isServerSupabaseConfigured } from '@/
 //
 // DELETE /api/tile-objects?id=<uuid>            — single style row.
 // DELETE /api/tile-objects?groupId=<uuid>       — every style in the asset.
+//
+// PATCH  /api/tile-objects
+//   { id?, groupId?, name?, label?, sortIndex? }
+//   - groupId + name → bulk-rename every row in the group (asset rename).
+//   - id + (label/sortIndex) → single-row update (style rename or
+//     drag-reorder). Body fields not present are left untouched.
 
 const MAX_DATA_BYTES = 8 * 1024 * 1024;
 const MAX_NAME_LENGTH = 200;
@@ -115,6 +121,59 @@ export async function GET() {
     .order('sort_index', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(500);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ objects: (data ?? []).map(rowToObject) });
+}
+
+interface PatchBody {
+  id?: string;
+  groupId?: string;
+  name?: string;
+  label?: string;
+  sortIndex?: number;
+  userId?: string;
+}
+
+export async function PATCH(request: NextRequest) {
+  if (!isServerSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  }
+  const body = (await request.json().catch(() => null)) as PatchBody | null;
+  if (!body) return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+
+  const id = typeof body.id === 'string' ? body.id : '';
+  const groupId = typeof body.groupId === 'string' ? body.groupId : '';
+  const name = typeof body.name === 'string' ? body.name.trim() : undefined;
+  const label = typeof body.label === 'string' ? body.label.trim() : undefined;
+  const sortIndex = Number.isFinite(Number(body.sortIndex)) ? Number(body.sortIndex) : undefined;
+
+  if (!id && !groupId) {
+    return NextResponse.json({ error: 'Missing id or groupId' }, { status: 400 });
+  }
+  if (name === undefined && label === undefined && sortIndex === undefined) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+  }
+  if (name !== undefined && name.length > MAX_NAME_LENGTH) {
+    return NextResponse.json({ error: `Name too long (max ${MAX_NAME_LENGTH})` }, { status: 400 });
+  }
+  if (label !== undefined && label.length > MAX_LABEL_LENGTH) {
+    return NextResponse.json({ error: `Label too long (max ${MAX_LABEL_LENGTH})` }, { status: 400 });
+  }
+
+  const user = await getServerUser();
+  const resolvedUserId = user.isAnonymous ? (body.userId || 'local-user') : user.id;
+
+  const supabase = await getServerSupabase();
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (name !== undefined) patch.name = name;
+  if (label !== undefined) patch.label = label;
+  if (sortIndex !== undefined) patch.sort_index = sortIndex;
+
+  const baseQuery = supabase.from('tile_objects').update(patch).eq('user_id', resolvedUserId);
+  const finalQuery = id ? baseQuery.eq('id', id) : baseQuery.eq('group_id', groupId);
+  const { data, error } = await finalQuery
+    .select('id, group_id, name, label, sort_index, data_url, width, height, created_at, updated_at');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ objects: (data ?? []).map(rowToObject) });

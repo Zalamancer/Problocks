@@ -5,10 +5,11 @@ import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
 } from 'lucide-react';
-import { useTile, type Tileset, type Tile } from '@/store/tile-store';
-import { sliceFile, loadImage, sliceImage } from '@/lib/tile-slicer';
+import { useTile, type Tileset, type Tile, type ObjectAsset } from '@/store/tile-store';
+import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
+import { saveTileObject, listTileObjects, deleteTileObject } from '@/lib/object-cloud';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -1059,81 +1060,231 @@ function LayerList() {
 }
 
 /**
- * Object placement section: lists all uploaded tiles (across every tileset)
- * so users can pick a single sprite to drop as a free object. Auto-tiling
- * doesn't apply to objects — they're just sprites.
+ * Object placement section. Standalone uploaded sprites only — Wang-tileset
+ * slices are auto-tile data, not props, and don't appear here. Each upload
+ * is saved to Supabase (`tile_objects` table) and rehydrated on mount so
+ * the sprite library survives reloads on any device.
  */
 function ObjectsSection() {
-  const tilesets = useTile((s) => s.tilesets);
-  const tiles = useTile((s) => s.tiles);
+  const objectAssets = useTile((s) => s.objectAssets);
+  const addObjectAsset = useTile((s) => s.addObjectAsset);
+  const removeObjectAsset = useTile((s) => s.removeObjectAsset);
+  const setObjectAssetCloudId = useTile((s) => s.setObjectAssetCloudId);
   const objects = useTile((s) => s.objects);
   const selectObject = useTile((s) => s.selectObject);
   const removeObject = useTile((s) => s.removeObject);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
-  const selectedTileId = useTile((s) => s.selectedTileId);
-  const setSelectedTileId = useTile((s) => s.setSelectedTileId);
+  const selectedAssetId = useTile((s) => s.selectedAssetId);
+  const setSelectedAssetId = useTile((s) => s.setSelectedAssetId);
   const setTool = useTile((s) => s.setTool);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
+
+  // Hydrate uploaded sprites from Supabase on mount. Skip names already in
+  // the local store to avoid duplicate entries when the persisted Zustand
+  // copy still has the same uploads.
+  useEffect(() => {
+    let cancelled = false;
+    setCloudStatus('syncing');
+    listTileObjects()
+      .then((cloud) => {
+        if (cancelled) return;
+        const localNames = new Set(Object.values(useTile.getState().objectAssets).map((a) => a.name));
+        for (const obj of cloud) {
+          if (cancelled) return;
+          if (localNames.has(obj.name)) {
+            const existing = Object.values(useTile.getState().objectAssets).find((a) => a.name === obj.name);
+            if (existing && !existing.cloudId) setObjectAssetCloudId(existing.id, obj.id);
+            continue;
+          }
+          addObjectAsset({
+            name: obj.name,
+            dataUrl: obj.dataUrl,
+            width: obj.width,
+            height: obj.height,
+            cloudId: obj.id,
+          });
+        }
+        if (!cancelled) setCloudStatus('synced');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[object-cloud] list failed; running in local-only mode', err);
+        setCloudStatus('offline');
+      });
+    return () => { cancelled = true; };
+  }, [addObjectAsset, setObjectAssetCloudId]);
+
+  async function handleObjectFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of files) {
+        const name = file.name.replace(/\.[^.]+$/, '');
+        // Decode the upload through a canvas so JPEG/WebP/GIF inputs all
+        // come out as homogeneous PNG data URLs (matches tile-slicer's
+        // approach), and so we can read the natural pixel size cheaply.
+        const img = await fileToImage(file);
+        const dataUrl = imageToDataUrl(img);
+        const localId = addObjectAsset({
+          name,
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+        // Background save — failure leaves the sprite local-only.
+        saveTileObject({
+          name,
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        }).then((cloud) => {
+          setObjectAssetCloudId(localId, cloud.id);
+          setCloudStatus('synced');
+        }).catch((err) => {
+          console.warn('[object-cloud] save failed; sprite kept local-only', err);
+          setCloudStatus('offline');
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleRemoveAsset(asset: ObjectAsset) {
+    if (!confirm(`Delete sprite "${asset.name}"? Placed objects using it will also be removed.`)) return;
+    removeObjectAsset(asset.id);
+    if (asset.cloudId) {
+      deleteTileObject(asset.cloudId).catch((err) => {
+        console.warn('[object-cloud] delete failed', err);
+      });
+    }
+  }
+
+  const assetList = Object.values(objectAssets).sort((a, b) => b.addedAt - a.addedAt);
 
   return (
     <div className="space-y-3 px-3 pb-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleObjectFiles}
+        className="hidden"
+      />
+
       <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-        Pick a sprite below, switch to <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), and click on the canvas to place a free object. Objects ignore the auto-tile grid.
+        Upload a sprite, pick it, switch to <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), and click on the canvas to place. Objects ignore the auto-tile grid.
       </p>
 
-      {tilesets.length === 0 ? (
-        <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)' }}>
-          Upload a tileset above to get sprite options.
+      <ChunkyButton
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        kind="butter"
+      >
+        <Upload size={12} strokeWidth={2.4} />
+        {uploading ? 'Uploading…' : 'Upload sprite'}
+      </ChunkyButton>
+      <CloudStatusPill status={cloudStatus} />
+      {error && (
+        <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600 }}>
+          {error}
         </p>
+      )}
+
+      {assetList.length === 0 ? (
+        <div
+          className="rounded-lg p-3 text-center"
+          style={{
+            background: 'var(--pb-cream-2)',
+            border: '1.5px dashed var(--pb-line-2)',
+          }}
+        >
+          <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
+            No sprites yet. Upload PNG/WebP files (trees, rocks, characters, anything) to drop on the canvas as free objects.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-2">
-          {tilesets.map((ts) => (
-            <div
-              key={ts.id}
-              style={{
-                background: 'var(--pb-cream-2)',
-                border: '1.5px solid var(--pb-line-2)',
-                borderRadius: 8,
-                padding: 4,
-              }}
-            >
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', padding: '2px 4px 4px' }}>
-                {ts.name}
+        <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>
+          {assetList.map((asset) => {
+            const isSel = asset.id === selectedAssetId;
+            return (
+              <div
+                key={asset.id}
+                style={{
+                  position: 'relative',
+                  background: isSel ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+                  border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+                  borderRadius: 8,
+                  padding: 4,
+                  boxShadow: isSel ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setSelectedAssetId(asset.id); setTool('object'); }}
+                  title={`Place "${asset.name}" — ${asset.width}×${asset.height}px`}
+                  className="w-full"
+                  style={{
+                    background: 'rgba(0,0,0,0.04)',
+                    border: 0,
+                    borderRadius: 6,
+                    padding: 0,
+                    cursor: 'pointer',
+                    aspectRatio: '1 / 1',
+                    overflow: 'hidden',
+                    display: 'block',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={asset.dataUrl}
+                    alt={asset.name}
+                    className="w-full h-full"
+                    style={{ objectFit: 'contain', imageRendering: 'pixelated' }}
+                    draggable={false}
+                  />
+                </button>
+                <div
+                  className="flex items-center gap-1"
+                  style={{ marginTop: 3 }}
+                >
+                  <span
+                    style={{
+                      flex: 1,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: 'var(--pb-ink)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.2,
+                    }}
+                    title={asset.name}
+                  >
+                    {asset.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleRemoveAsset(asset); }}
+                    style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 0 }}
+                    title="Delete sprite"
+                  >
+                    <Trash2 size={9} strokeWidth={2.4} />
+                  </button>
+                </div>
               </div>
-              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.min(ts.cols, 6)}, 1fr)` }}>
-                {ts.tileIds.map((tid, i) => {
-                  const tile = tiles[tid];
-                  if (!tile) return null;
-                  const isSel = tid === selectedTileId;
-                  return (
-                    <button
-                      key={tid}
-                      type="button"
-                      onClick={() => { setSelectedTileId(tid); setTool('object'); }}
-                      title={`Tile #${i + 1}`}
-                      className="aspect-square"
-                      style={{
-                        background: 'rgba(0,0,0,0.04)',
-                        border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'transparent'}`,
-                        borderRadius: 6,
-                        padding: 2,
-                        cursor: 'pointer',
-                        boxShadow: isSel ? '0 2px 0 var(--pb-butter-ink)' : 'none',
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={tile.dataUrl}
-                        alt=""
-                        className="w-full h-full"
-                        style={{ objectFit: 'contain', imageRendering: 'pixelated' }}
-                        draggable={false}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1143,7 +1294,7 @@ function ObjectsSection() {
             PLACED ({objects.length})
           </div>
           {objects.map((obj) => {
-            const tile = tiles[obj.tileId];
+            const asset = objectAssets[obj.assetId];
             const isSel = obj.id === selectedObjectId;
             return (
               <div
@@ -1166,9 +1317,9 @@ function ObjectsSection() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >
-                  {tile && (
+                  {asset && (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={tile.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                    <img src={asset.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
                   )}
                 </div>
                 <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

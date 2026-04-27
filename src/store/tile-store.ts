@@ -100,15 +100,34 @@ export interface TileObject {
   /** World pixel position (center of the sprite). */
   x: number;
   y: number;
-  /** Tile id this object renders. */
-  tileId: string;
-  /** Size in world pixels. Defaults to the tile's natural size. */
+  /** ObjectAsset id this object renders. Always references `objectAssets`,
+   *  never a Wang-tileset slice — those are auto-tile data, not props. */
+  assetId: string;
+  /** Size in world pixels. Defaults to the asset's natural size. */
   width: number;
   height: number;
   rotation: number;
   flipX: boolean;
   flipY: boolean;
   name: string;
+}
+
+/**
+ * Standalone uploaded sprite used by the OBJECT tool. Distinct from `Tile`
+ * (which is a Wang-tileset slice) because objects are whole images uploaded
+ * as-is — no cols/rows, no auto-tiling, no shared texture identity.
+ */
+export interface ObjectAsset {
+  id: string;
+  name: string;
+  /** PNG / WebP data URL — the actual sprite. */
+  dataUrl: string;
+  /** Natural pixel size, used as the placement default. */
+  width: number;
+  height: number;
+  addedAt: number;
+  /** Server-side row id (Supabase) once uploaded. Absent for local-only. */
+  cloudId?: string;
 }
 
 export interface TileCamera {
@@ -172,6 +191,12 @@ export interface TileStore {
   selectedObjectId: string | null;
   selectObject: (id: string | null) => void;
 
+  // ── Uploaded object sprites (OBJECT tool palette) ───────────────
+  objectAssets: Record<string, ObjectAsset>;
+  addObjectAsset: (asset: { name: string; dataUrl: string; width: number; height: number; cloudId?: string }) => string;
+  removeObjectAsset: (id: string) => void;
+  setObjectAssetCloudId: (id: string, cloudId: string) => void;
+
   // ── Tools ──────────────────────────────────────────────────────
   tool: TileTool;
   setTool: (t: TileTool) => void;
@@ -183,10 +208,10 @@ export interface TileStore {
    *  corner regardless of this. */
   brushTextureId: string | null;
   setBrushTextureId: (id: string | null) => void;
-  /** Used only by the OBJECT tool — pick a tile to drop as a free sprite.
-   *  Wang painting ignores this; it uses the active layer's tilesetId. */
-  selectedTileId: string | null;
-  setSelectedTileId: (id: string | null) => void;
+  /** Used only by the OBJECT tool — picks an uploaded sprite to drop as a
+   *  free object. References `objectAssets`, never a Wang-tileset slice. */
+  selectedAssetId: string | null;
+  setSelectedAssetId: (id: string | null) => void;
 
   // ── View ───────────────────────────────────────────────────────
   camera: TileCamera;
@@ -263,9 +288,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         tiles: nextTiles,
         layers: nextLayers,
         // Default brush picks the new tileset's UPPER texture so the user
-        // can paint immediately after upload; first tile becomes the
-        // object-tool sprite for the same reason.
-        selectedTileId: s.selectedTileId ?? tileIds[0] ?? null,
+        // can paint immediately after upload.
         brushTextureId: s.brushTextureId ?? upperTexId,
       };
     });
@@ -315,19 +338,15 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     }
     // Detach this tileset from any layer that's painting with it. The corner
     // data sticks around so re-assigning a different tileset re-uses it.
+    // Free objects no longer reference Wang slices (they live in
+    // objectAssets), so removing a tileset cannot orphan an object.
     const nextLayers = s.layers.map((l) =>
       l.tilesetId === tilesetId ? { ...l, tilesetId: null } : l,
     );
-    const nextObjects = s.objects.filter((o) => !removeIds.has(o.tileId));
-    const selectedTileId = s.selectedTileId && removeIds.has(s.selectedTileId)
-      ? null
-      : s.selectedTileId;
     return {
       tilesets: s.tilesets.filter((t) => t.id !== tilesetId),
       tiles: nextTiles,
       layers: nextLayers,
-      objects: nextObjects,
-      selectedTileId,
     };
   }),
 
@@ -395,14 +414,45 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   selectedObjectId: null,
   selectObject: (id) => set({ selectedObjectId: id }),
 
+  objectAssets: {},
+  addObjectAsset: ({ name, dataUrl, width, height, cloudId }) => {
+    const id = cryptoId();
+    set((s) => ({
+      objectAssets: {
+        ...s.objectAssets,
+        [id]: { id, name, dataUrl, width, height, addedAt: Date.now(), cloudId },
+      },
+      // Default the OBJECT-tool brush to the first sprite the user uploads
+      // so they can start placing immediately.
+      selectedAssetId: s.selectedAssetId ?? id,
+    }));
+    return id;
+  },
+  removeObjectAsset: (id) => set((s) => {
+    const next = { ...s.objectAssets };
+    delete next[id];
+    return {
+      objectAssets: next,
+      // Drop any placed objects that referenced the removed asset — without
+      // this they'd render as empty rectangles forever.
+      objects: s.objects.filter((o) => o.assetId !== id),
+      selectedAssetId: s.selectedAssetId === id ? null : s.selectedAssetId,
+    };
+  }),
+  setObjectAssetCloudId: (id, cloudId) => set((s) => {
+    const existing = s.objectAssets[id];
+    if (!existing) return {};
+    return { objectAssets: { ...s.objectAssets, [id]: { ...existing, cloudId } } };
+  }),
+
   tool: 'paint',
   setTool: (t) => set({ tool: t }),
   brushSize: 1,
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(16, Math.round(size))) }),
   brushTextureId: null,
   setBrushTextureId: (id) => set({ brushTextureId: id }),
-  selectedTileId: null,
-  setSelectedTileId: (id) => set({ selectedTileId: id }),
+  selectedAssetId: null,
+  setSelectedAssetId: (id) => set({ selectedAssetId: id }),
 
   camera: { x: 0, y: 0, zoom: 1 },
   setCamera: (cam) => set((s) => ({ camera: { ...s.camera, ...cam } })),
@@ -415,11 +465,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     objects: [],
   })),
 }), {
-  // v5 — corner values switched from Quadrant ('u'|'l') to texture id
-  // (string). Brush carries a texture id too. Old persisted maps would
-  // crash the renderer since 'u'/'l' aren't valid lookups any more, so
-  // we drop them. Tilesets re-hydrate from Supabase clean.
-  name: 'problocks-tile-v5',
+  // v6 — TileObject.tileId → assetId; objects now reference uploaded
+  // ObjectAssets (objectAssets), never Wang-tileset slices. Old persisted
+  // objects pointing at tile ids would render as blanks, so we drop them
+  // by switching the persist key.
+  name: 'problocks-tile-v6',
   partialize: (s) => ({
     tilesets: s.tilesets,
     tiles: s.tiles,
@@ -427,7 +477,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     layers: s.layers,
     activeLayerId: s.activeLayerId,
     objects: s.objects,
-    selectedTileId: s.selectedTileId,
+    objectAssets: s.objectAssets,
+    selectedAssetId: s.selectedAssetId,
     brushTextureId: s.brushTextureId,
     showGrid: s.showGrid,
   }),
@@ -454,6 +505,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       if (!t.upperTextureId) t.upperTextureId = cryptoId();
       if (!t.lowerTextureId) t.lowerTextureId = cryptoId();
     }
+    // v6: objectAssets is new; default to empty if missing.
+    if (!state.objectAssets) state.objectAssets = {};
   },
 }));
 

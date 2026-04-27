@@ -184,10 +184,10 @@ export function TileView() {
       }).sort((a, b) => a.y - b.y);
 
       for (const obj of visibleObjects) {
-        const tile = s.tiles[obj.tileId];
-        if (!tile) continue;
-        const img = ensureImage(tile.dataUrl);
-        if (!imgReadyRef.current.has(tile.dataUrl)) continue;
+        const asset = s.objectAssets[obj.assetId];
+        if (!asset) continue;
+        const img = ensureImage(asset.dataUrl);
+        if (!imgReadyRef.current.has(asset.dataUrl)) continue;
         const layer = s.layers.find((l) => l.id === obj.layerId);
         ctx!.globalAlpha = layer?.opacity ?? 1;
         ctx!.save();
@@ -411,18 +411,20 @@ export function TileView() {
       if (e.button !== 0) return;
 
       if (s.tool === 'object') {
-        if (!s.selectedTileId) return;
-        const tile = s.tiles[s.selectedTileId];
-        if (!tile) return;
+        if (!s.selectedAssetId) return;
+        const asset = s.objectAssets[s.selectedAssetId];
+        if (!asset) return;
+        // Drop the sprite at its natural pixel size — users resize per
+        // instance after placing if they need bigger / smaller.
         const id = s.addObject({
           layerId: s.activeLayerId,
           x: w.x, y: w.y,
-          tileId: s.selectedTileId,
-          width: s.tileSize,
-          height: s.tileSize,
+          assetId: s.selectedAssetId,
+          width: asset.width,
+          height: asset.height,
           rotation: 0,
           flipX: false, flipY: false,
-          name: `Object ${s.objects.length + 1}`,
+          name: asset.name || `Object ${s.objects.length + 1}`,
         });
         s.selectObject(id);
         scheduleRender();

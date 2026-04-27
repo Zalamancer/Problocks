@@ -11,6 +11,7 @@ import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } 
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
 import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
+import { analyzePalette, bucketLabel, type ColorBucket } from '@/lib/tile-palette';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
 
@@ -780,19 +781,13 @@ function TerrainCard({
         />
       )}
 
-      {/* Per-texture tint — hue/saturation/brightness applied at render
-          via ctx.filter. Two rows, one per side, each binding to the
-          corresponding texture id. The renderer uses the dominant
-          corner texture's tint for each cell, so transition tiles
-          inherit the more-prevalent side's filter. */}
-      <TintRow
-        title="UPPER tint"
-        textureId={tileset.upperTextureId}
-      />
-      <TintRow
-        title="LOWER tint"
-        textureId={tileset.lowerTextureId}
-      />
+      {/* Palette tint — analyses the sheet's pixels to surface dominant
+          colour groups (greens / blues / browns / etc.), then exposes
+          hue + saturation + brightness sliders per group. Adjusting
+          "green" pushes every green pixel, even mid-transition pieces
+          where green and brown share one tile, instead of treating each
+          UPPER / LOWER side as one block. */}
+      <PaletteSection tilesetId={tileset.id} sheetDataUrl={tileset.sheetDataUrl} />
 
       {/* All 16 sliced tiles, always visible. Hover to see the (NW,NE,SW,SE)
           encoding overlay so the user can sanity-check the auto-tile lookup.
@@ -2618,43 +2613,108 @@ function nextUniqueLabel(asset: ObjectAsset, base: string): string {
 }
 
 /**
- * Per-texture HSL tint sliders. Reads the current tint from the store
- * for the given `textureId` and writes patches via setTextureTint. The
- * row collapses by default; clicking the title toggles. A small "reset"
- * link clears the tint back to identity (which removes the entry from
- * the store, restoring the renderer's fast path).
+ * Palette section — analyses the tileset's source PNG once on mount,
+ * surfaces the dominant colour buckets as expandable rows, and binds
+ * hue/saturation/brightness sliders per bucket to the per-tileset tint
+ * map in the store. The renderer recolours every tile in the tileset
+ * whenever any bucket adjustment changes.
  */
-function TintRow({ title, textureId }: { title: string; textureId: string }) {
-  const tint = useTile((s) => s.textureTints[textureId]);
-  const setTextureTint = useTile((s) => s.setTextureTint);
-  const [open, setOpen] = useState(false);
-  const hue = tint?.hue ?? 0;
-  const saturation = tint?.saturation ?? 1;
-  const brightness = tint?.brightness ?? 1;
-  const isCustom = !!tint;
+function PaletteSection({ tilesetId, sheetDataUrl }: { tilesetId: string; sheetDataUrl: string }) {
+  const [palette, setPalette] = useState<ColorBucket[] | null>(null);
+  const tints = useTile((s) => s.tilesetTints[tilesetId]);
+  const setTilesetBucketTint = useTile((s) => s.setTilesetBucketTint);
+  useEffect(() => {
+    let cancelled = false;
+    setPalette(null);
+    analyzePalette(sheetDataUrl)
+      .then((p) => { if (!cancelled) setPalette(p); })
+      .catch((err) => {
+        console.warn('[tile-palette] analyse failed', err);
+        if (!cancelled) setPalette([]);
+      });
+    return () => { cancelled = true; };
+  }, [sheetDataUrl]);
+
+  if (!palette) {
+    return (
+      <div className="mt-2" style={{ borderTop: '1.5px solid var(--pb-line-2)', paddingTop: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)' }}>
+          Analysing palette…
+        </div>
+      </div>
+    );
+  }
+  if (palette.length === 0) return null;
+
   return (
     <div className="mt-2" style={{ borderTop: '1.5px solid var(--pb-line-2)', paddingTop: 8 }}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.4, color: 'var(--pb-ink)' }}>
+          PALETTE
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--pb-ink-muted)' }}>
+          ({palette.length} colours)
+        </span>
+      </div>
+      <div className="space-y-1">
+        {palette.map((bucket) => (
+          <PaletteBucketRow
+            key={bucket.id}
+            bucket={bucket}
+            adjustment={tints?.[bucket.id]}
+            onChange={(patch) => setTilesetBucketTint(tilesetId, bucket.id, patch)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaletteBucketRow({
+  bucket, adjustment, onChange,
+}: {
+  bucket: ColorBucket;
+  adjustment: { hue: number; saturation: number; brightness: number } | undefined;
+  onChange: (patch: { hue?: number; saturation?: number; brightness?: number } | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hue = adjustment?.hue ?? 0;
+  const saturation = adjustment?.saturation ?? 1;
+  const brightness = adjustment?.brightness ?? 1;
+  const isCustom = !!adjustment;
+  const [r, g, b] = bucket.representativeRgb;
+  const swatchHex = `rgb(${r}, ${g}, ${b})`;
+  return (
+    <div style={{ background: 'var(--pb-cream-2)', borderRadius: 6, padding: '4px 6px', border: '1.5px solid var(--pb-line-2)' }}>
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           style={{
             background: 'transparent', border: 0, cursor: 'pointer',
-            fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
-            color: isCustom ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: 0,
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: 0, flex: 1, minWidth: 0,
           }}
         >
           {open ? <ChevDown size={10} strokeWidth={2.6} /> : <ChevronRight size={10} strokeWidth={2.6} />}
-          {title}{isCustom ? ' ●' : ''}
+          <span style={{
+            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+            background: swatchHex,
+            border: '1.5px solid var(--pb-ink)',
+          }} />
+          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--pb-ink)' }}>
+            {bucketLabel(bucket.id)}
+          </span>
+          {isCustom && (
+            <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-butter-ink)' }}>●</span>
+          )}
         </button>
         {isCustom && (
           <button
             type="button"
-            onClick={() => setTextureTint(textureId, null)}
+            onClick={() => onChange(null)}
             style={{
-              marginLeft: 'auto', padding: '2px 6px',
+              padding: '2px 6px',
               background: 'transparent', border: '1.5px solid var(--pb-line-2)',
               borderRadius: 5, cursor: 'pointer',
               fontSize: 9, fontWeight: 700, color: 'var(--pb-ink-muted)',
@@ -2665,7 +2725,7 @@ function TintRow({ title, textureId }: { title: string; textureId: string }) {
         )}
       </div>
       {open && (
-        <div className="mt-1.5 space-y-1.5">
+        <div className="mt-1.5 space-y-1">
           <TintSlider
             label="hue"
             value={hue}
@@ -2673,7 +2733,7 @@ function TintRow({ title, textureId }: { title: string; textureId: string }) {
             max={180}
             step={1}
             unit="°"
-            onChange={(v) => setTextureTint(textureId, { hue: v })}
+            onChange={(v) => onChange({ hue: v })}
           />
           <TintSlider
             label="sat"
@@ -2681,7 +2741,7 @@ function TintRow({ title, textureId }: { title: string; textureId: string }) {
             min={0}
             max={2}
             step={0.05}
-            onChange={(v) => setTextureTint(textureId, { saturation: v })}
+            onChange={(v) => onChange({ saturation: v })}
             display={(v) => `${(v * 100).toFixed(0)}%`}
           />
           <TintSlider
@@ -2690,7 +2750,7 @@ function TintRow({ title, textureId }: { title: string; textureId: string }) {
             min={0.4}
             max={1.6}
             step={0.05}
-            onChange={(v) => setTextureTint(textureId, { brightness: v })}
+            onChange={(v) => onChange({ brightness: v })}
             display={(v) => `${(v * 100).toFixed(0)}%`}
           />
         </div>

@@ -372,22 +372,38 @@ export interface TileStore {
    *  list; when false, the id and all its siblings are removed. */
   setWavyTexture: (textureId: string, on: boolean) => void;
   /**
-   * Per-texture render tint applied via ctx.filter at draw time. Each
-   * value is a CSS-filter compatible scalar:
-   *   - hue: degrees, applied as `hue-rotate(${hue}deg)` (default 0)
-   *   - saturation: multiplier, `saturate(${saturation})` (default 1)
-   *   - brightness: multiplier, `brightness(${brightness})` (default 1)
-   * Cells whose dominant corner texture has a non-identity tint render
-   * with that filter; identity tints fall through the fast path with no
-   * filter overhead.
+   * Per-tileset palette tints — keyed first by tileset id and then by
+   * colour bucket (red/green/blue/etc., see `lib/tile-palette.ts`).
+   * Each entry holds an HSL triple { hue, saturation, brightness }
+   * applied per-pixel to every pixel that classifies into that bucket.
+   * The renderer caches a recoloured tile dataUrl per tile when any
+   * bucket has a non-identity entry; identity entries fall through the
+   * untinted fast path.
+   *
+   * Why per-bucket and not per-texture: a transition tile has both
+   * grass (green) and dirt (brown) pixels in the same image. Adjusting
+   * "the grass" via per-texture tint would push all those pixels
+   * together. Per-bucket tints push only the green pixels and leave
+   * brown pixels alone — the user's mental model.
    */
-  textureTints: Record<string, { hue: number; saturation: number; brightness: number }>;
-  /** Patch a texture's tint. Pass partial — unspecified fields keep
-   *  their current value. Pass `null` to clear the tint entirely. */
-  setTextureTint: (
-    textureId: string,
+  tilesetTints: Record<
+    string,
+    Partial<Record<
+      'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'magenta' | 'gray',
+      { hue: number; saturation: number; brightness: number }
+    >>
+  >;
+  /** Patch one bucket's tint on one tileset. Identity result drops the
+   *  bucket entry; passing `null` removes it explicitly. The renderer
+   *  watches this map and rebuilds recoloured tile dataUrls when any
+   *  entry changes. */
+  setTilesetBucketTint: (
+    tilesetId: string,
+    bucketId: 'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'magenta' | 'gray',
     patch: Partial<{ hue: number; saturation: number; brightness: number }> | null,
   ) => void;
+  /** Wipe every tint for a tileset (e.g. on tileset removal). */
+  clearTilesetTints: (tilesetId: string) => void;
   /** Used only by the OBJECT tool — picks the asset whose style brush is
    *  active. The actual sprite to place is `selectedStyleId` within this
    *  asset (defaults to the asset's first style on selection). */
@@ -962,27 +978,34 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     else for (const id of family) current.delete(id);
     return { wavyTextureIds: Array.from(current) };
   }),
-  textureTints: {},
-  setTextureTint: (textureId, patch) => set((s) => {
-    const next = { ...s.textureTints };
+  tilesetTints: {},
+  setTilesetBucketTint: (tilesetId, bucketId, patch) => set((s) => {
+    const next: TileStore['tilesetTints'] = { ...s.tilesetTints };
+    const tilesetEntry = { ...(next[tilesetId] ?? {}) };
     if (patch === null) {
-      delete next[textureId];
-      return { textureTints: next };
-    }
-    const current = next[textureId] ?? { hue: 0, saturation: 1, brightness: 1 };
-    const merged = {
-      hue: patch.hue ?? current.hue,
-      saturation: patch.saturation ?? current.saturation,
-      brightness: patch.brightness ?? current.brightness,
-    };
-    // Drop the entry when it returns to identity so the fast path in
-    // the renderer kicks back in.
-    if (merged.hue === 0 && merged.saturation === 1 && merged.brightness === 1) {
-      delete next[textureId];
+      delete tilesetEntry[bucketId];
     } else {
-      next[textureId] = merged;
+      const current = tilesetEntry[bucketId] ?? { hue: 0, saturation: 1, brightness: 1 };
+      const merged = {
+        hue: patch.hue ?? current.hue,
+        saturation: patch.saturation ?? current.saturation,
+        brightness: patch.brightness ?? current.brightness,
+      };
+      if (merged.hue === 0 && merged.saturation === 1 && merged.brightness === 1) {
+        delete tilesetEntry[bucketId];
+      } else {
+        tilesetEntry[bucketId] = merged;
+      }
     }
-    return { textureTints: next };
+    if (Object.keys(tilesetEntry).length === 0) delete next[tilesetId];
+    else next[tilesetId] = tilesetEntry;
+    return { tilesetTints: next };
+  }),
+  clearTilesetTints: (tilesetId) => set((s) => {
+    if (!s.tilesetTints[tilesetId]) return {};
+    const next = { ...s.tilesetTints };
+    delete next[tilesetId];
+    return { tilesetTints: next };
   }),
   selectedAssetId: null,
   setSelectedAssetId: (id) => set((s) => {
@@ -1039,7 +1062,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomFlipV: s.brushRandomFlipV,
     brushRandomRotate: s.brushRandomRotate,
     wavyTextureIds: s.wavyTextureIds,
-    textureTints: s.textureTints,
+    tilesetTints: s.tilesetTints,
     showGrid: s.showGrid,
   }),
   // Heal an empty / corrupted persisted state.

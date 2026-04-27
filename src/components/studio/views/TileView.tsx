@@ -8,6 +8,7 @@ import {
 import { useTile, type TileTool, findStyle, tileDataUrlFor } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
+import { recolorTile, hasActiveAdjustments } from '@/lib/tile-palette';
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
@@ -38,6 +39,18 @@ export function TileView() {
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const imgReadyRef = useRef<Set<string>>(new Set());
   const requestRender = useRef<() => void>(() => {});
+  /**
+   * Per-tile recoloured dataUrl cache. Keyed by `${tileId}:${tintHash}`
+   * so when the user changes a slider the cache hit rate stays high
+   * (we keep both the pre- and post-change dataUrls live until the
+   * next adjustment). Populated by `recolorTile` in a useEffect that
+   * watches `tilesetTints`. The renderer reads from here per draw —
+   * cache miss falls back to the original tile dataUrl untouched.
+   */
+  const recolorCacheRef = useRef<Map<string, string>>(new Map());
+  /** Inverse lookup so the renderer can ask "is there a recolour for
+   *  this base tile in this tileset right now?" without re-hashing. */
+  const tileRecolorRef = useRef<Map<string, string>>(new Map());
 
   const ensureImage = useCallback((dataUrl: string) => {
     let img = imgCacheRef.current.get(dataUrl);
@@ -66,6 +79,7 @@ export function TileView() {
   const setBrushRandomRotate = useTile((s) => s.setBrushRandomRotate);
   const wavyTextureIds = useTile((s) => s.wavyTextureIds);
   const setWavyTexture = useTile((s) => s.setWavyTexture);
+  const tilesetTints = useTile((s) => s.tilesetTints);
   const layers = useTile((s) => s.layers);
   const tiles = useTile((s) => s.tiles);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
@@ -82,6 +96,61 @@ export function TileView() {
   useEffect(() => {
     if (selectedObjectId) setRightPanelGroup('properties');
   }, [selectedObjectId, setRightPanelGroup]);
+
+  // ── Per-tileset palette recolouring ─────────────────────────────
+  // Each time `tilesetTints` (or the underlying tileset list) changes,
+  // recompute a recoloured PNG dataUrl for every tile in the affected
+  // tilesets and stash it under `tileRecolorRef`. The renderer prefers
+  // the recoloured URL when present and falls back to the source URL
+  // otherwise. We keep the previous dataUrl alive in `recolorCacheRef`
+  // until the next adjustment so a slider drag doesn't strobe.
+  useEffect(() => {
+    let cancelled = false;
+    async function rebuild() {
+      const state = useTile.getState();
+      const nextMap = new Map<string, string>();
+      for (const ts of state.tilesets) {
+        const adj = tilesetTints[ts.id];
+        if (!hasActiveAdjustments(adj)) continue;
+        // Stable hash for cache lookup — bucket id + numeric values.
+        const hash = JSON.stringify(adj);
+        for (const tileId of ts.tileIds) {
+          const tile = state.tiles[tileId];
+          if (!tile) continue;
+          const cacheKey = `${tileId}:${hash}`;
+          let recolored = recolorCacheRef.current.get(cacheKey);
+          if (!recolored) {
+            try {
+              recolored = await recolorTile(tile.dataUrl, adj);
+              if (cancelled) return;
+              recolorCacheRef.current.set(cacheKey, recolored);
+            } catch (err) {
+              console.warn('[tile-palette] recolor failed', err);
+              continue;
+            }
+          }
+          nextMap.set(tileId, recolored);
+          // Pre-warm the image cache so the first frame after the
+          // recolour finishes can blit the new dataUrl without waiting
+          // for an async load.
+          if (!imgCacheRef.current.has(recolored)) {
+            const img = new Image();
+            img.onload = () => {
+              imgReadyRef.current.add(recolored!);
+              requestRender.current();
+            };
+            img.src = recolored;
+            imgCacheRef.current.set(recolored, img);
+          }
+        }
+      }
+      if (cancelled) return;
+      tileRecolorRef.current = nextMap;
+      requestRender.current();
+    }
+    void rebuild();
+    return () => { cancelled = true; };
+  }, [tilesetTints, tiles]);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 
@@ -169,33 +238,7 @@ export function TileView() {
       // tileset bridges the textures present at the 4 corners. Two chained
       // tilesets sharing a texture transition smoothly because the bridge
       // tileset for the boundary cells contains both textures.
-      // Build a quick canonical-key → filter string lookup so per-cell
-      // tint application is one Map.get plus a string assignment. Keyed
-      // by canonical texture key (label/id) so two label-linked sheets
-      // share one tint entry rather than fighting over the dominant
-      // corner.
-      const tintCanon = new Map<string, string>();
-      const tintRawIds = Object.keys(s.textureTints);
-      if (tintRawIds.length > 0) {
-        for (const id of tintRawIds) {
-          const tint = s.textureTints[id];
-          // Identity tints are dropped from the store, so any entry
-          // here implies at least one channel is non-default.
-          const parts: string[] = [];
-          if (tint.hue !== 0) parts.push(`hue-rotate(${tint.hue}deg)`);
-          if (tint.saturation !== 1) parts.push(`saturate(${tint.saturation})`);
-          if (tint.brightness !== 1) parts.push(`brightness(${tint.brightness})`);
-          if (parts.length === 0) continue;
-          const filter = parts.join(' ');
-          tintCanon.set(id, filter);
-          // Mirror onto the canonical key (label or id) so any sibling
-          // texture id picks the same filter without needing its own
-          // entry. Cheap because tintRawIds is small.
-          // Sibling expansion not needed — the panel sets the tint on
-          // every sibling explicitly via its own onChange handler.
-        }
-      }
-      const hasTints = tintCanon.size > 0;
+      const recolorMap = tileRecolorRef.current;
       for (const layer of s.layers) {
         if (!layer.visible) continue;
         ctx!.globalAlpha = layer.opacity;
@@ -214,53 +257,37 @@ export function TileView() {
             if (!tileId) continue;
             const tile = s.tiles[tileId];
             if (!tile) continue;
-            // Use the active variant's data URL when one is selected; the
-            // base sheet's dataUrl when not. Image cache is keyed on the
-            // url, so swapping variants just swaps which decoded image
-            // gets blitted.
-            const dataUrl = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
+            // Per-bucket palette recolour produces a cached dataUrl per
+            // tile when any tileset tint is active; prefer it over the
+            // raw tile / variant data URL.
+            const baseDataUrl = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
+            const recoloredDataUrl = recolorMap.get(tileId);
+            const dataUrl = recoloredDataUrl ?? baseDataUrl;
             const img = imgCacheRef.current.get(dataUrl);
-            if (!img || !imgReadyRef.current.has(dataUrl)) continue;
-            // Per-cell tint: pick the dominant corner texture and look
-            // up its filter string. When no textures have tints we skip
-            // the lookup entirely (fast path).
-            let cellFilter: string | undefined;
-            if (hasTints) {
-              // Find dominant non-empty corner texture.
-              const counts = new Map<string, number>();
-              if (nw) counts.set(nw, (counts.get(nw) ?? 0) + 1);
-              if (ne) counts.set(ne, (counts.get(ne) ?? 0) + 1);
-              if (sw) counts.set(sw, (counts.get(sw) ?? 0) + 1);
-              if (se) counts.set(se, (counts.get(se) ?? 0) + 1);
-              let best: string | undefined;
-              let bestN = 0;
-              for (const [tex, n] of counts) {
-                if (n > bestN) { bestN = n; best = tex; }
-              }
-              if (best) cellFilter = tintCanon.get(best);
+            if (!img || !imgReadyRef.current.has(dataUrl)) {
+              // Recoloured image still loading; fall back to base for
+              // this frame so the cell doesn't disappear mid-recolour.
+              const fbImg = imgCacheRef.current.get(baseDataUrl);
+              if (!fbImg || !imgReadyRef.current.has(baseDataUrl)) continue;
+              ctx!.drawImage(fbImg, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+              continue;
             }
             // Per-cell render transform (random flip/rotate from brush
             // options at paint time). Cheap fast-path when no transforms
             // exist or this cell wasn't randomized — just drawImage at
             // the cell's top-left like before.
             const t = transforms?.[`${cx},${cy}`] ?? 0;
-            const needsState = t !== 0 || !!cellFilter;
-            if (!needsState) {
+            if (t === 0) {
               ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
             } else {
+              const flipH = (t & 0x1) !== 0;
+              const flipV = (t & 0x2) !== 0;
+              const rot = (t >> 2) & 0x3;
               ctx!.save();
-              if (cellFilter) ctx!.filter = cellFilter;
-              if (t !== 0) {
-                const flipH = (t & 0x1) !== 0;
-                const flipV = (t & 0x2) !== 0;
-                const rot = (t >> 2) & 0x3;
-                ctx!.translate(cx * ts + ts / 2, cy * ts + ts / 2);
-                if (rot) ctx!.rotate(rot * Math.PI / 2);
-                if (flipH || flipV) ctx!.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-                ctx!.drawImage(img, -ts / 2 - bleed, -ts / 2 - bleed, ts + bleed * 2, ts + bleed * 2);
-              } else {
-                ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
-              }
+              ctx!.translate(cx * ts + ts / 2, cy * ts + ts / 2);
+              if (rot) ctx!.rotate(rot * Math.PI / 2);
+              if (flipH || flipV) ctx!.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+              ctx!.drawImage(img, -ts / 2 - bleed, -ts / 2 - bleed, ts + bleed * 2, ts + bleed * 2);
               ctx!.restore();
             }
           }

@@ -17,6 +17,10 @@ export interface CloudSheet {
   sheetDataUrl: string;
   upperTextureId: string;
   lowerTextureId: string;
+  /** Persisted terrain labels — undefined when the user hasn't set one
+   *  on either side and the row predates migration 034. */
+  upperLabel?: string;
+  lowerLabel?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +37,11 @@ export interface SaveSheetInput {
    *  fresh ids (a stand-alone sheet). */
   upperTextureId?: string;
   lowerTextureId?: string;
+  /** Optional terrain labels (e.g. "grass", "dirt"). Pass `null` to clear
+   *  a previously-set override; pass `undefined` (or omit) to leave the
+   *  cloud value untouched on this upsert. */
+  upperLabel?: string | null;
+  lowerLabel?: string | null;
 }
 
 export async function saveTileSheet(input: SaveSheetInput): Promise<CloudSheet> {

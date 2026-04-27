@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
-import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
+import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
+import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
 
@@ -44,6 +45,7 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
   const addTileset = useTile((s) => s.addTileset);
   const removeTileset = useTile((s) => s.removeTileset);
   const setTilesetCloudId = useTile((s) => s.setTilesetCloudId);
+  const setTilesetLabelStore = useTile((s) => s.setTilesetLabel);
   const tileSize = useTile((s) => s.tileSize);
   const setTileSize = useTile((s) => s.setTileSize);
   const layers = useTile((s) => s.layers);
@@ -57,6 +59,12 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
+  // Promise-based modal state for the "name your terrains" prompt that
+  // pops on uploads where the sheet name doesn't parse and the auto-match
+  // step couldn't fill both label sides on its own. `resolve` is the
+  // function the modal calls on Save/Skip/Cancel — handleFiles awaits it
+  // before continuing.
+  const [namePrompt, setNamePrompt] = useState<NamePromptState | null>(null);
   // Set when the user is uploading a "connecting" sheet — i.e. a new sheet
   // that should share one of its texture ids with an existing sheet's
   // texture. Cleared after the next file upload completes (one-shot).
@@ -106,6 +114,10 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
               tileHeight: sliced.tileHeight,
               tiles: sliced.tiles,
               cloudId: sheet.id,
+              upperTextureId: sheet.upperTextureId,
+              lowerTextureId: sheet.lowerTextureId,
+              upperLabel: sheet.upperLabel,
+              lowerLabel: sheet.lowerLabel,
             });
           } catch (err) {
             console.error('[tile-cloud] failed to hydrate sheet', sheet.name, err);
@@ -121,6 +133,73 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
     return () => { cancelled = true; };
   }, [addTileset, setTilesetCloudId]);
 
+  /**
+   * Open a modal asking the user to name the new sheet's upper + lower
+   * terrains. Returns the entered labels (or `undefined` per side when
+   * the user clears them). Resolves immediately to `{}` if cancelled —
+   * the upload still proceeds with whatever auto-match found.
+   */
+  function promptForTerrainNames(args: {
+    upperPreviewUrl: string;
+    lowerPreviewUrl: string;
+    initialUpper: string;
+    initialLower: string;
+    upperLocked: boolean;
+    lowerLocked: boolean;
+    sheetName: string;
+  }): Promise<{ upper?: string; lower?: string }> {
+    return new Promise((resolve) => {
+      setNamePrompt({
+        ...args,
+        resolve: (result) => {
+          setNamePrompt(null);
+          resolve(result);
+        },
+      });
+    });
+  }
+
+  /**
+   * Compare a new sheet's pure-UPPER and pure-LOWER tiles against every
+   * existing tileset's pure tiles, and return any auto-match hits. A hit
+   * carries the matching texture id (so the new sheet inherits identity
+   * via shared id) and that side's label (so the brush also inherits the
+   * sibling's terrain name). Used by `handleFiles` to make multi-sheet
+   * uploads "just work" without forcing the user to type names or click
+   * the chain icon.
+   */
+  async function autoMatchTextures(newUpperUrl: string, newLowerUrl: string): Promise<{
+    upper?: { textureId: string; label?: string };
+    lower?: { textureId: string; label?: string };
+  }> {
+    const existing = useTile.getState().tilesets;
+    const allTiles = useTile.getState().tiles;
+    let upper: { textureId: string; label?: string } | undefined;
+    let lower: { textureId: string; label?: string } | undefined;
+    for (const ts of existing) {
+      if (upper && lower) break;
+      const exUpperUrl = allTiles[ts.tileIds[PURE_UPPER_INDEX]]?.dataUrl;
+      const exLowerUrl = allTiles[ts.tileIds[PURE_LOWER_INDEX]]?.dataUrl;
+      if (!upper && exUpperUrl) {
+        const sim = await tileSimilarityCached(newUpperUrl, exUpperUrl);
+        if (sim >= TILE_SIMILARITY_THRESHOLD) upper = { textureId: ts.upperTextureId, label: ts.upperLabel };
+      }
+      if (!upper && exLowerUrl) {
+        const sim = await tileSimilarityCached(newUpperUrl, exLowerUrl);
+        if (sim >= TILE_SIMILARITY_THRESHOLD) upper = { textureId: ts.lowerTextureId, label: ts.lowerLabel };
+      }
+      if (!lower && exUpperUrl) {
+        const sim = await tileSimilarityCached(newLowerUrl, exUpperUrl);
+        if (sim >= TILE_SIMILARITY_THRESHOLD) lower = { textureId: ts.upperTextureId, label: ts.upperLabel };
+      }
+      if (!lower && exLowerUrl) {
+        const sim = await tileSimilarityCached(newLowerUrl, exLowerUrl);
+        if (sim >= TILE_SIMILARITY_THRESHOLD) lower = { textureId: ts.lowerTextureId, label: ts.lowerLabel };
+      }
+    }
+    return { upper, lower };
+  }
+
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -133,13 +212,16 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
     const link = linkContextRef.current;
     linkContextRef.current = null;
     let sharedUpper: string | undefined;
+    let sharedUpperLabel: string | undefined;
     let sharedLower: string | undefined;
+    let sharedLowerLabel: string | undefined;
     if (link) {
       const source = useTile.getState().tilesets.find((t) => t.id === link.sourceTilesetId);
       if (source) {
         const sharedId = link.sourceSide === 'u' ? source.upperTextureId : source.lowerTextureId;
-        if (link.newSide === 'u') sharedUpper = sharedId;
-        else sharedLower = sharedId;
+        const sharedLabel = link.sourceSide === 'u' ? source.upperLabel : source.lowerLabel;
+        if (link.newSide === 'u') { sharedUpper = sharedId; sharedUpperLabel = sharedLabel; }
+        else { sharedLower = sharedId; sharedLowerLabel = sharedLabel; }
       }
     }
 
@@ -149,9 +231,50 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
       for (const file of files) {
         const name = file.name.replace(/\.[^.]+$/, '');
         const result = await sliceFile(file, { cols, rows });
-        // Add locally first so the user sees the sheet immediately. The
-        // Supabase save runs in the background and stamps cloudId on
-        // success — failure leaves the sheet local-only.
+        const newUpperUrl = result.tiles[PURE_UPPER_INDEX];
+        const newLowerUrl = result.tiles[PURE_LOWER_INDEX];
+
+        // Step 1: pixel-similarity auto-match against existing sheets. Only
+        // covers sides the explicit chain link didn't already pin.
+        const auto = (sharedUpper && sharedLower)
+          ? { upper: undefined, lower: undefined }
+          : await autoMatchTextures(newUpperUrl, newLowerUrl);
+
+        // Step 2: choose the final texture ids — explicit chain wins, then
+        // auto-match, otherwise let addTileset mint a fresh UUID.
+        const finalUpperTexId = sharedUpper ?? auto.upper?.textureId;
+        const finalLowerTexId = sharedLower ?? auto.lower?.textureId;
+
+        // Step 3: figure out the labels. Inherited from chain or auto-match
+        // first; falling back to a parse of the sheet name (handled inside
+        // addTileset). When neither hit AND the name doesn't parse, prompt
+        // the user.
+        let finalUpperLabel: string | undefined = sharedUpperLabel ?? auto.upper?.label;
+        let finalLowerLabel: string | undefined = sharedLowerLabel ?? auto.lower?.label;
+        const parsed = parseSheetName(name);
+        const upperWillBeNamed = !!finalUpperLabel || !!parsed?.[0];
+        const lowerWillBeNamed = !!finalLowerLabel || !!parsed?.[1];
+        if (!upperWillBeNamed || !lowerWillBeNamed) {
+          // At least one side has no label and the file name didn't parse —
+          // ask the user. Pre-fill whatever we already know.
+          const promptResult = await promptForTerrainNames({
+            upperPreviewUrl: newUpperUrl,
+            lowerPreviewUrl: newLowerUrl,
+            initialUpper: finalUpperLabel ?? parsed?.[0] ?? '',
+            initialLower: finalLowerLabel ?? parsed?.[1] ?? '',
+            // A side is "locked" when its texture id was already pinned by
+            // an explicit chain — re-typing the label there could confuse
+            // the user; we still allow edits but visually mark it.
+            upperLocked: !!sharedUpper,
+            lowerLocked: !!sharedLower,
+            sheetName: name,
+          });
+          if (promptResult.upper !== undefined) finalUpperLabel = promptResult.upper || undefined;
+          if (promptResult.lower !== undefined) finalLowerLabel = promptResult.lower || undefined;
+        }
+
+        // Step 4: add locally so the user sees it instantly. The Supabase
+        // save runs in the background and stamps cloudId on success.
         const localId = addTileset({
           name,
           sheetDataUrl: result.sheetDataUrl,
@@ -160,15 +283,15 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
           tileWidth: result.tileWidth,
           tileHeight: result.tileHeight,
           tiles: result.tiles,
-          upperTextureId: sharedUpper,
-          lowerTextureId: sharedLower,
+          upperTextureId: finalUpperTexId,
+          lowerTextureId: finalLowerTexId,
+          upperLabel: finalUpperLabel,
+          lowerLabel: finalLowerLabel,
         });
-        // Read the local tileset back so we send Supabase the SAME texture
-        // ids that addTileset resolved (either the shared ones from a chain
-        // upload, or the freshly-generated ones for a stand-alone upload).
-        // Without this the DB would assign its own ids, leaving local and
-        // cloud out of sync — and the "merge textures" feature would
-        // re-hydrate stale ids on reload.
+        // Read the local tileset back so cloud receives the SAME texture
+        // ids and labels that addTileset finalized (it may have parsed the
+        // name to fill missing labels). Without this, DB defaults would
+        // generate fresh ids, leaving local + cloud out of sync.
         const local = useTile.getState().tilesets.find((t) => t.id === localId);
         saveTileSheet({
           name,
@@ -179,6 +302,8 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
           tileHeight: result.tileHeight,
           upperTextureId: local?.upperTextureId,
           lowerTextureId: local?.lowerTextureId,
+          upperLabel: local?.upperLabel ?? null,
+          lowerLabel: local?.lowerLabel ?? null,
         }).then((cloud) => {
           setTilesetCloudId(localId, cloud.id);
           setCloudStatus('synced');
@@ -189,12 +314,42 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
         // Linkage is a one-shot per file picker invocation — only the first
         // file in a multi-file pick gets it.
         sharedUpper = undefined;
+        sharedUpperLabel = undefined;
         sharedLower = undefined;
+        sharedLowerLabel = undefined;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
+    }
+  }
+
+  /**
+   * Save a label override to the store and persist it to Supabase so it
+   * survives a reload. Used by TerrainCard's `onLabelChange` callback so
+   * the panel's "upper name" / "lower name" inputs round-trip through the
+   * cloud.
+   */
+  async function handleLabelChange(tilesetId: string, side: 'u' | 'l', label: string) {
+    setTilesetLabelStore(tilesetId, side, label);
+    const t = useTile.getState().tilesets.find((x) => x.id === tilesetId);
+    if (!t) return;
+    try {
+      await saveTileSheet({
+        name: t.name,
+        sheetDataUrl: t.sheetDataUrl,
+        cols: t.cols,
+        rows: t.rows,
+        tileWidth: t.tileWidth,
+        tileHeight: t.tileHeight,
+        upperTextureId: t.upperTextureId,
+        lowerTextureId: t.lowerTextureId,
+        upperLabel: t.upperLabel ?? null,
+        lowerLabel: t.lowerLabel ?? null,
+      });
+    } catch (err) {
+      console.warn('[tile-cloud] label save failed', err);
     }
   }
 
@@ -322,6 +477,7 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
                     const sourceId = sourceSide === 'u' ? ts.upperTextureId : ts.lowerTextureId;
                     void mergeWithExisting(sourceId, targetTextureId);
                   }}
+                  onLabelChange={(side, label) => { void handleLabelChange(ts.id, side, label); }}
                 />
               ))}
             </div>
@@ -330,6 +486,8 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
       )}
 
       {view === 'assets' && <ObjectsSection />}
+
+      {namePrompt && <NameTerrainModal {...namePrompt} />}
     </div>
   );
 }
@@ -376,7 +534,7 @@ function Section({
  * butter highlight + a checkmark.
  */
 function TerrainCard({
-  tileset, tiles, allTilesets, active, onPick, onRemove, onConnect, onMerge,
+  tileset, tiles, allTilesets, active, onPick, onRemove, onConnect, onMerge, onLabelChange,
 }: {
   tileset: Tileset;
   tiles: Record<string, Tile>;
@@ -392,12 +550,14 @@ function TerrainCard({
   /** Merge this card's `sourceSide` texture with an existing texture id
    *  picked from another tileset's swatch. */
   onMerge: (sourceSide: 'u' | 'l', targetTextureId: string) => void;
+  /** Persist a terrain-label edit to the store AND Supabase so the override
+   *  survives a reload. */
+  onLabelChange: (side: 'u' | 'l', label: string) => void;
 }) {
   const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
   const brushTextureId = useTile((s) => s.brushTextureId);
   const setBrushTextureId = useTile((s) => s.setBrushTextureId);
-  const setTilesetLabel = useTile((s) => s.setTilesetLabel);
   const setTool = useTile((s) => s.setTool);
 
   // Which swatch (if any) currently has its "connect" popover open.
@@ -524,13 +684,13 @@ function TerrainCard({
           placeholder="upper name"
           value={upperLabelDisplay}
           isOverride={tileset.upperLabel !== undefined}
-          onChange={(v) => setTilesetLabel(tileset.id, 'u', v)}
+          onChange={(v) => onLabelChange('u', v)}
         />
         <LabelInput
           placeholder="lower name"
           value={lowerLabelDisplay}
           isOverride={tileset.lowerLabel !== undefined}
-          onChange={(v) => setTilesetLabel(tileset.id, 'l', v)}
+          onChange={(v) => onLabelChange('l', v)}
         />
       </div>
 
@@ -2389,3 +2549,205 @@ const kbd: React.CSSProperties = {
   color: 'var(--pb-ink)',
   fontFamily: 'inherit',
 };
+
+/**
+ * Modal state shape for the upload-time "name your terrains" prompt.
+ * Lives at TileAssetsView's top-level state and is rendered by
+ * `NameTerrainModal` when not null.
+ */
+interface NamePromptState {
+  upperPreviewUrl: string;
+  lowerPreviewUrl: string;
+  initialUpper: string;
+  initialLower: string;
+  upperLocked: boolean;
+  lowerLocked: boolean;
+  sheetName: string;
+  resolve: (result: { upper?: string; lower?: string }) => void;
+}
+
+/**
+ * Chunky-pastel modal that asks the user to name a freshly-uploaded
+ * sheet's upper + lower terrains. Only shown when the file basename
+ * doesn't parse via parseSheetName AND auto-match against existing
+ * sheets didn't fill at least one side. Skip = leave labels unset
+ * (legacy behavior, hard edges between sheets); Save = persist labels
+ * so the auto-tile resolver bridges across sheets sharing a label.
+ */
+function NameTerrainModal({
+  upperPreviewUrl, lowerPreviewUrl, initialUpper, initialLower,
+  upperLocked, lowerLocked, sheetName, resolve,
+}: NamePromptState) {
+  const [upper, setUpper] = useState(initialUpper);
+  const [lower, setLower] = useState(initialLower);
+  const upperRef = useRef<HTMLInputElement | null>(null);
+
+  // Autofocus the first empty input on mount so the user can just type.
+  useEffect(() => {
+    const target = upperRef.current;
+    if (!target) return;
+    target.focus();
+    target.select();
+  }, []);
+
+  // Esc cancels the prompt (treated as "skip" — upload still proceeds
+  // with whatever auto-match found). Enter saves the current values.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        resolve({});
+      } else if (e.key === 'Enter') {
+        e.stopPropagation();
+        resolve({ upper: upper.trim(), lower: lower.trim() });
+      }
+    }
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [resolve, upper, lower]);
+
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-modal"
+        style={{ background: 'rgba(20, 18, 12, 0.55)', backdropFilter: 'blur(2px)' }}
+        onClick={() => resolve({})}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="name-terrain-title"
+        className="fixed z-modal inset-0 m-auto h-fit"
+        style={{
+          width: 'min(420px, 92vw)',
+          background: 'var(--pb-paper)',
+          border: '1.5px solid var(--pb-ink)',
+          borderRadius: 14,
+          boxShadow: '0 6px 0 var(--pb-ink), 0 12px 30px rgba(0,0,0,0.25)',
+          padding: 16,
+        }}
+      >
+        <div id="name-terrain-title" style={{ fontSize: 13, fontWeight: 800, color: 'var(--pb-ink)', marginBottom: 4 }}>
+          Name the terrains in “{sheetName}”
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600, lineHeight: 1.4, marginBottom: 14 }}>
+          Two sheets sharing a label (e.g. both “grass”) auto-bridge so the right transition tile shows when their textures meet on the canvas.
+        </div>
+
+        <NameRow
+          inputRef={upperRef}
+          previewUrl={upperPreviewUrl}
+          label="UPPER"
+          placeholder="e.g. grass"
+          value={upper}
+          locked={upperLocked}
+          onChange={setUpper}
+        />
+        <div style={{ height: 10 }} />
+        <NameRow
+          previewUrl={lowerPreviewUrl}
+          label="LOWER"
+          placeholder="e.g. dirt"
+          value={lower}
+          locked={lowerLocked}
+          onChange={setLower}
+        />
+
+        <div className="flex items-center gap-2" style={{ marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={() => resolve({})}
+            style={{
+              flex: 1,
+              padding: '8px 10px',
+              background: 'var(--pb-cream-2)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 800,
+              color: 'var(--pb-ink-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            Skip
+          </button>
+          <button
+            type="button"
+            onClick={() => resolve({ upper: upper.trim(), lower: lower.trim() })}
+            style={{
+              flex: 1.4,
+              padding: '8px 10px',
+              background: 'var(--pb-butter)',
+              border: '1.5px solid var(--pb-butter-ink)',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 800,
+              color: 'var(--pb-butter-ink)',
+              cursor: 'pointer',
+              boxShadow: '0 2px 0 var(--pb-butter-ink)',
+            }}
+          >
+            Save names
+          </button>
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+function NameRow({
+  previewUrl, label, placeholder, value, locked, onChange, inputRef,
+}: {
+  previewUrl: string;
+  label: 'UPPER' | 'LOWER';
+  placeholder: string;
+  value: string;
+  locked: boolean;
+  onChange: (v: string) => void;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        style={{
+          width: 44, height: 44,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {previewUrl
+          ? <img src={previewUrl} alt={label} style={{ width: '100%', height: '100%', imageRendering: 'pixelated', objectFit: 'cover' }} />
+          : null}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5, marginBottom: 2 }}>
+          {label}{locked ? ' · linked' : ''}
+        </div>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            outline: 'none',
+          }}
+        />
+      </div>
+    </div>
+  );
+}

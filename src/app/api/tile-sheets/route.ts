@@ -40,6 +40,12 @@ interface SheetBody {
    *  a fresh id and the row stands alone. */
   upperTextureId?: string;
   lowerTextureId?: string;
+  /** Optional human-readable terrain labels (e.g. "grass", "dirt"). Two
+   *  sheets sharing a label collapse to one terrain in the auto-tile
+   *  resolver — see lib/wang-tiles.ts. Nullable; clients fall back to a
+   *  parse of `name` when absent. */
+  upperLabel?: string | null;
+  lowerLabel?: string | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -103,15 +109,49 @@ export async function POST(request: NextRequest) {
   if (typeof body.lowerTextureId === 'string' && body.lowerTextureId) {
     insertRow.lower_texture_id = body.lowerTextureId;
   }
+  // Labels are nullable — pass through `null` so the user can clear a
+  // previously-set override; only skip the column entirely when the field
+  // is `undefined`, which means "don't touch on this upsert".
+  const hasLabelInsert = body.upperLabel !== undefined || body.lowerLabel !== undefined;
+  if (body.upperLabel !== undefined) {
+    insertRow.upper_label = typeof body.upperLabel === 'string'
+      ? (body.upperLabel.trim() || null)
+      : null;
+  }
+  if (body.lowerLabel !== undefined) {
+    insertRow.lower_label = typeof body.lowerLabel === 'string'
+      ? (body.lowerLabel.trim() || null)
+      : null;
+  }
 
-  const { data, error } = await supabase
+  // First try the modern shape (with label columns). When migration 034
+  // hasn't been applied yet, Postgres rejects the statement with a 42703 —
+  // we strip the label columns and retry so the studio keeps working
+  // until the user runs the migration.
+  let row = await supabase
     .from('tile_sheets')
     .upsert(insertRow, { onConflict: 'user_id,name' })
-    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, created_at, updated_at')
+    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, upper_label, lower_label, created_at, updated_at')
     .single();
+  if (row.error && isMissingLabelColumn(row.error.message)) {
+    if (hasLabelInsert) {
+      delete insertRow.upper_label;
+      delete insertRow.lower_label;
+    }
+    const fallback = await supabase
+      .from('tile_sheets')
+      .upsert(insertRow, { onConflict: 'user_id,name' })
+      .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, created_at, updated_at')
+      .single();
+    if (fallback.error) return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+    return NextResponse.json({ sheet: rowToSheet({ ...fallback.data, upper_label: null, lower_label: null } as SheetRow) });
+  }
+  if (row.error) return NextResponse.json({ error: row.error.message }, { status: 500 });
+  return NextResponse.json({ sheet: rowToSheet(row.data) });
+}
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ sheet: rowToSheet(data) });
+function isMissingLabelColumn(msg: string): boolean {
+  return /upper_label|lower_label/.test(msg) && /does not exist|column .* not found/i.test(msg);
 }
 
 export async function GET() {
@@ -123,15 +163,28 @@ export async function GET() {
   const resolvedUserId = user.isAnonymous ? 'local-user' : user.id;
 
   const supabase = await getServerSupabase();
-  const { data, error } = await supabase
+  // Same fallback dance as POST: query with label columns, retry without
+  // when migration 034 isn't applied yet. Lets the panel keep working
+  // before the schema bump.
+  let listed = await supabase
     .from('tile_sheets')
-    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, created_at, updated_at')
+    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, upper_label, lower_label, created_at, updated_at')
     .eq('user_id', resolvedUserId)
     .order('created_at', { ascending: false })
     .limit(100);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ sheets: (data ?? []).map(rowToSheet) });
+  if (listed.error && isMissingLabelColumn(listed.error.message)) {
+    const fallback = await supabase
+      .from('tile_sheets')
+      .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, created_at, updated_at')
+      .eq('user_id', resolvedUserId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (fallback.error) return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+    const sheets = (fallback.data ?? []).map((r) => rowToSheet({ ...r, upper_label: null, lower_label: null } as SheetRow));
+    return NextResponse.json({ sheets });
+  }
+  if (listed.error) return NextResponse.json({ error: listed.error.message }, { status: 500 });
+  return NextResponse.json({ sheets: (listed.data ?? []).map(rowToSheet) });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -166,6 +219,8 @@ interface SheetRow {
   sheet_data_url: string;
   upper_texture_id: string;
   lower_texture_id: string;
+  upper_label: string | null;
+  lower_label: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -181,6 +236,8 @@ function rowToSheet(r: SheetRow) {
     sheetDataUrl: r.sheet_data_url,
     upperTextureId: r.upper_texture_id,
     lowerTextureId: r.lower_texture_id,
+    upperLabel: r.upper_label ?? undefined,
+    lowerLabel: r.lower_label ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

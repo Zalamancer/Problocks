@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
-  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
+  Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
   Pencil, GripVertical, X, Maximize2,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
@@ -66,12 +66,11 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
     newSide: 'u' | 'l';      // where to place the shared id in the new sheet
   } | null>(null);
 
-  // The Assets tab for the 2D-tile system holds two stacked accordion
-  // sections: Layers + Objects. Terrain content moved to its own
-  // top-level Terrain tab (LeftPanel.tsx → TerrainPanel); placed objects
-  // moved to the existing top-level Scene tab. Both flags persist
-  // collapsed/expanded state per session.
-  const [layersOpen, setLayersOpen] = useState(true);
+  // The Assets tab for the 2D-tile system now only holds the Objects
+  // accordion. Terrain content moved to the top-level Terrain tab; the
+  // Layers section moved to the top-level Scene tab to live alongside
+  // placed instances. The flag persists collapsed/expanded state per
+  // session.
   const [objectsOpen, setObjectsOpen] = useState(true);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
@@ -333,25 +332,14 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
       )}
 
       {view === 'assets' && (
-        <>
-          <Section
-            title="Layers"
-            icon={<LayersIcon size={13} strokeWidth={2.4} />}
-            open={layersOpen}
-            onToggle={() => setLayersOpen(!layersOpen)}
-          >
-            <LayerList />
-          </Section>
-
-          <Section
-            title="Objects"
-            icon={<Box size={13} strokeWidth={2.4} />}
-            open={objectsOpen}
-            onToggle={() => setObjectsOpen(!objectsOpen)}
-          >
-            <ObjectsSection />
-          </Section>
-        </>
+        <Section
+          title="Objects"
+          icon={<Box size={13} strokeWidth={2.4} />}
+          open={objectsOpen}
+          onToggle={() => setObjectsOpen(!objectsOpen)}
+        >
+          <ObjectsSection />
+        </Section>
       )}
     </div>
   );
@@ -1002,7 +990,7 @@ function DebugTileCell({ tile, index }: { tile: Tile; index: number }) {
   );
 }
 
-function LayerList() {
+export function LayerList() {
   const layers = useTile((s) => s.layers);
   const activeLayerId = useTile((s) => s.activeLayerId);
   const tilesets = useTile((s) => s.tilesets);

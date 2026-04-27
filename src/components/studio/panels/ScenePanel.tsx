@@ -25,6 +25,7 @@ import { useLightingStore } from '@/store/lighting-store';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { useTile } from '@/store/tile-store';
 import { SectionLabel, type PBTone } from '@/components/ui';
+import { LayerList } from './TileAssetsView';
 
 // Ported from /tmp/design_bundle2/problocks/project/studio/leftpanel.jsx
 // SceneTab — grouped rows with colored ToneBadge-style tiles, chunky
@@ -135,6 +136,10 @@ export function ScenePanel({ onSelect }: Props) {
   const tileSelectedObjectId = useTile((s) => s.selectedObjectId);
   const tileSelectObject = useTile((s) => s.selectObject);
   const tileRemoveObject = useTile((s) => s.removeObject);
+  const tileLayers = useTile((s) => s.layers);
+  const gameSystem = useStudio((s) => s.gameSystem);
+  const showTileLayers = gameSystem === '2d';
+  const [tileLayersCollapsed, setTileLayersCollapsed] = useState(false);
 
   const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
   const setLightingPanelOpen = useLightingStore((s) => s.setPanelOpen);
@@ -399,6 +404,90 @@ export function ScenePanel({ onSelect }: Props) {
         >
           Scene
         </SectionLabel>
+
+        {showTileLayers && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+            <button
+              type="button"
+              onClick={() => setTileLayersCollapsed(!tileLayersCollapsed)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 10px',
+                borderRadius: 12,
+                background: 'transparent',
+                border: 0,
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+                transition: 'background 120ms ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 9,
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'var(--pb-butter)',
+                  color: 'var(--pb-butter-ink)',
+                  border: '1.5px solid var(--pb-butter-ink)',
+                }}
+              >
+                <Layers size={14} strokeWidth={2.2} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: 'var(--pb-ink)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Layers
+                </div>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    color: 'var(--pb-ink-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tileLayers.length} {tileLayers.length === 1 ? 'layer' : 'layers'} · Terrain stacks for the active scene
+                </div>
+              </div>
+              <span
+                aria-label={tileLayersCollapsed ? 'Expand' : 'Collapse'}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--pb-ink-muted)',
+                  flexShrink: 0,
+                }}
+              >
+                {tileLayersCollapsed ? <ChevronRight size={14} strokeWidth={2.4} /> : <ChevronDown size={14} strokeWidth={2.4} />}
+              </span>
+            </button>
+
+            {!tileLayersCollapsed && <LayerList />}
+          </div>
+        )}
 
         {totalCount === 0 ? (
           <div

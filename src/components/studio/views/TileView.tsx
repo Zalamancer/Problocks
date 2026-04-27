@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
-  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw,
+  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw, Waves,
 } from 'lucide-react';
-import { useTile, type TileTool, findStyle } from '@/store/tile-store';
+import { useTile, type TileTool, findStyle, tileDataUrlFor } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 
@@ -64,6 +64,8 @@ export function TileView() {
   const setBrushRandomFlipV = useTile((s) => s.setBrushRandomFlipV);
   const brushRandomRotate = useTile((s) => s.brushRandomRotate);
   const setBrushRandomRotate = useTile((s) => s.setBrushRandomRotate);
+  const wavyTextureIds = useTile((s) => s.wavyTextureIds);
+  const setWavyTexture = useTile((s) => s.setWavyTexture);
   const layers = useTile((s) => s.layers);
   const tiles = useTile((s) => s.tiles);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
@@ -147,8 +149,16 @@ export function TileView() {
 
       // Pre-warm every tile image once per frame so the resolver doesn't
       // get a cold cache miss mid-loop. Cheap because ensureImage no-ops
-      // when already loaded.
+      // when already loaded. Variants register their alt-sheet data URLs
+      // here too — switching the active variant on a tileset becomes a
+      // cheap cache-hit swap on the next frame.
       for (const t of Object.values(s.tiles)) ensureImage(t.dataUrl);
+      for (const ts of s.tilesets) {
+        if (!ts.variants) continue;
+        for (const v of ts.variants) {
+          for (const url of v.tileDataUrls) ensureImage(url);
+        }
+      }
 
       // Half a device pixel expressed in world units. Each tile draws
       // slightly larger so neighbors overlap by ~1 device pixel, hiding
@@ -177,8 +187,13 @@ export function TileView() {
             if (!tileId) continue;
             const tile = s.tiles[tileId];
             if (!tile) continue;
-            const img = imgCacheRef.current.get(tile.dataUrl);
-            if (!img || !imgReadyRef.current.has(tile.dataUrl)) continue;
+            // Use the active variant's data URL when one is selected; the
+            // base sheet's dataUrl when not. Image cache is keyed on the
+            // url, so swapping variants just swaps which decoded image
+            // gets blitted.
+            const dataUrl = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
+            const img = imgCacheRef.current.get(dataUrl);
+            if (!img || !imgReadyRef.current.has(dataUrl)) continue;
             // Per-cell render transform (random flip/rotate from brush
             // options at paint time). Cheap fast-path when no transforms
             // exist or this cell wasn't randomized — just drawImage at
@@ -201,6 +216,90 @@ export function TileView() {
         }
       }
       ctx!.globalAlpha = 1;
+
+      // ── Water-effect overlay ──────────────────────────────────────
+      // After the tiles are laid down, draw an animated sine-wave shimmer
+      // + hue tint over every cell whose corners reference a "wavy"
+      // texture. Drawn in ONE clipped pass across the union of all wavy
+      // cells — the waves visually flow across the region as a whole
+      // instead of restarting at every tile boundary.
+      if (s.wavyTextureIds.length > 0) {
+        const wavySet = new Set(s.wavyTextureIds);
+        function isWavy(cx: number, cy: number): boolean {
+          for (const layer of s.layers) {
+            if (!layer.visible) continue;
+            const c = layer.corners;
+            if (
+              wavySet.has(c[`${cx},${cy}`])
+              || wavySet.has(c[`${cx + 1},${cy}`])
+              || wavySet.has(c[`${cx},${cy + 1}`])
+              || wavySet.has(c[`${cx + 1},${cy + 1}`])
+            ) return true;
+          }
+          return false;
+        }
+        ctx!.save();
+        ctx!.beginPath();
+        let any = false;
+        let minPX = Infinity, minPY = Infinity, maxPX = -Infinity, maxPY = -Infinity;
+        for (let cy = cy0; cy <= cy1; cy++) {
+          for (let cx = cx0; cx <= cx1; cx++) {
+            if (!isWavy(cx, cy)) continue;
+            const x = cx * ts;
+            const y = cy * ts;
+            ctx!.rect(x, y, ts, ts);
+            any = true;
+            if (x < minPX) minPX = x;
+            if (y < minPY) minPY = y;
+            if (x + ts > maxPX) maxPX = x + ts;
+            if (y + ts > maxPY) maxPY = y + ts;
+          }
+        }
+        if (any) {
+          ctx!.clip();
+          const time = performance.now() / 1000;
+          // Hue-shifting tint — slowly oscillates around cyan (~200°) by
+          // ±18° so the region "breathes" colour without ever leaving the
+          // water-blue family. Low opacity so the tile texture still
+          // reads through.
+          const hue = 200 + Math.sin(time * 0.6) * 18;
+          ctx!.fillStyle = `hsla(${hue}, 70%, 65%, 0.22)`;
+          ctx!.fillRect(minPX, minPY, maxPX - minPX, maxPY - minPY);
+          // Sine-wave shimmer — multiple horizontal lines spaced at a
+          // fraction of the cell size, phase-shifted by time + y so the
+          // pattern looks like flowing water rather than static stripes.
+          ctx!.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+          ctx!.lineWidth = Math.max(1, ts * 0.05) / cam.zoom;
+          ctx!.lineCap = 'round';
+          ctx!.lineJoin = 'round';
+          ctx!.beginPath();
+          const stepY = Math.max(4, ts * 0.35);
+          const ampY = Math.max(1, ts * 0.06);
+          const stepX = Math.max(2, ts / 12);
+          for (let y = Math.floor(minPY / stepY) * stepY; y <= maxPY; y += stepY) {
+            const phase = y * 0.04 + time * 1.6;
+            ctx!.moveTo(minPX, y + Math.sin(minPX * 0.05 + phase) * ampY);
+            for (let x = minPX; x <= maxPX; x += stepX) {
+              ctx!.lineTo(x, y + Math.sin(x * 0.05 + phase) * ampY);
+            }
+          }
+          ctx!.stroke();
+          // A second softer wave layer at half-amplitude and offset phase
+          // adds depth without doubling render cost.
+          ctx!.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+          ctx!.lineWidth = Math.max(1, ts * 0.035) / cam.zoom;
+          ctx!.beginPath();
+          for (let y = Math.floor(minPY / stepY) * stepY + stepY * 0.5; y <= maxPY; y += stepY) {
+            const phase = y * 0.04 - time * 1.1;
+            ctx!.moveTo(minPX, y + Math.sin(minPX * 0.07 + phase) * ampY * 0.6);
+            for (let x = minPX; x <= maxPX; x += stepX) {
+              ctx!.lineTo(x, y + Math.sin(x * 0.07 + phase) * ampY * 0.6);
+            }
+          }
+          ctx!.stroke();
+        }
+        ctx!.restore();
+      }
 
       // Free objects, sorted bottom-to-top by y.
       const visibleObjects = s.objects.filter((o) => {
@@ -340,6 +439,11 @@ export function TileView() {
       }
 
       ctx!.restore();
+
+      // Keep the loop going while the water effect is on so the waves
+      // animate continuously. No-op when the user has no wavy textures
+      // (the renderer falls back to event-driven rAF).
+      if (s.wavyTextureIds.length > 0) scheduleRender();
     }
 
     /**
@@ -1051,6 +1155,19 @@ export function TileView() {
           onClick={() => setBrushRandomRotate(!brushRandomRotate)}
         >
           <RotateCw size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <Separator />
+        <ToolBtn
+          active={!!useTile.getState().brushTextureId
+            && wavyTextureIds.includes(useTile.getState().brushTextureId!)}
+          title="Toggle water effect on the brush's current texture (animated waves + hue tint across the whole region)"
+          onClick={() => {
+            const id = useTile.getState().brushTextureId;
+            if (!id) return;
+            setWavyTexture(id, !wavyTextureIds.includes(id));
+          }}
+        >
+          <Waves size={14} strokeWidth={2.2} />
         </ToolBtn>
         <Separator />
         <ToolBtn active={showGrid} title="Toggle grid (G)" onClick={toggleGrid}>

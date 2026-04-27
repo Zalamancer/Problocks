@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 
+// Wang sheet quadrant indices — kept in sync with `lib/wang-tiles.ts`
+// (PURE_UPPER_INDEX = 12, PURE_LOWER_INDEX = 6). Inlined here so the
+// store doesn't need to import the lib (which doesn't depend on the
+// store either, but the symmetry is nice and keeps the wavy-sibling
+// expansion fast — no extra module hops on the paint hot path).
+const PURE_UPPER_IDX = 12;
+const PURE_LOWER_IDX = 6;
+
 /**
  * 2D Tile-based editor state — Wang/dual-grid auto-tiling.
  *
@@ -83,6 +91,30 @@ export interface Tileset {
    */
   upperLabel?: string;
   lowerLabel?: string;
+  /**
+   * Optional alternate sheets for this terrain. Each variant carries its
+   * own sliced tile data URLs in the same order/length as the base
+   * `tileIds[]`, so swapping a variant in is a pure dataUrl swap — the
+   * chaining/labels/texture identity all stay on the parent tileset.
+   * Used by the panel's "swatch between two tilesets" feature so a user
+   * can preview the same map with a different art style without rebuilding.
+   * Not persisted to localStorage (would blow the quota) — re-uploaded
+   * after refresh, same as the base sheet.
+   */
+  variants?: TilesetVariant[];
+  /** 0 = base sheet, 1..n = variants[i - 1]. Undefined treated as 0. */
+  activeVariantIndex?: number;
+}
+
+export interface TilesetVariant {
+  id: string;
+  /** User-facing name (defaults to file basename on upload). */
+  name: string;
+  /** Source PNG of the variant sheet (for thumbnails + re-slice if dims change). */
+  sheetDataUrl: string;
+  /** Sliced tile data URLs — same length and slice order as parent
+   *  `tileIds[]` so an index lookup substitutes 1:1. */
+  tileDataUrls: string[];
 }
 
 export interface TileLayer {
@@ -216,6 +248,20 @@ export interface TileStore {
    * can re-save them to Supabase.
    */
   mergeTextures: (sourceTextureId: string, targetTextureId: string) => string[];
+  /**
+   * Add an alternate sheet variant to a tileset. The caller is responsible
+   * for slicing to the same `(cols, rows)` as the parent so `tileDataUrls`
+   * lines up 1:1 with `tileIds`. Auto-activates the new variant so the
+   * user sees the swap immediately.
+   */
+  addTilesetVariant: (
+    tilesetId: string,
+    variant: { name: string; sheetDataUrl: string; tileDataUrls: string[] },
+  ) => string;
+  /** Remove a variant by id. If the active variant is removed, falls back to base (0). */
+  removeTilesetVariant: (tilesetId: string, variantId: string) => void;
+  /** Pick which sheet renders for this terrain. 0 = base. */
+  setActiveTilesetVariant: (tilesetId: string, index: number) => void;
 
   // ── Map state ───────────────────────────────────────────────────
   /** Pixel size of one grid cell in the editor (independent of tile native
@@ -312,6 +358,19 @@ export interface TileStore {
    *  — turn off if the corner pattern matters more than the variety. */
   brushRandomRotate: boolean;
   setBrushRandomRotate: (v: boolean) => void;
+  /**
+   * Texture ids that should render with the animated "water effect"
+   * overlay — sine-wave shimmer + hue tint clipped to the region as a
+   * whole (not per tile). Stored as a flat list of raw ids, but
+   * `setWavyTexture` expands sibling sets via getSiblingTextures so two
+   * label-linked "water" textures both get the effect from a single
+   * toggle.
+   */
+  wavyTextureIds: string[];
+  /** Toggle the water-effect on a texture id. When `on` is true, this
+   *  id and all its siblings (sprite-byte or label) are added to the
+   *  list; when false, the id and all its siblings are removed. */
+  setWavyTexture: (textureId: string, on: boolean) => void;
   /** Used only by the OBJECT tool — picks the asset whose style brush is
    *  active. The actual sprite to place is `selectedStyleId` within this
    *  asset (defaults to the asset's first style on selection). */
@@ -332,6 +391,23 @@ export interface TileStore {
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
+}
+
+/**
+ * Resolve the dataUrl that should render for a given (tileset, sliceIndex)
+ * — accounting for the active variant. When no variant is active (or the
+ * tileset has none), returns the base tile's dataUrl. Falls back to the
+ * base if the variant is missing the expected slice for any reason.
+ */
+export function tileDataUrlFor(
+  tileset: Tileset,
+  sliceIndex: number,
+  baseDataUrl: string,
+): string {
+  const i = tileset.activeVariantIndex ?? 0;
+  if (i === 0) return baseDataUrl;
+  const variant = tileset.variants?.[i - 1];
+  return variant?.tileDataUrls[sliceIndex] ?? baseDataUrl;
 }
 
 function defaultLayer(name = 'Ground'): TileLayer {
@@ -545,6 +621,35 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       layers: nextLayers,
     };
   }),
+  addTilesetVariant: (tilesetId, { name, sheetDataUrl, tileDataUrls }) => {
+    const variantId = cryptoId();
+    set((s) => ({
+      tilesets: s.tilesets.map((t) => {
+        if (t.id !== tilesetId) return t;
+        const variants = [...(t.variants ?? []), { id: variantId, name, sheetDataUrl, tileDataUrls }];
+        // Activate the new variant so the user sees the swap immediately.
+        return { ...t, variants, activeVariantIndex: variants.length };
+      }),
+    }));
+    return variantId;
+  },
+  removeTilesetVariant: (tilesetId, variantId) => set((s) => ({
+    tilesets: s.tilesets.map((t) => {
+      if (t.id !== tilesetId) return t;
+      const variants = (t.variants ?? []).filter((v) => v.id !== variantId);
+      // Active index might be pointing at the removed variant, or shifted
+      // by removal. Simpler: snap back to base on any removal.
+      return { ...t, variants, activeVariantIndex: 0 };
+    }),
+  })),
+  setActiveTilesetVariant: (tilesetId, index) => set((s) => ({
+    tilesets: s.tilesets.map((t) => {
+      if (t.id !== tilesetId) return t;
+      const max = (t.variants?.length ?? 0);
+      const clamped = Math.max(0, Math.min(max, Math.floor(index)));
+      return { ...t, activeVariantIndex: clamped };
+    }),
+  })),
 
   tileSize: 32,
   setTileSize: (size) => set({ tileSize: Math.max(4, Math.min(256, Math.round(size))) }),
@@ -792,6 +897,52 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setBrushRandomFlipV: (v) => set({ brushRandomFlipV: v }),
   brushRandomRotate: false,
   setBrushRandomRotate: (v) => set({ brushRandomRotate: v }),
+  wavyTextureIds: [],
+  setWavyTexture: (textureId, on) => set((s) => {
+    // Sibling expansion so toggling on one "water" id picks up every
+    // other id labelled / pixel-matched as water in one shot.
+    // Inlined to avoid a circular dep with @/lib/wang-tiles.
+    const sprite = (() => {
+      for (const ts of s.tilesets) {
+        const isUpper = ts.upperTextureId === textureId;
+        const isLower = ts.lowerTextureId === textureId;
+        if (!isUpper && !isLower) continue;
+        const idx = isUpper
+          ? PURE_UPPER_IDX
+          : PURE_LOWER_IDX;
+        const tileId = ts.tileIds[idx];
+        return s.tiles[tileId]?.dataUrl ?? null;
+      }
+      return null;
+    })();
+    function labelOf(id: string): string | null {
+      for (const ts of s.tilesets) {
+        if (ts.upperTextureId === id) return ts.upperLabel?.trim().toLowerCase() || null;
+        if (ts.lowerTextureId === id) return ts.lowerLabel?.trim().toLowerCase() || null;
+      }
+      return null;
+    }
+    const baseLabel = labelOf(textureId);
+    const family = new Set<string>([textureId]);
+    for (const ts of s.tilesets) {
+      if (sprite) {
+        const u = s.tiles[ts.tileIds[PURE_UPPER_IDX]]?.dataUrl;
+        const l = s.tiles[ts.tileIds[PURE_LOWER_IDX]]?.dataUrl;
+        if (u === sprite) family.add(ts.upperTextureId);
+        if (l === sprite) family.add(ts.lowerTextureId);
+      }
+      if (baseLabel) {
+        const ul = ts.upperLabel?.trim().toLowerCase() || null;
+        const ll = ts.lowerLabel?.trim().toLowerCase() || null;
+        if (ul && ul === baseLabel) family.add(ts.upperTextureId);
+        if (ll && ll === baseLabel) family.add(ts.lowerTextureId);
+      }
+    }
+    const current = new Set(s.wavyTextureIds);
+    if (on) for (const id of family) current.add(id);
+    else for (const id of family) current.delete(id);
+    return { wavyTextureIds: Array.from(current) };
+  }),
   selectedAssetId: null,
   setSelectedAssetId: (id) => set((s) => {
     // When switching assets, reset the style brush to the new asset's first
@@ -846,6 +997,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomFlipH: s.brushRandomFlipH,
     brushRandomFlipV: s.brushRandomFlipV,
     brushRandomRotate: s.brushRandomRotate,
+    wavyTextureIds: s.wavyTextureIds,
     showGrid: s.showGrid,
   }),
   // Heal an empty / corrupted persisted state.

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
-  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud,
+  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage } from '@/lib/tile-slicer';
@@ -41,6 +41,14 @@ export function TileAssetsView() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
+  // Set when the user is uploading a "connecting" sheet — i.e. a new sheet
+  // that should share one of its texture ids with an existing sheet's
+  // texture. Cleared after the next file upload completes (one-shot).
+  const linkContextRef = useRef<{
+    sourceTilesetId: string;
+    sourceSide: 'u' | 'l';   // which side of the source we're sharing
+    newSide: 'u' | 'l';      // where to place the shared id in the new sheet
+  } | null>(null);
 
   const [terrainsOpen, setTerrainsOpen] = useState(true);
   const [layersOpen, setLayersOpen] = useState(true);
@@ -99,7 +107,25 @@ export function TileAssetsView() {
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      linkContextRef.current = null;
+      return;
+    }
+    // Resolve any pending connection BEFORE we kick off uploads, then clear
+    // the ref so it doesn't bleed into the next regular upload.
+    const link = linkContextRef.current;
+    linkContextRef.current = null;
+    let sharedUpper: string | undefined;
+    let sharedLower: string | undefined;
+    if (link) {
+      const source = useTile.getState().tilesets.find((t) => t.id === link.sourceTilesetId);
+      if (source) {
+        const sharedId = link.sourceSide === 'u' ? source.upperTextureId : source.lowerTextureId;
+        if (link.newSide === 'u') sharedUpper = sharedId;
+        else sharedLower = sharedId;
+      }
+    }
+
     setUploading(true);
     setError(null);
     try {
@@ -117,6 +143,8 @@ export function TileAssetsView() {
           tileWidth: result.tileWidth,
           tileHeight: result.tileHeight,
           tiles: result.tiles,
+          upperTextureId: sharedUpper,
+          lowerTextureId: sharedLower,
         });
         saveTileSheet({
           name,
@@ -125,6 +153,8 @@ export function TileAssetsView() {
           rows,
           tileWidth: result.tileWidth,
           tileHeight: result.tileHeight,
+          upperTextureId: sharedUpper,
+          lowerTextureId: sharedLower,
         }).then((cloud) => {
           setTilesetCloudId(localId, cloud.id);
           setCloudStatus('synced');
@@ -132,12 +162,26 @@ export function TileAssetsView() {
           console.warn('[tile-cloud] save failed; sheet kept local-only', err);
           setCloudStatus('offline');
         });
+        // Linkage is a one-shot per file picker invocation — only the first
+        // file in a multi-file pick gets it.
+        sharedUpper = undefined;
+        sharedLower = undefined;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
     }
+  }
+
+  /**
+   * Called when the user clicks a chain icon on a swatch. Stashes the
+   * connection metadata and opens the file picker. The next file uploaded
+   * inherits the source's texture id on the chosen side.
+   */
+  function startLink(sourceTilesetId: string, sourceSide: 'u' | 'l', newSide: 'u' | 'l') {
+    linkContextRef.current = { sourceTilesetId, sourceSide, newSide };
+    fileInputRef.current?.click();
   }
 
   function pickTileset(tilesetId: string) {
@@ -215,9 +259,11 @@ export function TileAssetsView() {
                   key={ts.id}
                   tileset={ts}
                   tiles={tiles}
+                  allTilesets={tilesets}
                   active={ts.id === activeTilesetId}
                   onPick={() => pickTileset(ts.id)}
                   onRemove={() => handleRemoveTileset(ts)}
+                  onConnect={(sourceSide, newSide) => startLink(ts.id, sourceSide, newSide)}
                 />
               ))}
             </div>
@@ -288,13 +334,17 @@ function Section({
  * butter highlight + a checkmark.
  */
 function TerrainCard({
-  tileset, tiles, active, onPick, onRemove,
+  tileset, tiles, allTilesets, active, onPick, onRemove, onConnect,
 }: {
   tileset: Tileset;
   tiles: Record<string, Tile>;
+  allTilesets: Tileset[];
   active: boolean;
   onPick: () => void;
   onRemove: () => void;
+  /** Open the file picker for a sheet that shares this tileset's texture
+   *  on `sourceSide` and places it on `newSide` of the new sheet. */
+  onConnect: (sourceSide: 'u' | 'l', newSide: 'u' | 'l') => void;
 }) {
   const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
@@ -302,11 +352,23 @@ function TerrainCard({
   const setBrushTexture = useTile((s) => s.setBrushTexture);
   const setTool = useTile((s) => s.setTool);
 
+  // Which swatch (if any) currently has its "connect" popover open.
+  const [linkingSide, setLinkingSide] = useState<null | 'u' | 'l'>(null);
+
   function pickBrush(tex: 'u' | 'l') {
     onPick();
     setBrushTexture(tex);
     setTool('paint');
   }
+
+  // Count how many OTHER tilesets share each side's texture id — used to
+  // show a small chain badge on the swatch when a connection exists.
+  const sharedUpperCount = allTilesets.filter((t) => t.id !== tileset.id && (
+    t.upperTextureId === tileset.upperTextureId || t.lowerTextureId === tileset.upperTextureId
+  )).length;
+  const sharedLowerCount = allTilesets.filter((t) => t.id !== tileset.id && (
+    t.upperTextureId === tileset.lowerTextureId || t.lowerTextureId === tileset.lowerTextureId
+  )).length;
 
   return (
     <div
@@ -357,23 +419,39 @@ function TerrainCard({
       </div>
 
       {/* Brush picker — choose which of the two base textures the paint tool
-          lays down. Bigger swatches than the old preview so they're clearly
-          interactive. The active swatch (only when this terrain is bound to
-          the active layer) gets the butter ring. */}
+          lays down. The chain icon on each swatch opens a small popover for
+          uploading a NEW tileset that shares this texture. */}
       <div className="flex items-center gap-2 mt-2">
         <BrushSwatch
           tile={upperTile}
           label="UPPER"
           active={active && brushTexture === 'u'}
+          shareCount={sharedUpperCount}
+          linking={linkingSide === 'u'}
           onClick={() => pickBrush('u')}
+          onChainClick={() => setLinkingSide(linkingSide === 'u' ? null : 'u')}
         />
         <BrushSwatch
           tile={lowerTile}
           label="LOWER"
           active={active && brushTexture === 'l'}
+          shareCount={sharedLowerCount}
+          linking={linkingSide === 'l'}
           onClick={() => pickBrush('l')}
+          onChainClick={() => setLinkingSide(linkingSide === 'l' ? null : 'l')}
         />
       </div>
+
+      {linkingSide && (
+        <ConnectPopover
+          sourceLabel={linkingSide === 'u' ? 'UPPER' : 'LOWER'}
+          onChoose={(newSide) => {
+            setLinkingSide(null);
+            onConnect(linkingSide, newSide);
+          }}
+          onCancel={() => setLinkingSide(null)}
+        />
+      )}
 
       {/* All 16 sliced tiles, always visible. Hover to see the (NW,NE,SW,SE)
           encoding overlay so the user can sanity-check the auto-tile lookup. */}
@@ -383,46 +461,170 @@ function TerrainCard({
 }
 
 function BrushSwatch({
-  tile, label, active, onClick,
+  tile, label, active, shareCount, linking, onClick, onChainClick,
 }: {
   tile: Tile | undefined;
   label: 'UPPER' | 'LOWER';
   active: boolean;
+  /** Number of OTHER tilesets sharing this texture id. >0 means it's part
+   *  of a chain — shown as a small badge next to the chain icon. */
+  shareCount: number;
+  linking: boolean;
   onClick: () => void;
+  onChainClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className="flex-1 flex items-center gap-2 transition-colors"
+    <div
+      className="flex-1"
       style={{
-        padding: 4,
+        position: 'relative',
         background: active ? 'var(--pb-paper)' : 'transparent',
-        border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        border: `1.5px solid ${linking ? 'var(--pb-mint-ink, #2d8f5b)' : (active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)')}`,
         borderRadius: 8,
-        cursor: 'pointer',
         boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : 'none',
       }}
-      title={`Brush with ${label.toLowerCase()} texture`}
     >
-      <div
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        className="w-full flex items-center gap-2"
         style={{
-          width: 26, height: 26, flexShrink: 0,
-          background: 'rgba(0,0,0,0.06)',
-          borderRadius: 5,
-          border: '1.5px solid var(--pb-line-2)',
-          overflow: 'hidden',
+          padding: 4,
+          background: 'transparent',
+          border: 0,
+          cursor: 'pointer',
+        }}
+        title={`Brush with ${label.toLowerCase()} texture`}
+      >
+        <div
+          style={{
+            width: 26, height: 26, flexShrink: 0,
+            background: 'rgba(0,0,0,0.06)',
+            borderRadius: 5,
+            border: '1.5px solid var(--pb-line-2)',
+            overflow: 'hidden',
+          }}
+        >
+          {tile && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={tile.dataUrl} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+          )}
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.5 }}>
+          {label}
+        </span>
+      </button>
+      {/* Chain button — opens the connect popover. Always visible so users
+          discover the feature; gets a green tint when this texture already
+          appears in another tileset. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onChainClick(); }}
+        title={
+          shareCount > 0
+            ? `Connected to ${shareCount} other tileset${shareCount === 1 ? '' : 's'} — click to add another`
+            : 'Add a new tileset that shares this texture'
+        }
+        style={{
+          position: 'absolute',
+          top: 2,
+          right: 2,
+          width: 18,
+          height: 18,
+          padding: 0,
+          background: shareCount > 0 ? 'rgba(110,180,90,0.18)' : 'var(--pb-paper)',
+          border: `1.5px solid ${shareCount > 0 ? 'rgba(60,140,40,0.55)' : 'var(--pb-line-2)'}`,
+          color: shareCount > 0 ? 'rgb(40,100,30)' : 'var(--pb-ink-muted)',
+          borderRadius: 999,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 8,
+          fontWeight: 800,
         }}
       >
-        {tile && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={tile.dataUrl} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
-        )}
+        {shareCount > 0
+          ? <span style={{ lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{shareCount + 1}</span>
+          : <Link2 size={10} strokeWidth={2.6} />}
+      </button>
+    </div>
+  );
+}
+
+function ConnectPopover({
+  sourceLabel, onChoose, onCancel,
+}: {
+  sourceLabel: 'UPPER' | 'LOWER';
+  onChoose: (newSide: 'u' | 'l') => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="mt-2 p-2"
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-ink)',
+        borderRadius: 8,
+        boxShadow: '0 2px 0 var(--pb-ink)',
+      }}
+    >
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4, marginBottom: 6 }}>
+        UPLOAD A NEW TILESET WHERE THIS {sourceLabel} BECOMES…
       </div>
-      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.5 }}>
-        {label}
-      </span>
-    </button>
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChoose('u')}
+          className="flex-1 transition-colors"
+          style={{
+            padding: '6px 8px',
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 800,
+            color: 'var(--pb-ink)',
+            cursor: 'pointer',
+          }}
+        >
+          new UPPER
+        </button>
+        <button
+          type="button"
+          onClick={() => onChoose('l')}
+          className="flex-1 transition-colors"
+          style={{
+            padding: '6px 8px',
+            background: 'var(--pb-cream-2)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 800,
+            color: 'var(--pb-ink)',
+            cursor: 'pointer',
+          }}
+        >
+          new LOWER
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            padding: '6px 8px',
+            background: 'transparent',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--pb-ink-muted)',
+            cursor: 'pointer',
+          }}
+        >
+          ×
+        </button>
+      </div>
+    </div>
   );
 }
 

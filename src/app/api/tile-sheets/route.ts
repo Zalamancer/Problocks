@@ -35,6 +35,11 @@ interface SheetBody {
   tileWidth?: number;
   tileHeight?: number;
   userId?: string;
+  /** When uploading a "connecting" sheet, these carry the shared texture
+   *  identity. When omitted, the DB default (gen_random_uuid()) generates
+   *  a fresh id and the row stands alone. */
+  upperTextureId?: string;
+  lowerTextureId?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -80,21 +85,29 @@ export async function POST(request: NextRequest) {
   const resolvedUserId = user.isAnonymous ? (body.userId || 'local-user') : user.id;
 
   const supabase = await getServerSupabase();
+  // Only include texture ids when the caller provided them — otherwise let
+  // the DB defaults assign fresh UUIDs. Sending undefined here would null
+  // out existing values on upsert.
+  const insertRow: Record<string, unknown> = {
+    user_id: resolvedUserId,
+    name,
+    sheet_data_url: sheet,
+    cols, rows,
+    tile_width: tw,
+    tile_height: th,
+    updated_at: new Date().toISOString(),
+  };
+  if (typeof body.upperTextureId === 'string' && body.upperTextureId) {
+    insertRow.upper_texture_id = body.upperTextureId;
+  }
+  if (typeof body.lowerTextureId === 'string' && body.lowerTextureId) {
+    insertRow.lower_texture_id = body.lowerTextureId;
+  }
+
   const { data, error } = await supabase
     .from('tile_sheets')
-    .upsert(
-      {
-        user_id: resolvedUserId,
-        name,
-        sheet_data_url: sheet,
-        cols, rows,
-        tile_width: tw,
-        tile_height: th,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,name' },
-    )
-    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, created_at, updated_at')
+    .upsert(insertRow, { onConflict: 'user_id,name' })
+    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, created_at, updated_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -112,7 +125,7 @@ export async function GET() {
   const supabase = await getServerSupabase();
   const { data, error } = await supabase
     .from('tile_sheets')
-    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, created_at, updated_at')
+    .select('id, name, cols, rows, tile_width, tile_height, sheet_data_url, upper_texture_id, lower_texture_id, created_at, updated_at')
     .eq('user_id', resolvedUserId)
     .order('created_at', { ascending: false })
     .limit(100);
@@ -151,6 +164,8 @@ interface SheetRow {
   tile_width: number;
   tile_height: number;
   sheet_data_url: string;
+  upper_texture_id: string;
+  lower_texture_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -164,6 +179,8 @@ function rowToSheet(r: SheetRow) {
     tileWidth: r.tile_width,
     tileHeight: r.tile_height,
     sheetDataUrl: r.sheet_data_url,
+    upperTextureId: r.upper_texture_id,
+    lowerTextureId: r.lower_texture_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

@@ -65,6 +65,15 @@ export interface Tileset {
    *  hydrate. Absent for not-yet-saved or anonymous sessions where the
    *  save call failed. */
   cloudId?: string;
+  /**
+   * Texture identity for chaining. Two tilesets are "connected" when one
+   * of their texture ids matches one of the other's (in any orientation).
+   * E.g. a water→dirt sheet and a dirt→grass sheet share the dirt id.
+   * Generated on creation; can be deliberately set when uploading a
+   * sheet that connects to an existing one.
+   */
+  upperTextureId: string;
+  lowerTextureId: string;
 }
 
 export interface TileLayer {
@@ -111,7 +120,13 @@ export interface TileStore {
   tilesets: Tileset[];
   tiles: Record<string, Tile>;
   addTileset: (
-    sheet: { name: string; sheetDataUrl: string; cols: number; rows: number; tileWidth: number; tileHeight: number; tiles: string[]; cloudId?: string },
+    sheet: {
+      name: string; sheetDataUrl: string; cols: number; rows: number;
+      tileWidth: number; tileHeight: number; tiles: string[];
+      cloudId?: string;
+      upperTextureId?: string;
+      lowerTextureId?: string;
+    },
   ) => string;
   removeTileset: (tilesetId: string) => void;
   setTilesetCloudId: (tilesetId: string, cloudId: string) => void;
@@ -191,8 +206,14 @@ const INITIAL_LAYER = defaultLayer('Ground');
 export const useTile = create<TileStore>()(persist((set, get) => ({
   tilesets: [],
   tiles: {},
-  addTileset: ({ name, sheetDataUrl, cols, rows, tileWidth, tileHeight, tiles, cloudId }) => {
+  addTileset: ({ name, sheetDataUrl, cols, rows, tileWidth, tileHeight, tiles, cloudId, upperTextureId, lowerTextureId }) => {
     const tilesetId = cryptoId();
+    // Texture ids default to fresh UUIDs when the caller doesn't pass one
+    // (i.e., a stand-alone upload). When the caller is "connecting" a new
+    // sheet to an existing texture, they pass that texture's id for the
+    // matching side.
+    const upperTexId = upperTextureId ?? cryptoId();
+    const lowerTexId = lowerTextureId ?? cryptoId();
     const tileObjs: Tile[] = tiles.map((dataUrl, index) => ({
       id: cryptoId(),
       tilesetId,
@@ -221,6 +242,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
           tileIds,
           addedAt: Date.now(),
           cloudId,
+          upperTextureId: upperTexId,
+          lowerTextureId: lowerTexId,
         }],
         tiles: nextTiles,
         layers: nextLayers,
@@ -374,6 +397,13 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     for (const l of state.layers) {
       if (!l.corners) l.corners = {};
       if (l.tilesetId === undefined) l.tilesetId = null;
+    }
+    // Backfill texture ids for tilesets that pre-date the chaining feature.
+    // Each gets its own fresh id so old tilesets aren't accidentally
+    // "connected" to anything new.
+    for (const t of state.tilesets ?? []) {
+      if (!t.upperTextureId) t.upperTextureId = cryptoId();
+      if (!t.lowerTextureId) t.lowerTextureId = cryptoId();
     }
   },
 }));

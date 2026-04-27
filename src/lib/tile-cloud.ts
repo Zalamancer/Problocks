@@ -15,6 +15,8 @@ export interface CloudSheet {
   tileWidth: number;
   tileHeight: number;
   sheetDataUrl: string;
+  upperTextureId: string;
+  lowerTextureId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +28,11 @@ export interface SaveSheetInput {
   rows: number;
   tileWidth: number;
   tileHeight: number;
+  /** Optional shared-texture ids — supply one or both when this sheet is
+   *  meant to chain to an existing tileset. Omit to let the server assign
+   *  fresh ids (a stand-alone sheet). */
+  upperTextureId?: string;
+  lowerTextureId?: string;
 }
 
 export async function saveTileSheet(input: SaveSheetInput): Promise<CloudSheet> {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
-  Grid3X3, Sparkles, Box,
+  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw,
 } from 'lucide-react';
 import { useTile, type TileTool, findStyle } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
@@ -58,6 +58,12 @@ export function TileView() {
   const toggleGrid = useTile((s) => s.toggleGrid);
   const brushSize = useTile((s) => s.brushSize);
   const setBrushSize = useTile((s) => s.setBrushSize);
+  const brushRandomFlipH = useTile((s) => s.brushRandomFlipH);
+  const setBrushRandomFlipH = useTile((s) => s.setBrushRandomFlipH);
+  const brushRandomFlipV = useTile((s) => s.brushRandomFlipV);
+  const setBrushRandomFlipV = useTile((s) => s.setBrushRandomFlipV);
+  const brushRandomRotate = useTile((s) => s.brushRandomRotate);
+  const setBrushRandomRotate = useTile((s) => s.setBrushRandomRotate);
   const layers = useTile((s) => s.layers);
   const tiles = useTile((s) => s.tiles);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
@@ -157,6 +163,7 @@ export function TileView() {
         if (!layer.visible) continue;
         ctx!.globalAlpha = layer.opacity;
         const corners = layer.corners;
+        const transforms = layer.cellTransforms;
         for (let cy = cy0; cy <= cy1; cy++) {
           for (let cx = cx0; cx <= cx1; cx++) {
             const nw = corners[`${cx},${cy}`];
@@ -172,7 +179,24 @@ export function TileView() {
             if (!tile) continue;
             const img = imgCacheRef.current.get(tile.dataUrl);
             if (!img || !imgReadyRef.current.has(tile.dataUrl)) continue;
-            ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+            // Per-cell render transform (random flip/rotate from brush
+            // options at paint time). Cheap fast-path when no transforms
+            // exist or this cell wasn't randomized — just drawImage at
+            // the cell's top-left like before.
+            const t = transforms?.[`${cx},${cy}`] ?? 0;
+            if (t === 0) {
+              ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+            } else {
+              const flipH = (t & 0x1) !== 0;
+              const flipV = (t & 0x2) !== 0;
+              const rot = (t >> 2) & 0x3;
+              ctx!.save();
+              ctx!.translate(cx * ts + ts / 2, cy * ts + ts / 2);
+              if (rot) ctx!.rotate(rot * Math.PI / 2);
+              if (flipH || flipV) ctx!.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+              ctx!.drawImage(img, -ts / 2 - bleed, -ts / 2 - bleed, ts + bleed * 2, ts + bleed * 2);
+              ctx!.restore();
+            }
           }
         }
       }
@@ -390,6 +414,20 @@ export function TileView() {
     }
 
     /**
+     * Build a packed cell transform from the brush's current random
+     * options. Bits: 0x1 = flipH, 0x2 = flipV, 0xC = rotation quadrant.
+     * Returns 0 when none of the random toggles are on, signalling
+     * "no transform — draw straight".
+     */
+    function rollCellTransform(flipH: boolean, flipV: boolean, rotate: boolean): number {
+      let t = 0;
+      if (flipH && Math.random() < 0.5) t |= 0x1;
+      if (flipV && Math.random() < 0.5) t |= 0x2;
+      if (rotate) t |= (Math.floor(Math.random() * 4) & 0x3) << 2;
+      return t;
+    }
+
+    /**
      * Per-cell validity gate for a paint stroke. Returns each brush cell
      * whose painting (in isolation) would keep every cell in its 3×3
      * neighborhood renderable. Rejected cells are dropped from the stroke
@@ -471,6 +509,22 @@ export function TileView() {
       s.mutateCorners(layer.id, (c) => {
         for (const [cx, cy] of allowed) paintCell(c, cx, cy, texId);
       });
+      // Roll a fresh per-cell render transform when any random brush
+      // option is on; clear stale transforms otherwise so re-painting a
+      // cell with options off goes back to the un-rotated default.
+      const anyRandom = s.brushRandomFlipH || s.brushRandomFlipV || s.brushRandomRotate;
+      s.mutateCellTransforms(layer.id, (t) => {
+        for (const [cx, cy] of allowed) {
+          const k = `${cx},${cy}`;
+          if (anyRandom) {
+            const v = rollCellTransform(s.brushRandomFlipH, s.brushRandomFlipV, s.brushRandomRotate);
+            if (v === 0) delete t[k];
+            else t[k] = v;
+          } else {
+            delete t[k];
+          }
+        }
+      });
     }
 
     function applyErase(cell: { cx: number; cy: number }) {
@@ -480,6 +534,11 @@ export function TileView() {
       const cells = brushCells(cell.cx, cell.cy, s.brushSize);
       s.mutateCorners(layer.id, (c) => {
         for (const [cx, cy] of cells) eraseCell(c, cx, cy);
+      });
+      // Drop any cached render transforms for the erased cells — they no
+      // longer have a tile to flip/rotate.
+      s.mutateCellTransforms(layer.id, (t) => {
+        for (const [cx, cy] of cells) delete t[`${cx},${cy}`];
       });
     }
 
@@ -516,6 +575,19 @@ export function TileView() {
       if (allowed.length === 0) return;
       s.mutateCorners(layer.id, (c) => {
         for (const [cx, cy] of allowed) paintCell(c, cx, cy, adjustedTexId);
+      });
+      const anyRandom = s.brushRandomFlipH || s.brushRandomFlipV || s.brushRandomRotate;
+      s.mutateCellTransforms(layer.id, (t) => {
+        for (const [cx, cy] of allowed) {
+          const k = `${cx},${cy}`;
+          if (anyRandom) {
+            const v = rollCellTransform(s.brushRandomFlipH, s.brushRandomFlipV, s.brushRandomRotate);
+            if (v === 0) delete t[k];
+            else t[k] = v;
+          } else {
+            delete t[k];
+          }
+        }
       });
     }
 
@@ -958,6 +1030,28 @@ export function TileView() {
         </ToolBtn>
         <Separator />
         <BrushPill value={brushSize} onChange={setBrushSize} />
+        <Separator />
+        <ToolBtn
+          active={brushRandomFlipH}
+          title="Random horizontal flip per painted cell"
+          onClick={() => setBrushRandomFlipH(!brushRandomFlipH)}
+        >
+          <FlipHorizontal2 size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn
+          active={brushRandomFlipV}
+          title="Random vertical flip per painted cell"
+          onClick={() => setBrushRandomFlipV(!brushRandomFlipV)}
+        >
+          <FlipVertical2 size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn
+          active={brushRandomRotate}
+          title="Random 90° rotation per painted cell"
+          onClick={() => setBrushRandomRotate(!brushRandomRotate)}
+        >
+          <RotateCw size={14} strokeWidth={2.2} />
+        </ToolBtn>
         <Separator />
         <ToolBtn active={showGrid} title="Toggle grid (G)" onClick={toggleGrid}>
           <Grid3X3 size={14} strokeWidth={2.2} />

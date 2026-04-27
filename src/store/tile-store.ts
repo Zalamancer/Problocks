@@ -102,6 +102,18 @@ export interface TileLayer {
    * together at their shared texture without any layer juggling.
    */
   corners: Record<string, string>;
+  /**
+   * Optional per-cell render transform — packed bits applied by the
+   * canvas before drawing the resolved tile:
+   *   bit 0 (0x1): horizontal flip
+   *   bit 1 (0x2): vertical flip
+   *   bits 2-3 (0xC): rotation quadrant (0..3, scaled by 90° clockwise)
+   * Absent / 0 = the tile renders untransformed. Set per cell at paint
+   * time when any of the brush's `brushRandomFlipH/V/Rotate` flags is on,
+   * cleared on erase. Only affects render — the auto-tile lookup still
+   * keys off the cell's 4 corner texture ids.
+   */
+  cellTransforms?: Record<string, number>;
 }
 
 export interface TileObject {
@@ -225,6 +237,10 @@ export interface TileStore {
   setLayerTileset: (layerId: string, tilesetId: string | null) => void;
   /** Bulk-mutate corners in a single update (paint stroke, fill, etc.). */
   mutateCorners: (layerId: string, mutator: (corners: Record<string, string>) => void) => void;
+  /** Bulk-mutate per-cell render transforms in a single update. The map
+   *  is created lazily so layers persisted before this feature start
+   *  with no transforms (and zero cost when the brush options are off). */
+  mutateCellTransforms: (layerId: string, mutator: (transforms: Record<string, number>) => void) => void;
 
   // ── Free objects (props on top of grid) ─────────────────────────
   objects: TileObject[];
@@ -282,6 +298,20 @@ export interface TileStore {
    *  corner regardless of this. */
   brushTextureId: string | null;
   setBrushTextureId: (id: string | null) => void;
+  /** When on, each painted cell gets a random horizontal flip in its
+   *  per-cell render transform. Pure interior tiles benefit most; edge
+   *  tiles get their corner pattern visually scrambled, which the user
+   *  may or may not want — exposed as a brush toggle. */
+  brushRandomFlipH: boolean;
+  setBrushRandomFlipH: (v: boolean) => void;
+  /** Random vertical flip per painted cell. Same trade-off as flipH. */
+  brushRandomFlipV: boolean;
+  setBrushRandomFlipV: (v: boolean) => void;
+  /** Random 0/90/180/270° rotation per painted cell. Wang transition
+   *  tiles rotate visually but the cell's auto-tile lookup is unchanged
+   *  — turn off if the corner pattern matters more than the variety. */
+  brushRandomRotate: boolean;
+  setBrushRandomRotate: (v: boolean) => void;
   /** Used only by the OBJECT tool — picks the asset whose style brush is
    *  active. The actual sprite to place is `selectedStyleId` within this
    *  asset (defaults to the asset's first style on selection). */
@@ -312,6 +342,7 @@ function defaultLayer(name = 'Ground'): TileLayer {
     opacity: 1,
     tilesetId: null,
     corners: {},
+    cellTransforms: {},
   };
 }
 
@@ -567,6 +598,13 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     mutator(layer.corners);
     return { layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
   }),
+  mutateCellTransforms: (layerId, mutator) => set((s) => {
+    const layer = s.layers.find((l) => l.id === layerId);
+    if (!layer) return {};
+    if (!layer.cellTransforms) layer.cellTransforms = {};
+    mutator(layer.cellTransforms);
+    return { layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
+  }),
 
   objects: [],
   addObject: (obj) => {
@@ -748,6 +786,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(16, Math.round(size))) }),
   brushTextureId: null,
   setBrushTextureId: (id) => set({ brushTextureId: id }),
+  brushRandomFlipH: false,
+  setBrushRandomFlipH: (v) => set({ brushRandomFlipH: v }),
+  brushRandomFlipV: false,
+  setBrushRandomFlipV: (v) => set({ brushRandomFlipV: v }),
+  brushRandomRotate: false,
+  setBrushRandomRotate: (v) => set({ brushRandomRotate: v }),
   selectedAssetId: null,
   setSelectedAssetId: (id) => set((s) => {
     // When switching assets, reset the style brush to the new asset's first
@@ -799,6 +843,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     selectedAssetId: s.selectedAssetId,
     selectedStyleId: s.selectedStyleId,
     brushTextureId: s.brushTextureId,
+    brushRandomFlipH: s.brushRandomFlipH,
+    brushRandomFlipV: s.brushRandomFlipV,
+    brushRandomRotate: s.brushRandomRotate,
     showGrid: s.showGrid,
   }),
   // Heal an empty / corrupted persisted state.
@@ -816,6 +863,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     for (const l of state.layers) {
       if (!l.corners) l.corners = {};
       if (l.tilesetId === undefined) l.tilesetId = null;
+      if (!l.cellTransforms) l.cellTransforms = {};
     }
     // Backfill texture ids for tilesets that pre-date the chaining feature.
     // Each gets its own fresh id so old tilesets aren't accidentally

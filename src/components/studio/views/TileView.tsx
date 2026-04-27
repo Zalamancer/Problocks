@@ -139,6 +139,11 @@ export function TileView() {
       // when already loaded.
       for (const t of Object.values(s.tiles)) ensureImage(t.dataUrl);
 
+      // Half a device pixel expressed in world units. Each tile draws
+      // slightly larger so neighbors overlap by ~1 device pixel, hiding
+      // the sub-pixel seams the rasterizer creates at fractional zoom/pan.
+      const bleed = 0.5 / cam.zoom;
+
       // Render each layer's corners; per-cell, the resolver picks whichever
       // tileset bridges the textures present at the 4 corners. Two chained
       // tilesets sharing a texture transition smoothly because the bridge
@@ -162,7 +167,7 @@ export function TileView() {
             if (!tile) continue;
             const img = imgCacheRef.current.get(tile.dataUrl);
             if (!img || !imgReadyRef.current.has(tile.dataUrl)) continue;
-            ctx!.drawImage(img, cx * ts, cy * ts, ts, ts);
+            ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
           }
         }
       }

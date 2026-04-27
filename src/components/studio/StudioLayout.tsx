@@ -26,6 +26,8 @@ import { PartPropertiesPanel } from './panels/PartPropertiesPanel';
 import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
 import { Freeform3DPropertiesPanel } from './panels/Freeform3DPropertiesPanel';
 import { Freeform2DPropertiesPanel } from './panels/Freeform2DPropertiesPanel';
+import { TileObjectPropertiesPanel } from './panels/TileObjectPropertiesPanel';
+import { useTile } from '@/store/tile-store';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
 import { useProjectBoard as useBoardStore } from '@/store/project-board-store';
@@ -131,6 +133,9 @@ export function StudioLayout() {
   const setViewMode = useStudio((s) => s.setViewMode);
   const gameSystem = useStudio((s) => s.gameSystem);
   const freeform3dSelectedId = useFreeform3D((s) => s.selectedId);
+  // Re-render when the user picks/clears an object on the 2D Tile canvas
+  // so the Properties tab can swap to TileObjectPropertiesPanel.
+  const tileSelectedObjectId = useTile((s) => s.selectedObjectId);
   // Subscribe so the Code tab re-renders when the agent edits the
   // scene script via setScript ACTION.
   const freeform3dScript = useFreeform3D((s) => s.scene.script);
@@ -610,6 +615,12 @@ export function StudioLayout() {
               // non-selection global settings.
               if (gameSystem === '2d-freeform') {
                 return <Freeform2DPropertiesPanel headless />;
+              }
+              // 2D Tile — when an object is selected on the canvas show its
+              // transform / hue / style controls in the right panel instead
+              // of the in-canvas popup that used to live in TileView.
+              if (gameSystem === '2d' && tileSelectedObjectId) {
+                return <TileObjectPropertiesPanel headless />;
               }
               if (openFileName) {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;

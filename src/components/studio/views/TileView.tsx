@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
-  Grid3X3, Sparkles, Box, FlipHorizontal, FlipVertical,
+  Grid3X3, Sparkles, Box,
 } from 'lucide-react';
 import { useTile, type TileTool, findStyle } from '@/store/tile-store';
+import { useStudio } from '@/store/studio-store';
 import { resolveCellTile } from '@/lib/wang-tiles';
 
 /**
@@ -60,16 +61,20 @@ export function TileView() {
   const layers = useTile((s) => s.layers);
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
-  const objects = useTile((s) => s.objects);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
   const activeLayerId = useTile((s) => s.activeLayerId);
   const resetCamera = useTile((s) => s.resetCamera);
   const clearMap = useTile((s) => s.clearMap);
   const camera = useTile((s) => s.camera);
-  const updateObject = useTile((s) => s.updateObject);
-  const removeObject = useTile((s) => s.removeObject);
-  const objectAssets = useTile((s) => s.objectAssets);
-  const setObjectStyle = useTile((s) => s.setObjectStyle);
+  const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
+
+  // When the user picks an object on the canvas, jump the right panel to
+  // its Properties tab so TileObjectPropertiesPanel comes into view. The
+  // floating in-canvas popup is gone — properties live in the right panel
+  // now, so the surface needs to be visible to be useful.
+  useEffect(() => {
+    if (selectedObjectId) setRightPanelGroup('properties');
+  }, [selectedObjectId, setRightPanelGroup]);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const brushTextureId = useTile((s) => s.brushTextureId);
@@ -844,10 +849,6 @@ export function TileView() {
     c.style.cursor = cursorForTool(tool, false);
   }, [tool]);
 
-  const selectedObject = selectedObjectId ? objects.find((o) => o.id === selectedObjectId) : null;
-  // Resolve the selected object's owning asset so the right-side panel can
-  // show every style as an "upgrade" pill the user can swap to.
-  const selectedAsset = selectedObject ? objectAssets[selectedObject.assetId] ?? null : null;
   const totalCorners = activeLayer ? Object.keys(activeLayer.corners).length : 0;
 
   return (
@@ -936,129 +937,6 @@ export function TileView() {
             {brushTileset.name}
           </span>
           <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)' }}>on {activeLayer?.name}</span>
-        </div>
-      )}
-
-      {selectedObject && (
-        <div
-          className="absolute top-3 right-3 z-10 p-3"
-          style={{
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-ink)',
-            borderRadius: 12,
-            boxShadow: '0 3px 0 var(--pb-ink)',
-            minWidth: 200,
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
-              {selectedObject.name}
-            </span>
-            <button
-              onClick={() => removeObject(selectedObject.id)}
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)' }}
-              title="Delete object"
-            >
-              <Trash2 size={14} strokeWidth={2.2} />
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 mb-2">
-            <NumField label="X" value={Math.round(selectedObject.x)} onChange={(v) => updateObject(selectedObject.id, { x: v })} />
-            <NumField label="Y" value={Math.round(selectedObject.y)} onChange={(v) => updateObject(selectedObject.id, { y: v })} />
-            <NumField label="W" value={Math.round(selectedObject.width)} min={1} onChange={(v) => updateObject(selectedObject.id, { width: v })} />
-            <NumField label="H" value={Math.round(selectedObject.height)} min={1} onChange={(v) => updateObject(selectedObject.id, { height: v })} />
-            <NumField label="°" value={Math.round(selectedObject.rotation)} onChange={(v) => updateObject(selectedObject.id, { rotation: v })} />
-          </div>
-          <div className="flex gap-1.5">
-            <ToolBtn active={selectedObject.flipX} title="Flip X" onClick={() => updateObject(selectedObject.id, { flipX: !selectedObject.flipX })}>
-              <FlipHorizontal size={14} strokeWidth={2.2} />
-            </ToolBtn>
-            <ToolBtn active={selectedObject.flipY} title="Flip Y" onClick={() => updateObject(selectedObject.id, { flipY: !selectedObject.flipY })}>
-              <FlipVertical size={14} strokeWidth={2.2} />
-            </ToolBtn>
-          </div>
-
-          {/* Hue slider — recolours the sprite via canvas filter without
-              touching the source PNG. Quick way to make 5 differently-tinted
-              copies of the same tree, etc. Double-click the readout to reset. */}
-          <div className="mt-2.5">
-            <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>HUE</span>
-              <span
-                onDoubleClick={() => updateObject(selectedObject.id, { hue: 0 })}
-                title="Double-click to reset"
-                style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }}
-              >
-                {selectedObject.hue}°
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={360}
-              step={1}
-              value={selectedObject.hue}
-              onChange={(e) => updateObject(selectedObject.id, { hue: parseInt(e.target.value) })}
-              style={{
-                width: '100%',
-                accentColor: '#0ea5e9',
-                background: 'linear-gradient(to right, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%))',
-                borderRadius: 4,
-              }}
-            />
-          </div>
-
-          {/* Style chips — only meaningful when the asset has more than one
-              variant. Click swaps the placed instance's sprite (footprint
-              stays put, just the look changes — i.e. "upgrade"). */}
-          {selectedAsset && selectedAsset.styles.length > 1 && (
-            <div className="mt-2.5">
-              <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5, marginBottom: 4 }}>
-                STYLE
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {selectedAsset.styles.map((st, i) => {
-                  const isCurrent = st.id === selectedObject.styleId;
-                  return (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => setObjectStyle(selectedObject.id, st.id)}
-                      title={st.label || `Style ${i + 1}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '3px 6px 3px 3px',
-                        background: isCurrent ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-                        border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-                        borderRadius: 999,
-                        cursor: 'pointer',
-                        boxShadow: isCurrent ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 18, height: 18, borderRadius: 999,
-                          overflow: 'hidden',
-                          background: 'rgba(0,0,0,0.06)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={st.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
-                      </span>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {st.label || `Style ${i + 1}`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1217,32 +1095,3 @@ function BrushPill({ value, onChange }: { value: number; onChange: (v: number) =
   );
 }
 
-function NumField({
-  label, value, onChange, min,
-}: { label: string; value: number; onChange: (v: number) => void; min?: number }) {
-  return (
-    <label className="flex items-center gap-1" style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 700 }}>
-      {label}
-      <input
-        type="number"
-        value={value}
-        min={min}
-        onChange={(e) => {
-          const v = parseFloat(e.target.value);
-          if (!Number.isNaN(v)) onChange(v);
-        }}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: '4px 6px',
-          background: 'var(--pb-cream-2)',
-          border: '1.5px solid var(--pb-line-2)',
-          borderRadius: 6,
-          fontSize: 11,
-          fontWeight: 700,
-          color: 'var(--pb-ink)',
-        }}
-      />
-    </label>
-  );
-}

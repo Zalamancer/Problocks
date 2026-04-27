@@ -1609,26 +1609,53 @@ function ObjectsSection() {
     const isHoriz = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
     const dir = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
 
+    if (isHoriz) {
+      // Flat horizontal navigation across (asset, style) tuples. Pressing
+      // Right walks through this asset's styles, then crosses into the
+      // next asset's first style; Left mirrors. The big card thumbnail
+      // is bound to focusedStyleId, so each step updates the preview.
+      const aIdx = assetList.findIndex((a) => a.id === focused.assetId);
+      if (aIdx < 0) return;
+      const startAsset = assetList[aIdx];
+      const startStyleIdx = focused.kind === 'style'
+        ? startAsset.styles.findIndex((s) => s.id === focused.styleId)
+        : 0;
+      let curA = aIdx;
+      let curS = startStyleIdx + dir;
+      // Spill across asset boundaries.
+      while (curS < 0 || (assetList[curA] && curS >= assetList[curA].styles.length)) {
+        if (curS < 0) {
+          if (curA === 0) { curS = 0; break; }
+          curA -= 1;
+          curS = assetList[curA].styles.length - 1;
+        } else {
+          if (curA === assetList.length - 1) { curS = assetList[curA].styles.length - 1; break; }
+          curA += 1;
+          curS = 0;
+        }
+      }
+      const nextAsset = assetList[curA];
+      const nextStyle = nextAsset.styles[curS];
+      if (!nextAsset || !nextStyle) return;
+      setFocused({ kind: 'style', assetId: nextAsset.id, styleId: nextStyle.id });
+      // Scroll the new asset's card into view if we crossed asset boundaries.
+      if (nextAsset.id !== focused.assetId) {
+        scrollAssetIntoView(nextAsset.id);
+      }
+      return;
+    }
+
+    // Vertical → reorder (asset list when on asset focus, styles[] when
+    // on style focus). Existing behavior preserved.
     if (focused.kind === 'asset') {
       const order = assetList.map((a) => a.id);
       const idx = order.indexOf(focused.assetId);
       if (idx < 0) return;
       const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
       if (newIdx === idx) return;
-
-      if (isHoriz) {
-        // Navigate to prev/next card and explicitly scroll the list so the
-        // new card lands at the start of the visible area — that card's
-        // own thumbnail IS the preview, no floating popup needed.
-        const newAssetId = order[newIdx];
-        setFocused({ kind: 'asset', assetId: newAssetId });
-        scrollAssetIntoView(newAssetId);
-      } else {
-        // Vertical → reorder.
-        const next = order.slice();
-        [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-        reorderAssets(next);
-      }
+      const next = order.slice();
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      reorderAssets(next);
     } else {
       const asset = objectAssets[focused.assetId];
       if (!asset) return;
@@ -1637,23 +1664,16 @@ function ObjectsSection() {
       if (idx < 0) return;
       const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
       if (newIdx === idx) return;
-
-      if (isHoriz) {
-        // Navigate styles within the asset (no preview — styles are tiny rows).
-        setFocused({ kind: 'style', assetId: asset.id, styleId: order[newIdx] });
-      } else {
-        // Vertical → reorder styles.
-        const next = order.slice();
-        [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-        const newOrder = reorderStyles(asset.id, next);
-        newOrder.forEach((style, i) => {
-          if (style.cloudId) {
-            updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
-              console.warn('[object-cloud] style reorder failed', err);
-            });
-          }
-        });
-      }
+      const next = order.slice();
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      const newOrder = reorderStyles(asset.id, next);
+      newOrder.forEach((style, i) => {
+        if (style.cloudId) {
+          updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
+            console.warn('[object-cloud] style reorder failed', err);
+          });
+        }
+      });
     }
   }
 
@@ -1979,9 +1999,17 @@ function AssetCard({
   onFocusAsset?: () => void;
   onFocusStyle?: (styleId: string) => void;
 }) {
-  const headerStyle = isSelected
-    ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
-    : asset.styles[0];
+  // The big card thumbnail prefers the FOCUSED style (so arrow-key
+  // navigation across styles updates the visible preview), then falls
+  // back to the brush style if this asset is the current brush, then
+  // styles[0] as a last resort.
+  const focusedStyle = focusedStyleId
+    ? asset.styles.find((s) => s.id === focusedStyleId) ?? null
+    : null;
+  const brushStyle = isSelected && selectedStyleId
+    ? asset.styles.find((s) => s.id === selectedStyleId) ?? null
+    : null;
+  const headerStyle = focusedStyle ?? brushStyle ?? asset.styles[0];
 
   // Layout dims that change with size — kept here so the JSX below stays
   // readable instead of branching on `size` inline.

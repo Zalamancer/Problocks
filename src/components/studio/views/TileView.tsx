@@ -390,15 +390,23 @@ export function TileView() {
     }
 
     /**
-     * Filter a candidate cell list down to those whose post-paint state
-     * keeps every affected cell renderable — i.e. each cell ends up
-     * empty, pure (one canonical texture), or a bridged 2-texture
-     * transition. Cells whose painting would put 3+ unique textures or
-     * two unbridged textures in any neighbor are dropped, so the brush
-     * silently refuses to bring unlinked terrains into contact.
+     * All-or-nothing validity gate for a paint stroke. Returns the full
+     * list of cells when EVERY cell in the brush's 3×3 neighborhood would
+     * remain renderable post-paint; returns `[]` when any cell would
+     * become invalid.
      *
-     * The "affected" set per painted cell is the painted cell + its 8
-     * neighbors (every cell that shares at least one corner with it).
+     * Why all-or-nothing: brush cells share corners with their neighbors.
+     * A cell rejected for invalidity still receives corner overwrites
+     * from any committed neighbor — e.g. paint a 2×2 water brush over a
+     * dirt-water boundary, accept the interior cell, reject the boundary
+     * cell, and the boundary cell still gets two of its four corners
+     * stamped to water through the interior commit. That recreates the
+     * unlinked-contact the gate is supposed to prevent. Rejecting the
+     * entire stroke when any single cell would be invalid is the only
+     * way to keep the canvas free of unlinked-texture corners.
+     *
+     * "Renderable" = empty, pure (one canonical texture), or a bridged
+     * 2-texture transition. 3+ unique or 2 unbridged → reject.
      */
     function filterPaintableCells(
       cells: ReadonlyArray<readonly [number, number]>,
@@ -419,16 +427,18 @@ export function TileView() {
         const k = `${x},${y}`;
         return paintedCorners.has(k) ? texId : corners[k];
       };
-      const out: Array<[number, number]> = [];
+      // Walk every cell that shares a corner with any brush cell — that's
+      // the union of each brush cell's 3×3 neighborhood. If ANY would be
+      // invalid post-paint, return [] so the caller skips the stroke.
+      const checked = new Set<string>();
       for (const [cx, cy] of cells) {
-        let ok = true;
-        // Each painted cell touches a 3×3 neighborhood of cells through
-        // its corners. If any of those would be invalid post-paint,
-        // refuse to paint this cell at all.
-        for (let dy = -1; dy <= 1 && ok; dy++) {
-          for (let dx = -1; dx <= 1 && ok; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
             const ncx = cx + dx;
             const ncy = cy + dy;
+            const ck = `${ncx},${ncy}`;
+            if (checked.has(ck)) continue;
+            checked.add(ck);
             if (!canPlaceCorners(
               after(ncx, ncy),
               after(ncx + 1, ncy),
@@ -436,13 +446,12 @@ export function TileView() {
               after(ncx + 1, ncy + 1),
               tilesets,
             )) {
-              ok = false;
+              return [];
             }
           }
         }
-        if (ok) out.push([cx, cy]);
       }
-      return out;
+      return cells.map(([cx, cy]) => [cx, cy] as [number, number]);
     }
 
     function applyPaint(cell: { cx: number; cy: number }) {

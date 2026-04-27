@@ -1524,7 +1524,7 @@ function AssetCard({
   // Layout dims that change with size — kept here so the JSX below stays
   // readable instead of branching on `size` inline.
   const dims = size === 'lg'
-    ? { thumb: 84, styleThumb: 44, headerFont: 16, labelFont: 13, gripIcon: 14, padding: 10 }
+    ? { thumb: 256, styleThumb: 56, headerFont: 15, labelFont: 13, gripIcon: 14, padding: 10 }
     : { thumb: 36, styleThumb: 24, headerFont: 12, labelFont: 11, gripIcon: 12, padding: 6 };
 
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
@@ -1586,8 +1586,37 @@ function AssetCard({
             ? '0 0 0 2px rgba(14,165,233,0.18)'
             : 'none',
         overflow: 'hidden',
+        ...(size === 'lg' ? { width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column' } : null),
       }}
     >
+      {size === 'lg' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
+          title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
+          style={{
+            display: 'block',
+            width: '100%',
+            aspectRatio: '1 / 1',
+            background: 'rgba(0,0,0,0.04)',
+            border: 0,
+            borderBottom: '1.5px solid var(--pb-line-2)',
+            padding: 8,
+            cursor: 'pointer',
+            overflow: 'hidden',
+          }}
+        >
+          {headerStyle && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={headerStyle.dataUrl}
+              alt={asset.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+              draggable={false}
+            />
+          )}
+        </button>
+      )}
       <div className="flex items-center gap-1.5" style={{ padding: dims.padding }}>
         <span
           // Mouse-down on the grip arms the card-level drag. Without this,
@@ -1605,31 +1634,33 @@ function AssetCard({
         >
           <GripVertical size={dims.gripIcon} strokeWidth={2.4} />
         </span>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
-          title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
-          style={{
-            width: dims.thumb, height: dims.thumb,
-            background: 'rgba(0,0,0,0.04)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 6,
-            padding: 2,
-            cursor: 'pointer',
-            flexShrink: 0,
-            overflow: 'hidden',
-          }}
-        >
-          {headerStyle && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={headerStyle.dataUrl}
-              alt={asset.name}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-              draggable={false}
-            />
-          )}
-        </button>
+        {size === 'sm' && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
+            title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
+            style={{
+              width: dims.thumb, height: dims.thumb,
+              background: 'rgba(0,0,0,0.04)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6,
+              padding: 2,
+              cursor: 'pointer',
+              flexShrink: 0,
+              overflow: 'hidden',
+            }}
+          >
+            {headerStyle && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={headerStyle.dataUrl}
+                alt={asset.name}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+                draggable={false}
+              />
+            )}
+          </button>
+        )}
         <div className="flex-1 min-w-0">
           {editingName ? (
             <input
@@ -2079,8 +2110,8 @@ function ObjectLibraryOverlay({
             </div>
           ) : (
             <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}
+              className="flex gap-3 overflow-x-auto"
+              style={{ paddingBottom: 6, scrollbarGutter: 'stable' }}
             >
               {assetList.map((asset) => (
                 <AssetCard

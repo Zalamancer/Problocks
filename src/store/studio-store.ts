@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'parts' | 'connectors' | 'library';
+export type LeftPanelGroup = 'scene' | 'assets' | 'chat' | 'parts' | 'connectors' | 'library' | 'terrain';
 export type RightPanelGroup = 'properties' | 'workspace' | 'chat' | 'parts';
 export type AssetsTab = 'models' | 'parts';
 export type PartsTab = 'generate' | 'history';

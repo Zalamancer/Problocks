@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap, Library } from 'lucide-react';
+import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap, Library, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
 import type { LucideIcon } from 'lucide-react';
@@ -8,6 +8,7 @@ import { AssetsPanel }       from './panels/AssetsPanel';
 import { ScenePanel }        from './panels/ScenePanel';
 import { ConnectorsPanel }   from './panels/ConnectorsPanel';
 import { LibraryPanel }      from './panels/LibraryPanel';
+import { TileAssetsView }    from './panels/TileAssetsView';
 
 interface TabGroupDef {
   id: LeftPanelGroup;
@@ -17,9 +18,15 @@ interface TabGroupDef {
 
 // Chat + Part Studio now live on the right panel's dropdown (see
 // RightPanel.tsx). The left panel keeps the workspace-level navigators only.
+//
+// "Terrain" is a 2D-tile-system-specific tab; it shows the Wang sheet
+// upload + terrain cards. Showing the entry for non-tile games is fine —
+// users naturally won't click it. Hiding it conditionally would require
+// reading game system here and re-rendering the dropdown on every switch.
 const TAB_GROUPS: TabGroupDef[] = [
   { id: 'library',    label: 'My Games',    icon: Library },
   { id: 'scene',      label: 'Scene',       icon: Layers },
+  { id: 'terrain',    label: 'Terrain',     icon: Sparkles },
   { id: 'assets',     label: 'Assets',      icon: FolderOpen },
   { id: 'connectors', label: 'Connectors',  icon: Zap },
 ];
@@ -30,6 +37,7 @@ function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onScene
   switch (group) {
     case 'library':    return <LibraryPanel />;
     case 'scene':      return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
+    case 'terrain':    return <div className="flex-1 flex flex-col min-h-0"><TileAssetsView view="terrain" /></div>;
     case 'assets':     return <AssetsPanel />;
     case 'connectors': return <ConnectorsPanel />;
     default:           return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;

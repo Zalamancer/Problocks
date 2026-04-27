@@ -23,6 +23,7 @@ import { useBuildingStore } from '@/store/building-store';
 import { useStudio } from '@/store/studio-store';
 import { useLightingStore } from '@/store/lighting-store';
 import { useFreeform3D } from '@/store/freeform3d-store';
+import { useTile } from '@/store/tile-store';
 import { SectionLabel, type PBTone } from '@/components/ui';
 
 // Ported from /tmp/design_bundle2/problocks/project/studio/leftpanel.jsx
@@ -33,7 +34,7 @@ import { SectionLabel, type PBTone } from '@/components/ui';
 interface LayerItem {
   id: string;
   name: string;
-  type: 'part' | 'floor' | 'wall' | 'script' | 'prefab';
+  type: 'part' | 'floor' | 'wall' | 'script' | 'prefab' | 'tile-object';
   icon: typeof Box;
   iconColor: string;        // part: user color hex; others: derived from category tone
   badge: string;
@@ -45,12 +46,12 @@ interface LayerItem {
   onRemove?: () => void;
 }
 
-type SceneCat = 'part' | 'floor' | 'wall' | 'script' | 'prefab';
+type SceneCat = 'part' | 'floor' | 'wall' | 'script' | 'prefab' | 'tile-object';
 
-// Prefab category renders FIRST when there are freeform 3D objects in
-// the scene — that's the active store for kid-style worlds, so the
-// hierarchy view should lead with what the agent actually built.
-const CATEGORY_ORDER: SceneCat[] = ['prefab', 'part', 'floor', 'wall', 'script'];
+// Tile-object category renders FIRST when the active game is 2D-tile and
+// there are placed sprites — those are the freshest interactive elements
+// of that scene. Otherwise the existing prefab/part/etc. ordering applies.
+const CATEGORY_ORDER: SceneCat[] = ['tile-object', 'prefab', 'part', 'floor', 'wall', 'script'];
 
 interface CategoryMeta {
   label: string;
@@ -60,11 +61,12 @@ interface CategoryMeta {
 }
 
 const CATEGORY_META: Record<SceneCat, CategoryMeta> = {
-  prefab: { label: 'Prefabs',   sub: 'Freeform 3D objects', icon: Box,                   tone: 'sky'    },
-  part:   { label: 'Workspace', sub: 'Parts in your scene', icon: Folder,                tone: 'sky'    },
-  floor:  { label: 'Floors',    sub: 'Floor tiles',         icon: Square,                tone: 'butter' },
-  wall:   { label: 'Walls',     sub: 'Wall edges',          icon: RectangleHorizontal,   tone: 'coral'  },
-  script: { label: 'Scripts',   sub: 'Game code files',     icon: FileCode,              tone: 'mint'   },
+  'tile-object': { label: 'Placed', sub: 'Sprites placed on the canvas', icon: Box,                   tone: 'grape'  },
+  prefab:        { label: 'Prefabs',   sub: 'Freeform 3D objects',       icon: Box,                   tone: 'sky'    },
+  part:          { label: 'Workspace', sub: 'Parts in your scene',       icon: Folder,                tone: 'sky'    },
+  floor:         { label: 'Floors',    sub: 'Floor tiles',               icon: Square,                tone: 'butter' },
+  wall:          { label: 'Walls',     sub: 'Wall edges',                icon: RectangleHorizontal,   tone: 'coral'  },
+  script:        { label: 'Scripts',   sub: 'Game code files',           icon: FileCode,              tone: 'mint'   },
 };
 
 // Map common prefab kinds to icons. Anything not listed falls back to
@@ -125,6 +127,15 @@ export function ScenePanel({ onSelect }: Props) {
   const setOpenFileName = useStudio((s) => s.setOpenFileName);
   const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;
 
+  // 2D-tile placed sprites — rows surface in the new "Placed" category so
+  // the user can browse / select / delete instances from the same scene
+  // panel they already use for prefabs and parts.
+  const tileObjects = useTile((s) => s.objects);
+  const tileAssets = useTile((s) => s.objectAssets);
+  const tileSelectedObjectId = useTile((s) => s.selectedObjectId);
+  const tileSelectObject = useTile((s) => s.selectObject);
+  const tileRemoveObject = useTile((s) => s.removeObject);
+
   const lightingPanelOpen = useLightingStore((s) => s.panelOpen);
   const setLightingPanelOpen = useLightingStore((s) => s.setPanelOpen);
   const rightPanelGroup = useStudio((s) => s.rightPanelActiveGroup);
@@ -146,7 +157,33 @@ export function ScenePanel({ onSelect }: Props) {
   const layers: LayerItem[] = useMemo(() => {
     const items: LayerItem[] = [];
 
-    // Freeform 3D prefabs first — that's the active store for the
+    // 2D-tile placed sprites first — when this scene is a tile game,
+    // these are the most-touched elements. Each row points at one
+    // placed instance; the icon's tile colour reuses the asset's
+    // primary tone via the shared category meta. Empty for non-tile
+    // games (objects array stays empty).
+    tileObjects.forEach((obj) => {
+      const asset = tileAssets[obj.assetId];
+      const style = asset?.styles.find((st) => st.id === obj.styleId);
+      const styleSuffix = style && asset && asset.styles.length > 1
+        ? ` · ${style.label || `Style ${asset.styles.findIndex((s) => s.id === style.id) + 1}`}`
+        : '';
+      const labelName = obj.name + styleSuffix;
+      items.push({
+        id: `tile-object-${obj.id}`,
+        name: labelName,
+        type: 'tile-object',
+        icon: Box,
+        iconColor: 'var(--pb-grape-ink)',
+        badge: `(${Math.round(obj.x)}, ${Math.round(obj.y)})`,
+        visible: null,
+        isSelected: tileSelectedObjectId === obj.id,
+        onSelect: () => tileSelectObject(obj.id),
+        onRemove: () => tileRemoveObject(obj.id),
+      });
+    });
+
+    // Freeform 3D prefabs next — that's the active store for the
     // chunky-pastel agent. One row per scene object; name is the
     // prefab kind (rounded-box, character, tree-pine, …) plus a
     // short id suffix so a tycoon with 30 cubes is still scannable.
@@ -258,6 +295,11 @@ export function ScenePanel({ onSelect }: Props) {
 
     return items;
   }, [
+    tileObjects,
+    tileAssets,
+    tileSelectedObjectId,
+    tileSelectObject,
+    tileRemoveObject,
     f3dObjects,
     f3dSelectedId,
     f3dSelect,

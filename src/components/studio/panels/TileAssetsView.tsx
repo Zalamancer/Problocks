@@ -4,17 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
-  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, ChevronLeft, Check, Cloud, Link2,
+  Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
   Pencil, GripVertical, X, Maximize2,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
-
-type TileTabKey = 'terrain' | 'scene' | 'objects' | 'layers';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -28,7 +25,20 @@ type TileTabKey = 'terrain' | 'scene' | 'objects' | 'layers';
  *   3. Objects — manually-placed sprites (free-positioned, not auto-tiled).
  *      Picking an object sprite still requires choosing one of the tiles.
  */
-export function TileAssetsView() {
+/**
+ * 2D Tile system asset view. Two render modes share one mount because the
+ * hydration + helpers (TerrainCard, BrushSwatch, etc.) only need to live
+ * in one place:
+ *
+ *   - `view="terrain"` → terrain-cards + Wang sheet upload only. Mounted
+ *     by LeftPanel under the new "Terrain" top-level tab.
+ *   - `view="assets"` (default) → Layers + Objects accordion only. Mounted
+ *     by AssetsPanel for the "Assets" tab.
+ *
+ * Placed-object listing moved to the existing top-level "Scene" tab
+ * (ScenePanel grew a Tile Objects category for it).
+ */
+export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets' } = {}) {
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const addTileset = useTile((s) => s.addTileset);
@@ -56,11 +66,13 @@ export function TileAssetsView() {
     newSide: 'u' | 'l';      // where to place the shared id in the new sheet
   } | null>(null);
 
-  // Top-level tab routing for the 2D tile panel. Replaced the old
-  // accordion (Terrains / Layers / Objects collapsibles) so the placed-
-  // object list — which can run dozens of rows on a built-out scene —
-  // gets its own dedicated screen instead of being buried below uploads.
-  const [activeTab, setActiveTab] = useState<TileTabKey>('terrain');
+  // The Assets tab for the 2D-tile system holds two stacked accordion
+  // sections: Layers + Objects. Terrain content moved to its own
+  // top-level Terrain tab (LeftPanel.tsx → TerrainPanel); placed objects
+  // moved to the existing top-level Scene tab. Both flags persist
+  // collapsed/expanded state per session.
+  const [layersOpen, setLayersOpen] = useState(true);
+  const [objectsOpen, setObjectsOpen] = useState(true);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const brushTextureId = useTile((s) => s.brushTextureId);
@@ -263,9 +275,7 @@ export function TileAssetsView() {
         className="hidden"
       />
 
-      <TileGroupHeader active={activeTab} onChange={setActiveTab} />
-
-      {activeTab === 'terrain' && (
+      {view === 'terrain' && (
         <div className="space-y-2 px-3 py-3">
           <div className="flex items-center gap-1.5">
             <NumField label="Cols" value={cols} onChange={setCols} min={1} max={32} />
@@ -322,9 +332,27 @@ export function TileAssetsView() {
         </div>
       )}
 
-      {activeTab === 'scene' && <SceneSection />}
-      {activeTab === 'objects' && <ObjectsSection />}
-      {activeTab === 'layers' && <LayerList />}
+      {view === 'assets' && (
+        <>
+          <Section
+            title="Layers"
+            icon={<LayersIcon size={13} strokeWidth={2.4} />}
+            open={layersOpen}
+            onToggle={() => setLayersOpen(!layersOpen)}
+          >
+            <LayerList />
+          </Section>
+
+          <Section
+            title="Objects"
+            icon={<Box size={13} strokeWidth={2.4} />}
+            open={objectsOpen}
+            onToggle={() => setObjectsOpen(!objectsOpen)}
+          >
+            <ObjectsSection />
+          </Section>
+        </>
+      )}
     </div>
   );
 }
@@ -1819,260 +1847,6 @@ function AssetCard({
   );
 }
 
-/**
- * Sub-group header for the 2D Tile panel. Matches the dropdown style of
- * `LeftPanel.tsx`'s `MainGroupHeader` (the pager + central dropdown that
- * shows My Games / Scene / Assets / Connectors) so the inner navigation
- * feels native to the rest of the studio. Click the centre button to open
- * the dropdown; click an item to switch tab. Chevron arrows on either side
- * cycle through tabs without needing the dropdown.
- */
-function TileGroupHeader({ active, onChange }: { active: TileTabKey; onChange: (k: TileTabKey) => void }) {
-  const tabs: Array<{ key: TileTabKey; label: string; icon: LucideIcon }> = [
-    { key: 'terrain', label: 'Terrain', icon: Sparkles },
-    { key: 'scene',   label: 'Scene',   icon: LayersIcon },
-    { key: 'objects', label: 'Objects', icon: Box },
-    { key: 'layers',  label: 'Layers',  icon: LayersIcon },
-  ];
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const currentIndex = Math.max(0, tabs.findIndex((t) => t.key === active));
-  const current = tabs[currentIndex];
-  const Icon = current.icon;
-
-  // Close on outside click — same pattern as MainGroupHeader so behaviour
-  // stays predictable across both dropdowns.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const goPrev = () => onChange(tabs[(currentIndex - 1 + tabs.length) % tabs.length].key);
-  const goNext = () => onChange(tabs[(currentIndex + 1) % tabs.length].key);
-
-  const pagerBtnStyle: React.CSSProperties = {
-    width: 30,
-    height: 30,
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    background: 'var(--pb-paper)',
-    border: '1.5px solid var(--pb-line-2)',
-    color: 'var(--pb-ink-soft)',
-    cursor: 'pointer',
-  };
-
-  return (
-    <div
-      className="shrink-0 relative"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '10px 12px',
-        borderBottom: '1.5px solid var(--pb-line-2)',
-      }}
-    >
-      <button type="button" onClick={goPrev} aria-label="Previous tab" style={pagerBtnStyle}>
-        <ChevronLeft size={13} strokeWidth={2.4} />
-      </button>
-
-      <div ref={dropdownRef} style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            padding: '8px 10px',
-            borderRadius: 10,
-            background: open ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
-            border: `1.5px solid ${open ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-            boxShadow: open ? '0 2px 0 var(--pb-ink)' : 'none',
-            fontSize: 13,
-            fontWeight: 700,
-            color: 'var(--pb-ink)',
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-            transition: 'background 120ms ease, border-color 120ms ease',
-          }}
-        >
-          <Icon size={14} strokeWidth={2.2} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {current.label}
-          </span>
-          <ChevronDown
-            size={11}
-            strokeWidth={2.4}
-            style={{
-              color: 'var(--pb-ink-muted)',
-              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.15s',
-              flexShrink: 0,
-            }}
-          />
-        </button>
-
-        {open && (
-          <div
-            className="z-dropdown"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              left: 0,
-              right: 0,
-              background: 'var(--pb-paper)',
-              border: '1.5px solid var(--pb-ink)',
-              borderRadius: 12,
-              boxShadow: '0 4px 0 var(--pb-ink), 0 12px 28px rgba(29,26,20,0.12)',
-              padding: 6,
-            }}
-          >
-            {tabs.map((t) => {
-              const ItemIcon = t.icon;
-              const isActive = t.key === active;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => { onChange(t.key); setOpen(false); }}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '9px 10px',
-                    borderRadius: 8,
-                    background: isActive ? 'var(--pb-cream-2)' : 'transparent',
-                    color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink)',
-                    fontSize: 13,
-                    fontWeight: isActive ? 700 : 500,
-                    fontFamily: 'inherit',
-                    textAlign: 'left',
-                    border: 0,
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
-                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <ItemIcon
-                    size={15}
-                    strokeWidth={2.2}
-                    style={{ color: isActive ? 'var(--pb-mint-ink)' : 'var(--pb-ink-muted)', flexShrink: 0 }}
-                  />
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {t.label}
-                  </span>
-                  {isActive && <Check size={12} strokeWidth={2.6} style={{ color: 'var(--pb-mint-ink)', flexShrink: 0 }} />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <button type="button" onClick={goNext} aria-label="Next tab" style={pagerBtnStyle}>
-        <ChevronRight size={13} strokeWidth={2.4} />
-      </button>
-    </div>
-  );
-}
-
-/**
- * Scene tab — the placed-objects list, formerly the bottom of the
- * Objects accordion. Showing it on its own dedicated tab gives it the
- * full panel height to scroll, which matters once a built-out scene
- * has dozens of placed sprites.
- */
-function SceneSection() {
-  const objects = useTile((s) => s.objects);
-  const objectAssets = useTile((s) => s.objectAssets);
-  const selectObject = useTile((s) => s.selectObject);
-  const removeObject = useTile((s) => s.removeObject);
-  const selectedObjectId = useTile((s) => s.selectedObjectId);
-
-  if (objects.length === 0) {
-    return (
-      <div className="px-3 py-3">
-        <div
-          className="rounded-lg p-4 text-center"
-          style={{
-            background: 'var(--pb-cream-2)',
-            border: '1.5px dashed var(--pb-line-2)',
-          }}
-        >
-          <p style={{ fontSize: 12, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-            No objects placed yet. Switch to the <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), pick a style from the library, and click on the canvas to drop sprites.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1 px-3 py-3">
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
-        PLACED ({objects.length})
-      </div>
-      {objects.map((obj) => {
-        const asset = objectAssets[obj.assetId];
-        const style = asset?.styles.find((st) => st.id === obj.styleId);
-        const isSel = obj.id === selectedObjectId;
-        return (
-          <div
-            key={obj.id}
-            onClick={() => selectObject(obj.id)}
-            className="flex items-center gap-2 cursor-pointer transition-colors"
-            style={{
-              padding: '4px 6px',
-              borderRadius: 6,
-              background: isSel ? 'var(--pb-butter)' : 'transparent',
-              border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-            }}
-          >
-            <div
-              style={{
-                width: 22, height: 22, flexShrink: 0,
-                background: 'rgba(0,0,0,0.05)',
-                borderRadius: 4,
-                overflow: 'hidden',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              {style && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
-              )}
-            </div>
-            <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {obj.name}
-              {style && asset && asset.styles.length > 1 && (
-                <span style={{ color: 'var(--pb-ink-muted)', fontWeight: 600 }}> · {style.label || `Style ${asset.styles.findIndex((s) => s.id === style.id) + 1}`}</span>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center' }}
-              title="Delete object"
-            >
-              <Trash2 size={11} strokeWidth={2.4} />
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /**
  * Full-screen modal for browsing + managing object assets. Mounted via

@@ -389,6 +389,62 @@ export function TileView() {
       delete corners[`${cx + 1},${cy + 1}`];
     }
 
+    /**
+     * Filter a candidate cell list down to those whose post-paint state
+     * keeps every affected cell renderable — i.e. each cell ends up
+     * empty, pure (one canonical texture), or a bridged 2-texture
+     * transition. Cells whose painting would put 3+ unique textures or
+     * two unbridged textures in any neighbor are dropped, so the brush
+     * silently refuses to bring unlinked terrains into contact.
+     *
+     * The "affected" set per painted cell is the painted cell + its 8
+     * neighbors (every cell that shares at least one corner with it).
+     */
+    function filterPaintableCells(
+      cells: ReadonlyArray<readonly [number, number]>,
+      texId: string,
+      corners: Record<string, string>,
+      tilesets: typeof stateRef.current.tilesets,
+    ): Array<[number, number]> {
+      // Pre-compute the corner set the stroke would touch — these all
+      // become `texId` simultaneously when checking neighbor validity.
+      const paintedCorners = new Set<string>();
+      for (const [cx, cy] of cells) {
+        paintedCorners.add(`${cx},${cy}`);
+        paintedCorners.add(`${cx + 1},${cy}`);
+        paintedCorners.add(`${cx},${cy + 1}`);
+        paintedCorners.add(`${cx + 1},${cy + 1}`);
+      }
+      const after = (x: number, y: number): string | undefined => {
+        const k = `${x},${y}`;
+        return paintedCorners.has(k) ? texId : corners[k];
+      };
+      const out: Array<[number, number]> = [];
+      for (const [cx, cy] of cells) {
+        let ok = true;
+        // Each painted cell touches a 3×3 neighborhood of cells through
+        // its corners. If any of those would be invalid post-paint,
+        // refuse to paint this cell at all.
+        for (let dy = -1; dy <= 1 && ok; dy++) {
+          for (let dx = -1; dx <= 1 && ok; dx++) {
+            const ncx = cx + dx;
+            const ncy = cy + dy;
+            if (!canPlaceCorners(
+              after(ncx, ncy),
+              after(ncx + 1, ncy),
+              after(ncx, ncy + 1),
+              after(ncx + 1, ncy + 1),
+              tilesets,
+            )) {
+              ok = false;
+            }
+          }
+        }
+        if (ok) out.push([cx, cy]);
+      }
+      return out;
+    }
+
     function applyPaint(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
@@ -403,8 +459,12 @@ export function TileView() {
       const texId = pickAdjustedBrushTexture(
         baseTexId, cells, layer.corners, s.tilesets, s.tiles,
       );
+      // Refuse to bring unlinked textures into contact — cells whose
+      // post-paint neighborhood would render invalid are skipped.
+      const allowed = filterPaintableCells(cells, texId, layer.corners, s.tilesets);
+      if (allowed.length === 0) return;
       s.mutateCorners(layer.id, (c) => {
-        for (const [cx, cy] of cells) paintCell(c, cx, cy, texId);
+        for (const [cx, cy] of allowed) paintCell(c, cx, cy, texId);
       });
     }
 
@@ -447,8 +507,10 @@ export function TileView() {
       const adjustedTexId = pickAdjustedBrushTexture(
         texId, writes, layer.corners, s.tilesets, s.tiles,
       );
+      const allowed = filterPaintableCells(writes, adjustedTexId, layer.corners, s.tilesets);
+      if (allowed.length === 0) return;
       s.mutateCorners(layer.id, (c) => {
-        for (const [cx, cy] of writes) paintCell(c, cx, cy, adjustedTexId);
+        for (const [cx, cy] of allowed) paintCell(c, cx, cy, adjustedTexId);
       });
     }
 

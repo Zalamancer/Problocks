@@ -390,23 +390,26 @@ export function TileView() {
     }
 
     /**
-     * All-or-nothing validity gate for a paint stroke. Returns the full
-     * list of cells when EVERY cell in the brush's 3×3 neighborhood would
-     * remain renderable post-paint; returns `[]` when any cell would
-     * become invalid.
+     * Per-cell validity gate for a paint stroke. Returns each brush cell
+     * whose painting (in isolation) would keep every cell in its 3×3
+     * neighborhood renderable. Rejected cells are dropped from the stroke
+     * but the stroke still commits whatever passed — so a brush dragged
+     * past a dirt edge paints up to the edge and stops, instead of being
+     * cancelled wholesale.
      *
-     * Why all-or-nothing: brush cells share corners with their neighbors.
-     * A cell rejected for invalidity still receives corner overwrites
-     * from any committed neighbor — e.g. paint a 2×2 water brush over a
-     * dirt-water boundary, accept the interior cell, reject the boundary
-     * cell, and the boundary cell still gets two of its four corners
-     * stamped to water through the interior commit. That recreates the
-     * unlinked-contact the gate is supposed to prevent. Rejecting the
-     * entire stroke when any single cell would be invalid is the only
-     * way to keep the canvas free of unlinked-texture corners.
+     * Why per-cell instead of all-of-brush: when several brush cells
+     * paint the same texId, the batch commit only ADDS texId corners (it
+     * never adds non-texId corners). So if cell A is per-cell valid
+     * (painting A alone leaves all neighbors valid) and cell B is per-cell
+     * valid, painting both leaves every neighbor with at least as many
+     * texId corners and at most the same set of non-texId corners — i.e.
+     * still valid. Per-cell sim already accounts for shared-corner stamps:
+     * a brush cell adjacent to dirt sees the dirt cell go invalid in its
+     * own neighborhood check and gets rejected. So the partial commit is
+     * provably free of unlinked-texture cells.
      *
      * "Renderable" = empty, pure (one canonical texture), or a bridged
-     * 2-texture transition. 3+ unique or 2 unbridged → reject.
+     * 2-texture transition. 3+ unique or 2 unbridged → reject the cell.
      */
     function filterPaintableCells(
       cells: ReadonlyArray<readonly [number, number]>,
@@ -414,31 +417,23 @@ export function TileView() {
       corners: Record<string, string>,
       tilesets: typeof stateRef.current.tilesets,
     ): Array<[number, number]> {
-      // Pre-compute the corner set the stroke would touch — these all
-      // become `texId` simultaneously when checking neighbor validity.
-      const paintedCorners = new Set<string>();
+      const out: Array<[number, number]> = [];
       for (const [cx, cy] of cells) {
-        paintedCorners.add(`${cx},${cy}`);
-        paintedCorners.add(`${cx + 1},${cy}`);
-        paintedCorners.add(`${cx},${cy + 1}`);
-        paintedCorners.add(`${cx + 1},${cy + 1}`);
-      }
-      const after = (x: number, y: number): string | undefined => {
-        const k = `${x},${y}`;
-        return paintedCorners.has(k) ? texId : corners[k];
-      };
-      // Walk every cell that shares a corner with any brush cell — that's
-      // the union of each brush cell's 3×3 neighborhood. If ANY would be
-      // invalid post-paint, return [] so the caller skips the stroke.
-      const checked = new Set<string>();
-      for (const [cx, cy] of cells) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
+        // Simulate painting JUST this cell — its 4 corners become texId,
+        // the rest of the canvas stays as-is.
+        const cellCorners = new Set<string>([
+          `${cx},${cy}`, `${cx + 1},${cy}`,
+          `${cx},${cy + 1}`, `${cx + 1},${cy + 1}`,
+        ]);
+        const after = (x: number, y: number): string | undefined => {
+          const k = `${x},${y}`;
+          return cellCorners.has(k) ? texId : corners[k];
+        };
+        let ok = true;
+        for (let dy = -1; dy <= 1 && ok; dy++) {
+          for (let dx = -1; dx <= 1 && ok; dx++) {
             const ncx = cx + dx;
             const ncy = cy + dy;
-            const ck = `${ncx},${ncy}`;
-            if (checked.has(ck)) continue;
-            checked.add(ck);
             if (!canPlaceCorners(
               after(ncx, ncy),
               after(ncx + 1, ncy),
@@ -446,12 +441,13 @@ export function TileView() {
               after(ncx + 1, ncy + 1),
               tilesets,
             )) {
-              return [];
+              ok = false;
             }
           }
         }
+        if (ok) out.push([cx, cy]);
       }
-      return cells.map(([cx, cy]) => [cx, cy] as [number, number]);
+      return out;
     }
 
     function applyPaint(cell: { cx: number; cy: number }) {

@@ -185,8 +185,20 @@ export function TileAssetsView() {
   }
 
   function pickTileset(tilesetId: string) {
-    if (!activeLayer) return;
-    setLayerTileset(activeLayer.id, tilesetId);
+    const state = useTile.getState();
+    // Each tileset has its own dedicated layer (set up by addTileset).
+    // Clicking a terrain swatch jumps to that layer rather than rebinding
+    // the current layer — otherwise the cells already painted with the
+    // previous tileset would re-render in the new texture, looking like
+    // the brush is "stuck" on one terrain.
+    const owningLayer = state.layers.find((l) => l.tilesetId === tilesetId);
+    if (owningLayer) {
+      state.setActiveLayer(owningLayer.id);
+    } else if (activeLayer) {
+      // Fallback: hydration race or manually-detached layer. Bind to
+      // whatever's currently active so the click isn't a dead end.
+      setLayerTileset(activeLayer.id, tilesetId);
+    }
     setTool('paint');
   }
 

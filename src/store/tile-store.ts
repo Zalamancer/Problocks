@@ -226,13 +226,32 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     set((s) => {
       const nextTiles: Record<string, Tile> = { ...s.tiles };
       for (const t of tileObjs) nextTiles[t.id] = t;
-      // Auto-bind the new tileset to the active layer if it doesn't have one
-      // yet — that way "upload then click on canvas" Just Works without
-      // requiring an extra selection step.
+      // Each tileset gets its own dedicated layer so that:
+      //   1. switching terrains in the panel doesn't repaint old work in
+      //      the new texture (the old corners stay on their own layer);
+      //   2. layers + tilesets stay 1:1, which makes "click terrain →
+      //      switch to its layer" trivial in the panel.
+      // If the active layer is empty (no tileset), we claim it instead of
+      // appending — keeps the initial "Ground" layer from going to waste.
+      let nextLayers = s.layers;
+      let nextActiveLayerId = s.activeLayerId;
       const activeLayer = s.layers.find((l) => l.id === s.activeLayerId);
-      const nextLayers = activeLayer && !activeLayer.tilesetId
-        ? s.layers.map((l) => l.id === s.activeLayerId ? { ...l, tilesetId } : l)
-        : s.layers;
+      if (activeLayer && !activeLayer.tilesetId) {
+        nextLayers = s.layers.map((l) => l.id === s.activeLayerId
+          ? { ...l, tilesetId, name: activeLayer.name === 'Ground' ? name : activeLayer.name }
+          : l);
+      } else {
+        const newLayer: TileLayer = {
+          id: cryptoId(),
+          name,
+          visible: true,
+          opacity: 1,
+          tilesetId,
+          corners: {},
+        };
+        nextLayers = [...s.layers, newLayer];
+        nextActiveLayerId = newLayer.id;
+      }
       return {
         tilesets: [...s.tilesets, {
           id: tilesetId,
@@ -247,6 +266,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         }],
         tiles: nextTiles,
         layers: nextLayers,
+        activeLayerId: nextActiveLayerId,
         // The first tile of the new sheet becomes the default object-tool sprite
         // so the user can immediately switch to Object tool and drop props.
         selectedTileId: s.selectedTileId ?? tileIds[0] ?? null,
@@ -367,10 +387,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     objects: [],
   })),
 }), {
-  // v3 — bumped from v2 (corner value: true → 'u'|'l'), so old persisted
-  // maps are dropped. Painting now lays down either the upper or the lower
-  // texture instead of just toggling on/off.
-  name: 'problocks-tile-v3',
+  // v4 — bumped from v3 (one-layer-per-tileset). Old persisted state had
+  // multiple tilesets sharing one layer's corners, which made switching
+  // terrains repaint old work in the new texture. Dropping the v3 cache
+  // forces a clean rebuild from Supabase, which now creates a dedicated
+  // layer per uploaded sheet.
+  name: 'problocks-tile-v4',
   partialize: (s) => ({
     tilesets: s.tilesets,
     tiles: s.tiles,

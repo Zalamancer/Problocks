@@ -94,6 +94,14 @@ export function TileView() {
     let rafId = 0;
     const hoverRef = { current: null as { cx: number; cy: number } | null };
     const objectDragRef = { current: null as { id: string; startWX: number; startWY: number; origX: number; origY: number } | null };
+    /** Resize-handle drag state. localCx/localCy are the cursor's local-frame
+     *  coords at drag start, used to keep cursor → handle position aligned
+     *  even when the object is rotated. */
+    const resizeDragRef = { current: null as { id: string; startW: number; startH: number; rotation: number } | null };
+    /** Rotation-handle drag state. startAngle is the cursor's angle around
+     *  the object centre at drag start; origRotation is the object's
+     *  rotation at that moment. New rotation = origRotation + (now - start). */
+    const rotateDragRef = { current: null as { id: string; cx: number; cy: number; startAngle: number; origRotation: number } | null };
     let isDrawing: 'paint' | 'erase' | null = null;
     let isPanning = false;
     let panStart = { x: 0, y: 0, camX: 0, camY: 0 };
@@ -198,15 +206,47 @@ export function TileView() {
         const sx = obj.flipX ? -1 : 1;
         const sy = obj.flipY ? -1 : 1;
         if (sx !== 1 || sy !== 1) ctx!.scale(sx, sy);
+        // ctx.filter is reset to 'none' on save/restore, so no manual undo
+        // needed once we leave this block. hue 0 = no filter (skip the
+        // string assignment to save a few ops per frame).
+        if (obj.hue) ctx!.filter = `hue-rotate(${obj.hue}deg)`;
         ctx!.drawImage(img, -obj.width / 2, -obj.height / 2, obj.width, obj.height);
         ctx!.restore();
 
         if (obj.id === s.selectedObjectId) {
+          // Bounding box: draw in the object's LOCAL rotated frame so the
+          // box hugs the sprite even when rotated. Same trick the resize +
+          // rotate handles use below.
+          ctx!.save();
+          ctx!.translate(obj.x, obj.y);
+          if (obj.rotation) ctx!.rotate(obj.rotation * Math.PI / 180);
+          const halfW = obj.width / 2;
+          const halfH = obj.height / 2;
           ctx!.strokeStyle = '#0ea5e9';
           ctx!.lineWidth = 1.5 / cam.zoom;
           ctx!.setLineDash([4 / cam.zoom, 3 / cam.zoom]);
-          ctx!.strokeRect(obj.x - obj.width / 2, obj.y - obj.height / 2, obj.width, obj.height);
+          ctx!.strokeRect(-halfW, -halfH, obj.width, obj.height);
           ctx!.setLineDash([]);
+          // Resize handle — bottom-right corner (in local frame). Filled
+          // white square with blue border, sized in screen space so it
+          // stays the same physical size at any zoom.
+          const handleSize = 10 / cam.zoom;
+          ctx!.fillStyle = '#ffffff';
+          ctx!.lineWidth = 1.5 / cam.zoom;
+          ctx!.fillRect(halfW - handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+          ctx!.strokeRect(halfW - handleSize / 2, halfH - handleSize / 2, handleSize, handleSize);
+          // Rotation handle — small circle on a stalk above the top-centre.
+          const stalkLen = 22 / cam.zoom;
+          ctx!.beginPath();
+          ctx!.moveTo(0, -halfH);
+          ctx!.lineTo(0, -halfH - stalkLen);
+          ctx!.stroke();
+          const rotR = 6 / cam.zoom;
+          ctx!.beginPath();
+          ctx!.arc(0, -halfH - stalkLen, rotR, 0, Math.PI * 2);
+          ctx!.fillStyle = '#0ea5e9';
+          ctx!.fill();
+          ctx!.restore();
         }
       }
       ctx!.globalAlpha = 1;
@@ -431,11 +471,49 @@ export function TileView() {
       for (const o of sorted) {
         const layer = s.layers.find((l) => l.id === o.layerId);
         if (layer && !layer.visible) continue;
+        // Hit-test in the object's LOCAL rotated frame so rotated sprites
+        // pick up clicks on their actual painted bounds, not the AABB.
+        const dx = wx - o.x;
+        const dy = wy - o.y;
+        const r = -(o.rotation || 0) * Math.PI / 180;
+        const lx = dx * Math.cos(r) - dy * Math.sin(r);
+        const ly = dx * Math.sin(r) + dy * Math.cos(r);
         if (
-          wx >= o.x - o.width / 2 && wx <= o.x + o.width / 2 &&
-          wy >= o.y - o.height / 2 && wy <= o.y + o.height / 2
+          lx >= -o.width / 2 && lx <= o.width / 2 &&
+          ly >= -o.height / 2 && ly <= o.height / 2
         ) return o;
       }
+      return null;
+    }
+
+    /**
+     * Test whether (wx, wy) lands on a transform handle of the currently-
+     * selected object. Returns 'resize' (bottom-right square), 'rotate'
+     * (circle above top centre), or null. Computes hit zones in the
+     * object's local rotated frame so handles work for rotated sprites.
+     */
+    function pickHandleAt(wx: number, wy: number): 'resize' | 'rotate' | null {
+      const s = stateRef.current;
+      if (!s.selectedObjectId) return null;
+      const o = s.objects.find((x) => x.id === s.selectedObjectId);
+      if (!o) return null;
+      const dx = wx - o.x;
+      const dy = wy - o.y;
+      const r = -(o.rotation || 0) * Math.PI / 180;
+      const lx = dx * Math.cos(r) - dy * Math.sin(r);
+      const ly = dx * Math.sin(r) + dy * Math.cos(r);
+      const halfW = o.width / 2;
+      const halfH = o.height / 2;
+      const zoom = s.camera.zoom;
+      const handleHalf = 8 / zoom;       // generous hit zone (visual is 10/zoom)
+      const stalkLen = 22 / zoom;
+      const rotR = 10 / zoom;            // generous hit zone (visual is 6/zoom)
+      // Resize: bottom-right corner.
+      if (Math.abs(lx - halfW) <= handleHalf && Math.abs(ly - halfH) <= handleHalf) return 'resize';
+      // Rotate: stalk endpoint above top-centre.
+      const rx = lx - 0;
+      const ry = ly - (-halfH - stalkLen);
+      if (Math.hypot(rx, ry) <= rotR) return 'rotate';
       return null;
     }
 
@@ -462,7 +540,52 @@ export function TileView() {
       }
       if (e.button !== 0) return;
 
+      // Transform handles take priority over everything except panning —
+      // user wants to grab the resize/rotate handle of the SELECTED object
+      // even if they're still in OBJECT (or any other) tool. Without this,
+      // the handle would be unreachable from OBJECT mode.
+      const handle = pickHandleAt(w.x, w.y);
+      if (handle && s.selectedObjectId) {
+        const obj = s.objects.find((x) => x.id === s.selectedObjectId)!;
+        if (handle === 'resize') {
+          resizeDragRef.current = {
+            id: obj.id,
+            startW: obj.width,
+            startH: obj.height,
+            rotation: obj.rotation || 0,
+          };
+        } else {
+          rotateDragRef.current = {
+            id: obj.id,
+            cx: obj.x,
+            cy: obj.y,
+            startAngle: Math.atan2(w.y - obj.y, w.x - obj.x),
+            origRotation: obj.rotation || 0,
+          };
+        }
+        canvas!.setPointerCapture(e.pointerId);
+        return;
+      }
+
       if (s.tool === 'object') {
+        // Click on an existing placed object → select it AND switch to
+        // SELECT so the user can immediately drag/resize/rotate. Empty
+        // space still places a new sprite. Without this, the only way to
+        // edit a placed object was to first toggle tools manually, which
+        // wasn't obvious.
+        const hitExisting = pickObjectAt(w.x, w.y);
+        if (hitExisting) {
+          s.selectObject(hitExisting.id);
+          s.setTool('select');
+          objectDragRef.current = {
+            id: hitExisting.id,
+            startWX: w.x, startWY: w.y,
+            origX: hitExisting.x, origY: hitExisting.y,
+          };
+          canvas!.setPointerCapture(e.pointerId);
+          scheduleRender();
+          return;
+        }
         if (!s.selectedAssetId || !s.selectedStyleId) return;
         const found = findStyle(s.objectAssets, s.selectedAssetId, s.selectedStyleId);
         if (!found) return;
@@ -482,6 +605,7 @@ export function TileView() {
           height: placedH,
           rotation: 0,
           flipX: false, flipY: false,
+          hue: 0,
           name: found.asset.name || `Object ${s.objects.length + 1}`,
         });
         s.selectObject(id);
@@ -539,6 +663,48 @@ export function TileView() {
         return;
       }
 
+      if (resizeDragRef.current) {
+        const drag = resizeDragRef.current;
+        const obj = stateRef.current.objects.find((x) => x.id === drag.id);
+        if (obj) {
+          // Convert cursor into the object's LOCAL frame; the BR corner
+          // is at (halfW, halfH) there. Doubling the local coords gives
+          // the new total width/height (object stays centred).
+          const r = -drag.rotation * Math.PI / 180;
+          const dx = w.x - obj.x;
+          const dy = w.y - obj.y;
+          const lx = dx * Math.cos(r) - dy * Math.sin(r);
+          const ly = dx * Math.sin(r) + dy * Math.cos(r);
+          let newW = Math.max(4, lx * 2);
+          let newH = Math.max(4, ly * 2);
+          // Shift = lock aspect ratio to the original.
+          if (e.shiftKey) {
+            const aspect = drag.startW / Math.max(1, drag.startH);
+            // Use whichever drag direction grew more, fit the other to aspect.
+            if (newW / drag.startW > newH / drag.startH) newH = newW / aspect;
+            else newW = newH * aspect;
+          }
+          stateRef.current.updateObject(drag.id, { width: Math.round(newW), height: Math.round(newH) });
+        }
+        scheduleRender();
+        return;
+      }
+
+      if (rotateDragRef.current) {
+        const drag = rotateDragRef.current;
+        const angleNow = Math.atan2(w.y - drag.cy, w.x - drag.cx);
+        let degrees = drag.origRotation + (angleNow - drag.startAngle) * 180 / Math.PI;
+        // Snap to 15° increments while Shift is held — the standard
+        // "rotate cleanly" modifier.
+        if (e.shiftKey) degrees = Math.round(degrees / 15) * 15;
+        // Normalise to [-180, 180] so the readout in the right panel
+        // doesn't drift to absurd values after many full rotations.
+        degrees = ((degrees + 180) % 360 + 360) % 360 - 180;
+        stateRef.current.updateObject(drag.id, { rotation: Math.round(degrees) });
+        scheduleRender();
+        return;
+      }
+
       const prev = hoverRef.current;
       if (!prev || prev.cx !== cell.cx || prev.cy !== cell.cy) {
         hoverRef.current = cell;
@@ -554,6 +720,8 @@ export function TileView() {
       isDrawing = null;
       isPanning = false;
       objectDragRef.current = null;
+      resizeDragRef.current = null;
+      rotateDragRef.current = null;
       canvas!.style.cursor = cursorForTool(stateRef.current.tool, spaceHeld);
     }
 
@@ -603,6 +771,14 @@ export function TileView() {
       else if (e.key === '4') s.setTool('fill');
       else if (e.key === '5') s.setTool('eyedropper');
       else if (e.key === '6') s.setTool('object');
+      else if (e.key === 'Escape') {
+        // Bail out of any modal tool back to SELECT. Also drops any
+        // object selection so the side panel goes away — the same key
+        // doing both feels right because Escape == "stop what I'm doing".
+        s.setTool('select');
+        if (s.selectedObjectId) s.selectObject(null);
+        scheduleRender();
+      }
       else if (e.key === '[') s.setBrushSize(s.brushSize - 1);
       else if (e.key === ']') s.setBrushSize(s.brushSize + 1);
       else if (e.key === 'g' || e.key === 'G') s.toggleGrid();
@@ -691,22 +867,25 @@ export function TileView() {
           boxShadow: '0 3px 0 var(--pb-ink)',
         }}
       >
-        <ToolBtn active={tool === 'select'} title="Select / move objects (1)" onClick={() => setTool('select')}>
+        <ToolBtn active={tool === 'select'} title="Select / move objects (1) · Esc" onClick={() => setTool('select')}>
           <MousePointer2 size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'paint'} title="Paint (2)" onClick={() => setTool('paint')}>
+        {/* Clicking the active modal tool toggles back to SELECT — same
+            behaviour as Escape — so users can exit Place mode by clicking
+            the same icon they used to enter it. */}
+        <ToolBtn active={tool === 'paint'} title="Paint (2) · click again to exit" onClick={() => setTool(tool === 'paint' ? 'select' : 'paint')}>
           <Paintbrush size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'erase'} title="Erase (3)" onClick={() => setTool('erase')}>
+        <ToolBtn active={tool === 'erase'} title="Erase (3) · click again to exit" onClick={() => setTool(tool === 'erase' ? 'select' : 'erase')}>
           <Eraser size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'fill'} title="Fill connected empty area (4)" onClick={() => setTool('fill')}>
+        <ToolBtn active={tool === 'fill'} title="Fill connected empty area (4) · click again to exit" onClick={() => setTool(tool === 'fill' ? 'select' : 'fill')}>
           <PaintBucket size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'eyedropper'} title="Eyedropper — pick tileset under cursor (5)" onClick={() => setTool('eyedropper')}>
+        <ToolBtn active={tool === 'eyedropper'} title="Eyedropper — pick tileset under cursor (5) · click again to exit" onClick={() => setTool(tool === 'eyedropper' ? 'select' : 'eyedropper')}>
           <Pipette size={14} strokeWidth={2.2} />
         </ToolBtn>
-        <ToolBtn active={tool === 'object'} title="Place object (6)" onClick={() => setTool('object')}>
+        <ToolBtn active={tool === 'object'} title="Place object (6) · click again or Esc to exit" onClick={() => setTool(tool === 'object' ? 'select' : 'object')}>
           <Box size={14} strokeWidth={2.2} />
         </ToolBtn>
         <Separator />
@@ -798,6 +977,36 @@ export function TileView() {
             <ToolBtn active={selectedObject.flipY} title="Flip Y" onClick={() => updateObject(selectedObject.id, { flipY: !selectedObject.flipY })}>
               <FlipVertical size={14} strokeWidth={2.2} />
             </ToolBtn>
+          </div>
+
+          {/* Hue slider — recolours the sprite via canvas filter without
+              touching the source PNG. Quick way to make 5 differently-tinted
+              copies of the same tree, etc. Double-click the readout to reset. */}
+          <div className="mt-2.5">
+            <div className="flex items-center justify-between" style={{ marginBottom: 3 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>HUE</span>
+              <span
+                onDoubleClick={() => updateObject(selectedObject.id, { hue: 0 })}
+                title="Double-click to reset"
+                style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }}
+              >
+                {selectedObject.hue}°
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={360}
+              step={1}
+              value={selectedObject.hue}
+              onChange={(e) => updateObject(selectedObject.id, { hue: parseInt(e.target.value) })}
+              style={{
+                width: '100%',
+                accentColor: '#0ea5e9',
+                background: 'linear-gradient(to right, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%))',
+                borderRadius: 4,
+              }}
+            />
           </div>
 
           {/* Style chips — only meaningful when the asset has more than one

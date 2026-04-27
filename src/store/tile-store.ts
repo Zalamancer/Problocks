@@ -113,6 +113,9 @@ export interface TileObject {
   rotation: number;
   flipX: boolean;
   flipY: boolean;
+  /** CSS-equivalent hue rotation in degrees (0–360). Applied on render
+   *  via ctx.filter so the source sprite is untouched. 0 = no shift. */
+  hue: number;
   name: string;
 }
 
@@ -704,6 +707,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     }
     // v6: objectAssets is new; default to empty if missing.
     if (!state.objectAssets) state.objectAssets = {};
+    // Backfill hue on any TileObject persisted before the field was added.
+    // Optional in TypeScript would leak `?` everywhere; one-shot backfill
+    // keeps the renderer simple (it never sees `undefined` for hue).
+    for (const o of state.objects ?? []) {
+      if (typeof o.hue !== 'number') o.hue = 0;
+    }
     // v7+: backfill sortIndex for assets that pre-date drag-reorder. Use
     // addedAt as a stable tie-breaker so the displayed order doesn't
     // jitter on first load after the upgrade.

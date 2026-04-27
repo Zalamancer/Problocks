@@ -177,3 +177,156 @@ export function resolveCellTile(
   const dominant = Object.entries(counts).sort((x, y) => y[1] - x[1])[0][0];
   return resolveCellTile(dominant, dominant, dominant, dominant, tilesets);
 }
+
+// ── Sibling-aware brush remap ─────────────────────────────────────────
+// Two independently-uploaded tilesets (e.g. grass→water and grass→dirt)
+// each get their own UUID for "grass", so a corner painted with one cannot
+// bridge to a corner painted with the other — the auto-tile resolver sees
+// two unrelated textures and falls back to a hard edge. The user-facing
+// fix: at paint time, recognise that the brush's tileset and another
+// tileset share the same upper/lower SPRITE (the pure-upper or pure-lower
+// tile bytes), treat those texture ids as siblings, and swap the brush to
+// whichever sibling actually bridges with the surrounding region. This
+// way clicking "grass" on either sheet just paints "grass" — the system
+// picks the right id for the local context.
+
+/** Tile sprite map needed for sibling detection — a record from tile id
+ *  to its dataUrl. Wider `Tile` shapes (with width/height/etc.) are
+ *  structurally compatible. */
+export type TileSpriteMap = Record<string, { dataUrl: string }>;
+
+/**
+ * Resolve a texture id to the dataUrl of its representative pure-tile —
+ * `PURE_UPPER_INDEX` (12) when the texture sits in the upper slot of its
+ * tileset, `PURE_LOWER_INDEX` (6) when in the lower slot. Returns null if
+ * the id doesn't belong to any tileset or its sprite is missing from the
+ * tile map.
+ */
+export function getTextureSpriteUrl(
+  texId: string,
+  tilesets: TilesetForResolve[],
+  tiles: TileSpriteMap,
+): string | null {
+  for (const ts of tilesets) {
+    const isUpper = ts.upperTextureId === texId;
+    const isLower = ts.lowerTextureId === texId;
+    if (!isUpper && !isLower) continue;
+    const idx = isUpper ? PURE_UPPER_INDEX : PURE_LOWER_INDEX;
+    const tileId = ts.tileIds[idx];
+    return tiles[tileId]?.dataUrl ?? null;
+  }
+  return null;
+}
+
+/**
+ * Find every texture id whose tileset's pure-tile sprite (at the slot it
+ * occupies) is byte-identical to `texId`'s. Two grass→water and
+ * grass→dirt sheets uploaded from the same source PNG end up with
+ * different `upperTextureId`s for grass, but their pure-upper tiles are
+ * the same dataUrl — siblings. Always includes `texId` itself when its
+ * sprite is resolvable.
+ */
+export function getSiblingTextures(
+  texId: string,
+  tilesets: TilesetForResolve[],
+  tiles: TileSpriteMap,
+): string[] {
+  const sprite = getTextureSpriteUrl(texId, tilesets, tiles);
+  if (!sprite) return [texId];
+  const out = new Set<string>([texId]);
+  for (const ts of tilesets) {
+    const upperSprite = tiles[ts.tileIds[PURE_UPPER_INDEX]]?.dataUrl;
+    const lowerSprite = tiles[ts.tileIds[PURE_LOWER_INDEX]]?.dataUrl;
+    if (upperSprite === sprite) out.add(ts.upperTextureId);
+    if (lowerSprite === sprite) out.add(ts.lowerTextureId);
+  }
+  return Array.from(out);
+}
+
+/**
+ * True when at least one tileset has these two texture ids as its upper
+ * + lower (in either order) — i.e. an auto-tile transition between them
+ * can be rendered. `a === b` returns true (same texture, no transition
+ * needed).
+ */
+export function hasBridgeTileset(
+  a: string,
+  b: string,
+  tilesets: Array<Pick<TilesetForResolve, 'upperTextureId' | 'lowerTextureId'>>,
+): boolean {
+  if (a === b) return true;
+  return tilesets.some((t) =>
+    (t.upperTextureId === a && t.lowerTextureId === b)
+    || (t.upperTextureId === b && t.lowerTextureId === a),
+  );
+}
+
+/**
+ * Given the user's chosen brush texture and the cells about to be painted,
+ * return the texture id we should ACTUALLY stamp into every painted corner
+ * so the stroke blends with the surrounding region.
+ *
+ * Algorithm:
+ *   1. Tally non-brush texture ids on corners adjacent to (but outside of)
+ *      the painted region. The most-common one is the "dominant neighbor".
+ *   2. If the dominant neighbor IS a sibling of the brush, return that
+ *      sibling — the stroke folds into the existing patch rather than
+ *      sitting next to it as a different "grass".
+ *   3. Else, if the brush already bridges with the dominant neighbor (a
+ *      transition tileset exists for the pair), keep the brush as-is.
+ *   4. Else, look for a sibling of the brush that DOES bridge with the
+ *      dominant neighbor and use that.
+ *   5. Otherwise fall through to the original brush — the stroke will
+ *      render with hard edges, but the user's intent is preserved.
+ *
+ * Empty regions (no neighbors) always fall through to the original brush.
+ */
+export function pickAdjustedBrushTexture(
+  baseTexId: string,
+  paintedCells: ReadonlyArray<readonly [number, number]>,
+  corners: Record<string, string>,
+  tilesets: TilesetForResolve[],
+  tiles: TileSpriteMap,
+): string {
+  if (paintedCells.length === 0) return baseTexId;
+
+  // Corners the stroke will overwrite — these don't count as neighbors we
+  // need to harmonize with.
+  const paintedCorners = new Set<string>();
+  for (const [cx, cy] of paintedCells) {
+    paintedCorners.add(`${cx},${cy}`);
+    paintedCorners.add(`${cx + 1},${cy}`);
+    paintedCorners.add(`${cx},${cy + 1}`);
+    paintedCorners.add(`${cx + 1},${cy + 1}`);
+  }
+  // 8-neighborhood of every painted corner, restricted to corners not in
+  // the painted set. Tally each non-empty, non-base texture id we find.
+  const tally = new Map<string, number>();
+  const dirs: ReadonlyArray<readonly [number, number]> = [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1],
+  ];
+  for (const k of paintedCorners) {
+    const [x, y] = k.split(',').map(Number);
+    for (const [dx, dy] of dirs) {
+      const nk = `${x + dx},${y + dy}`;
+      if (paintedCorners.has(nk)) continue;
+      const v = corners[nk];
+      if (!v || v === baseTexId) continue;
+      tally.set(v, (tally.get(v) ?? 0) + 1);
+    }
+  }
+  if (tally.size === 0) return baseTexId;
+  const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+  const dominant = sorted[0][0];
+
+  const siblings = getSiblingTextures(baseTexId, tilesets, tiles);
+  if (siblings.includes(dominant)) return dominant;
+  if (hasBridgeTileset(baseTexId, dominant, tilesets)) return baseTexId;
+  for (const sib of siblings) {
+    if (sib === baseTexId) continue;
+    if (hasBridgeTileset(sib, dominant, tilesets)) return sib;
+  }
+  return baseTexId;
+}

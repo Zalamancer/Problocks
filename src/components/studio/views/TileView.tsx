@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useTile, type TileTool, findStyle } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
-import { resolveCellTile } from '@/lib/wang-tiles';
+import { resolveCellTile, pickAdjustedBrushTexture } from '@/lib/wang-tiles';
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
@@ -403,9 +403,16 @@ export function TileView() {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
       if (!layer) return;
-      const texId = s.brushTextureId;
-      if (!texId) return;
+      const baseTexId = s.brushTextureId;
+      if (!baseTexId) return;
       const cells = brushCells(cell.cx, cell.cy, s.brushSize);
+      // Swap to a sibling brush when the surrounding region's dominant
+      // texture has no bridge with the chosen one, so two independently-
+      // uploaded tilesets sharing a "grass" sprite blend through whichever
+      // sheet's transitions actually exist on the local boundary.
+      const texId = pickAdjustedBrushTexture(
+        baseTexId, cells, layer.corners, s.tilesets, s.tiles,
+      );
       s.mutateCorners(layer.id, (c) => {
         for (const [cx, cy] of cells) paintCell(c, cx, cy, texId);
       });
@@ -447,8 +454,11 @@ export function TileView() {
         writes.push([cx, cy]);
         stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
       }
+      const adjustedTexId = pickAdjustedBrushTexture(
+        texId, writes, layer.corners, s.tilesets, s.tiles,
+      );
       s.mutateCorners(layer.id, (c) => {
-        for (const [cx, cy] of writes) paintCell(c, cx, cy, texId);
+        for (const [cx, cy] of writes) paintCell(c, cx, cy, adjustedTexId);
       });
     }
 

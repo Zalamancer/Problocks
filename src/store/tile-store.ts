@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Quadrant } from '@/lib/wang-tiles';
 
 /**
  * 2D Tile-based editor state — Wang/dual-grid auto-tiling.
@@ -81,15 +80,18 @@ export interface TileLayer {
   name: string;
   visible: boolean;
   opacity: number;
-  /** Tileset used for Wang painting on this layer. null = no painting yet. */
+  /** Default tileset for the panel UI (e.g. "remember which terrain I was
+   *  painting on this layer"). The renderer no longer needs it — every cell
+   *  resolves its own tileset from the corner texture ids. */
   tilesetId: string | null;
   /**
-   * Sparse map of painted corners. Key "cx,cy" → 'u' (upper texture) or 'l'
-   * (lower texture). Absent = transparent (cell renders nothing if all 4 of
-   * its corners are absent). The renderer derives the visible Wang tile by
-   * reading 4 corners and looking up the (NW,NE,SW,SE) pattern.
+   * Sparse map of painted corners. Key "cx,cy" → texture id (matches some
+   * tileset's upperTextureId or lowerTextureId). Absent = transparent.
+   * Per-cell rendering picks whichever tileset bridges the textures
+   * present at the cell's 4 corners — so two CHAINED tilesets blend
+   * together at their shared texture without any layer juggling.
    */
-  corners: Record<string, Quadrant>;
+  corners: Record<string, string>;
 }
 
 export interface TileObject {
@@ -150,7 +152,7 @@ export interface TileStore {
   /** Assign a tileset to a layer (the texture used for Wang painting). */
   setLayerTileset: (layerId: string, tilesetId: string | null) => void;
   /** Bulk-mutate corners in a single update (paint stroke, fill, etc.). */
-  mutateCorners: (layerId: string, mutator: (corners: Record<string, Quadrant>) => void) => void;
+  mutateCorners: (layerId: string, mutator: (corners: Record<string, string>) => void) => void;
 
   // ── Free objects (props on top of grid) ─────────────────────────
   objects: TileObject[];
@@ -165,10 +167,12 @@ export interface TileStore {
   setTool: (t: TileTool) => void;
   brushSize: number;
   setBrushSize: (size: number) => void;
-  /** Which texture the paint tool lays down — 'u' (upper) or 'l' (lower).
-   *  Erase always clears the corner regardless of this. */
-  brushTexture: Quadrant;
-  setBrushTexture: (t: Quadrant) => void;
+  /** Texture id the paint tool lays down. Set by clicking an UPPER or LOWER
+   *  swatch on a terrain card — the click resolves to the corresponding
+   *  tileset's upperTextureId / lowerTextureId. Erase always clears the
+   *  corner regardless of this. */
+  brushTextureId: string | null;
+  setBrushTextureId: (id: string | null) => void;
   /** Used only by the OBJECT tool — pick a tile to drop as a free sprite.
    *  Wang painting ignores this; it uses the active layer's tilesetId. */
   selectedTileId: string | null;
@@ -226,32 +230,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     set((s) => {
       const nextTiles: Record<string, Tile> = { ...s.tiles };
       for (const t of tileObjs) nextTiles[t.id] = t;
-      // Each tileset gets its own dedicated layer so that:
-      //   1. switching terrains in the panel doesn't repaint old work in
-      //      the new texture (the old corners stay on their own layer);
-      //   2. layers + tilesets stay 1:1, which makes "click terrain →
-      //      switch to its layer" trivial in the panel.
-      // If the active layer is empty (no tileset), we claim it instead of
-      // appending — keeps the initial "Ground" layer from going to waste.
-      let nextLayers = s.layers;
-      let nextActiveLayerId = s.activeLayerId;
+      // Layers exist for visibility/opacity grouping, but the renderer
+      // resolves a tileset PER CELL from corner texture ids — so we no
+      // longer need a layer-per-tileset. Just bind the active layer's
+      // optional default tileset reference if it's empty.
       const activeLayer = s.layers.find((l) => l.id === s.activeLayerId);
-      if (activeLayer && !activeLayer.tilesetId) {
-        nextLayers = s.layers.map((l) => l.id === s.activeLayerId
-          ? { ...l, tilesetId, name: activeLayer.name === 'Ground' ? name : activeLayer.name }
-          : l);
-      } else {
-        const newLayer: TileLayer = {
-          id: cryptoId(),
-          name,
-          visible: true,
-          opacity: 1,
-          tilesetId,
-          corners: {},
-        };
-        nextLayers = [...s.layers, newLayer];
-        nextActiveLayerId = newLayer.id;
-      }
+      const nextLayers = activeLayer && !activeLayer.tilesetId
+        ? s.layers.map((l) => l.id === s.activeLayerId ? { ...l, tilesetId } : l)
+        : s.layers;
       return {
         tilesets: [...s.tilesets, {
           id: tilesetId,
@@ -266,10 +252,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         }],
         tiles: nextTiles,
         layers: nextLayers,
-        activeLayerId: nextActiveLayerId,
-        // The first tile of the new sheet becomes the default object-tool sprite
-        // so the user can immediately switch to Object tool and drop props.
+        // Default brush picks the new tileset's UPPER texture so the user
+        // can paint immediately after upload; first tile becomes the
+        // object-tool sprite for the same reason.
         selectedTileId: s.selectedTileId ?? tileIds[0] ?? null,
+        brushTextureId: s.brushTextureId ?? upperTexId,
       };
     });
     return tilesetId;
@@ -371,8 +358,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setTool: (t) => set({ tool: t }),
   brushSize: 1,
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(16, Math.round(size))) }),
-  brushTexture: 'u',
-  setBrushTexture: (t) => set({ brushTexture: t }),
+  brushTextureId: null,
+  setBrushTextureId: (id) => set({ brushTextureId: id }),
   selectedTileId: null,
   setSelectedTileId: (id) => set({ selectedTileId: id }),
 
@@ -387,12 +374,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     objects: [],
   })),
 }), {
-  // v4 — bumped from v3 (one-layer-per-tileset). Old persisted state had
-  // multiple tilesets sharing one layer's corners, which made switching
-  // terrains repaint old work in the new texture. Dropping the v3 cache
-  // forces a clean rebuild from Supabase, which now creates a dedicated
-  // layer per uploaded sheet.
-  name: 'problocks-tile-v4',
+  // v5 — corner values switched from Quadrant ('u'|'l') to texture id
+  // (string). Brush carries a texture id too. Old persisted maps would
+  // crash the renderer since 'u'/'l' aren't valid lookups any more, so
+  // we drop them. Tilesets re-hydrate from Supabase clean.
+  name: 'problocks-tile-v5',
   partialize: (s) => ({
     tilesets: s.tilesets,
     tiles: s.tiles,
@@ -401,7 +387,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     activeLayerId: s.activeLayerId,
     objects: s.objects,
     selectedTileId: s.selectedTileId,
-    brushTexture: s.brushTexture,
+    brushTextureId: s.brushTextureId,
     showGrid: s.showGrid,
   }),
   // Heal an empty / corrupted persisted state.

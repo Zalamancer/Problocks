@@ -55,7 +55,7 @@ export function TileAssetsView() {
   const [objectsOpen, setObjectsOpen] = useState(false);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
-  const activeTilesetId = activeLayer?.tilesetId ?? null;
+  const brushTextureId = useTile((s) => s.brushTextureId);
 
   // Hydrate from Supabase on mount. We re-slice each saved sheet client-side
   // (cheap canvas blits) rather than persisting the 16 derived tiles. Names
@@ -184,21 +184,10 @@ export function TileAssetsView() {
     fileInputRef.current?.click();
   }
 
-  function pickTileset(tilesetId: string) {
-    const state = useTile.getState();
-    // Each tileset has its own dedicated layer (set up by addTileset).
-    // Clicking a terrain swatch jumps to that layer rather than rebinding
-    // the current layer — otherwise the cells already painted with the
-    // previous tileset would re-render in the new texture, looking like
-    // the brush is "stuck" on one terrain.
-    const owningLayer = state.layers.find((l) => l.tilesetId === tilesetId);
-    if (owningLayer) {
-      state.setActiveLayer(owningLayer.id);
-    } else if (activeLayer) {
-      // Fallback: hydration race or manually-detached layer. Bind to
-      // whatever's currently active so the click isn't a dead end.
-      setLayerTileset(activeLayer.id, tilesetId);
-    }
+  function pickTileset(_tilesetId: string) {
+    // Picking a swatch is purely a brush change in the texture-id model.
+    // The active layer doesn't need to change — every cell resolves its
+    // own tileset from the corner texture ids on render.
     setTool('paint');
   }
 
@@ -272,7 +261,7 @@ export function TileAssetsView() {
                   tileset={ts}
                   tiles={tiles}
                   allTilesets={tilesets}
-                  active={ts.id === activeTilesetId}
+                  active={brushTextureId === ts.upperTextureId || brushTextureId === ts.lowerTextureId}
                   onPick={() => pickTileset(ts.id)}
                   onRemove={() => handleRemoveTileset(ts)}
                   onConnect={(sourceSide, newSide) => startLink(ts.id, sourceSide, newSide)}
@@ -351,6 +340,8 @@ function TerrainCard({
   tileset: Tileset;
   tiles: Record<string, Tile>;
   allTilesets: Tileset[];
+  /** True when the brush's current texture id belongs to this tileset
+   *  (either side). Surface so swatches can show the active highlight. */
   active: boolean;
   onPick: () => void;
   onRemove: () => void;
@@ -360,16 +351,16 @@ function TerrainCard({
 }) {
   const upperTile = tiles[tileset.tileIds[PURE_UPPER_INDEX]];
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
-  const brushTexture = useTile((s) => s.brushTexture);
-  const setBrushTexture = useTile((s) => s.setBrushTexture);
+  const brushTextureId = useTile((s) => s.brushTextureId);
+  const setBrushTextureId = useTile((s) => s.setBrushTextureId);
   const setTool = useTile((s) => s.setTool);
 
   // Which swatch (if any) currently has its "connect" popover open.
   const [linkingSide, setLinkingSide] = useState<null | 'u' | 'l'>(null);
 
-  function pickBrush(tex: 'u' | 'l') {
+  function pickBrush(side: 'u' | 'l') {
     onPick();
-    setBrushTexture(tex);
+    setBrushTextureId(side === 'u' ? tileset.upperTextureId : tileset.lowerTextureId);
     setTool('paint');
   }
 
@@ -437,7 +428,7 @@ function TerrainCard({
         <BrushSwatch
           tile={upperTile}
           label="UPPER"
-          active={active && brushTexture === 'u'}
+          active={brushTextureId === tileset.upperTextureId}
           shareCount={sharedUpperCount}
           linking={linkingSide === 'u'}
           onClick={() => pickBrush('u')}
@@ -446,7 +437,7 @@ function TerrainCard({
         <BrushSwatch
           tile={lowerTile}
           label="LOWER"
-          active={active && brushTexture === 'l'}
+          active={brushTextureId === tileset.lowerTextureId}
           shareCount={sharedLowerCount}
           linking={linkingSide === 'l'}
           onClick={() => pickBrush('l')}

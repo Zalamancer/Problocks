@@ -95,3 +95,85 @@ export const TILE_INDEX_TO_QUADRANTS: Record<number, [Quadrant, Quadrant, Quadra
   }
   return out;
 })();
+
+/**
+ * Minimal tileset shape needed by the resolver. Defined here (instead of
+ * importing the store's full Tileset) so this lib stays free of store deps.
+ */
+export interface TilesetForResolve {
+  upperTextureId: string;
+  lowerTextureId: string;
+  tileIds: string[];
+}
+
+/**
+ * Pick which tileset to render with for a cell whose 4 corners hold the
+ * given texture ids (undefined = "no texture", treat as transparent).
+ *
+ * Logic:
+ *   - 0 unique non-empty textures → returns null (cell is empty).
+ *   - 1 unique texture → use any tileset where that texture appears as
+ *     UPPER (preferring upper for the "pure upper" pretty fill); else any
+ *     tileset where it appears as LOWER. The Wang index falls out as
+ *     pure-upper or pure-lower respectively.
+ *   - 2 unique textures → find a tileset whose {upperTextureId, lowerTextureId}
+ *     equals {a, b} — that's the bridge tileset. Map each corner to 'u'/'l'
+ *     based on the tileset's own assignment, and look up the Wang index.
+ *   - 3+ unique textures → ambiguous; falls back to the dominant texture's
+ *     pure tile (no transition possible without a 3-way bridge).
+ */
+export interface ResolveResult {
+  tileset: TilesetForResolve;
+  /** Wang lookup index 0..15. */
+  index: number;
+}
+
+export function resolveCellTile(
+  nw: string | undefined,
+  ne: string | undefined,
+  sw: string | undefined,
+  se: string | undefined,
+  tilesets: TilesetForResolve[],
+): ResolveResult | null {
+  const corners = [nw, ne, sw, se].filter((c): c is string => !!c);
+  if (corners.length === 0) return null;
+
+  const unique = Array.from(new Set(corners));
+
+  if (unique.length === 1) {
+    const tex = unique[0];
+    const upperHit = tilesets.find((t) => t.upperTextureId === tex);
+    if (upperHit) return { tileset: upperHit, index: PURE_UPPER_INDEX };
+    const lowerHit = tilesets.find((t) => t.lowerTextureId === tex);
+    if (lowerHit) return { tileset: lowerHit, index: PURE_LOWER_INDEX };
+    return null;
+  }
+
+  if (unique.length === 2) {
+    const [a, b] = unique;
+    const bridge = tilesets.find((t) =>
+      (t.upperTextureId === a && t.lowerTextureId === b)
+      || (t.upperTextureId === b && t.lowerTextureId === a),
+    );
+    if (!bridge) {
+      // No tileset bridges these two textures — fall back to the dominant
+      // corner's pure tile so the user at least sees something.
+      const counts: Record<string, number> = {};
+      for (const c of corners) counts[c] = (counts[c] ?? 0) + 1;
+      const dominant = Object.entries(counts).sort((x, y) => y[1] - x[1])[0][0];
+      return resolveCellTile(dominant, dominant, dominant, dominant, tilesets);
+    }
+    const isUpper = (t: string | undefined): Quadrant => {
+      if (!t) return 'l';
+      return t === bridge.upperTextureId ? 'u' : 'l';
+    };
+    const idx = wangIndex(isUpper(nw), isUpper(ne), isUpper(sw), isUpper(se));
+    return idx >= 0 ? { tileset: bridge, index: idx } : null;
+  }
+
+  // 3+ unique textures in one cell — pick the dominant and fall back.
+  const counts: Record<string, number> = {};
+  for (const c of corners) counts[c] = (counts[c] ?? 0) + 1;
+  const dominant = Object.entries(counts).sort((x, y) => y[1] - x[1])[0][0];
+  return resolveCellTile(dominant, dominant, dominant, dominant, tilesets);
+}

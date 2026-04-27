@@ -113,6 +113,10 @@ export interface TilesetForResolve {
   name?: string;
   upperLabel?: string;
   lowerLabel?: string;
+  /** Carried through so renderers can pick the active variant's slice
+   *  data URL via `tileDataUrlFor` without a separate Tileset lookup. */
+  variants?: Array<{ id: string; name: string; sheetDataUrl: string; tileDataUrls: string[] }>;
+  activeVariantIndex?: number;
 }
 
 /**

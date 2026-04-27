@@ -397,10 +397,12 @@ export interface TileStore {
  * Resolve the dataUrl that should render for a given (tileset, sliceIndex)
  * — accounting for the active variant. When no variant is active (or the
  * tileset has none), returns the base tile's dataUrl. Falls back to the
- * base if the variant is missing the expected slice for any reason.
+ * base if the variant is missing the expected slice for any reason. Takes
+ * a structural type so render-time `TilesetForResolve` shapes from
+ * `lib/wang-tiles` can pass through without a cast.
  */
 export function tileDataUrlFor(
-  tileset: Tileset,
+  tileset: Pick<Tileset, 'variants' | 'activeVariantIndex'>,
   sliceIndex: number,
   baseDataUrl: string,
 ): string {

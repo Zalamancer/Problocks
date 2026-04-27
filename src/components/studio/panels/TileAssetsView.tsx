@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
-  Pencil, GripVertical, X,
+  Pencil, GripVertical, X, Layers,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
@@ -558,9 +558,55 @@ function TerrainCard({
   const brushTextureId = useTile((s) => s.brushTextureId);
   const setBrushTextureId = useTile((s) => s.setBrushTextureId);
   const setTool = useTile((s) => s.setTool);
+  const addTilesetVariant = useTile((s) => s.addTilesetVariant);
+  const removeTilesetVariant = useTile((s) => s.removeTilesetVariant);
+  const setActiveTilesetVariant = useTile((s) => s.setActiveTilesetVariant);
 
   // Which swatch (if any) currently has its "connect" popover open.
   const [linkingSide, setLinkingSide] = useState<null | 'u' | 'l'>(null);
+  // Hidden file input for variant uploads, scoped to this card so each
+  // terrain has its own upload slot independent of the main "Upload Wang
+  // sheet" picker at the top of the panel.
+  const variantInputRef = useRef<HTMLInputElement | null>(null);
+  const [variantError, setVariantError] = useState<string | null>(null);
+  const [variantUploading, setVariantUploading] = useState(false);
+
+  // Which slice dataUrls render (variant-aware). Falls back to the base
+  // tile dataUrls when no variant is active.
+  const activeIdx = tileset.activeVariantIndex ?? 0;
+  const variantTileUrls = activeIdx > 0
+    ? tileset.variants?.[activeIdx - 1]?.tileDataUrls
+    : undefined;
+  const upperDataUrl = variantTileUrls?.[PURE_UPPER_INDEX] ?? upperTile?.dataUrl;
+  const lowerDataUrl = variantTileUrls?.[PURE_LOWER_INDEX] ?? lowerTile?.dataUrl;
+  const debugTileUrls = tileset.tileIds.map((id, i) => variantTileUrls?.[i] ?? tiles[id]?.dataUrl ?? '');
+
+  async function handleVariantFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setVariantUploading(true);
+    setVariantError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const sliced = await sliceFile(file, { cols: tileset.cols, rows: tileset.rows });
+        if (sliced.tiles.length !== tileset.tileIds.length) {
+          throw new Error(`Variant has ${sliced.tiles.length} tiles, expected ${tileset.tileIds.length}`);
+        }
+        const baseName = file.name.replace(/\.[^.]+$/, '');
+        addTilesetVariant(tileset.id, {
+          name: baseName,
+          sheetDataUrl: sliced.sheetDataUrl,
+          tileDataUrls: sliced.tiles,
+        });
+      }
+    } catch (err) {
+      console.error('[tile-variant] upload failed', err);
+      setVariantError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setVariantUploading(false);
+      if (variantInputRef.current) variantInputRef.current.value = '';
+    }
+  }
 
   // Auto-derive labels from the sheet name when the user hasn't set them
   // explicitly — kept in sync via the placeholder in the inputs below.
@@ -653,7 +699,7 @@ function TerrainCard({
           uploading a NEW tileset that shares this texture. */}
       <div className="flex items-center gap-2 mt-2">
         <BrushSwatch
-          tile={upperTile}
+          dataUrl={upperDataUrl}
           label="UPPER"
           active={brushTextureId === tileset.upperTextureId}
           shareCount={sharedUpperCount}
@@ -662,7 +708,7 @@ function TerrainCard({
           onChainClick={() => setLinkingSide(linkingSide === 'u' ? null : 'u')}
         />
         <BrushSwatch
-          tile={lowerTile}
+          dataUrl={lowerDataUrl}
           label="LOWER"
           active={brushTextureId === tileset.lowerTextureId}
           shareCount={sharedLowerCount}
@@ -693,6 +739,28 @@ function TerrainCard({
         />
       </div>
 
+      {/* Variant strip — alternate sheet swatches for the same terrain.
+          Click a chip to swap which sheet renders; the auto-tile lookup
+          and corner data are unchanged, so a click before-and-after
+          shows the same map painted in a different art style. */}
+      <VariantStrip
+        tileset={tileset}
+        baseSheetUrl={tileset.sheetDataUrl}
+        uploading={variantUploading}
+        error={variantError}
+        onUploadClick={() => variantInputRef.current?.click()}
+        onPick={(idx) => setActiveTilesetVariant(tileset.id, idx)}
+        onRemoveVariant={(variantId) => removeTilesetVariant(tileset.id, variantId)}
+      />
+      <input
+        ref={variantInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleVariantFiles}
+        className="hidden"
+      />
+
       {linkingSide && (
         <ConnectPopover
           sourceLabel={linkingSide === 'u' ? 'UPPER' : 'LOWER'}
@@ -712,16 +780,20 @@ function TerrainCard({
       )}
 
       {/* All 16 sliced tiles, always visible. Hover to see the (NW,NE,SW,SE)
-          encoding overlay so the user can sanity-check the auto-tile lookup. */}
-      <DebugTileGrid tileset={tileset} tiles={tiles} />
+          encoding overlay so the user can sanity-check the auto-tile lookup.
+          Variant-aware — `tileDataUrls` substitutes in for the base slices
+          when a variant is active. */}
+      <DebugTileGrid tileset={tileset} tileDataUrls={debugTileUrls} />
     </div>
   );
 }
 
 function BrushSwatch({
-  tile, label, active, shareCount, linking, onClick, onChainClick,
+  dataUrl, label, active, shareCount, linking, onClick, onChainClick,
 }: {
-  tile: Tile | undefined;
+  /** PNG dataUrl to render in the thumbnail. Variant-aware — the parent
+   *  resolves the active variant's slice URL before passing it in. */
+  dataUrl: string | undefined;
   label: 'UPPER' | 'LOWER';
   active: boolean;
   /** Number of OTHER tilesets sharing this texture id. >0 means it's part
@@ -763,9 +835,9 @@ function BrushSwatch({
             overflow: 'hidden',
           }}
         >
-          {tile && (
+          {dataUrl && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={tile.dataUrl} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+            <img src={dataUrl} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
           )}
         </div>
         <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.5 }}>
@@ -806,6 +878,152 @@ function BrushSwatch({
           ? <span style={{ lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{shareCount + 1}</span>
           : <Link2 size={10} strokeWidth={2.6} />}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Horizontal strip of "alternate sheet" chips for a terrain card.
+ * Index 0 is always the original (base) sheet; subsequent chips are
+ * the user-uploaded variants. Clicking a chip swaps which sheet's
+ * sliced tiles render — the corner data + auto-tile logic stay put,
+ * so the same map appears in a different art style instantly.
+ *
+ * The "+" button at the end opens the variant file picker. Variants
+ * must slice cleanly to the parent's (cols, rows) — the validation
+ * is enforced in the upload handler.
+ */
+function VariantStrip({
+  tileset, baseSheetUrl, uploading, error, onUploadClick, onPick, onRemoveVariant,
+}: {
+  tileset: Tileset;
+  baseSheetUrl: string;
+  uploading: boolean;
+  error: string | null;
+  onUploadClick: () => void;
+  onPick: (index: number) => void;
+  onRemoveVariant: (variantId: string) => void;
+}) {
+  const activeIdx = tileset.activeVariantIndex ?? 0;
+  const variants = tileset.variants ?? [];
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-1 mb-1">
+        <Layers size={10} strokeWidth={2.4} style={{ color: 'var(--pb-ink-muted)' }} />
+        <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>
+          STYLE VARIANT
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <VariantChip
+          sheetUrl={baseSheetUrl}
+          label="Base"
+          active={activeIdx === 0}
+          onClick={() => onPick(0)}
+        />
+        {variants.map((v, i) => (
+          <VariantChip
+            key={v.id}
+            sheetUrl={v.sheetDataUrl}
+            label={v.name || `Variant ${i + 1}`}
+            active={activeIdx === i + 1}
+            onClick={() => onPick(i + 1)}
+            onRemove={() => onRemoveVariant(v.id)}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onUploadClick(); }}
+          disabled={uploading}
+          title="Add an alternate sheet for this terrain (same grid)"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            border: '1.5px dashed var(--pb-line-2)',
+            background: 'var(--pb-paper)',
+            color: 'var(--pb-ink-muted)',
+            cursor: uploading ? 'progress' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: uploading ? 0.6 : 1,
+          }}
+        >
+          <Plus size={13} strokeWidth={2.6} />
+        </button>
+      </div>
+      {error && (
+        <p style={{ fontSize: 10, color: 'var(--pb-coral-ink)', fontWeight: 600, marginTop: 4 }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function VariantChip({
+  sheetUrl, label, active, onClick, onRemove,
+}: {
+  sheetUrl: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  /** Absent on the base chip — user can't remove the original sheet. */
+  onRemove?: () => void;
+}) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        title={`Render with: ${label}`}
+        style={{
+          width: 32,
+          height: 32,
+          padding: 0,
+          borderRadius: 6,
+          border: `1.5px solid ${active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+          background: 'var(--pb-paper)',
+          boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+          cursor: 'pointer',
+          overflow: 'hidden',
+          display: 'block',
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={sheetUrl}
+          alt={label}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }}
+          draggable={false}
+        />
+      </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          title="Remove this variant"
+          style={{
+            position: 'absolute',
+            top: -5,
+            right: -5,
+            width: 14,
+            height: 14,
+            padding: 0,
+            borderRadius: 999,
+            border: '1.5px solid var(--pb-coral-ink)',
+            background: 'var(--pb-paper)',
+            color: 'var(--pb-coral-ink)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <X size={8} strokeWidth={3} />
+        </button>
+      )}
     </div>
   );
 }
@@ -1029,7 +1247,7 @@ function ConnectPopover({
  * upper texture in its top-left quadrant but the overlay shows the top-left
  * (NW) as black, our encoding is wrong for that index.
  */
-function DebugTileGrid({ tileset, tiles }: { tileset: Tileset; tiles: Record<string, Tile> }) {
+function DebugTileGrid({ tileset, tileDataUrls }: { tileset: Tileset; tileDataUrls: string[] }) {
   const cols = tileset.cols;
   return (
     <div
@@ -1044,15 +1262,15 @@ function DebugTileGrid({ tileset, tiles }: { tileset: Tileset; tiles: Record<str
       }}
     >
       {tileset.tileIds.map((id, i) => {
-        const tile = tiles[id];
-        if (!tile) return <div key={i} style={{ aspectRatio: '1 / 1', background: 'rgba(0,0,0,0.05)' }} />;
-        return <DebugTileCell key={id} tile={tile} index={i} />;
+        const dataUrl = tileDataUrls[i];
+        if (!dataUrl) return <div key={i} style={{ aspectRatio: '1 / 1', background: 'rgba(0,0,0,0.05)' }} />;
+        return <DebugTileCell key={id} dataUrl={dataUrl} index={i} />;
       })}
     </div>
   );
 }
 
-function DebugTileCell({ tile, index }: { tile: Tile; index: number }) {
+function DebugTileCell({ dataUrl, index }: { dataUrl: string; index: number }) {
   const [hover, setHover] = useState(false);
   const quads = TILE_INDEX_TO_QUADRANTS[index];
   // Stored quadrant order is (NW, NE, SW, SE) — reading order of the 2×2 grid,
@@ -1075,7 +1293,7 @@ function DebugTileCell({ tile, index }: { tile: Tile; index: number }) {
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={tile.dataUrl}
+        src={dataUrl}
         alt=""
         style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
         draggable={false}

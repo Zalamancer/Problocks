@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 
 /**
  * 2D Tile-based editor state — Wang/dual-grid auto-tiling.
@@ -320,6 +320,52 @@ function cryptoId(): string {
   return `id-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
 }
 
+/**
+ * Coalesce + defer localStorage writes. zustand calls `setItem` on every
+ * `set()` — once `layers[].corners` grows to tens of thousands of entries
+ * the per-call `JSON.stringify` + DOM write becomes the dominant cost on
+ * slow hardware (Chromebook target). This storage holds the latest
+ * unserialised state and only stringifies/writes once per `delayMs` of
+ * idle, plus once on `beforeunload` so the very last edit isn't lost.
+ */
+function makeDeferredLocalStorage(delayMs = 500): PersistStorage<unknown> {
+  let pending: { name: string; value: StorageValue<unknown> } | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  function flush() {
+    timer = null;
+    if (!pending || typeof window === 'undefined') return;
+    const { name, value } = pending;
+    pending = null;
+    try {
+      window.localStorage.setItem(name, JSON.stringify(value));
+    } catch (err) {
+      // Quota errors etc. — log and move on; the in-memory state is
+      // unaffected, the next flush attempt will retry.
+      console.warn('[tile-store] persist write failed', err);
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', flush);
+  }
+  return {
+    getItem: (name) => {
+      if (typeof window === 'undefined') return null;
+      const raw = window.localStorage.getItem(name);
+      if (!raw) return null;
+      try { return JSON.parse(raw) as StorageValue<unknown>; } catch { return null; }
+    },
+    setItem: (name, value) => {
+      if (typeof window === 'undefined') return;
+      pending = { name, value };
+      if (timer === null) timer = setTimeout(flush, delayMs);
+    },
+    removeItem: (name) => {
+      if (typeof window === 'undefined') return;
+      window.localStorage.removeItem(name);
+    },
+  };
+}
+
 const INITIAL_LAYER = defaultLayer('Ground');
 
 export const useTile = create<TileStore>()(persist((set, get) => ({
@@ -508,14 +554,19 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setLayerTileset: (layerId, tilesetId) => set((s) => ({
     layers: s.layers.map((l) => l.id === layerId ? { ...l, tilesetId } : l),
   })),
-  mutateCorners: (layerId, mutator) => set((s) => ({
-    layers: s.layers.map((l) => {
-      if (l.id !== layerId) return l;
-      const next = { ...l.corners };
-      mutator(next);
-      return { ...l, corners: next };
-    }),
-  })),
+  mutateCorners: (layerId, mutator) => set((s) => {
+    // Mutate the corners map IN PLACE rather than spreading it. With ~90k
+    // entries, the spread alone took ~5–15 ms per paint cell on a slow
+    // laptop and was the main reason painting felt laggy. The renderer
+    // reads via `stateRef` (imperative canvas), and no React selector in
+    // the studio depends on referential equality of `corners`, so an
+    // in-place mutation is safe — we still replace the layer wrapper +
+    // layers array so zustand subscribers re-render.
+    const layer = s.layers.find((l) => l.id === layerId);
+    if (!layer) return {};
+    mutator(layer.corners);
+    return { layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
+  }),
 
   objects: [],
   addObject: (obj) => {
@@ -724,6 +775,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   // so we let the persist key bump drop them. Cloud rehydrate will repopulate
   // assets/styles.
   name: 'problocks-tile-v7',
+  // Coalesce localStorage writes — see makeDeferredLocalStorage above.
+  // Painting at 90k corners was firing JSON.stringify of the whole map
+  // on every cell, which alone burned 30–80 ms on Chromebook-class
+  // hardware. Deferring to one flush per ~500 ms idle (plus beforeunload)
+  // keeps strokes responsive without losing data.
+  storage: makeDeferredLocalStorage(500),
   // Big blobs (sheet PNG dataUrls, sliced tile dataUrls, object-style
   // dataUrls) are NOT persisted — Supabase is the source of truth and
   // they rehydrate when the panel mounts. Persisting them used to blow

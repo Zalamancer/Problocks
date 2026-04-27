@@ -1811,7 +1811,7 @@ function AssetCard({
             ? '0 0 0 2px rgba(14,165,233,0.18)'
             : 'none',
         overflow: 'hidden',
-        ...(size === 'lg' ? { width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column' } : null),
+        ...(size === 'lg' ? { width: '100%', flexShrink: 0, display: 'flex', flexDirection: 'column' } : null),
       }}
     >
       {size === 'lg' && (

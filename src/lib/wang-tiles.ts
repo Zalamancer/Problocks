@@ -377,6 +377,44 @@ export function hasBridgeTileset(
 }
 
 /**
+ * Strict cell-validity check used by the painter to enforce "no contact
+ * between unlinked textures". Mirrors `resolveCellTile` but returns a
+ * boolean instead of falling back to a dominant pure tile when no bridge
+ * exists — so the caller can refuse to paint corners that would leave
+ * the cell un-renderable.
+ *
+ * Valid when:
+ *   - 0 non-empty corners (empty cell — anything goes), OR
+ *   - 1 unique canonical texture (pure cell), OR
+ *   - 2 unique canonical textures whose pair appears as a bridge tileset
+ *     (i.e. some tileset has them as its upper + lower, in either order).
+ *
+ * Canonical means label-collapsed: two ids that share a `getTextureLabel`
+ * value count as one texture (matching the resolver's behavior, so
+ * sibling textures painted next to each other are valid).
+ */
+export function canPlaceCorners(
+  nw: string | undefined,
+  ne: string | undefined,
+  sw: string | undefined,
+  se: string | undefined,
+  tilesets: TilesetForResolve[],
+): boolean {
+  const corners = [nw, ne, sw, se].filter((c): c is string => !!c);
+  if (corners.length === 0) return true;
+  const canonical = corners.map((c) => canonicalTextureKey(c, tilesets));
+  const unique = Array.from(new Set(canonical));
+  if (unique.length <= 1) return true;
+  if (unique.length >= 3) return false;
+  const [a, b] = unique;
+  return tilesets.some((t) => {
+    const tu = canonicalTextureKey(t.upperTextureId, tilesets);
+    const tl = canonicalTextureKey(t.lowerTextureId, tilesets);
+    return (tu === a && tl === b) || (tu === b && tl === a);
+  });
+}
+
+/**
  * Given the user's chosen brush texture and the cells about to be painted,
  * return the texture id we should ACTUALLY stamp into every painted corner
  * so the stroke blends with the surrounding region.

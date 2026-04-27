@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useTile, type TileTool, findStyle } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
-import { resolveCellTile, pickAdjustedBrushTexture } from '@/lib/wang-tiles';
+import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.

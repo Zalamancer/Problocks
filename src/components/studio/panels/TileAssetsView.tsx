@@ -1571,11 +1571,40 @@ function ObjectsSection() {
   const assetList = Object.values(objectAssets)
     .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
 
+  function scrollAssetIntoView(assetId: string) {
+    // Defer to next frame so the focused state has rendered (focus ring
+    // updates) before we measure. Using direct scrollTo + getBoundingClientRect
+    // delta is more reliable than scrollIntoView for nested flex scroll
+    // containers — scrollIntoView sometimes refuses to scroll when the
+    // target is "near enough" by its own heuristics.
+    requestAnimationFrame(() => {
+      const c = listRef.current;
+      if (!c) return;
+      const sel = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(assetId) : assetId;
+      const node = c.querySelector<HTMLDivElement>(`[data-asset-id="${sel}"]`);
+      if (!node) return;
+      const cRect = c.getBoundingClientRect();
+      const nRect = node.getBoundingClientRect();
+      c.scrollTo({ left: c.scrollLeft + (nRect.left - cRect.left), behavior: 'smooth' });
+    });
+  }
+
   function handleListKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    if (!focused) return;
+    // Cold start: if the user arrow-keys before clicking any card, seed
+    // focus to the first asset so the next press has a starting point and
+    // the user immediately sees a focus ring instead of a silent no-op.
+    if (!focused) {
+      if (assetList.length > 0) {
+        e.preventDefault();
+        const firstId = assetList[0].id;
+        setFocused({ kind: 'asset', assetId: firstId });
+        scrollAssetIntoView(firstId);
+      }
+      return;
+    }
     e.preventDefault();
     const isHoriz = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
     const dir = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
@@ -1588,13 +1617,12 @@ function ObjectsSection() {
       if (newIdx === idx) return;
 
       if (isHoriz) {
-        // Navigate to prev/next card. Each card is 100% of the visible
-        // panel width, so scrollIntoView lands the new card flush in view —
-        // its own thumbnail IS the preview, no floating popup needed.
+        // Navigate to prev/next card and explicitly scroll the list so the
+        // new card lands at the start of the visible area — that card's
+        // own thumbnail IS the preview, no floating popup needed.
         const newAssetId = order[newIdx];
-        const node = listRef.current?.querySelector<HTMLDivElement>(`[data-asset-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(newAssetId) : newAssetId}"]`);
-        node?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         setFocused({ kind: 'asset', assetId: newAssetId });
+        scrollAssetIntoView(newAssetId);
       } else {
         // Vertical → reorder.
         const next = order.slice();
@@ -1789,6 +1817,15 @@ function ObjectsSection() {
                 // so subsequent ArrowLeft/Right reach handleListKeyDown.
                 if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
                 requestAnimationFrame(() => listRef.current?.focus({ preventScroll: true }));
+              }}
+              onMouseEnter={() => {
+                // Hover-to-focus: if the user is sweeping the mouse over
+                // the panel and wants to use arrow keys, we move focus
+                // here so the keys land in handleListKeyDown. Skip if the
+                // user is currently typing in an input somewhere.
+                const ae = document.activeElement as HTMLElement | null;
+                if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+                listRef.current?.focus({ preventScroll: true });
               }}
               onFocus={() => {
                 // First time the list gains focus (e.g. via Tab) without any

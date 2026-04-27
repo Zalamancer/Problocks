@@ -5,7 +5,7 @@ import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
   Grid3X3, Sparkles, Box, FlipHorizontal, FlipVertical,
 } from 'lucide-react';
-import { useTile, type TileTool } from '@/store/tile-store';
+import { useTile, type TileTool, findStyle } from '@/store/tile-store';
 import { resolveCellTile } from '@/lib/wang-tiles';
 
 /**
@@ -68,6 +68,8 @@ export function TileView() {
   const camera = useTile((s) => s.camera);
   const updateObject = useTile((s) => s.updateObject);
   const removeObject = useTile((s) => s.removeObject);
+  const objectAssets = useTile((s) => s.objectAssets);
+  const setObjectStyle = useTile((s) => s.setObjectStyle);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const brushTextureId = useTile((s) => s.brushTextureId);
@@ -184,10 +186,10 @@ export function TileView() {
       }).sort((a, b) => a.y - b.y);
 
       for (const obj of visibleObjects) {
-        const asset = s.objectAssets[obj.assetId];
-        if (!asset) continue;
-        const img = ensureImage(asset.dataUrl);
-        if (!imgReadyRef.current.has(asset.dataUrl)) continue;
+        const found = findStyle(s.objectAssets, obj.assetId, obj.styleId);
+        if (!found) continue;
+        const img = ensureImage(found.style.dataUrl);
+        if (!imgReadyRef.current.has(found.style.dataUrl)) continue;
         const layer = s.layers.find((l) => l.id === obj.layerId);
         ctx!.globalAlpha = layer?.opacity ?? 1;
         ctx!.save();
@@ -248,12 +250,12 @@ export function TileView() {
       }
 
       // Object placement ghost — show the snapped cells AND a faint preview
-      // of the sprite so the user sees exactly what + where they'll drop.
-      if (hover && s.tool === 'object' && s.selectedAssetId) {
-        const asset = s.objectAssets[s.selectedAssetId];
-        if (asset) {
-          const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(asset.width, asset.height, ts, hover.cx, hover.cy);
-          // Cells the object will overlap.
+      // of the currently-picked style so the user sees exactly what + where
+      // they'll drop (style swaps the preview in real time).
+      if (hover && s.tool === 'object' && s.selectedAssetId && s.selectedStyleId) {
+        const found = findStyle(s.objectAssets, s.selectedAssetId, s.selectedStyleId);
+        if (found) {
+          const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(found.style.width, found.style.height, ts, hover.cx, hover.cy);
           ctx!.fillStyle = 'rgba(168,85,247,0.18)';
           ctx!.strokeStyle = 'rgba(126,34,206,0.85)';
           ctx!.lineWidth = 1.5 / cam.zoom;
@@ -265,9 +267,8 @@ export function TileView() {
               ctx!.strokeRect(px, py, ts, ts);
             }
           }
-          // Faint sprite preview at the snapped target position.
-          const img = imgCacheRef.current.get(asset.dataUrl);
-          if (img && imgReadyRef.current.has(asset.dataUrl)) {
+          const img = imgCacheRef.current.get(found.style.dataUrl);
+          if (img && imgReadyRef.current.has(found.style.dataUrl)) {
             const w = cellsW * ts;
             const h = cellsH * ts;
             const x = cellTLX * ts;
@@ -462,13 +463,13 @@ export function TileView() {
       if (e.button !== 0) return;
 
       if (s.tool === 'object') {
-        if (!s.selectedAssetId) return;
-        const asset = s.objectAssets[s.selectedAssetId];
-        if (!asset) return;
+        if (!s.selectedAssetId || !s.selectedStyleId) return;
+        const found = findStyle(s.objectAssets, s.selectedAssetId, s.selectedStyleId);
+        if (!found) return;
         // Snap to the grid using the same footprint helper the hover ghost
         // uses, so the placed object lands exactly where the preview showed.
         const ts = s.tileSize;
-        const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(asset.width, asset.height, ts, cell.cx, cell.cy);
+        const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(found.style.width, found.style.height, ts, cell.cx, cell.cy);
         const placedW = cellsW * ts;
         const placedH = cellsH * ts;
         const id = s.addObject({
@@ -476,11 +477,12 @@ export function TileView() {
           x: cellTLX * ts + placedW / 2,
           y: cellTLY * ts + placedH / 2,
           assetId: s.selectedAssetId,
+          styleId: s.selectedStyleId,
           width: placedW,
           height: placedH,
           rotation: 0,
           flipX: false, flipY: false,
-          name: asset.name || `Object ${s.objects.length + 1}`,
+          name: found.asset.name || `Object ${s.objects.length + 1}`,
         });
         s.selectObject(id);
         scheduleRender();
@@ -667,6 +669,9 @@ export function TileView() {
   }, [tool]);
 
   const selectedObject = selectedObjectId ? objects.find((o) => o.id === selectedObjectId) : null;
+  // Resolve the selected object's owning asset so the right-side panel can
+  // show every style as an "upgrade" pill the user can swap to.
+  const selectedAsset = selectedObject ? objectAssets[selectedObject.assetId] ?? null : null;
   const totalCorners = activeLayer ? Object.keys(activeLayer.corners).length : 0;
 
   return (
@@ -794,6 +799,57 @@ export function TileView() {
               <FlipVertical size={14} strokeWidth={2.2} />
             </ToolBtn>
           </div>
+
+          {/* Style chips — only meaningful when the asset has more than one
+              variant. Click swaps the placed instance's sprite (footprint
+              stays put, just the look changes — i.e. "upgrade"). */}
+          {selectedAsset && selectedAsset.styles.length > 1 && (
+            <div className="mt-2.5">
+              <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5, marginBottom: 4 }}>
+                STYLE
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {selectedAsset.styles.map((st, i) => {
+                  const isCurrent = st.id === selectedObject.styleId;
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setObjectStyle(selectedObject.id, st.id)}
+                      title={st.label || `Style ${i + 1}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '3px 6px 3px 3px',
+                        background: isCurrent ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+                        border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+                        borderRadius: 999,
+                        cursor: 'pointer',
+                        boxShadow: isCurrent ? '0 1.5px 0 var(--pb-butter-ink)' : 'none',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 18, height: 18, borderRadius: 999,
+                          overflow: 'hidden',
+                          background: 'rgba(0,0,0,0.06)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={st.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {st.label || `Style ${i + 1}`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

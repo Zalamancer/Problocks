@@ -103,6 +103,10 @@ export interface TileObject {
   /** ObjectAsset id this object renders. Always references `objectAssets`,
    *  never a Wang-tileset slice — those are auto-tile data, not props. */
   assetId: string;
+  /** Style id within the asset's `styles[]` array. Determines which sprite
+   *  variant this placed instance shows. Switching styles is the "upgrade"
+   *  flow — same footprint, different look. */
+  styleId: string;
   /** Size in world pixels. Defaults to the asset's natural size. */
   width: number;
   height: number;
@@ -113,21 +117,33 @@ export interface TileObject {
 }
 
 /**
- * Standalone uploaded sprite used by the OBJECT tool. Distinct from `Tile`
- * (which is a Wang-tileset slice) because objects are whole images uploaded
- * as-is — no cols/rows, no auto-tiling, no shared texture identity.
+ * One sprite variant of an ObjectAsset. Multiple styles share an asset
+ * group so a placed instance can swap between them ("Level 1" → "Level 2").
+ * Each style is a distinct upload (its own dataUrl, its own Supabase row).
+ */
+export interface ObjectStyle {
+  id: string;
+  /** User-visible name for this variant. May be empty for single-style assets. */
+  label: string;
+  dataUrl: string;
+  width: number;
+  height: number;
+  /** Server-side row id (Supabase). Absent for local-only styles. */
+  cloudId?: string;
+}
+
+/**
+ * Logical "object" the user places — a group of one or more sprite styles.
+ * Distinct from `Tile` (a Wang-tileset slice) because objects are whole
+ * images uploaded as-is — no auto-tiling, no shared texture identity.
  */
 export interface ObjectAsset {
   id: string;
   name: string;
-  /** PNG / WebP data URL — the actual sprite. */
-  dataUrl: string;
-  /** Natural pixel size, used as the placement default. */
-  width: number;
-  height: number;
+  /** Ordered style variants. Always non-empty (asset is removed when
+   *  the last style is). styles[0] is the default for new placements. */
+  styles: ObjectStyle[];
   addedAt: number;
-  /** Server-side row id (Supabase) once uploaded. Absent for local-only. */
-  cloudId?: string;
 }
 
 export interface TileCamera {
@@ -193,9 +209,29 @@ export interface TileStore {
 
   // ── Uploaded object sprites (OBJECT tool palette) ───────────────
   objectAssets: Record<string, ObjectAsset>;
-  addObjectAsset: (asset: { name: string; dataUrl: string; width: number; height: number; cloudId?: string }) => string;
-  removeObjectAsset: (id: string) => void;
-  setObjectAssetCloudId: (id: string, cloudId: string) => void;
+  /** Create a new asset with a single style. Returns both ids so the
+   *  caller can hook up a Supabase row to the right style. Optionally
+   *  pass `assetId` to reuse a known id during cloud rehydrate (so the
+   *  local asset.id matches the server-side group_id one-for-one). */
+  addObjectAsset: (
+    asset: { assetId?: string; name: string; label?: string; dataUrl: string; width: number; height: number; cloudId?: string },
+  ) => { assetId: string; styleId: string };
+  /** Add another style variant to an existing asset (e.g. "Level 2"). */
+  addStyleToAsset: (
+    assetId: string,
+    style: { label?: string; dataUrl: string; width: number; height: number; cloudId?: string },
+  ) => string;
+  /** Remove an entire asset (and all its styles). Placed objects using
+   *  any of its styles are removed too. */
+  removeObjectAsset: (assetId: string) => void;
+  /** Remove one style. If it was the last style, the asset is removed.
+   *  Placed objects using this style are remapped to the asset's first
+   *  remaining style, or removed if no styles remain. */
+  removeStyle: (assetId: string, styleId: string) => void;
+  setStyleLabel: (assetId: string, styleId: string, label: string) => void;
+  setStyleCloudId: (assetId: string, styleId: string, cloudId: string) => void;
+  /** Switch the style on a placed instance ("upgrade"). */
+  setObjectStyle: (objectId: string, styleId: string) => void;
 
   // ── Tools ──────────────────────────────────────────────────────
   tool: TileTool;
@@ -208,10 +244,16 @@ export interface TileStore {
    *  corner regardless of this. */
   brushTextureId: string | null;
   setBrushTextureId: (id: string | null) => void;
-  /** Used only by the OBJECT tool — picks an uploaded sprite to drop as a
-   *  free object. References `objectAssets`, never a Wang-tileset slice. */
+  /** Used only by the OBJECT tool — picks the asset whose style brush is
+   *  active. The actual sprite to place is `selectedStyleId` within this
+   *  asset (defaults to the asset's first style on selection). */
   selectedAssetId: string | null;
   setSelectedAssetId: (id: string | null) => void;
+  /** Style brush for OBJECT placement. Always belongs to selectedAssetId.
+   *  Set via the panel's style chip; the renderer uses this for the ghost
+   *  preview and final placement. */
+  selectedStyleId: string | null;
+  setSelectedStyleId: (id: string | null) => void;
 
   // ── View ───────────────────────────────────────────────────────
   camera: TileCamera;
@@ -415,35 +457,105 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   selectObject: (id) => set({ selectedObjectId: id }),
 
   objectAssets: {},
-  addObjectAsset: ({ name, dataUrl, width, height, cloudId }) => {
-    const id = cryptoId();
+  addObjectAsset: ({ assetId: providedAssetId, name, label, dataUrl, width, height, cloudId }) => {
+    const assetId = providedAssetId ?? cryptoId();
+    const styleId = cryptoId();
+    const style: ObjectStyle = { id: styleId, label: label ?? '', dataUrl, width, height, cloudId };
     set((s) => ({
       objectAssets: {
         ...s.objectAssets,
-        [id]: { id, name, dataUrl, width, height, addedAt: Date.now(), cloudId },
+        [assetId]: { id: assetId, name, styles: [style], addedAt: Date.now() },
       },
       // Default the OBJECT-tool brush to the first sprite the user uploads
       // so they can start placing immediately.
-      selectedAssetId: s.selectedAssetId ?? id,
+      selectedAssetId: s.selectedAssetId ?? assetId,
+      selectedStyleId: s.selectedStyleId ?? styleId,
     }));
-    return id;
+    return { assetId, styleId };
   },
-  removeObjectAsset: (id) => set((s) => {
+  addStyleToAsset: (assetId, { label, dataUrl, width, height, cloudId }) => {
+    const styleId = cryptoId();
+    set((s) => {
+      const asset = s.objectAssets[assetId];
+      if (!asset) return {};
+      const style: ObjectStyle = { id: styleId, label: label ?? '', dataUrl, width, height, cloudId };
+      return {
+        objectAssets: {
+          ...s.objectAssets,
+          [assetId]: { ...asset, styles: [...asset.styles, style] },
+        },
+      };
+    });
+    return styleId;
+  },
+  removeObjectAsset: (assetId) => set((s) => {
     const next = { ...s.objectAssets };
-    delete next[id];
+    delete next[assetId];
+    const styleIds = new Set((s.objectAssets[assetId]?.styles ?? []).map((st) => st.id));
     return {
       objectAssets: next,
-      // Drop any placed objects that referenced the removed asset — without
-      // this they'd render as empty rectangles forever.
-      objects: s.objects.filter((o) => o.assetId !== id),
-      selectedAssetId: s.selectedAssetId === id ? null : s.selectedAssetId,
+      // Drop placed objects referencing any style of this asset — they'd
+      // otherwise render as empty rectangles forever.
+      objects: s.objects.filter((o) => o.assetId !== assetId),
+      selectedAssetId: s.selectedAssetId === assetId ? null : s.selectedAssetId,
+      selectedStyleId: s.selectedStyleId && styleIds.has(s.selectedStyleId) ? null : s.selectedStyleId,
     };
   }),
-  setObjectAssetCloudId: (id, cloudId) => set((s) => {
-    const existing = s.objectAssets[id];
-    if (!existing) return {};
-    return { objectAssets: { ...s.objectAssets, [id]: { ...existing, cloudId } } };
+  removeStyle: (assetId, styleId) => set((s) => {
+    const asset = s.objectAssets[assetId];
+    if (!asset) return {};
+    const remaining = asset.styles.filter((st) => st.id !== styleId);
+    if (remaining.length === 0) {
+      // Last style — drop the entire asset.
+      const next = { ...s.objectAssets };
+      delete next[assetId];
+      return {
+        objectAssets: next,
+        objects: s.objects.filter((o) => o.assetId !== assetId),
+        selectedAssetId: s.selectedAssetId === assetId ? null : s.selectedAssetId,
+        selectedStyleId: s.selectedStyleId === styleId ? null : s.selectedStyleId,
+      };
+    }
+    // Remap placed objects on the removed style → the asset's first
+    // remaining style. Better than leaving them blank.
+    const fallbackId = remaining[0].id;
+    return {
+      objectAssets: { ...s.objectAssets, [assetId]: { ...asset, styles: remaining } },
+      objects: s.objects.map((o) =>
+        o.assetId === assetId && o.styleId === styleId ? { ...o, styleId: fallbackId } : o,
+      ),
+      selectedStyleId: s.selectedStyleId === styleId ? fallbackId : s.selectedStyleId,
+    };
   }),
+  setStyleLabel: (assetId, styleId, label) => set((s) => {
+    const asset = s.objectAssets[assetId];
+    if (!asset) return {};
+    return {
+      objectAssets: {
+        ...s.objectAssets,
+        [assetId]: {
+          ...asset,
+          styles: asset.styles.map((st) => st.id === styleId ? { ...st, label } : st),
+        },
+      },
+    };
+  }),
+  setStyleCloudId: (assetId, styleId, cloudId) => set((s) => {
+    const asset = s.objectAssets[assetId];
+    if (!asset) return {};
+    return {
+      objectAssets: {
+        ...s.objectAssets,
+        [assetId]: {
+          ...asset,
+          styles: asset.styles.map((st) => st.id === styleId ? { ...st, cloudId } : st),
+        },
+      },
+    };
+  }),
+  setObjectStyle: (objectId, styleId) => set((s) => ({
+    objects: s.objects.map((o) => o.id === objectId ? { ...o, styleId } : o),
+  })),
 
   tool: 'paint',
   setTool: (t) => set({ tool: t }),
@@ -452,7 +564,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   brushTextureId: null,
   setBrushTextureId: (id) => set({ brushTextureId: id }),
   selectedAssetId: null,
-  setSelectedAssetId: (id) => set({ selectedAssetId: id }),
+  setSelectedAssetId: (id) => set((s) => {
+    // When switching assets, reset the style brush to the new asset's first
+    // style so the OBJECT tool always has a valid sprite to place.
+    const fallback = id ? s.objectAssets[id]?.styles[0]?.id ?? null : null;
+    return { selectedAssetId: id, selectedStyleId: fallback };
+  }),
+  selectedStyleId: null,
+  setSelectedStyleId: (id) => set({ selectedStyleId: id }),
 
   camera: { x: 0, y: 0, zoom: 1 },
   setCamera: (cam) => set((s) => ({ camera: { ...s.camera, ...cam } })),
@@ -465,11 +584,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     objects: [],
   })),
 }), {
-  // v6 — TileObject.tileId → assetId; objects now reference uploaded
-  // ObjectAssets (objectAssets), never Wang-tileset slices. Old persisted
-  // objects pointing at tile ids would render as blanks, so we drop them
-  // by switching the persist key.
-  name: 'problocks-tile-v6',
+  // v7 — ObjectAsset gained nested `styles[]` (multi-variant per asset);
+  // TileObject gained `styleId`. Old v6 persisted objects only had
+  // `assetId` and would crash the renderer (no styleId → no style lookup),
+  // so we let the persist key bump drop them. Cloud rehydrate will repopulate
+  // assets/styles.
+  name: 'problocks-tile-v7',
   partialize: (s) => ({
     tilesets: s.tilesets,
     tiles: s.tiles,
@@ -479,6 +599,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     objects: s.objects,
     objectAssets: s.objectAssets,
     selectedAssetId: s.selectedAssetId,
+    selectedStyleId: s.selectedStyleId,
     brushTextureId: s.brushTextureId,
     showGrid: s.showGrid,
   }),
@@ -509,6 +630,25 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     if (!state.objectAssets) state.objectAssets = {};
   },
 }));
+
+/**
+ * Find the (asset, style) pair for a TileObject. Centralised here so
+ * renderers and panels don't keep re-implementing the nested lookup.
+ * Returns null when the asset or style was deleted but the object still
+ * references them — the caller decides whether to skip rendering or
+ * surface a warning.
+ */
+export function findStyle(
+  objectAssets: Record<string, ObjectAsset>,
+  assetId: string,
+  styleId: string,
+): { asset: ObjectAsset; style: ObjectStyle } | null {
+  const asset = objectAssets[assetId];
+  if (!asset) return null;
+  const style = asset.styles.find((st) => st.id === styleId);
+  if (!style) return null;
+  return { asset, style };
+}
 
 /** Helper: parse "x,y" → {x, y}. */
 export function parseCornerKey(key: string): { x: number; y: number } {

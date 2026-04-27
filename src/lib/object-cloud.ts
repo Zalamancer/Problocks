@@ -1,12 +1,21 @@
 /**
  * Thin client wrappers around `/api/tile-objects` — uploaded standalone
- * sprite assets used by the studio's OBJECT tool. Mirrors `tile-cloud.ts`
- * exactly so panels can use the same try/catch + offline-fallback pattern.
+ * sprite assets used by the studio's OBJECT tool. Each row is one style
+ * (sprite); rows sharing a `groupId` belong to the same logical asset
+ * (e.g. "house" with multiple level / damage variants).
  */
 
 export interface CloudObject {
+  /** Per-style row id. */
   id: string;
+  /** Asset id — every style of the same asset shares this. */
+  groupId: string;
+  /** Asset name (group). All styles in a group share the same name. */
   name: string;
+  /** Style label within the group (e.g. "Level 2"). May be empty. */
+  label: string;
+  /** Lower sortIndex appears first in style lists. */
+  sortIndex: number;
   dataUrl: string;
   width: number;
   height: number;
@@ -19,6 +28,12 @@ export interface SaveObjectInput {
   dataUrl: string;
   width: number;
   height: number;
+  /** Omit to create a brand-new asset (single-style group). Provide an
+   *  existing groupId to add another style to that asset. */
+  groupId?: string;
+  /** Style label. Empty string = "default" / unlabeled style. */
+  label?: string;
+  sortIndex?: number;
 }
 
 export async function saveTileObject(input: SaveObjectInput): Promise<CloudObject> {
@@ -45,11 +60,21 @@ export async function listTileObjects(): Promise<CloudObject[]> {
   return (json.objects ?? []) as CloudObject[];
 }
 
+/** Delete a single style row. */
 export async function deleteTileObject(id: string): Promise<void> {
   const res = await fetch(`/api/tile-objects?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const msg = await safeMsg(res);
     throw new Error(`deleteTileObject failed (${res.status}): ${msg}`);
+  }
+}
+
+/** Delete every style belonging to an asset (group). */
+export async function deleteTileObjectGroup(groupId: string): Promise<void> {
+  const res = await fetch(`/api/tile-objects?groupId=${encodeURIComponent(groupId)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const msg = await safeMsg(res);
+    throw new Error(`deleteTileObjectGroup failed (${res.status}): ${msg}`);
   }
 }
 

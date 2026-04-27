@@ -5,11 +5,11 @@ import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Layers as LayersIcon, Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
 } from 'lucide-react';
-import { useTile, type Tileset, type Tile, type ObjectAsset } from '@/store/tile-store';
+import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS } from '@/lib/wang-tiles';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
-import { saveTileObject, listTileObjects, deleteTileObject } from '@/lib/object-cloud';
+import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, type CloudObject } from '@/lib/object-cloud';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -1060,53 +1060,105 @@ function LayerList() {
 }
 
 /**
- * Object placement section. Standalone uploaded sprites only — Wang-tileset
- * slices are auto-tile data, not props, and don't appear here. Each upload
- * is saved to Supabase (`tile_objects` table) and rehydrated on mount so
- * the sprite library survives reloads on any device.
+ * Object placement section. Each card is one logical asset (e.g. "house"),
+ * which can hold multiple sprite STYLES (e.g. level-1 / level-2). Each
+ * style is its own Supabase row in `tile_objects`, joined by `group_id`.
+ *
+ * Flows
+ * -----
+ * - "Upload sprite"           → creates a brand-new asset (group of 1).
+ * - Click an asset thumbnail  → selects the asset's first style as the
+ *                               OBJECT-tool brush; click canvas to place.
+ * - Expand an asset card      → see all styles, switch which style the
+ *                               brush is using, add another style, rename
+ *                               or remove individual styles.
+ * - "Add style" inside a card → uploads a new sprite into that asset
+ *                               group (saved as another row sharing the
+ *                               group_id, so it shows up across reloads).
+ *
+ * Hydration on mount: list flat rows from Supabase, group by `groupId`,
+ * skip groups already present locally, and rebuild missing assets.
  */
 function ObjectsSection() {
   const objectAssets = useTile((s) => s.objectAssets);
   const addObjectAsset = useTile((s) => s.addObjectAsset);
+  const addStyleToAsset = useTile((s) => s.addStyleToAsset);
   const removeObjectAsset = useTile((s) => s.removeObjectAsset);
-  const setObjectAssetCloudId = useTile((s) => s.setObjectAssetCloudId);
+  const removeStyle = useTile((s) => s.removeStyle);
+  const setStyleLabel = useTile((s) => s.setStyleLabel);
+  const setStyleCloudId = useTile((s) => s.setStyleCloudId);
   const objects = useTile((s) => s.objects);
   const selectObject = useTile((s) => s.selectObject);
   const removeObject = useTile((s) => s.removeObject);
   const selectedObjectId = useTile((s) => s.selectedObjectId);
   const selectedAssetId = useTile((s) => s.selectedAssetId);
   const setSelectedAssetId = useTile((s) => s.setSelectedAssetId);
+  const selectedStyleId = useTile((s) => s.selectedStyleId);
+  const setSelectedStyleId = useTile((s) => s.setSelectedStyleId);
   const setTool = useTile((s) => s.setTool);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const styleInputRef = useRef<HTMLInputElement | null>(null);
+  /** When the user clicks "Add style" on a card, we stash the target asset
+   *  id here so the next file the picker returns is appended to that asset
+   *  rather than creating a new one. Cleared after the upload completes. */
+  const targetAssetForStyleRef = useRef<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
+  const [expandedAssets, setExpandedAssets] = useState<Record<string, boolean>>({});
 
-  // Hydrate uploaded sprites from Supabase on mount. Skip names already in
-  // the local store to avoid duplicate entries when the persisted Zustand
-  // copy still has the same uploads.
+  // Hydrate uploaded sprites from Supabase on mount. Group by groupId so
+  // each asset gets its full style list. Skip any group that's already
+  // represented in the persisted Zustand state to avoid duplicates.
   useEffect(() => {
     let cancelled = false;
     setCloudStatus('syncing');
     listTileObjects()
-      .then((cloud) => {
+      .then((rows) => {
         if (cancelled) return;
-        const localNames = new Set(Object.values(useTile.getState().objectAssets).map((a) => a.name));
-        for (const obj of cloud) {
+        const byGroup = new Map<string, CloudObject[]>();
+        for (const r of rows) {
+          const arr = byGroup.get(r.groupId) ?? [];
+          arr.push(r);
+          byGroup.set(r.groupId, arr);
+        }
+        // Snapshot the current local cloudId set so we can detect which
+        // groups are already hydrated client-side.
+        const hydratedCloudIds = new Set<string>();
+        for (const a of Object.values(useTile.getState().objectAssets)) {
+          for (const st of a.styles) if (st.cloudId) hydratedCloudIds.add(st.cloudId);
+        }
+        for (const [groupId, group] of byGroup) {
           if (cancelled) return;
-          if (localNames.has(obj.name)) {
-            const existing = Object.values(useTile.getState().objectAssets).find((a) => a.name === obj.name);
-            if (existing && !existing.cloudId) setObjectAssetCloudId(existing.id, obj.id);
-            continue;
-          }
-          addObjectAsset({
-            name: obj.name,
-            dataUrl: obj.dataUrl,
-            width: obj.width,
-            height: obj.height,
-            cloudId: obj.id,
+          group.sort((a, b) => a.sortIndex - b.sortIndex || a.createdAt.localeCompare(b.createdAt));
+          // If any row of this group is already known locally, assume the
+          // whole group is hydrated and don't re-add it.
+          if (group.some((r) => hydratedCloudIds.has(r.id))) continue;
+          const first = group[0];
+          // Use the cloud's group_id as the local asset.id so subsequent
+          // "add style" saves can pass `groupId: asset.id` and land in the
+          // same server group on reload.
+          const { assetId, styleId } = addObjectAsset({
+            assetId: groupId,
+            name: first.name,
+            label: first.label,
+            dataUrl: first.dataUrl,
+            width: first.width,
+            height: first.height,
+            cloudId: first.id,
           });
+          for (let i = 1; i < group.length; i++) {
+            const r = group[i];
+            addStyleToAsset(assetId, {
+              label: r.label,
+              dataUrl: r.dataUrl,
+              width: r.width,
+              height: r.height,
+              cloudId: r.id,
+            });
+          }
+          void styleId;
         }
         if (!cancelled) setCloudStatus('synced');
       })
@@ -1116,41 +1168,79 @@ function ObjectsSection() {
         setCloudStatus('offline');
       });
     return () => { cancelled = true; };
-  }, [addObjectAsset, setObjectAssetCloudId]);
+  }, [addObjectAsset, addStyleToAsset]);
 
-  async function handleObjectFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = '';
-    if (files.length === 0) return;
+  /** Generic upload helper. When `targetAssetId` is set, the sprite is
+   *  appended as a new style on that asset (sharing the asset's groupId
+   *  on the Supabase side, looked up via the asset's first style cloudId).
+   *  Otherwise a new asset is created. */
+  async function uploadFiles(files: File[], targetAssetId: string | null) {
     setUploading(true);
     setError(null);
     try {
       for (const file of files) {
-        const name = file.name.replace(/\.[^.]+$/, '');
-        // Decode the upload through a canvas so JPEG/WebP/GIF inputs all
-        // come out as homogeneous PNG data URLs (matches tile-slicer's
-        // approach), and so we can read the natural pixel size cheaply.
+        const baseName = file.name.replace(/\.[^.]+$/, '');
         const img = await fileToImage(file);
         const dataUrl = imageToDataUrl(img);
-        const localId = addObjectAsset({
-          name,
-          dataUrl,
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-        });
-        // Background save — failure leaves the sprite local-only.
-        saveTileObject({
-          name,
-          dataUrl,
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-        }).then((cloud) => {
-          setObjectAssetCloudId(localId, cloud.id);
-          setCloudStatus('synced');
-        }).catch((err) => {
-          console.warn('[object-cloud] save failed; sprite kept local-only', err);
-          setCloudStatus('offline');
-        });
+        if (targetAssetId) {
+          const asset = useTile.getState().objectAssets[targetAssetId];
+          if (!asset) continue;
+          // Make labels unique within the asset so the server's
+          // (user_id, group_id, label) upsert key doesn't overwrite an
+          // existing style. Reuses baseName when free, otherwise appends
+          // an index.
+          const label = nextUniqueLabel(asset, baseName || `Style ${asset.styles.length + 1}`);
+          const styleId = addStyleToAsset(targetAssetId, {
+            label,
+            dataUrl,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
+          saveTileObject({
+            name: asset.name,
+            dataUrl,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            // asset.id IS the group_id end-to-end. For brand-new assets we
+            // pass it explicitly on first upload too (below), so on reload
+            // every style of an asset shares the same group_id and
+            // reconstructs the asset 1:1.
+            groupId: asset.id,
+            label,
+            sortIndex: asset.styles.length,
+          }).then((cloud) => {
+            setStyleCloudId(targetAssetId, styleId, cloud.id);
+            setCloudStatus('synced');
+          }).catch((err) => {
+            console.warn('[object-cloud] save style failed; kept local-only', err);
+            setCloudStatus('offline');
+          });
+        } else {
+          const { assetId, styleId } = addObjectAsset({
+            name: baseName,
+            label: '',
+            dataUrl,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
+          saveTileObject({
+            name: baseName,
+            dataUrl,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            // Stamp the local assetId as the server group_id so subsequent
+            // "Add style" calls land in the same Supabase group.
+            groupId: assetId,
+            label: '',
+            sortIndex: 0,
+          }).then((cloud) => {
+            setStyleCloudId(assetId, styleId, cloud.id);
+            setCloudStatus('synced');
+          }).catch((err) => {
+            console.warn('[object-cloud] save asset failed; kept local-only', err);
+            setCloudStatus('offline');
+          });
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1159,12 +1249,56 @@ function ObjectsSection() {
     }
   }
 
+  async function handleNewAssetFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    await uploadFiles(files, null);
+  }
+
+  async function handleNewStyleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    const target = targetAssetForStyleRef.current;
+    targetAssetForStyleRef.current = null;
+    if (files.length === 0 || !target) return;
+    await uploadFiles(files, target);
+  }
+
+  function handleAddStyleClick(assetId: string) {
+    targetAssetForStyleRef.current = assetId;
+    setExpandedAssets((m) => ({ ...m, [assetId]: true }));
+    styleInputRef.current?.click();
+  }
+
+  function handleSelectAsset(asset: ObjectAsset) {
+    setSelectedAssetId(asset.id);
+    setTool('object');
+  }
+
   function handleRemoveAsset(asset: ObjectAsset) {
-    if (!confirm(`Delete sprite "${asset.name}"? Placed objects using it will also be removed.`)) return;
+    if (!confirm(`Delete asset "${asset.name}" and all ${asset.styles.length} style(s)? Placed objects using it will also be removed.`)) return;
+    const hasAnyCloudStyle = asset.styles.some((s) => s.cloudId);
     removeObjectAsset(asset.id);
-    if (asset.cloudId) {
-      deleteTileObject(asset.cloudId).catch((err) => {
-        console.warn('[object-cloud] delete failed', err);
+    if (hasAnyCloudStyle) {
+      // asset.id is also the server-side group_id (we stamp it on save),
+      // so a single group delete cleans up every style row at once.
+      deleteTileObjectGroup(asset.id).catch((err) => {
+        console.warn('[object-cloud] delete group failed', err);
+      });
+    }
+  }
+
+  function handleRemoveStyle(asset: ObjectAsset, style: ObjectStyle) {
+    if (asset.styles.length === 1) {
+      handleRemoveAsset(asset);
+      return;
+    }
+    if (!confirm(`Delete style "${style.label || 'unlabeled'}" from "${asset.name}"?`)) return;
+    removeStyle(asset.id, style.id);
+    if (style.cloudId) {
+      deleteTileObject(style.cloudId).catch((err) => {
+        console.warn('[object-cloud] delete style failed', err);
       });
     }
   }
@@ -1178,12 +1312,20 @@ function ObjectsSection() {
         type="file"
         accept="image/*"
         multiple
-        onChange={handleObjectFiles}
+        onChange={handleNewAssetFiles}
+        className="hidden"
+      />
+      <input
+        ref={styleInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleNewStyleFiles}
         className="hidden"
       />
 
       <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', lineHeight: 1.5 }}>
-        Upload a sprite, pick it, switch to <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), and click on the canvas to place. Objects ignore the auto-tile grid.
+        Upload a sprite to make a new <strong>asset</strong>. Add more sprites to the same asset as <strong>styles</strong> (e.g. level&nbsp;1 / level&nbsp;2). Switch to <strong>Object</strong> tool (<kbd style={kbd}>6</kbd>), pick a style, and click on the canvas. Placed objects can swap styles from the right panel.
       </p>
 
       <ChunkyButton
@@ -1214,77 +1356,27 @@ function ObjectsSection() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))' }}>
-          {assetList.map((asset) => {
-            const isSel = asset.id === selectedAssetId;
-            return (
-              <div
-                key={asset.id}
-                style={{
-                  position: 'relative',
-                  background: isSel ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-                  border: `1.5px solid ${isSel ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-                  borderRadius: 8,
-                  padding: 4,
-                  boxShadow: isSel ? '0 2px 0 var(--pb-butter-ink)' : 'none',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => { setSelectedAssetId(asset.id); setTool('object'); }}
-                  title={`Place "${asset.name}" — ${asset.width}×${asset.height}px`}
-                  className="w-full"
-                  style={{
-                    background: 'rgba(0,0,0,0.04)',
-                    border: 0,
-                    borderRadius: 6,
-                    padding: 0,
-                    cursor: 'pointer',
-                    aspectRatio: '1 / 1',
-                    overflow: 'hidden',
-                    display: 'block',
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={asset.dataUrl}
-                    alt={asset.name}
-                    className="w-full h-full"
-                    style={{ objectFit: 'contain', imageRendering: 'pixelated' }}
-                    draggable={false}
-                  />
-                </button>
-                <div
-                  className="flex items-center gap-1"
-                  style={{ marginTop: 3 }}
-                >
-                  <span
-                    style={{
-                      flex: 1,
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: 'var(--pb-ink)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      lineHeight: 1.2,
-                    }}
-                    title={asset.name}
-                  >
-                    {asset.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); handleRemoveAsset(asset); }}
-                    style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 0 }}
-                    title="Delete sprite"
-                  >
-                    <Trash2 size={9} strokeWidth={2.4} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="space-y-2">
+          {assetList.map((asset) => (
+            <AssetCard
+              key={asset.id}
+              asset={asset}
+              expanded={!!expandedAssets[asset.id]}
+              isSelected={asset.id === selectedAssetId}
+              selectedStyleId={selectedStyleId}
+              onSelect={() => handleSelectAsset(asset)}
+              onToggleExpand={() => setExpandedAssets((m) => ({ ...m, [asset.id]: !m[asset.id] }))}
+              onPickStyle={(styleId) => {
+                setSelectedAssetId(asset.id);
+                setSelectedStyleId(styleId);
+                setTool('object');
+              }}
+              onRemoveAsset={() => handleRemoveAsset(asset)}
+              onRemoveStyle={(style) => handleRemoveStyle(asset, style)}
+              onRenameStyle={(styleId, label) => setStyleLabel(asset.id, styleId, label)}
+              onAddStyle={() => handleAddStyleClick(asset.id)}
+            />
+          ))}
         </div>
       )}
 
@@ -1295,6 +1387,7 @@ function ObjectsSection() {
           </div>
           {objects.map((obj) => {
             const asset = objectAssets[obj.assetId];
+            const style = asset?.styles.find((st) => st.id === obj.styleId);
             const isSel = obj.id === selectedObjectId;
             return (
               <div
@@ -1317,13 +1410,16 @@ function ObjectsSection() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}
                 >
-                  {asset && (
+                  {style && (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={asset.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                    <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
                   )}
                 </div>
                 <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {obj.name}
+                  {style && asset && asset.styles.length > 1 && (
+                    <span style={{ color: 'var(--pb-ink-muted)', fontWeight: 600 }}> · {style.label || `Style ${asset.styles.findIndex((s) => s.id === style.id) + 1}`}</span>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -1340,6 +1436,223 @@ function ObjectsSection() {
       )}
     </div>
   );
+}
+
+/**
+ * One asset card. Collapsed: thumbnail of the currently-active style + name
+ * + style count badge. Expanded: list of every style (thumb + label edit +
+ * delete) plus an "Add style" upload button. Picking a style sets the
+ * OBJECT-tool brush to that exact sprite.
+ */
+function AssetCard({
+  asset, expanded, isSelected, selectedStyleId,
+  onSelect, onToggleExpand, onPickStyle, onRemoveAsset, onRemoveStyle, onRenameStyle, onAddStyle,
+}: {
+  asset: ObjectAsset;
+  expanded: boolean;
+  isSelected: boolean;
+  selectedStyleId: string | null;
+  onSelect: () => void;
+  onToggleExpand: () => void;
+  onPickStyle: (styleId: string) => void;
+  onRemoveAsset: () => void;
+  onRemoveStyle: (style: ObjectStyle) => void;
+  onRenameStyle: (styleId: string, label: string) => void;
+  onAddStyle: () => void;
+}) {
+  // Show the currently picked style's thumb when this asset is the active
+  // brush target — otherwise fall back to the first style. Keeps the card
+  // visually in sync with what would actually be placed on click.
+  const headerStyle = isSelected
+    ? asset.styles.find((s) => s.id === selectedStyleId) ?? asset.styles[0]
+    : asset.styles[0];
+
+  const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
+
+  return (
+    <div
+      style={{
+        background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+        border: `1.5px solid ${isSelected ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        borderRadius: 10,
+        boxShadow: isSelected ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+        overflow: 'hidden',
+      }}
+    >
+      <div className="flex items-center gap-2" style={{ padding: 6 }}>
+        <button
+          type="button"
+          onClick={onSelect}
+          title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
+          style={{
+            width: 36, height: 36,
+            background: 'rgba(0,0,0,0.04)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 6,
+            padding: 2,
+            cursor: 'pointer',
+            flexShrink: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {headerStyle && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={headerStyle.dataUrl}
+              alt={asset.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+              draggable={false}
+            />
+          )}
+        </button>
+        <div className="flex-1 min-w-0" onClick={onSelect} style={{ cursor: 'pointer' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {asset.name}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+            {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          title={expanded ? 'Hide styles' : 'Show styles'}
+          style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 2 }}
+        >
+          {expanded ? <ChevDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
+        </button>
+        <button
+          type="button"
+          onClick={onRemoveAsset}
+          title="Delete asset"
+          style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
+        >
+          <Trash2 size={11} strokeWidth={2.4} />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="space-y-1.5" style={{ padding: '0 6px 6px' }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>
+            STYLES
+          </div>
+          <div className="space-y-1">
+            {asset.styles.map((style, i) => {
+              const isCurrent = isSelected && style.id === selectedStyleId;
+              return (
+                <div
+                  key={style.id}
+                  className="flex items-center gap-1.5"
+                  style={{
+                    padding: 3,
+                    background: isCurrent ? 'var(--pb-paper)' : 'transparent',
+                    border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'transparent'}`,
+                    borderRadius: 6,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onPickStyle(style.id)}
+                    title={`Use "${style.label || `Style ${i + 1}`}" as the brush`}
+                    style={{
+                      width: 24, height: 24, flexShrink: 0,
+                      background: 'rgba(0,0,0,0.06)',
+                      border: '1.5px solid var(--pb-line-2)',
+                      borderRadius: 5,
+                      padding: 0,
+                      cursor: 'pointer',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
+                  </button>
+                  {editingStyleId === style.id ? (
+                    <input
+                      autoFocus
+                      defaultValue={style.label}
+                      onBlur={(e) => { onRenameStyle(style.id, e.target.value); setEditingStyleId(null); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                        if (e.key === 'Escape') setEditingStyleId(null);
+                      }}
+                      style={{
+                        flex: 1,
+                        background: 'var(--pb-paper)',
+                        border: '1.5px solid var(--pb-line-2)',
+                        borderRadius: 5,
+                        padding: '2px 6px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: 'var(--pb-ink)',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onDoubleClick={() => setEditingStyleId(style.id)}
+                      title="Double-click to rename"
+                      style={{
+                        flex: 1,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: 'var(--pb-ink)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        cursor: 'text',
+                      }}
+                    >
+                      {style.label || `Style ${i + 1}`}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onRemoveStyle(style)}
+                    title="Delete this style"
+                    style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
+                  >
+                    <Trash2 size={10} strokeWidth={2.4} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={onAddStyle}
+            className="w-full flex items-center justify-center gap-1.5"
+            style={{
+              padding: '5px 8px',
+              background: 'var(--pb-paper)',
+              border: '1.5px dashed var(--pb-line-2)',
+              borderRadius: 6,
+              color: 'var(--pb-ink)',
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            <Plus size={11} strokeWidth={2.4} />
+            Add style
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Pick the next free label inside an asset's style list. Used to keep
+ *  the server's (user_id, group_id, label) upsert key from accidentally
+ *  overwriting an existing row when a user uploads two files with the
+ *  same base filename. */
+function nextUniqueLabel(asset: ObjectAsset, base: string): string {
+  const taken = new Set(asset.styles.map((s) => s.label));
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 1000; i++) {
+    const candidate = `${base} ${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base} ${Date.now()}`;
 }
 
 function NumField({

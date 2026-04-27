@@ -247,7 +247,58 @@ export function TileView() {
         }
       }
 
+      // Object placement ghost — show the snapped cells AND a faint preview
+      // of the sprite so the user sees exactly what + where they'll drop.
+      if (hover && s.tool === 'object' && s.selectedAssetId) {
+        const asset = s.objectAssets[s.selectedAssetId];
+        if (asset) {
+          const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(asset.width, asset.height, ts, hover.cx, hover.cy);
+          // Cells the object will overlap.
+          ctx!.fillStyle = 'rgba(168,85,247,0.18)';
+          ctx!.strokeStyle = 'rgba(126,34,206,0.85)';
+          ctx!.lineWidth = 1.5 / cam.zoom;
+          for (let dy = 0; dy < cellsH; dy++) {
+            for (let dx = 0; dx < cellsW; dx++) {
+              const px = (cellTLX + dx) * ts;
+              const py = (cellTLY + dy) * ts;
+              ctx!.fillRect(px, py, ts, ts);
+              ctx!.strokeRect(px, py, ts, ts);
+            }
+          }
+          // Faint sprite preview at the snapped target position.
+          const img = imgCacheRef.current.get(asset.dataUrl);
+          if (img && imgReadyRef.current.has(asset.dataUrl)) {
+            const w = cellsW * ts;
+            const h = cellsH * ts;
+            const x = cellTLX * ts;
+            const y = cellTLY * ts;
+            ctx!.globalAlpha = 0.55;
+            ctx!.drawImage(img, x, y, w, h);
+            ctx!.globalAlpha = 1;
+          }
+        }
+      }
+
       ctx!.restore();
+    }
+
+    /**
+     * Compute the cell-aligned footprint for placing an object whose natural
+     * size is (assetW × assetH) when the cursor is over cell (cursorCX, cursorCY).
+     * The cursor cell becomes the top-left of an N×M cell block sized to the
+     * sprite (ceil so a 33-px sprite still occupies a single 32-px cell rather
+     * than disappearing to zero). The placement code uses the same helper so
+     * preview and final position match exactly.
+     */
+    function objectFootprint(assetW: number, assetH: number, ts: number, cursorCX: number, cursorCY: number) {
+      const cellsW = Math.max(1, Math.round(assetW / ts));
+      const cellsH = Math.max(1, Math.round(assetH / ts));
+      return {
+        cellsW,
+        cellsH,
+        cellTLX: cursorCX,
+        cellTLY: cursorCY,
+      };
     }
 
     function screenToWorld(sx: number, sy: number) {
@@ -414,14 +465,19 @@ export function TileView() {
         if (!s.selectedAssetId) return;
         const asset = s.objectAssets[s.selectedAssetId];
         if (!asset) return;
-        // Drop the sprite at its natural pixel size — users resize per
-        // instance after placing if they need bigger / smaller.
+        // Snap to the grid using the same footprint helper the hover ghost
+        // uses, so the placed object lands exactly where the preview showed.
+        const ts = s.tileSize;
+        const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(asset.width, asset.height, ts, cell.cx, cell.cy);
+        const placedW = cellsW * ts;
+        const placedH = cellsH * ts;
         const id = s.addObject({
           layerId: s.activeLayerId,
-          x: w.x, y: w.y,
+          x: cellTLX * ts + placedW / 2,
+          y: cellTLY * ts + placedH / 2,
           assetId: s.selectedAssetId,
-          width: asset.width,
-          height: asset.height,
+          width: placedW,
+          height: placedH,
           rotation: 0,
           flipX: false, flipY: false,
           name: asset.name || `Object ${s.objects.length + 1}`,

@@ -27,6 +27,7 @@ import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
 import { Freeform3DPropertiesPanel } from './panels/Freeform3DPropertiesPanel';
 import { Freeform2DPropertiesPanel } from './panels/Freeform2DPropertiesPanel';
 import { TileObjectPropertiesPanel } from './panels/TileObjectPropertiesPanel';
+import { TileAssetPropertiesPanel } from './panels/TileAssetPropertiesPanel';
 import { useTile } from '@/store/tile-store';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
@@ -136,6 +137,10 @@ export function StudioLayout() {
   // Re-render when the user picks/clears an object on the 2D Tile canvas
   // so the Properties tab can swap to TileObjectPropertiesPanel.
   const tileSelectedObjectId = useTile((s) => s.selectedObjectId);
+  // Re-render when the user clicks an uploaded asset card so the Properties
+  // tab can swap to TileAssetPropertiesPanel (image preview + slice
+  // controls). Object selection still wins — see the if-chain below.
+  const tileSelectedAssetId = useTile((s) => s.selectedAssetId);
   // Subscribe so the Code tab re-renders when the agent edits the
   // scene script via setScript ACTION.
   const freeform3dScript = useFreeform3D((s) => s.scene.script);
@@ -621,6 +626,11 @@ export function StudioLayout() {
               // of the in-canvas popup that used to live in TileView.
               if (gameSystem === '2d' && tileSelectedObjectId) {
                 return <TileObjectPropertiesPanel headless />;
+              }
+              // 2D Tile — when no canvas object is selected but an uploaded
+              // asset card is, show its image + slice (rows/cols) controls.
+              if (gameSystem === '2d' && tileSelectedAssetId) {
+                return <TileAssetPropertiesPanel headless />;
               }
               if (openFileName) {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;

@@ -14,6 +14,7 @@ import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-simi
 import { analyzePalette, bucketLabel, type ColorBucket } from '@/lib/tile-palette';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
+import { useStudio } from '@/store/studio-store';
 
 /**
  * Left-panel content for the 2D Tile-based game system.
@@ -1572,6 +1573,9 @@ function ObjectsSection() {
   const selectedStyleId = useTile((s) => s.selectedStyleId);
   const setSelectedStyleId = useTile((s) => s.setSelectedStyleId);
   const setTool = useTile((s) => s.setTool);
+  // Auto-open the right Properties tab on asset click so the asset's image
+  // preview + slice (rows/cols) controls show without a manual tab switch.
+  const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const styleInputRef = useRef<HTMLInputElement | null>(null);
@@ -1764,6 +1768,7 @@ function ObjectsSection() {
   function handleSelectAsset(asset: ObjectAsset) {
     setSelectedAssetId(asset.id);
     setTool('object');
+    setRightPanelGroup('properties');
   }
 
   function handleRemoveAsset(asset: ObjectAsset) {
@@ -2106,6 +2111,7 @@ function ObjectsSection() {
                     setSelectedAssetId(asset.id);
                     setSelectedStyleId(styleId);
                     setTool('object');
+                    setRightPanelGroup('properties');
                   }}
                   onRemoveAsset={() => handleRemoveAsset(asset)}
                   onRemoveStyle={(style) => handleRemoveStyle(asset, style)}

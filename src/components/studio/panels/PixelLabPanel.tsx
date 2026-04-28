@@ -1,53 +1,16 @@
 'use client';
 import { useState } from 'react';
 import { PanelCategoryTabs } from '@/components/ui/panel-controls';
+import {
+  TOOLS_BY_CATEGORY,
+  findTool,
+  type Category,
+  type Badge,
+  type ToolSchema,
+} from '@/lib/pixellab-tools';
+import { PixelLabToolForm } from './PixelLabToolForm';
 
-type Category = 'create' | 'transform' | 'animate' | 'utility';
-type Badge = 'NEW' | 'PRO' | 'EXPERIMENTAL';
-
-interface Tool {
-  id: string;
-  title: string;
-  desc: string;
-  badge?: Badge;
-}
-
-const TOOLS: Record<Category, Tool[]> = {
-  create: [
-    { id: 'create-image-sxl',      title: 'Create image S-XL (new)', desc: 'New model, outline + detail controls', badge: 'NEW' },
-    { id: 'create-image-mxl',      title: 'Create M-XL image',       desc: 'Best for 64px and larger' },
-    { id: 'create-image-sm',       title: 'Create S-M image',        desc: 'Best for 16-64px' },
-    { id: 'image-to-pixel-art',    title: 'Image to pixel art',      desc: 'Convert any image to pixel art' },
-    { id: 'create-image',          title: 'Create image',            desc: 'High quality generation', badge: 'PRO' },
-    { id: 'create-from-style',     title: 'Create from style reference', desc: 'Match your art style', badge: 'PRO' },
-    { id: 'create-8dir-sprite',    title: 'Create 8-directional sprite', desc: 'Generate 8 directional views', badge: 'PRO' },
-    { id: 'create-tiles',          title: 'Create tiles',            desc: 'Generate tile variations for games', badge: 'PRO' },
-    { id: 'create-ui-elements-pro',title: 'Create UI elements',      desc: 'Create game UI components', badge: 'PRO' },
-    { id: 'create-ui-elements-exp',title: 'Create UI elements',      desc: 'Generate game UI components', badge: 'EXPERIMENTAL' },
-  ],
-  transform: [
-    { id: 'image-to-image',     title: 'Image to image', desc: 'Transform using depth guidance' },
-    { id: 'edit-image',         title: 'Edit image',     desc: 'Edit parts of an existing image' },
-    { id: 'edit-image-pro',     title: 'Edit image',     desc: 'Advanced AI image editing', badge: 'PRO' },
-  ],
-  animate: [
-    { id: 'generate-8-rotations',  title: 'Generate 8 rotations',     desc: 'Create 8 directional views from reference', badge: 'NEW' },
-    { id: 'animate-with-text-new', title: 'Animate with text',        desc: 'Generate animation from text', badge: 'NEW' },
-    { id: 'interpolate-new',       title: 'Interpolate',              desc: 'Animate between two frames', badge: 'NEW' },
-    { id: 'create-animated',       title: 'Create animated object/character', desc: 'Generate animation from text', badge: 'PRO' },
-    { id: 'animate-with-text-pro', title: 'Animate with text',        desc: 'Add animation to existing image', badge: 'PRO' },
-    { id: 'edit-animation',        title: 'Edit animation',           desc: 'Modify frames of an animation', badge: 'PRO' },
-    { id: 'transfer-outfit',       title: 'Transfer outfit to animation', desc: 'Apply outfit to another animation', badge: 'PRO' },
-    { id: 'interpolate-pro',       title: 'Interpolate',              desc: 'Smooth transitions between frames', badge: 'PRO' },
-  ],
-  utility: [
-    { id: 'unzoom',              title: 'Unzoom',              desc: 'Detect pixel scale and downscale', badge: 'NEW' },
-    { id: 'remove-background',   title: 'Remove background',   desc: 'Remove background from image', badge: 'NEW' },
-    { id: 'pixel-art-correction',title: 'Pixel art correction',desc: 'Clean up and refine pixel art', badge: 'NEW' },
-  ],
-};
-
-const TABS = [
+const TABS: { id: Category; label: string }[] = [
   { id: 'create',    label: 'Create' },
   { id: 'transform', label: 'Transform' },
   { id: 'animate',   label: 'Animate' },
@@ -77,7 +40,7 @@ function BadgePill({ badge }: { badge: Badge }) {
   );
 }
 
-function ToolCard({ tool, onSelect }: { tool: Tool; onSelect: (id: string) => void }) {
+function ToolCard({ tool, onSelect }: { tool: ToolSchema; onSelect: (id: string) => void }) {
   return (
     <button
       type="button"
@@ -109,13 +72,40 @@ function ToolCard({ tool, onSelect }: { tool: Tool; onSelect: (id: string) => vo
   );
 }
 
+function EmptyCategory({ category }: { category: Category }) {
+  return (
+    <div
+      style={{
+        padding: '24px 12px',
+        textAlign: 'center',
+        color: 'var(--pb-ink-muted)',
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
+      <p style={{ fontWeight: 600, color: 'var(--pb-ink)', marginBottom: 4 }}>
+        No {category} tools yet
+      </p>
+      <p>
+        PixelLab&apos;s MCP server hasn&apos;t exposed {category}-class tools yet.
+        Add them here once the MCP catalog includes them, or wire PixelLab&apos;s
+        REST API directly.
+      </p>
+    </div>
+  );
+}
+
 export function PixelLabPanel() {
   const [active, setActive] = useState<Category>('create');
+  const [openToolId, setOpenToolId] = useState<string | null>(null);
 
-  const handleSelect = (toolId: string) => {
-    // TODO: wire to PixelLab tool config view / MCP call
-    console.log('[pixellab] selected', toolId);
-  };
+  const openTool = openToolId ? findTool(openToolId) : null;
+
+  if (openTool) {
+    return <PixelLabToolForm tool={openTool} onBack={() => setOpenToolId(null)} />;
+  }
+
+  const tools = TOOLS_BY_CATEGORY[active];
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -127,9 +117,13 @@ export function PixelLabPanel() {
         />
       </div>
       <div className="flex-1 overflow-y-auto" style={{ padding: '4px 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {TOOLS[active].map((tool) => (
-          <ToolCard key={tool.id} tool={tool} onSelect={handleSelect} />
-        ))}
+        {tools.length === 0 ? (
+          <EmptyCategory category={active} />
+        ) : (
+          tools.map((tool) => (
+            <ToolCard key={tool.id} tool={tool} onSelect={setOpenToolId} />
+          ))
+        )}
       </div>
     </div>
   );

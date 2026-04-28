@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
-  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw, Waves,
+  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw, Waves, Fence,
 } from 'lucide-react';
 import { useTile, type TileTool, findStyle, tileDataUrlFor } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
@@ -556,6 +556,97 @@ export function TileView() {
       }
       ctx!.globalAlpha = 1;
 
+      // ── Fence component (procedural pixel-art posts + rails) ────
+      // Edges first so posts overlap their ends. Edges are only drawn
+      // when both endpoints exist as posts (deleting a post via clear
+      // would orphan an edge, so we guard at draw time too).
+      const fenceEdgeKeys = Object.keys(s.fenceEdges);
+      const fencePostKeys = Object.keys(s.fencePosts);
+      if (fenceEdgeKeys.length || fencePostKeys.length) {
+        const postCenter = (key: string) => {
+          const [cx, cy] = key.split(',').map(Number);
+          return { x: cx * ts + ts / 2, y: cy * ts + ts / 2 };
+        };
+        ctx!.lineCap = 'round';
+        for (const ek of fenceEdgeKeys) {
+          const sep = ek.indexOf('|');
+          if (sep < 0) continue;
+          const a = ek.slice(0, sep);
+          const b = ek.slice(sep + 1);
+          if (!s.fencePosts[a] || !s.fencePosts[b]) continue;
+          const A = postCenter(a);
+          const B = postCenter(b);
+          const dx = B.x - A.x;
+          const dy = B.y - A.y;
+          const len = Math.hypot(dx, dy);
+          if (!len) continue;
+          const nx = -dy / len;
+          const ny = dx / len;
+          const railOffsets = [-ts * 0.14, ts * 0.14];
+          for (const off of railOffsets) {
+            ctx!.strokeStyle = '#7a5a35';
+            ctx!.lineWidth = Math.max(2 / cam.zoom, ts * 0.07);
+            ctx!.beginPath();
+            ctx!.moveTo(A.x + nx * off, A.y + ny * off);
+            ctx!.lineTo(B.x + nx * off, B.y + ny * off);
+            ctx!.stroke();
+            ctx!.strokeStyle = '#b08a55';
+            ctx!.lineWidth = Math.max(1 / cam.zoom, ts * 0.025);
+            ctx!.beginPath();
+            ctx!.moveTo(A.x + nx * off, A.y + ny * off - ts * 0.02);
+            ctx!.lineTo(B.x + nx * off, B.y + ny * off - ts * 0.02);
+            ctx!.stroke();
+          }
+        }
+        const postW = ts * 0.20;
+        const postH = ts * 0.58;
+        for (const key of fencePostKeys) {
+          const c = postCenter(key);
+          const x = c.x - postW / 2;
+          const y = c.y - postH / 2;
+          ctx!.fillStyle = 'rgba(0,0,0,0.20)';
+          ctx!.fillRect(x - 1, y + postH, postW + 2, ts * 0.06);
+          ctx!.fillStyle = '#7a5a35';
+          ctx!.fillRect(x, y, postW, postH);
+          ctx!.fillStyle = '#b08a55';
+          ctx!.fillRect(x, y, Math.max(1, postW * 0.28), postH);
+          ctx!.fillStyle = '#5a4225';
+          ctx!.fillRect(x - postW * 0.12, y, postW * 1.24, ts * 0.07);
+          if (s.selectedFencePostKey === key) {
+            ctx!.strokeStyle = '#0ea5e9';
+            ctx!.lineWidth = 2 / cam.zoom;
+            ctx!.setLineDash([4 / cam.zoom, 3 / cam.zoom]);
+            ctx!.strokeRect(c.x - ts * 0.42, c.y - ts * 0.42, ts * 0.84, ts * 0.84);
+            ctx!.setLineDash([]);
+          }
+        }
+        ctx!.lineCap = 'butt';
+      }
+
+      // Fence-tool hover ghost: outline the 8-neighbour ring of the
+      // current post (where a click adds a connected segment) and the
+      // hovered cell where a new post would land. Uses hoverRef directly
+      // because the shared `hover` const is declared further down.
+      const fenceHover = hoverRef.current;
+      if (fenceHover && s.tool === 'fence') {
+        if (s.selectedFencePostKey) {
+          const [sx, sy] = s.selectedFencePostKey.split(',').map(Number);
+          ctx!.strokeStyle = 'rgba(168,85,247,0.5)';
+          ctx!.lineWidth = 1.5 / cam.zoom;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              ctx!.strokeRect((sx + dx) * ts, (sy + dy) * ts, ts, ts);
+            }
+          }
+        }
+        ctx!.fillStyle = 'rgba(168,85,247,0.18)';
+        ctx!.strokeStyle = 'rgba(126,34,206,0.85)';
+        ctx!.lineWidth = 1.5 / cam.zoom;
+        ctx!.fillRect(fenceHover.cx * ts, fenceHover.cy * ts, ts, ts);
+        ctx!.strokeRect(fenceHover.cx * ts, fenceHover.cy * ts, ts, ts);
+      }
+
       // Grid overlay.
       if (s.showGrid && cam.zoom > 0.25) {
         const fade = Math.min(1, (cam.zoom - 0.25) * 2);
@@ -1063,6 +1154,11 @@ export function TileView() {
         return;
       }
 
+      if (s.tool === 'fence') {
+        s.placeFenceAt(cell.cx, cell.cy);
+        scheduleRender();
+        return;
+      }
       if (s.tool === 'paint') { isDrawing = 'paint'; applyPaint(cell); }
       else if (s.tool === 'erase') { isDrawing = 'erase'; applyErase(cell); }
       else if (s.tool === 'fill') { applyFill(cell); }
@@ -1206,12 +1302,14 @@ export function TileView() {
       else if (e.key === '4') s.setTool('fill');
       else if (e.key === '5') s.setTool('eyedropper');
       else if (e.key === '6') s.setTool('object');
+      else if (e.key === '7') s.setTool('fence');
       else if (e.key === 'Escape') {
         // Bail out of any modal tool back to SELECT. Also drops any
         // object selection so the side panel goes away — the same key
         // doing both feels right because Escape == "stop what I'm doing".
         s.setTool('select');
         if (s.selectedObjectId) s.selectObject(null);
+        if (s.selectedFencePostKey) s.setSelectedFencePostKey(null);
         scheduleRender();
       }
       else if (e.key === '[') s.setBrushSize(s.brushSize - 1);
@@ -1318,6 +1416,9 @@ export function TileView() {
         </ToolBtn>
         <ToolBtn active={tool === 'object'} title="Place object (6) · click again or Esc to exit" onClick={() => setTool(tool === 'object' ? 'select' : 'object')}>
           <Box size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn active={tool === 'fence'} title="Fence (7) — click to add a post; click an adjacent cell to connect with a segment · Esc to exit" onClick={() => setTool(tool === 'fence' ? 'select' : 'fence')}>
+          <Fence size={14} strokeWidth={2.2} />
         </ToolBtn>
         <Separator />
         <BrushPill value={brushSize} onChange={setBrushSize} />
@@ -1445,6 +1546,7 @@ function cursorForTool(tool: TileTool, spaceHeld: boolean): string {
     case 'fill': return 'crosshair';
     case 'eyedropper': return 'crosshair';
     case 'object': return 'copy';
+    case 'fence': return 'crosshair';
   }
 }
 

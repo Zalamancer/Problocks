@@ -40,7 +40,8 @@ export type TileTool =
   | 'erase'
   | 'fill'
   | 'eyedropper'
-  | 'object';
+  | 'object'
+  | 'fence';
 
 export interface Tile {
   id: string;
@@ -414,6 +415,32 @@ export interface TileStore {
    *  preview and final placement. */
   selectedStyleId: string | null;
   setSelectedStyleId: (id: string | null) => void;
+
+  // ── Fence component (procedural pixel-art) ─────────────────────
+  /**
+   * Posts are placed per cell (one post per tile cell). Key `"cx,cy"`.
+   * The renderer draws a procedural pixel-art post centered on each cell.
+   */
+  fencePosts: Record<string, true>;
+  /**
+   * Segments connecting two posts. Key is the canonical edge string
+   * `"a|b"` where `a < b` lexicographically and each side is a post key.
+   * Edges are only drawn when both endpoints exist in `fencePosts`.
+   */
+  fenceEdges: Record<string, true>;
+  /** Last-touched post — the "current post" the user will connect from
+   *  on the next click. Null = no current post. */
+  selectedFencePostKey: string | null;
+  /**
+   * Fence-tool click resolver. If a current post is selected and (cx, cy)
+   * falls within the 8-neighbour ring, this places a new post (if absent)
+   * and an edge between the two; the new post becomes the current one.
+   * Clicking the same selected cell deselects. Clicking outside the ring
+   * places/selects a fresh post with no segment to the previous one.
+   */
+  placeFenceAt: (cx: number, cy: number) => void;
+  setSelectedFencePostKey: (key: string | null) => void;
+  clearFences: () => void;
 
   // ── View ───────────────────────────────────────────────────────
   camera: TileCamera;
@@ -1017,6 +1044,32 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   selectedStyleId: null,
   setSelectedStyleId: (id) => set({ selectedStyleId: id }),
 
+  fencePosts: {},
+  fenceEdges: {},
+  selectedFencePostKey: null,
+  placeFenceAt: (cx, cy) => set((s) => {
+    const newKey = `${cx},${cy}`;
+    const sel = s.selectedFencePostKey;
+    // Toggle deselect when clicking the same post.
+    if (sel === newKey) return { selectedFencePostKey: null };
+    const posts = { ...s.fencePosts, [newKey]: true as const };
+    let edges = s.fenceEdges;
+    if (sel && sel !== newKey) {
+      const [sx, sy] = sel.split(',').map(Number);
+      const dx = cx - sx;
+      const dy = cy - sy;
+      if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+        const a = sel < newKey ? sel : newKey;
+        const b = sel < newKey ? newKey : sel;
+        const ek = `${a}|${b}`;
+        if (!edges[ek]) edges = { ...edges, [ek]: true };
+      }
+    }
+    return { fencePosts: posts, fenceEdges: edges, selectedFencePostKey: newKey };
+  }),
+  setSelectedFencePostKey: (key) => set({ selectedFencePostKey: key }),
+  clearFences: () => set({ fencePosts: {}, fenceEdges: {}, selectedFencePostKey: null }),
+
   camera: { x: 0, y: 0, zoom: 1 },
   setCamera: (cam) => set((s) => ({ camera: { ...s.camera, ...cam } })),
   showGrid: true,
@@ -1026,6 +1079,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   clearMap: () => set((s) => ({
     layers: s.layers.map((l) => ({ ...l, corners: {} })),
     objects: [],
+    fencePosts: {},
+    fenceEdges: {},
+    selectedFencePostKey: null,
   })),
 }), {
   // v7 — ObjectAsset gained nested `styles[]` (multi-variant per asset);
@@ -1064,6 +1120,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     wavyTextureIds: s.wavyTextureIds,
     tilesetTints: s.tilesetTints,
     showGrid: s.showGrid,
+    fencePosts: s.fencePosts,
+    fenceEdges: s.fenceEdges,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {
@@ -1115,6 +1173,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     }
     // v6: objectAssets is new; default to empty if missing.
     if (!state.objectAssets) state.objectAssets = {};
+    // Fence component (added 2026-04-27) — backfill empty maps.
+    if (!state.fencePosts) state.fencePosts = {};
+    if (!state.fenceEdges) state.fenceEdges = {};
+    if (state.selectedFencePostKey === undefined) state.selectedFencePostKey = null;
     // Backfill hue on any TileObject persisted before the field was added.
     // Optional in TypeScript would leak `?` everywhere; one-shot backfill
     // keeps the renderer simple (it never sees `undefined` for hue).

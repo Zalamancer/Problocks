@@ -201,20 +201,20 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
             type="button"
             disabled={uploading}
             onClick={() => styleInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-1.5"
+            className="w-full flex items-center justify-center gap-2 mt-2"
             style={{
-              padding: '6px 10px',
+              padding: '10px 12px',
               background: 'var(--pb-paper)',
               border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 6,
+              borderRadius: 8,
               color: 'var(--pb-ink)',
-              fontSize: 11,
+              fontSize: 12.5,
               fontWeight: 800,
               cursor: uploading ? 'not-allowed' : 'pointer',
               opacity: uploading ? 0.6 : 1,
             }}
           >
-            {uploading ? <Upload size={11} strokeWidth={2.4} /> : <Plus size={11} strokeWidth={2.4} />}
+            {uploading ? <Upload size={13} strokeWidth={2.4} /> : <Plus size={13} strokeWidth={2.4} />}
             {uploading ? 'Uploading…' : 'Add style'}
           </button>
         </PanelSection>
@@ -369,7 +369,7 @@ function StylesList({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {asset.styles.map((style, i) => {
         const isCurrent = style.id === selectedStyleId;
         const isEditing = editingStyleId === style.id;
@@ -387,12 +387,12 @@ function StylesList({
               e.preventDefault();
             }}
             onDrop={(e) => { e.preventDefault(); reorderViaDrop(style.id); }}
-            className="flex items-center gap-1.5"
+            className="flex items-center gap-2"
             style={{
-              padding: 4,
+              padding: 8,
               background: isCurrent ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
               border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-              borderRadius: 6,
+              borderRadius: 8,
             }}
           >
             <span
@@ -404,18 +404,18 @@ function StylesList({
                 flexShrink: 0,
               }}
             >
-              <GripVertical size={12} strokeWidth={2.4} />
+              <GripVertical size={14} strokeWidth={2.4} />
             </span>
             <button
               type="button"
               onClick={() => onPickStyle(style.id)}
               title={`Use "${style.label || `Style ${i + 1}`}" as the brush`}
               style={{
-                width: 28, height: 28, flexShrink: 0,
+                width: 56, height: 56, flexShrink: 0,
                 background: 'rgba(0,0,0,0.06)',
                 border: '1.5px solid var(--pb-line-2)',
-                borderRadius: 5,
-                padding: 0,
+                borderRadius: 6,
+                padding: 2,
                 cursor: 'pointer',
                 overflow: 'hidden',
               }}
@@ -439,11 +439,12 @@ function StylesList({
                 }}
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   background: 'var(--pb-paper)',
                   border: '1.5px solid var(--pb-line-2)',
                   borderRadius: 5,
-                  padding: '4px 8px',
-                  fontSize: 11,
+                  padding: '5px 8px',
+                  fontSize: 13,
                   fontWeight: 700,
                   color: 'var(--pb-ink)',
                 }}
@@ -454,7 +455,8 @@ function StylesList({
                 title="Double-click to rename"
                 style={{
                   flex: 1,
-                  fontSize: 11,
+                  minWidth: 0,
+                  fontSize: 13,
                   fontWeight: 700,
                   color: 'var(--pb-ink)',
                   overflow: 'hidden',
@@ -470,17 +472,17 @@ function StylesList({
               type="button"
               onClick={() => setEditingStyleId(style.id)}
               title="Rename style"
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}
             >
-              <Pencil size={10} strokeWidth={2.4} />
+              <Pencil size={12} strokeWidth={2.4} />
             </button>
             <button
               type="button"
               onClick={() => onRemoveStyle(style)}
               title="Delete style"
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}
             >
-              <Trash2 size={11} strokeWidth={2.4} />
+              <Trash2 size={13} strokeWidth={2.4} />
             </button>
           </div>
         );

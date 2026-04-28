@@ -166,18 +166,6 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
         className="hidden"
       />
 
-      <div
-        className="shrink-0 flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
-      >
-        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
-          {asset.name}
-        </span>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
-          ASSET
-        </span>
-      </div>
-
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         <ImagePreviewWithEdit
           dataUrl={baseStyle?.dataUrl ?? ''}

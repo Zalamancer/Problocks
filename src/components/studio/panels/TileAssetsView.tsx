@@ -1702,6 +1702,11 @@ function ObjectsSection() {
   }
 
   function handleSelectAsset(asset: ObjectAsset) {
+    // Clear any canvas-object selection so the right Properties panel
+    // shows the ASSET view (TileAssetPropertiesPanel) instead of the
+    // OBJECT view — the StudioLayout switch gives object selection
+    // priority, which would otherwise mask the asset panel.
+    useTile.getState().selectObject(null);
     setSelectedAssetId(asset.id);
     setTool('object');
     setRightPanelGroup('properties');

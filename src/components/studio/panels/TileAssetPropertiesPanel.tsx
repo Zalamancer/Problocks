@@ -249,6 +249,7 @@ function ImagePreviewWithEdit({
         style={{
           width: '100%',
           aspectRatio: '1 / 1',
+          flexShrink: 0,
           background: 'var(--pb-cream-2)',
           borderBottom: '1.5px solid var(--pb-line-2)',
           display: 'flex',
@@ -270,6 +271,7 @@ function ImagePreviewWithEdit({
         position: 'relative',
         width: '100%',
         aspectRatio: '1 / 1',
+        flexShrink: 0,
         background: 'rgba(0,0,0,0.06)',
         borderBottom: '1.5px solid var(--pb-line-2)',
         overflow: 'hidden',
@@ -281,9 +283,11 @@ function ImagePreviewWithEdit({
         src={dataUrl}
         alt=""
         style={{
+          position: 'absolute',
+          inset: 12,
           display: 'block',
-          width: '100%',
-          height: '100%',
+          width: 'calc(100% - 24px)',
+          height: 'calc(100% - 24px)',
           objectFit: 'contain',
           imageRendering: 'pixelated',
         }}

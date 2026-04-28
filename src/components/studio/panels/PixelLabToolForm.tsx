@@ -342,7 +342,7 @@ export function PixelLabToolForm({ tool, onBack }: PixelLabToolFormProps) {
       }
       fd.append('__args', JSON.stringify(args));
 
-      const resp = await fetch(`/api/pixellab/run/${encodeURIComponent(tool.mcpName)}`, {
+      const resp = await fetch(`/api/pixellab/run/${encodeURIComponent(tool.id)}`, {
         method: 'POST',
         body: fd,
       });

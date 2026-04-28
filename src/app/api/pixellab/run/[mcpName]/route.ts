@@ -1,42 +1,40 @@
 /**
- * PixelLab MCP tool invoker.
+ * PixelLab tool invoker — dispatches by transport.
  *
- * POST /api/pixellab/run/<mcp_tool_name>
+ * POST /api/pixellab/run/<tool.id>
  *
  * Body: multipart/form-data
- *   - __args: JSON-encoded object of non-file arguments
- *   - <key>:  binary file (single image; e.g. background_image)
- *   - <key>[]: binary file(s) (image array; e.g. style_images)
+ *   - __args:    JSON-encoded object of non-file arguments
+ *   - <key>:     binary file (single image input)
+ *   - <key>[]:   binary file(s) (image array input)
  *
- * Calls the PixelLab MCP server at https://api.pixellab.ai/mcp via JSON-RPC
- * (`tools/call`), with image fields injected as base64 data URLs into the
- * arguments object. Returns `{ ok, result, images, error }` to the caller.
+ * Looks up `tool.id` in src/lib/pixellab-tools.ts, then:
+ *   - transport === 'mcp'   → POST JSON-RPC tools/call to api.pixellab.ai/mcp
+ *                              and poll the matching get_* MCP tool when async.
+ *   - transport === 'rest'  → run tool.restTransform to build the v2 REST body,
+ *                              POST to api.pixellab.ai/v2/<endpoint>, and poll
+ *                              /v2/background-jobs/<id> when async.
  *
- * Why MCP and not the v2 REST API: our schemas (src/lib/pixellab-tools.ts)
- * were authored from the MCP catalog so argument names match 1:1 with
- * MCP tool inputs. The v2 REST surface uses different parameter shapes
- * (e.g. `image_size: {width,height}` instead of MCP's `size: int`) and
- * is mapped per endpoint, which would require a second translation layer.
+ * Response: { ok, text, images, raw, jobId? }.
  */
 
-const MCP_ENDPOINT = 'https://api.pixellab.ai/mcp';
+import { findTool, type RestImage } from '@/lib/pixellab-tools';
 
-/**
- * Map of `create_*` MCP tools to their `get_*` counterpart and the argument
- * key the get-tool expects. Used to poll for completion of async jobs.
- */
-const POLL_BINDINGS: Record<string, { getTool: string; idArg: string; idLabels: string[] } | undefined> = {
+const MCP_ENDPOINT  = 'https://api.pixellab.ai/mcp';
+const REST_BASE     = 'https://api.pixellab.ai/v2';
+
+const POLL_INTERVAL_MS = 4000;
+const POLL_MAX_ATTEMPTS = 18; // ~72s — well under serverless 5-min cap.
+
+const MCP_POLL_BINDINGS: Record<string, { getTool: string; idArg: string; idLabels: string[] } | undefined> = {
   create_character:             { getTool: 'get_character',             idArg: 'character_id', idLabels: ['Character ID', 'character_id'] },
   create_topdown_tileset:       { getTool: 'get_topdown_tileset',       idArg: 'tileset_id',   idLabels: ['Tileset ID', 'tileset_id'] },
   create_sidescroller_tileset:  { getTool: 'get_sidescroller_tileset',  idArg: 'tileset_id',   idLabels: ['Tileset ID', 'tileset_id'] },
   create_isometric_tile:        { getTool: 'get_isometric_tile',        idArg: 'tile_id',      idLabels: ['Tile ID', 'tile_id'] },
   create_map_object:            { getTool: 'get_map_object',            idArg: 'object_id',    idLabels: ['Object ID', 'object_id'] },
   create_tiles_pro:             { getTool: 'get_tiles_pro',             idArg: 'tile_id',      idLabels: ['Tile ID', 'tile_id'] },
-  animate_character:            undefined, // Animations live on the character record.
+  animate_character:            undefined,
 };
-
-const POLL_INTERVAL_MS = 4000;
-const POLL_MAX_ATTEMPTS = 18; // ~72s total — keeps us well under serverless 5-min cap.
 
 interface JsonRpcResponse {
   jsonrpc: '2.0';
@@ -57,12 +55,18 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ mcpName: string }> },
 ) {
-  const { mcpName } = await params;
+  const { mcpName: toolId } = await params;
   const key = process.env.PIXELLAB_API_KEY;
   if (!key) {
     return Response.json({ ok: false, error: 'PIXELLAB_API_KEY not configured' }, { status: 500 });
   }
 
+  const tool = findTool(toolId);
+  if (!tool) {
+    return Response.json({ ok: false, error: `Unknown tool id: ${toolId}` }, { status: 404 });
+  }
+
+  // Parse the FormData payload (shared across both transports).
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -70,7 +74,6 @@ export async function POST(
     return Response.json({ ok: false, error: 'Expected multipart/form-data' }, { status: 400 });
   }
 
-  // Parse non-file args.
   let args: Record<string, unknown> = {};
   const argsRaw = formData.get('__args');
   if (typeof argsRaw === 'string') {
@@ -81,23 +84,191 @@ export async function POST(
     }
   }
 
-  // Inject image fields. Single files → base64 data URL string.
-  // Repeated `<key>[]` entries → array of base64 data URL strings.
-  const arrayBuffers: Record<string, string[]> = {};
+  // Build:
+  //   imageDataUrls:  Record<key, string>          for MCP (data URL strings)
+  //   imageObjs:      Record<key, RestImage|RestImage[]> for REST (typed objects)
+  const imageDataUrls: Record<string, string | string[]> = {};
+  const imageObjs: Record<string, RestImage | RestImage[]> = {};
+  const arrayDataUrls: Record<string, string[]> = {};
   for (const [name, value] of formData.entries()) {
     if (name === '__args' || !(value instanceof File)) continue;
     const dataUrl = await fileToDataUrl(value);
     if (name.endsWith('[]')) {
-      const key = name.slice(0, -2);
-      (arrayBuffers[key] ??= []).push(dataUrl);
+      const k = name.slice(0, -2);
+      (arrayDataUrls[k] ??= []).push(dataUrl);
     } else {
-      args[name] = dataUrl;
+      imageDataUrls[name] = dataUrl;
+      imageObjs[name] = { type: 'base64', base64: dataUrl };
     }
   }
-  for (const [key, arr] of Object.entries(arrayBuffers)) {
-    args[key] = arr;
+  for (const [k, arr] of Object.entries(arrayDataUrls)) {
+    imageDataUrls[k] = arr;
+    imageObjs[k] = arr.map((u) => ({ type: 'base64' as const, base64: u }));
   }
 
+  // ── REST transport ─────────────────────────────────────────────────────
+  if (tool.transport === 'rest') {
+    if (!tool.restEndpoint || !tool.restTransform) {
+      return Response.json(
+        { ok: false, error: `Tool ${toolId} is REST but missing restEndpoint/restTransform` },
+        { status: 500 },
+      );
+    }
+    const body = tool.restTransform(args, imageObjs);
+    return await callRest({
+      key, endpoint: tool.restEndpoint, body, async: !!tool.restAsync,
+    });
+  }
+
+  // ── MCP transport ──────────────────────────────────────────────────────
+  if (!tool.mcpName) {
+    return Response.json({ ok: false, error: `Tool ${toolId} is MCP but missing mcpName` }, { status: 500 });
+  }
+
+  // Inject MCP-style image strings (single = bare key, multiple = array of strings).
+  const mcpArgs = { ...args };
+  for (const [k, v] of Object.entries(imageDataUrls)) mcpArgs[k] = v;
+
+  return await callMcp({ key, mcpName: tool.mcpName, args: mcpArgs });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// REST transport
+// ──────────────────────────────────────────────────────────────────────────
+
+async function callRest({
+  key, endpoint, body, async,
+}: { key: string; endpoint: string; body: Record<string, unknown>; async: boolean }) {
+  let resp: Response;
+  try {
+    resp = await fetch(`${REST_BASE}/${endpoint}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return Response.json(
+      { ok: false, error: `PixelLab REST request failed: ${errMsg(err)}` },
+      { status: 502 },
+    );
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = (await resp.json()) as Record<string, unknown>;
+  } catch (err) {
+    return Response.json(
+      { ok: false, error: `Failed to parse REST response: ${errMsg(err)}`, status: resp.status },
+      { status: 502 },
+    );
+  }
+
+  // Error path: prefer FastAPI {detail: ...} shape, fall back to status text.
+  if (!resp.ok && resp.status !== 202) {
+    const detail = (data.detail as string | undefined) ?? (data.error as string | undefined);
+    return Response.json(
+      { ok: false, error: detail ?? `REST ${endpoint} failed (HTTP ${resp.status})`, status: resp.status, raw: data },
+      { status: resp.status >= 500 ? 502 : resp.status },
+    );
+  }
+
+  // Async: server returned a job id — poll background-jobs/<id> until done.
+  const jobId = (data.background_job_id as string | undefined) ?? (data.job_id as string | undefined);
+  if (async || jobId) {
+    if (!jobId) {
+      return Response.json(
+        { ok: false, error: 'REST endpoint flagged async but no background_job_id returned', raw: data },
+        { status: 502 },
+      );
+    }
+    const polled = await pollBackgroundJob({ key, jobId });
+    if (polled.error) {
+      return Response.json({ ok: false, error: polled.error, jobId, raw: data }, { status: 502 });
+    }
+    return Response.json({
+      ok: true,
+      text: polled.text,
+      images: polled.images,
+      raw: polled.raw,
+      jobId,
+    });
+  }
+
+  // Sync: extract the image(s) right away.
+  const images = extractRestImages(data);
+  return Response.json({
+    ok: true,
+    text: '',
+    images,
+    raw: data,
+  });
+}
+
+async function pollBackgroundJob(
+  { key, jobId }: { key: string; jobId: string },
+): Promise<{ images: string[]; text: string; raw?: Record<string, unknown>; error?: string }> {
+  for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    let resp: Response;
+    try {
+      resp = await fetch(`${REST_BASE}/background-jobs/${encodeURIComponent(jobId)}`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+    } catch (err) {
+      return { images: [], text: '', error: `Poll fetch failed: ${errMsg(err)}` };
+    }
+    let data: Record<string, unknown>;
+    try {
+      data = (await resp.json()) as Record<string, unknown>;
+    } catch (err) {
+      return { images: [], text: '', error: `Poll parse failed: ${errMsg(err)}` };
+    }
+    const status = (data.status as string | undefined)?.toLowerCase() ?? '';
+    if (status === 'completed' || status === 'done' || status === 'success') {
+      const images = extractRestImages(data.last_response ?? data);
+      return { images, text: '', raw: data };
+    }
+    if (status === 'failed' || status === 'error') {
+      const errText = (data.error as string | undefined) ?? `Job ${jobId} reported ${status}`;
+      return { images: [], text: '', error: errText, raw: data };
+    }
+  }
+  return { images: [], text: '', error: `Job ${jobId} timed out after ${POLL_INTERVAL_MS * POLL_MAX_ATTEMPTS / 1000}s` };
+}
+
+function extractRestImages(data: unknown): string[] {
+  const out: string[] = [];
+  walk(data);
+  return Array.from(new Set(out));
+
+  function walk(o: unknown) {
+    if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o)) { o.forEach(walk); return; }
+    const rec = o as Record<string, unknown>;
+    // {type: "base64", base64: "data:image/...;base64,..."}
+    if (rec.type === 'base64' && typeof rec.base64 === 'string') {
+      out.push(rec.base64.startsWith('data:') ? rec.base64 : `data:image/png;base64,${rec.base64}`);
+      return;
+    }
+    // {type: "url", url: "..."}
+    if (rec.type === 'url' && typeof rec.url === 'string') {
+      out.push(rec.url);
+      return;
+    }
+    // {url: "..."} or {download_url: "..."} on completed jobs
+    for (const k of ['url', 'download_url', 'image_url']) {
+      const v = rec[k];
+      if (typeof v === 'string' && /^https?:\/\//.test(v)) out.push(v);
+    }
+    Object.values(rec).forEach(walk);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MCP transport
+// ──────────────────────────────────────────────────────────────────────────
+
+async function callMcp({ key, mcpName, args }: { key: string; mcpName: string; args: Record<string, unknown> }) {
   const rpcBody = {
     jsonrpc: '2.0',
     id: 1,
@@ -118,7 +289,7 @@ export async function POST(
     });
   } catch (err) {
     return Response.json(
-      { ok: false, error: 'PixelLab MCP request failed', detail: errMsg(err) },
+      { ok: false, error: `PixelLab MCP request failed: ${errMsg(err)}` },
       { status: 502 },
     );
   }
@@ -126,21 +297,12 @@ export async function POST(
   let rpc: JsonRpcResponse | null = null;
   const ct = resp.headers.get('content-type') || '';
   try {
-    if (ct.includes('text/event-stream')) {
-      rpc = await parseSse(resp);
-    } else {
-      rpc = (await resp.json()) as JsonRpcResponse;
-    }
+    rpc = ct.includes('text/event-stream') ? await parseSse(resp) : ((await resp.json()) as JsonRpcResponse);
   } catch (err) {
-    return Response.json(
-      { ok: false, error: 'Failed to parse MCP response', detail: errMsg(err) },
-      { status: 502 },
-    );
+    return Response.json({ ok: false, error: `Failed to parse MCP response: ${errMsg(err)}` }, { status: 502 });
   }
 
-  if (!rpc) {
-    return Response.json({ ok: false, error: 'Empty MCP response' }, { status: 502 });
-  }
+  if (!rpc) return Response.json({ ok: false, error: 'Empty MCP response' }, { status: 502 });
   if (rpc.error) {
     return Response.json(
       { ok: false, error: rpc.error.message, code: rpc.error.code, data: rpc.error.data },
@@ -149,26 +311,16 @@ export async function POST(
   }
 
   const result = rpc.result;
-  let images = extractImages(result);
-  let text = extractText(result);
+  let images = extractMcpImages(result);
+  let text = extractMcpText(result);
 
-  // If this was an async create_* call and no image landed yet, poll the
-  // matching get_* tool until completion (or timeout).
-  const polling = POLL_BINDINGS[mcpName];
+  const polling = MCP_POLL_BINDINGS[mcpName];
   if (polling && images.length === 0) {
     const jobId = extractJobId(text, polling.idLabels);
     if (jobId) {
-      const polled = await pollUntilDone({
-        key,
-        getTool: polling.getTool,
-        idArg: polling.idArg,
-        jobId,
-      });
+      const polled = await pollMcpUntilDone({ key, getTool: polling.getTool, idArg: polling.idArg, jobId });
       if (polled.error) {
-        return Response.json(
-          { ok: false, error: polled.error, jobId, getTool: polling.getTool },
-          { status: 502 },
-        );
+        return Response.json({ ok: false, error: polled.error, jobId, getTool: polling.getTool }, { status: 502 });
       }
       if (polled.images.length > 0) images = polled.images;
       if (polled.text) text = `${text}\n\n— Polled result —\n${polled.text}`;
@@ -183,24 +335,7 @@ export async function POST(
   });
 }
 
-function extractJobId(text: string, labels: string[]): string | null {
-  // Match either ``Tile ID:`<uuid>` ``-style or `tile_id: "<uuid>"`-style.
-  const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-  for (const label of labels) {
-    const re = new RegExp(`${escapeRe(label)}[^a-z0-9]*\`?(${uuidRe.source})\`?`, 'i');
-    const m = text.match(re);
-    if (m) return m[1];
-  }
-  // Fallback: first UUID in the text.
-  const m = text.match(uuidRe);
-  return m ? m[0] : null;
-}
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-async function pollUntilDone({
+async function pollMcpUntilDone({
   key, getTool, idArg, jobId,
 }: { key: string; getTool: string; idArg: string; jobId: string }): Promise<{ images: string[]; text: string; error?: string }> {
   for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
@@ -234,45 +369,20 @@ async function pollUntilDone({
     }
     if (rpc?.error) return { images: [], text: '', error: rpc.error.message };
     const result = rpc?.result;
-    const images = extractImages(result);
-    const text = extractText(result);
+    const images = extractMcpImages(result);
+    const text = extractMcpText(result);
     if (images.length > 0) return { images, text };
-    // Heuristic: if status text says completed but no inline image, return text.
     if (/(?:status|state)[^\n]*\b(?:complete|completed|done|ready|success)\b/i.test(text) && images.length === 0) {
       return { images: [], text };
     }
     if (/(?:status|state)[^\n]*\b(?:failed|error)\b/i.test(text)) {
       return { images: [], text: '', error: text };
     }
-    // Otherwise loop again.
   }
   return { images: [], text: '', error: `Timed out after ${POLL_INTERVAL_MS * POLL_MAX_ATTEMPTS / 1000}s waiting for ${getTool}` };
 }
 
-async function fileToDataUrl(file: File): Promise<string> {
-  const buf = Buffer.from(await file.arrayBuffer());
-  const mime = file.type || 'application/octet-stream';
-  return `data:${mime};base64,${buf.toString('base64')}`;
-}
-
-async function parseSse(resp: Response): Promise<JsonRpcResponse | null> {
-  const text = await resp.text();
-  // Each SSE event is delimited by a blank line. We want the last `data:` payload.
-  const events = text.split(/\r?\n\r?\n/).filter(Boolean);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const lines = events[i].split(/\r?\n/);
-    const dataLines = lines.filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trimStart());
-    if (dataLines.length === 0) continue;
-    try {
-      return JSON.parse(dataLines.join('\n')) as JsonRpcResponse;
-    } catch {
-      // try previous event
-    }
-  }
-  return null;
-}
-
-function extractImages(result: JsonRpcResponse['result']): string[] {
+function extractMcpImages(result: JsonRpcResponse['result']): string[] {
   if (!result?.content) return [];
   const out: string[] = [];
   for (const c of result.content) {
@@ -284,7 +394,6 @@ function extractImages(result: JsonRpcResponse['result']): string[] {
       else if (r.uri) out.push(r.uri);
     }
   }
-  // Some MCP servers stash image URLs inside text content; sniff for them.
   const textBlobs = result.content
     .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
     .map((c) => c.text);
@@ -297,13 +406,54 @@ function extractImages(result: JsonRpcResponse['result']): string[] {
   return Array.from(new Set(out));
 }
 
-function extractText(result: JsonRpcResponse['result']): string {
+function extractMcpText(result: JsonRpcResponse['result']): string {
   if (!result?.content) return '';
   return result.content
     .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
     .map((c) => c.text)
     .join('\n')
     .trim();
+}
+
+function extractJobId(text: string, labels: string[]): string | null {
+  const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  for (const label of labels) {
+    const re = new RegExp(`${escapeRe(label)}[^a-z0-9]*\`?(${uuidRe.source})\`?`, 'i');
+    const m = text.match(re);
+    if (m) return m[1];
+  }
+  const m = text.match(uuidRe);
+  return m ? m[0] : null;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ──────────────────────────────────────────────────────────────────────────
+
+async function fileToDataUrl(file: File): Promise<string> {
+  const buf = Buffer.from(await file.arrayBuffer());
+  const mime = file.type || 'application/octet-stream';
+  return `data:${mime};base64,${buf.toString('base64')}`;
+}
+
+async function parseSse(resp: Response): Promise<JsonRpcResponse | null> {
+  const text = await resp.text();
+  const events = text.split(/\r?\n\r?\n/).filter(Boolean);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const lines = events[i].split(/\r?\n/);
+    const dataLines = lines.filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trimStart());
+    if (dataLines.length === 0) continue;
+    try {
+      return JSON.parse(dataLines.join('\n')) as JsonRpcResponse;
+    } catch {
+      // try previous event
+    }
+  }
+  return null;
 }
 
 function errMsg(err: unknown): string {

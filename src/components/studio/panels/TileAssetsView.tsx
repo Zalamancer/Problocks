@@ -7,13 +7,13 @@ import {
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
   Pencil, GripVertical, X, Layers,
 } from 'lucide-react';
-import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
+import { useTile, type Tileset, type Tile, type ObjectAsset } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
 import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
 import { analyzePalette, bucketLabel, type ColorBucket } from '@/lib/tile-palette';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
-import { saveTileObject, listTileObjects, deleteTileObject, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
+import { saveTileObject, listTileObjects, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
 import { useStudio } from '@/store/studio-store';
 
 /**
@@ -1562,27 +1562,17 @@ function ObjectsSection() {
   const addObjectAsset = useTile((s) => s.addObjectAsset);
   const addStyleToAsset = useTile((s) => s.addStyleToAsset);
   const removeObjectAsset = useTile((s) => s.removeObjectAsset);
-  const removeStyle = useTile((s) => s.removeStyle);
-  const setStyleLabel = useTile((s) => s.setStyleLabel);
   const setStyleCloudId = useTile((s) => s.setStyleCloudId);
   const renameAsset = useTile((s) => s.renameAsset);
   const reorderAssets = useTile((s) => s.reorderAssets);
-  const reorderStyles = useTile((s) => s.reorderStyles);
   const selectedAssetId = useTile((s) => s.selectedAssetId);
   const setSelectedAssetId = useTile((s) => s.setSelectedAssetId);
-  const selectedStyleId = useTile((s) => s.selectedStyleId);
-  const setSelectedStyleId = useTile((s) => s.setSelectedStyleId);
   const setTool = useTile((s) => s.setTool);
   // Auto-open the right Properties tab on asset click so the asset's image
-  // preview + slice (rows/cols) controls show without a manual tab switch.
+  // preview + slice / styles controls show without a manual tab switch.
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const styleInputRef = useRef<HTMLInputElement | null>(null);
-  /** When the user clicks "Add style" on a card, we stash the target asset
-   *  id here so the next file the picker returns is appended to that asset
-   *  rather than creating a new one. Cleared after the upload completes. */
-  const targetAssetForStyleRef = useRef<string | null>(null);
   /** Drag source for asset-card reorder. Native HTML5 DnD would let us
    *  serialise this through dataTransfer, but a ref is simpler and avoids
    *  the dataTransfer.types restrictions on dragover. */
@@ -1590,16 +1580,12 @@ function ObjectsSection() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
-  const [expandedAssets, setExpandedAssets] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState(false);
-  /** What the user last clicked. Arrow keys move THIS item up/down within
-   *  its parent list (asset → asset list, style → the asset's style[]
-   *  array). Click sets it; reorder keeps it. */
-  const [focused, setFocused] = useState<
-    | { kind: 'asset'; assetId: string }
-    | { kind: 'style'; assetId: string; styleId: string }
-    | null
-  >(null);
+  /** Keyboard-focused asset row. Up/Down moves it through the list; Enter
+   *  selects (mirrors mouse click behaviour). Style-axis navigation lived
+   *  on the inline-expand list which is now in the right panel, so the
+   *  shape simplified to a single asset-id. */
+  const [focused, setFocused] = useState<{ kind: 'asset'; assetId: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   // Hydrate uploaded sprites from Supabase on mount. Group by groupId so
@@ -1664,11 +1650,10 @@ function ObjectsSection() {
     return () => { cancelled = true; };
   }, [addObjectAsset, addStyleToAsset]);
 
-  /** Generic upload helper. When `targetAssetId` is set, the sprite is
-   *  appended as a new style on that asset (sharing the asset's groupId
-   *  on the Supabase side, looked up via the asset's first style cloudId).
-   *  Otherwise a new asset is created. */
-  async function uploadFiles(files: File[], targetAssetId: string | null) {
+  /** Upload one or more sprites as brand-new assets. The right-panel
+   *  Properties view handles "add style to existing asset" via its own
+   *  file input, so this section only ever creates new assets. */
+  async function uploadFiles(files: File[]) {
     setUploading(true);
     setError(null);
     try {
@@ -1676,65 +1661,31 @@ function ObjectsSection() {
         const baseName = file.name.replace(/\.[^.]+$/, '');
         const img = await fileToImage(file);
         const dataUrl = imageToDataUrl(img);
-        if (targetAssetId) {
-          const asset = useTile.getState().objectAssets[targetAssetId];
-          if (!asset) continue;
-          // Make labels unique within the asset so the server's
-          // (user_id, group_id, label) upsert key doesn't overwrite an
-          // existing style. Reuses baseName when free, otherwise appends
-          // an index.
-          const label = nextUniqueLabel(asset, baseName || `Style ${asset.styles.length + 1}`);
-          const styleId = addStyleToAsset(targetAssetId, {
-            label,
-            dataUrl,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-          });
-          saveTileObject({
-            name: asset.name,
-            dataUrl,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            // asset.id IS the group_id end-to-end. For brand-new assets we
-            // pass it explicitly on first upload too (below), so on reload
-            // every style of an asset shares the same group_id and
-            // reconstructs the asset 1:1.
-            groupId: asset.id,
-            label,
-            sortIndex: asset.styles.length,
-          }).then((cloud) => {
-            setStyleCloudId(targetAssetId, styleId, cloud.id);
-            setCloudStatus('synced');
-          }).catch((err) => {
-            console.warn('[object-cloud] save style failed; kept local-only', err);
-            setCloudStatus('offline');
-          });
-        } else {
-          const { assetId, styleId } = addObjectAsset({
-            name: baseName,
-            label: '',
-            dataUrl,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-          });
-          saveTileObject({
-            name: baseName,
-            dataUrl,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            // Stamp the local assetId as the server group_id so subsequent
-            // "Add style" calls land in the same Supabase group.
-            groupId: assetId,
-            label: '',
-            sortIndex: 0,
-          }).then((cloud) => {
-            setStyleCloudId(assetId, styleId, cloud.id);
-            setCloudStatus('synced');
-          }).catch((err) => {
-            console.warn('[object-cloud] save asset failed; kept local-only', err);
-            setCloudStatus('offline');
-          });
-        }
+        const { assetId, styleId } = addObjectAsset({
+          name: baseName,
+          label: '',
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+        saveTileObject({
+          name: baseName,
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          // Stamp the local assetId as the server group_id so subsequent
+          // "Add style" calls (from the right panel) land in the same
+          // Supabase group.
+          groupId: assetId,
+          label: '',
+          sortIndex: 0,
+        }).then((cloud) => {
+          setStyleCloudId(assetId, styleId, cloud.id);
+          setCloudStatus('synced');
+        }).catch((err) => {
+          console.warn('[object-cloud] save asset failed; kept local-only', err);
+          setCloudStatus('offline');
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1747,22 +1698,7 @@ function ObjectsSection() {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
     if (files.length === 0) return;
-    await uploadFiles(files, null);
-  }
-
-  async function handleNewStyleFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = '';
-    const target = targetAssetForStyleRef.current;
-    targetAssetForStyleRef.current = null;
-    if (files.length === 0 || !target) return;
-    await uploadFiles(files, target);
-  }
-
-  function handleAddStyleClick(assetId: string) {
-    targetAssetForStyleRef.current = assetId;
-    setExpandedAssets((m) => ({ ...m, [assetId]: true }));
-    styleInputRef.current?.click();
+    await uploadFiles(files);
   }
 
   function handleSelectAsset(asset: ObjectAsset) {
@@ -1780,20 +1716,6 @@ function ObjectsSection() {
       // so a single group delete cleans up every style row at once.
       deleteTileObjectGroup(asset.id).catch((err) => {
         console.warn('[object-cloud] delete group failed', err);
-      });
-    }
-  }
-
-  function handleRemoveStyle(asset: ObjectAsset, style: ObjectStyle) {
-    if (asset.styles.length === 1) {
-      handleRemoveAsset(asset);
-      return;
-    }
-    if (!confirm(`Delete style "${style.label || 'unlabeled'}" from "${asset.name}"?`)) return;
-    removeStyle(asset.id, style.id);
-    if (style.cloudId) {
-      deleteTileObject(style.cloudId).catch((err) => {
-        console.warn('[object-cloud] delete style failed', err);
       });
     }
   }
@@ -1825,10 +1747,7 @@ function ObjectsSection() {
   function handleListKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    // Cold start: if the user arrow-keys before clicking any card, seed
-    // focus to the first asset so the next press has a starting point and
-    // the user immediately sees a focus ring instead of a silent no-op.
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     if (!focused) {
       if (assetList.length > 0) {
         e.preventDefault();
@@ -1839,75 +1758,15 @@ function ObjectsSection() {
       return;
     }
     e.preventDefault();
-    const isHoriz = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
-    const dir = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
-
-    if (isHoriz) {
-      // Flat horizontal navigation across (asset, style) tuples. Pressing
-      // Right walks through this asset's styles, then crosses into the
-      // next asset's first style; Left mirrors. The big card thumbnail
-      // is bound to focusedStyleId, so each step updates the preview.
-      const aIdx = assetList.findIndex((a) => a.id === focused.assetId);
-      if (aIdx < 0) return;
-      const startAsset = assetList[aIdx];
-      const startStyleIdx = focused.kind === 'style'
-        ? startAsset.styles.findIndex((s) => s.id === focused.styleId)
-        : 0;
-      let curA = aIdx;
-      let curS = startStyleIdx + dir;
-      // Spill across asset boundaries.
-      while (curS < 0 || (assetList[curA] && curS >= assetList[curA].styles.length)) {
-        if (curS < 0) {
-          if (curA === 0) { curS = 0; break; }
-          curA -= 1;
-          curS = assetList[curA].styles.length - 1;
-        } else {
-          if (curA === assetList.length - 1) { curS = assetList[curA].styles.length - 1; break; }
-          curA += 1;
-          curS = 0;
-        }
-      }
-      const nextAsset = assetList[curA];
-      const nextStyle = nextAsset.styles[curS];
-      if (!nextAsset || !nextStyle) return;
-      setFocused({ kind: 'style', assetId: nextAsset.id, styleId: nextStyle.id });
-      // Scroll the new asset's card into view if we crossed asset boundaries.
-      if (nextAsset.id !== focused.assetId) {
-        scrollAssetIntoView(nextAsset.id);
-      }
-      return;
-    }
-
-    // Vertical → reorder (asset list when on asset focus, styles[] when
-    // on style focus). Existing behavior preserved.
-    if (focused.kind === 'asset') {
-      const order = assetList.map((a) => a.id);
-      const idx = order.indexOf(focused.assetId);
-      if (idx < 0) return;
-      const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
-      if (newIdx === idx) return;
-      const next = order.slice();
-      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-      reorderAssets(next);
-    } else {
-      const asset = objectAssets[focused.assetId];
-      if (!asset) return;
-      const order = asset.styles.map((s) => s.id);
-      const idx = order.indexOf(focused.styleId);
-      if (idx < 0) return;
-      const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
-      if (newIdx === idx) return;
-      const next = order.slice();
-      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-      const newOrder = reorderStyles(asset.id, next);
-      newOrder.forEach((style, i) => {
-        if (style.cloudId) {
-          updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
-            console.warn('[object-cloud] style reorder failed', err);
-          });
-        }
-      });
-    }
+    const dir = e.key === 'ArrowUp' ? -1 : 1;
+    const order = assetList.map((a) => a.id);
+    const idx = order.indexOf(focused.assetId);
+    if (idx < 0) return;
+    const newIdx = Math.max(0, Math.min(order.length - 1, idx + dir));
+    if (newIdx === idx) return;
+    const next = order.slice();
+    [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+    reorderAssets(next);
   }
 
   return (
@@ -1918,14 +1777,6 @@ function ObjectsSection() {
         accept="image/*"
         multiple
         onChange={handleNewAssetFiles}
-        className="hidden"
-      />
-      <input
-        ref={styleInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handleNewStyleFiles}
         className="hidden"
       />
 
@@ -2089,42 +1940,18 @@ function ObjectsSection() {
                   setFocused({ kind: 'asset', assetId: assetList[0].id });
                 }
               }}
-              className="flex gap-3 overflow-x-auto"
-              style={{ paddingBottom: 6, outline: 'none', scrollbarGutter: 'stable' }}
+              className="flex flex-col gap-2 overflow-y-auto"
+              style={{ outline: 'none', maxHeight: 360, scrollbarGutter: 'stable' }}
             >
               {assetList.map((asset) => (
                 <AssetCard
                   key={asset.id}
                   asset={asset}
-                  expanded={!!expandedAssets[asset.id]}
                   isSelected={asset.id === selectedAssetId}
-                  selectedStyleId={selectedStyleId}
-                  size="lg"
                   isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
-                  focusedStyleId={focused?.kind === 'style' && focused.assetId === asset.id ? focused.styleId : null}
                   onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
-                  onFocusStyle={(styleId) => setFocused({ kind: 'style', assetId: asset.id, styleId })}
                   onSelect={() => { setFocused({ kind: 'asset', assetId: asset.id }); handleSelectAsset(asset); }}
-                  onToggleExpand={() => setExpandedAssets((m) => ({ ...m, [asset.id]: !m[asset.id] }))}
-                  onPickStyle={(styleId) => {
-                    setFocused({ kind: 'style', assetId: asset.id, styleId });
-                    setSelectedAssetId(asset.id);
-                    setSelectedStyleId(styleId);
-                    setTool('object');
-                    setRightPanelGroup('properties');
-                  }}
                   onRemoveAsset={() => handleRemoveAsset(asset)}
-                  onRemoveStyle={(style) => handleRemoveStyle(asset, style)}
-                  onRenameStyle={(styleId, label) => {
-                    setStyleLabel(asset.id, styleId, label);
-                    const style = asset.styles.find((s) => s.id === styleId);
-                    if (style?.cloudId) {
-                      updateTileObject({ id: style.cloudId, label }).catch((err) => {
-                        console.warn('[object-cloud] style rename failed', err);
-                      });
-                    }
-                  }}
-                  onAddStyle={() => handleAddStyleClick(asset.id)}
                   onRenameAsset={(name) => {
                     renameAsset(asset.id, name);
                     if (asset.styles.some((s) => s.cloudId)) {
@@ -2132,16 +1959,6 @@ function ObjectsSection() {
                         console.warn('[object-cloud] asset rename failed', err);
                       });
                     }
-                  }}
-                  onReorderStyles={(orderedStyleIds) => {
-                    const newOrder = reorderStyles(asset.id, orderedStyleIds);
-                    newOrder.forEach((style, i) => {
-                      if (style.cloudId) {
-                        updateTileObject({ id: style.cloudId, sortIndex: i }).catch((err) => {
-                          console.warn('[object-cloud] style reorder failed', err);
-                        });
-                      }
-                    });
                   }}
                   onDragStart={() => { dragAssetIdRef.current = asset.id; }}
                   onDragOverCard={(e) => {
@@ -2177,107 +1994,58 @@ function ObjectsSection() {
 }
 
 /**
- * One asset card. Collapsed: thumbnail of the currently-active style + name
- * + style count badge. Expanded: list of every style (thumb + label edit +
- * delete) plus an "Add style" upload button. Picking a style sets the
- * OBJECT-tool brush to that exact sprite.
+ * One asset row. Compact horizontal layout: grip + thumbnail + name + trash.
+ * Clicking the row selects the asset (sets the OBJECT brush to its first
+ * style and opens the right Properties panel where the user can edit /
+ * slice / manage styles). Inline expand was removed — the styles list now
+ * lives in TileAssetPropertiesPanel.
  *
  * Drag interactions
  * -----------------
- * - The grip-handle on the LEFT initiates HTML5 drag for the WHOLE card
- *   (asset reorder). Hovering another card while dragging fires the
- *   parent's onDragOver/onDrop, which calls reorderAssets.
- * - Inside the expanded styles list, each row has its own grip-handle
- *   for intra-asset style reorder. The card-level drag handlers ignore
- *   the style drags so there's no cross-talk (style drags don't bubble
- *   up to a card reorder).
+ * - The grip-handle on the LEFT initiates HTML5 drag for asset reorder.
+ *   Hovering another row while dragging fires the parent's onDragOver/
+ *   onDrop, which calls reorderAssets.
  *
  * Inline rename
  * -------------
  * - Pencil icon next to the asset name → click toggles edit mode (an
- *   inline input). Same pattern for each style label. Save on blur or
- *   Enter; Escape cancels.
+ *   inline input). Save on blur or Enter; Escape cancels.
  */
 function AssetCard({
-  asset, expanded, isSelected, selectedStyleId,
-  onSelect, onToggleExpand, onPickStyle, onRemoveAsset, onRemoveStyle,
-  onRenameStyle, onAddStyle, onRenameAsset, onReorderStyles,
+  asset, isSelected,
+  onSelect, onRemoveAsset, onRenameAsset,
   onDragStart, onDragOverCard, onDropCard,
-  size = 'sm', isFocused = false, focusedStyleId = null,
-  onFocusAsset, onFocusStyle,
+  isFocused = false,
+  onFocusAsset,
 }: {
   asset: ObjectAsset;
-  expanded: boolean;
   isSelected: boolean;
-  selectedStyleId: string | null;
   onSelect: () => void;
-  onToggleExpand: () => void;
-  onPickStyle: (styleId: string) => void;
   onRemoveAsset: () => void;
-  onRemoveStyle: (style: ObjectStyle) => void;
-  onRenameStyle: (styleId: string, label: string) => void;
-  onAddStyle: () => void;
   onRenameAsset: (name: string) => void;
-  onReorderStyles: (orderedStyleIds: string[]) => void;
   onDragStart: () => void;
   onDragOverCard: (e: React.DragEvent) => void;
   onDropCard: (e: React.DragEvent) => void;
-  isDropTarget?: boolean;
-  dragIndex?: number;
-  /** 'sm' = sidebar (default); 'lg' = library overlay (bigger thumbs). */
-  size?: 'sm' | 'lg';
-  /** Whether this whole card is the keyboard-reorder target. */
   isFocused?: boolean;
-  /** Style id within this asset that's the keyboard-reorder target. */
-  focusedStyleId?: string | null;
   onFocusAsset?: () => void;
-  onFocusStyle?: (styleId: string) => void;
 }) {
-  // The big card thumbnail prefers the FOCUSED style (so arrow-key
-  // navigation across styles updates the visible preview), then falls
-  // back to the brush style if this asset is the current brush, then
-  // styles[0] as a last resort.
-  const focusedStyle = focusedStyleId
-    ? asset.styles.find((s) => s.id === focusedStyleId) ?? null
+  // The thumbnail prefers the brush style if this asset is the current
+  // brush, then styles[0] as a fallback. The arrow-key style focus that
+  // the inline-expand list used to drive is gone with the inline list.
+  const brushStyle = useTile.getState().selectedStyleId
+    ? asset.styles.find((s) => s.id === useTile.getState().selectedStyleId) ?? null
     : null;
-  const brushStyle = isSelected && selectedStyleId
-    ? asset.styles.find((s) => s.id === selectedStyleId) ?? null
-    : null;
-  const headerStyle = focusedStyle ?? brushStyle ?? asset.styles[0];
+  const headerStyle = (isSelected && brushStyle) ? brushStyle : asset.styles[0];
 
-  // Layout dims that change with size — kept here so the JSX below stays
-  // readable instead of branching on `size` inline.
-  const dims = size === 'lg'
-    ? { thumb: 256, styleThumb: 56, headerFont: 15, labelFont: 13, gripIcon: 14, padding: 10 }
-    : { thumb: 36, styleThumb: 24, headerFont: 12, labelFont: 11, gripIcon: 12, padding: 6 };
+  const dims = { thumb: 40, headerFont: 12.5, gripIcon: 12, padding: 8 };
 
-  const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
-  // Whether the asset card itself is being dragged (vs a style row inside).
-  // Native HTML5 drag bubbles, so we use this to suppress card-drag start
-  // when the user grabs a style handle.
   const cardDragArmedRef = useRef(false);
-  /** Style row currently being dragged; the handler reads this on drop. */
-  const dragStyleIdRef = useRef<string | null>(null);
 
   function commitName(value: string) {
     setEditingName(false);
     const trimmed = value.trim();
     if (trimmed && trimmed !== asset.name) onRenameAsset(trimmed);
-  }
-
-  function reorderStylesViaDrop(targetStyleId: string) {
-    const fromId = dragStyleIdRef.current;
-    dragStyleIdRef.current = null;
-    if (!fromId || fromId === targetStyleId) return;
-    const order = asset.styles.map((s) => s.id);
-    const fromIdx = order.indexOf(fromId);
-    const toIdx = order.indexOf(targetStyleId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const next = order.slice();
-    next.splice(fromIdx, 1);
-    next.splice(toIdx, 0, fromId);
-    onReorderStyles(next);
   }
 
   return (
@@ -2295,7 +2063,13 @@ function AssetCard({
       onDragEnd={() => { cardDragArmedRef.current = false; }}
       onDragOver={onDragOverCard}
       onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
-      onClick={() => { onFocusAsset?.(); }}
+      onClick={(e) => {
+        const t = e.target as HTMLElement;
+        // Don't double-fire when an inner button / input handles the click.
+        if (t.closest('button, input')) return;
+        onFocusAsset?.();
+        onSelect();
+      }}
       style={{
         background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
         // Focus ring uses a thicker accent border so it reads at a glance
@@ -2311,24 +2085,35 @@ function AssetCard({
             ? '0 0 0 2px rgba(14,165,233,0.18)'
             : 'none',
         overflow: 'hidden',
-        ...(size === 'lg' ? { width: '100%', flexShrink: 0, display: 'flex', flexDirection: 'column' } : null),
+        cursor: 'pointer',
       }}
     >
-      {size === 'lg' && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
-          title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
+      <div className="flex items-center gap-2" style={{ padding: dims.padding }}>
+        <span
+          onMouseDown={() => { cardDragArmedRef.current = true; }}
+          title="Drag to reorder"
           style={{
-            display: 'block',
-            width: '100%',
-            aspectRatio: '1 / 1',
+            display: 'flex', alignItems: 'center',
+            color: 'var(--pb-ink-muted)',
+            cursor: 'grab',
+            padding: '2px 0',
+            flexShrink: 0,
+          }}
+        >
+          <GripVertical size={dims.gripIcon} strokeWidth={2.4} />
+        </span>
+        <div
+          style={{
+            width: dims.thumb, height: dims.thumb,
             background: 'rgba(0,0,0,0.04)',
-            border: 0,
-            borderBottom: '1.5px solid var(--pb-line-2)',
-            padding: 8,
-            cursor: 'pointer',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 6,
+            padding: 2,
+            flexShrink: 0,
             overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           {headerStyle && (
@@ -2340,52 +2125,7 @@ function AssetCard({
               draggable={false}
             />
           )}
-        </button>
-      )}
-      <div className="flex items-center gap-1.5" style={{ padding: dims.padding }}>
-        <span
-          // Mouse-down on the grip arms the card-level drag. Without this,
-          // an HTML5 drag on the rest of the card (e.g. accidental from
-          // the thumbnail button) would also try to reorder.
-          onMouseDown={() => { cardDragArmedRef.current = true; }}
-          onMouseUp={() => { /* keep armed until dragEnd */ }}
-          title="Drag to reorder"
-          style={{
-            display: 'flex', alignItems: 'center',
-            color: 'var(--pb-ink-muted)',
-            cursor: 'grab',
-            padding: '2px 0',
-          }}
-        >
-          <GripVertical size={dims.gripIcon} strokeWidth={2.4} />
-        </span>
-        {size === 'sm' && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
-            title={`Place "${asset.name}" — ${asset.styles.length} style(s)`}
-            style={{
-              width: dims.thumb, height: dims.thumb,
-              background: 'rgba(0,0,0,0.04)',
-              border: '1.5px solid var(--pb-line-2)',
-              borderRadius: 6,
-              padding: 2,
-              cursor: 'pointer',
-              flexShrink: 0,
-              overflow: 'hidden',
-            }}
-          >
-            {headerStyle && (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={headerStyle.dataUrl}
-                alt={asset.name}
-                style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-                draggable={false}
-              />
-            )}
-          </button>
-        )}
+        </div>
         <div className="flex-1 min-w-0">
           {editingName ? (
             <input
@@ -2411,10 +2151,9 @@ function AssetCard({
           ) : (
             <div className="flex items-center gap-1">
               <span
-                onClick={(e) => { e.stopPropagation(); onFocusAsset?.(); onSelect(); }}
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
-                title="Click to select · double-click to rename"
-                style={{ flex: 1, fontSize: dims.headerFont, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                title="Click row to open · double-click name to rename"
+                style={{ flex: 1, fontSize: dims.headerFont, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
                 {asset.name}
               </span>
@@ -2424,181 +2163,23 @@ function AssetCard({
                 title="Rename asset"
                 style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
               >
-                <Pencil size={size === 'lg' ? 12 : 10} strokeWidth={2.4} />
+                <Pencil size={10} strokeWidth={2.4} />
               </button>
             </div>
           )}
-          <div style={{ fontSize: size === 'lg' ? 11 : 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+          <div style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
             {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
           </div>
         </div>
         <button
           type="button"
-          onClick={onToggleExpand}
-          title={expanded ? 'Hide styles' : 'Show styles'}
-          style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 2 }}
-        >
-          {expanded ? <ChevDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
-        </button>
-        <button
-          type="button"
-          onClick={onRemoveAsset}
+          onClick={(e) => { e.stopPropagation(); onRemoveAsset(); }}
           title="Delete asset"
           style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
         >
           <Trash2 size={11} strokeWidth={2.4} />
         </button>
       </div>
-
-      {expanded && (
-        <div className="space-y-1.5" style={{ padding: '0 6px 6px' }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.5 }}>
-            STYLES
-          </div>
-          <div className="space-y-1">
-            {asset.styles.map((style, i) => {
-              const isCurrent = isSelected && style.id === selectedStyleId;
-              const isStyleFocused = focusedStyleId === style.id;
-              const isEditing = editingStyleId === style.id;
-              return (
-                <div
-                  key={style.id}
-                  draggable
-                  onClick={(e) => { e.stopPropagation(); onFocusStyle?.(style.id); }}
-                  onDragStart={(e) => {
-                    // Stop the asset-card drag from also firing when the
-                    // user grabs a style row.
-                    e.stopPropagation();
-                    cardDragArmedRef.current = false;
-                    dragStyleIdRef.current = style.id;
-                    e.dataTransfer.effectAllowed = 'move';
-                    try { e.dataTransfer.setData('text/plain', style.id); } catch { /* ignore */ }
-                  }}
-                  onDragOver={(e) => {
-                    if (!dragStyleIdRef.current || dragStyleIdRef.current === style.id) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    reorderStylesViaDrop(style.id);
-                  }}
-                  className="flex items-center gap-1.5"
-                  style={{
-                    padding: size === 'lg' ? 6 : 3,
-                    background: isCurrent ? 'var(--pb-paper)' : isStyleFocused ? 'rgba(14,165,233,0.10)' : 'transparent',
-                    border: `${isStyleFocused && !isCurrent ? 2 : 1.5}px solid ${
-                      isCurrent ? 'var(--pb-butter-ink)' : isStyleFocused ? '#0ea5e9' : 'transparent'
-                    }`,
-                    borderRadius: 6,
-                  }}
-                >
-                  <span
-                    title="Drag to reorder"
-                    style={{
-                      display: 'flex', alignItems: 'center',
-                      color: 'var(--pb-ink-muted)',
-                      cursor: 'grab',
-                    }}
-                  >
-                    <GripVertical size={size === 'lg' ? 13 : 11} strokeWidth={2.4} />
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onFocusStyle?.(style.id); onPickStyle(style.id); }}
-                    title={`Use "${style.label || `Style ${i + 1}`}" as the brush`}
-                    style={{
-                      width: dims.styleThumb, height: dims.styleThumb, flexShrink: 0,
-                      background: 'rgba(0,0,0,0.06)',
-                      border: '1.5px solid var(--pb-line-2)',
-                      borderRadius: 5,
-                      padding: 0,
-                      cursor: 'pointer',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={style.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} draggable={false} />
-                  </button>
-                  {isEditing ? (
-                    <input
-                      autoFocus
-                      defaultValue={style.label}
-                      onBlur={(e) => { onRenameStyle(style.id, e.target.value); setEditingStyleId(null); }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                        if (e.key === 'Escape') setEditingStyleId(null);
-                      }}
-                      style={{
-                        flex: 1,
-                        background: 'var(--pb-paper)',
-                        border: '1.5px solid var(--pb-line-2)',
-                        borderRadius: 5,
-                        padding: '4px 8px',
-                        fontSize: dims.labelFont,
-                        fontWeight: 700,
-                        color: 'var(--pb-ink)',
-                      }}
-                    />
-                  ) : (
-                    <span
-                      onDoubleClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
-                      title="Double-click to rename"
-                      style={{
-                        flex: 1,
-                        fontSize: dims.labelFont,
-                        fontWeight: 700,
-                        color: 'var(--pb-ink)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        cursor: 'text',
-                      }}
-                    >
-                      {style.label || `Style ${i + 1}`}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
-                    title="Rename style"
-                    style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
-                  >
-                    <Pencil size={size === 'lg' ? 11 : 9} strokeWidth={2.4} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onRemoveStyle(style); }}
-                    title="Delete this style"
-                    style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
-                  >
-                    <Trash2 size={size === 'lg' ? 12 : 10} strokeWidth={2.4} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            onClick={onAddStyle}
-            className="w-full flex items-center justify-center gap-1.5"
-            style={{
-              padding: '5px 8px',
-              background: 'var(--pb-paper)',
-              border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 6,
-              color: 'var(--pb-ink)',
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: 'pointer',
-            }}
-          >
-            <Plus size={11} strokeWidth={2.4} />
-            Add style
-          </button>
-        </div>
-      )}
     </div>
   );
 }

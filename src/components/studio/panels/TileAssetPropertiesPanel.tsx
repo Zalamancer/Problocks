@@ -257,61 +257,70 @@ function AssetPreview({
   const vDividers = Math.max(0, cols - 1);
   const hDividers = Math.max(0, rows - 1);
 
+  // The wrapper is `inline-block` and shrinks to the <img>'s actual rendered
+  // size (driven by maxWidth/maxHeight on the img). That means the absolute
+  // grid lines — placed with `inset: 0` and fractional left/top — align
+  // exactly with the image edges, regardless of the image's aspect ratio.
+  // An aspect-ratio'd outer box with `objectFit: contain` would have
+  // letterboxed the image, leaving the grid drawn on dead space.
   return (
     <div className="flex flex-col gap-2">
-      <div
-        style={{
-          position: 'relative',
-          aspectRatio: `${Math.max(1, width)} / ${Math.max(1, height)}`,
-          maxHeight: 220,
-          background: 'rgba(0,0,0,0.06)',
-          border: '1.5px solid var(--pb-line-2)',
-          borderRadius: 8,
-          overflow: 'hidden',
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={dataUrl}
-          alt=""
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+        <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            imageRendering: 'pixelated',
+            position: 'relative',
+            display: 'inline-block',
+            maxWidth: '100%',
+            background: 'rgba(0,0,0,0.06)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 8,
+            overflow: 'hidden',
+            lineHeight: 0,
           }}
-          draggable={false}
-        />
-        {Array.from({ length: vDividers }, (_, i) => (
-          <div
-            key={`v${i}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={dataUrl}
+            alt=""
             style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: `${((i + 1) / cols) * 100}%`,
-              width: 0,
-              borderLeft: '1.5px dashed var(--pb-butter-ink)',
-              pointerEvents: 'none',
+              display: 'block',
+              maxWidth: '100%',
+              maxHeight: 220,
+              width: 'auto',
+              height: 'auto',
+              imageRendering: 'pixelated',
             }}
+            draggable={false}
           />
-        ))}
-        {Array.from({ length: hDividers }, (_, i) => (
-          <div
-            key={`h${i}`}
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: `${((i + 1) / rows) * 100}%`,
-              height: 0,
-              borderTop: '1.5px dashed var(--pb-butter-ink)',
-              pointerEvents: 'none',
-            }}
-          />
-        ))}
+          {Array.from({ length: vDividers }, (_, i) => (
+            <div
+              key={`v${i}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: `${((i + 1) / cols) * 100}%`,
+                width: 0,
+                borderLeft: '1.5px dashed var(--pb-butter-ink)',
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
+          {Array.from({ length: hDividers }, (_, i) => (
+            <div
+              key={`h${i}`}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: `${((i + 1) / rows) * 100}%`,
+                height: 0,
+                borderTop: '1.5px dashed var(--pb-butter-ink)',
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
+        </div>
       </div>
       <div
         style={{

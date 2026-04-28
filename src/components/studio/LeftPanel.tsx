@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap, Library, Sparkles } from 'lucide-react';
+import { FolderOpen, ChevronLeft, ChevronRight, ChevronDown, Check, Layers, Zap, Library, Sparkles, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStudio, type LeftPanelGroup } from '@/store/studio-store';
 import type { LucideIcon } from 'lucide-react';
@@ -9,6 +9,7 @@ import { ScenePanel }        from './panels/ScenePanel';
 import { ConnectorsPanel }   from './panels/ConnectorsPanel';
 import { LibraryPanel }      from './panels/LibraryPanel';
 import { TileAssetsView }    from './panels/TileAssetsView';
+import { PixelLabPanel }     from './panels/PixelLabPanel';
 
 interface TabGroupDef {
   id: LeftPanelGroup;
@@ -29,6 +30,7 @@ const TAB_GROUPS: TabGroupDef[] = [
   { id: 'terrain',    label: 'Terrain',     icon: Sparkles },
   { id: 'assets',     label: 'Assets',      icon: FolderOpen },
   { id: 'connectors', label: 'Connectors',  icon: Zap },
+  { id: 'pixellab',   label: 'Pixel Lab',   icon: Wand2 },
 ];
 
 function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onSceneSelect?: (id: string) => void }) {
@@ -40,6 +42,7 @@ function PanelContent({ group, onSceneSelect }: { group: LeftPanelGroup; onScene
     case 'terrain':    return <div className="flex-1 flex flex-col min-h-0"><TileAssetsView view="terrain" /></div>;
     case 'assets':     return <AssetsPanel />;
     case 'connectors': return <ConnectorsPanel />;
+    case 'pixellab':   return <PixelLabPanel />;
     default:           return <ScenePanel onSelect={onSceneSelect ?? (() => {})} />;
   }
 }

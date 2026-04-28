@@ -266,64 +266,60 @@ function ImagePreviewWithEdit({
     );
   }
 
-  // Fixed-size display tile with `objectFit: contain` + pixelated rendering
-  // so a tiny 16×16 or 32×32 sprite scales up to a meaningful preview
-  // (instead of rendering at its natural pixel size and looking like a
-  // postage stamp). Square tile keeps the chrome consistent regardless
-  // of source aspect; non-square sources letterbox cleanly inside.
+  // Full-width square tile — fills the section width, image letterboxes
+  // inside via `objectFit: contain` + pixelated. Works the same for
+  // 16×16 sprites (scaled up crisp) and 512×512 sheets (scaled down).
   return (
     <div className="flex flex-col gap-2">
-      <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-        <div
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '1 / 1',
+          background: 'rgba(0,0,0,0.06)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 10,
+          overflow: 'hidden',
+          padding: 8,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={dataUrl}
+          alt=""
           style={{
-            position: 'relative',
-            width: 160,
-            height: 160,
-            background: 'rgba(0,0,0,0.06)',
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            imageRendering: 'pixelated',
+          }}
+          draggable={false}
+        />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          title="Slice into rows × columns"
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 30,
+            height: 30,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--pb-paper)',
             border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 10,
-            overflow: 'hidden',
-            padding: 6,
+            borderRadius: 8,
+            boxShadow: '0 1.5px 0 var(--pb-line-2)',
+            color: 'var(--pb-ink)',
+            cursor: 'pointer',
+            padding: 0,
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={dataUrl}
-            alt=""
-            style={{
-              display: 'block',
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              imageRendering: 'pixelated',
-            }}
-            draggable={false}
-          />
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            title="Slice into rows × columns"
-            style={{
-              position: 'absolute',
-              top: 6,
-              right: 6,
-              width: 26,
-              height: 26,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'var(--pb-paper)',
-              border: '1.5px solid var(--pb-line-2)',
-              borderRadius: 7,
-              boxShadow: '0 1.5px 0 var(--pb-line-2)',
-              color: 'var(--pb-ink)',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            <Pencil size={13} strokeWidth={2.4} />
-          </button>
-        </div>
+          <Pencil size={14} strokeWidth={2.4} />
+        </button>
       </div>
       <div
         style={{

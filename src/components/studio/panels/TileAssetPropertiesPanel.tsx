@@ -288,7 +288,7 @@ function ImagePreviewWithEdit({
             style={{
               display: 'block',
               maxWidth: '100%',
-              maxHeight: 220,
+              maxHeight: 120,
               width: 'auto',
               height: 'auto',
               imageRendering: 'pixelated',
@@ -301,10 +301,10 @@ function ImagePreviewWithEdit({
             title="Slice into rows × columns"
             style={{
               position: 'absolute',
-              top: 6,
-              right: 6,
-              width: 26,
-              height: 26,
+              top: 4,
+              right: 4,
+              width: 24,
+              height: 24,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

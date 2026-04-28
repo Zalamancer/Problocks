@@ -178,17 +178,14 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
         </span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-        <PanelSection title="Image" collapsible defaultOpen>
-          <ImagePreviewWithEdit
-            dataUrl={baseStyle?.dataUrl ?? ''}
-            width={baseStyle?.width ?? 0}
-            height={baseStyle?.height ?? 0}
-            onEdit={() => setSliceOpen(true)}
-          />
-        </PanelSection>
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <ImagePreviewWithEdit
+          dataUrl={baseStyle?.dataUrl ?? ''}
+          onEdit={() => setSliceOpen(true)}
+        />
 
-        <PanelSection title={`Styles (${asset.styles.length})`} collapsible defaultOpen>
+        <div className="px-4 py-4 flex flex-col gap-4">
+          <PanelSection title={`Styles (${asset.styles.length})`} collapsible defaultOpen>
           <StylesList
             asset={asset}
             selectedStyleId={selectedStyleId}
@@ -217,7 +214,8 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
             {uploading ? <Upload size={13} strokeWidth={2.4} /> : <Plus size={13} strokeWidth={2.4} />}
             {uploading ? 'Uploading…' : 'Add style'}
           </button>
-        </PanelSection>
+          </PanelSection>
+        </div>
       </div>
 
       {sliceOpen && baseStyle && (
@@ -232,27 +230,27 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
 }
 
 /**
- * Header image preview with a small edit (Scissors) icon overlay top-right.
- * Same intrinsic-aspect sizing as the previous preview — the wrapper
- * shrinks to the rendered <img> via inline-block + maxWidth/maxHeight so
- * any later overlays line up on real image edges.
+ * Edge-to-edge header image — fills the right panel's full width with a
+ * 1:1 square tile, no internal section chrome (no PanelSection title, no
+ * caption, no border / padding). Image letterboxes via objectFit:contain
+ * + pixelated so 16×16 sprites scale up crisply and large sheets scale
+ * down to fit. The bottom border separates the preview from the Styles
+ * section that follows.
  */
 function ImagePreviewWithEdit({
-  dataUrl, width, height, onEdit,
+  dataUrl, onEdit,
 }: {
   dataUrl: string;
-  width: number;
-  height: number;
   onEdit: () => void;
 }) {
   if (!dataUrl) {
     return (
       <div
         style={{
+          width: '100%',
           aspectRatio: '1 / 1',
           background: 'var(--pb-cream-2)',
-          border: '1.5px solid var(--pb-line-2)',
-          borderRadius: 8,
+          borderBottom: '1.5px solid var(--pb-line-2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -266,71 +264,55 @@ function ImagePreviewWithEdit({
     );
   }
 
-  // Full-width square tile — fills the section width, image letterboxes
-  // inside via `objectFit: contain` + pixelated. Works the same for
-  // 16×16 sprites (scaled up crisp) and 512×512 sheets (scaled down).
   return (
-    <div className="flex flex-col gap-2">
-      <div
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '1 / 1',
+        background: 'rgba(0,0,0,0.06)',
+        borderBottom: '1.5px solid var(--pb-line-2)',
+        overflow: 'hidden',
+        padding: 12,
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={dataUrl}
+        alt=""
         style={{
-          position: 'relative',
+          display: 'block',
           width: '100%',
-          aspectRatio: '1 / 1',
-          background: 'rgba(0,0,0,0.06)',
-          border: '1.5px solid var(--pb-line-2)',
-          borderRadius: 10,
-          overflow: 'hidden',
-          padding: 8,
+          height: '100%',
+          objectFit: 'contain',
+          imageRendering: 'pixelated',
         }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={dataUrl}
-          alt=""
-          style={{
-            display: 'block',
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            imageRendering: 'pixelated',
-          }}
-          draggable={false}
-        />
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          title="Slice into rows × columns"
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            width: 30,
-            height: 30,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 8,
-            boxShadow: '0 1.5px 0 var(--pb-line-2)',
-            color: 'var(--pb-ink)',
-            cursor: 'pointer',
-            padding: 0,
-          }}
-        >
-          <Pencil size={14} strokeWidth={2.4} />
-        </button>
-      </div>
-      <div
+        draggable={false}
+      />
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        title="Slice into rows × columns"
         style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: 'var(--pb-ink-muted)',
-          textAlign: 'center',
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          width: 30,
+          height: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--pb-paper)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 8,
+          boxShadow: '0 1.5px 0 var(--pb-line-2)',
+          color: 'var(--pb-ink)',
+          cursor: 'pointer',
+          padding: 0,
         }}
       >
-        {width}×{height}px
-      </div>
+        <Pencil size={14} strokeWidth={2.4} />
+      </button>
     </div>
   );
 }

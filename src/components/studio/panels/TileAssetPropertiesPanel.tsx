@@ -49,6 +49,35 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
     setSliceOpen(false);
   }, [selectedAssetId]);
 
+  // Arrow-key navigation across the asset's styles. Up/Left = previous,
+  // Down/Right = next, with wrap-around. Listener is document-level
+  // because the right panel doesn't own a focusable container, but we
+  // bail out if the user is typing in an input (rename / search etc.),
+  // if the slice modal is open (it owns its own keys), or if any other
+  // selection panel is on top (covered by the StudioLayout if-chain —
+  // this panel only mounts when there's no canvas-object selected).
+  useEffect(() => {
+    if (!asset || asset.styles.length < 2 || sliceOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const dir =
+        e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 :
+        e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 :
+        0;
+      if (dir === 0) return;
+      e.preventDefault();
+      const idx = asset.styles.findIndex((s) => s.id === selectedStyleId);
+      const startIdx = idx < 0 ? 0 : idx;
+      const nextIdx = (startIdx + dir + asset.styles.length) % asset.styles.length;
+      const nextStyle = asset.styles[nextIdx];
+      setSelectedStyleId(nextStyle.id);
+      setTool('object');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [asset, selectedStyleId, sliceOpen, setSelectedStyleId, setTool]);
+
   const Shell = headless
     ? (({ children }: { children: React.ReactNode }) => <>{children}</>)
     : (({ children }: { children: React.ReactNode }) => (
@@ -327,6 +356,14 @@ function StylesList({
 }) {
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
   const dragStyleIdRef = useRef<string | null>(null);
+  // Per-row refs so the arrow-key navigation in the parent can scroll the
+  // currently-selected style into view as the user cycles.
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  useEffect(() => {
+    if (!selectedStyleId) return;
+    const row = rowRefs.current[selectedStyleId];
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedStyleId]);
 
   function reorderViaDrop(targetStyleId: string) {
     const fromId = dragStyleIdRef.current;
@@ -350,6 +387,7 @@ function StylesList({
         return (
           <div
             key={style.id}
+            ref={(el) => { rowRefs.current[style.id] = el; }}
             draggable
             onDragStart={(e) => {
               dragStyleIdRef.current = style.id;

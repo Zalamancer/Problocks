@@ -266,19 +266,24 @@ function ImagePreviewWithEdit({
     );
   }
 
+  // Fixed-size display tile with `objectFit: contain` + pixelated rendering
+  // so a tiny 16×16 or 32×32 sprite scales up to a meaningful preview
+  // (instead of rendering at its natural pixel size and looking like a
+  // postage stamp). Square tile keeps the chrome consistent regardless
+  // of source aspect; non-square sources letterbox cleanly inside.
   return (
     <div className="flex flex-col gap-2">
       <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
         <div
           style={{
             position: 'relative',
-            display: 'inline-block',
-            maxWidth: '100%',
+            width: 160,
+            height: 160,
             background: 'rgba(0,0,0,0.06)',
             border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 8,
+            borderRadius: 10,
             overflow: 'hidden',
-            lineHeight: 0,
+            padding: 6,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -287,10 +292,9 @@ function ImagePreviewWithEdit({
             alt=""
             style={{
               display: 'block',
-              maxWidth: '100%',
-              maxHeight: 120,
-              width: 'auto',
-              height: 'auto',
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
               imageRendering: 'pixelated',
             }}
             draggable={false}
@@ -301,10 +305,10 @@ function ImagePreviewWithEdit({
             title="Slice into rows × columns"
             style={{
               position: 'absolute',
-              top: 4,
-              right: 4,
-              width: 24,
-              height: 24,
+              top: 6,
+              right: 6,
+              width: 26,
+              height: 26,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -323,7 +327,7 @@ function ImagePreviewWithEdit({
       </div>
       <div
         style={{
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: 'var(--pb-ink-muted)',
           textAlign: 'center',

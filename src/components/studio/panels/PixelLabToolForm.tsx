@@ -275,9 +275,16 @@ function ImagesInput({ values, max, onChange }: { values: File[]; max: number; o
   );
 }
 
+interface ToolResult {
+  text: string;
+  images: string[];
+}
+
 export function PixelLabToolForm({ tool, onBack }: PixelLabToolFormProps) {
   const [state, setState] = useState<FormState>(() => defaultsFor(tool));
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ToolResult | null>(null);
 
   const groupedFields = useMemo(() => {
     const groups: Record<string, Field[]> = {};
@@ -309,18 +316,50 @@ export function PixelLabToolForm({ tool, onBack }: PixelLabToolFormProps) {
   const handleSubmit = useCallback(async () => {
     if (missingRequired.length > 0 || submitting) return;
     setSubmitting(true);
+    setError(null);
+    setResult(null);
     try {
-      // Strip empty optional values & coerce select-encoded numbers (e.g. n_directions).
-      const payload: Record<string, unknown> = { __mcp_tool: tool.mcpName };
+      // Build FormData: __args is JSON for non-file fields; image fields are
+      // appended as binary (single = `<key>`, multiple = `<key>[]`).
+      const args: Record<string, unknown> = {};
+      const fd = new FormData();
       for (const f of tool.fields) {
         if (!isFieldVisible(f, state)) continue;
         const v = state[f.key];
+        if (f.kind === 'image') {
+          if (v instanceof File) fd.append(f.key, v, v.name);
+          continue;
+        }
+        if (f.kind === 'images') {
+          const arr = (v as File[] | null) ?? [];
+          for (const file of arr) fd.append(`${f.key}[]`, file, file.name);
+          continue;
+        }
         if (v === '' || v == null) continue;
-        if (f.kind === 'select' && f.key === 'n_directions') payload[f.key] = Number(v);
-        else payload[f.key] = v;
+        // Numeric coercion for selects whose MCP type is integer.
+        if (f.kind === 'select' && f.key === 'n_directions') args[f.key] = Number(v);
+        else args[f.key] = v;
       }
-      // TODO: wire to /api/pixellab/<mcpName> route — POST formdata for image fields.
-      console.log('[pixellab] submit', payload);
+      fd.append('__args', JSON.stringify(args));
+
+      const resp = await fetch(`/api/pixellab/run/${encodeURIComponent(tool.mcpName)}`, {
+        method: 'POST',
+        body: fd,
+      });
+      const json = (await resp.json()) as {
+        ok: boolean;
+        text?: string;
+        images?: string[];
+        error?: string;
+        detail?: string;
+      };
+      if (!json.ok) {
+        setError(json.error ?? `Request failed (HTTP ${resp.status})`);
+      } else {
+        setResult({ text: json.text ?? '', images: json.images ?? [] });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
     }
@@ -398,6 +437,59 @@ export function PixelLabToolForm({ tool, onBack }: PixelLabToolFormProps) {
         })}
       </div>
 
+      {/* Result / error block (above footer, inside scroll region for tall outputs) */}
+      {(error || result) && (
+        <div
+          className="shrink-0 overflow-y-auto"
+          style={{
+            padding: '10px 12px',
+            borderTop: '1.5px solid var(--pb-line-2)',
+            maxHeight: '40%',
+          }}
+        >
+          {error && (
+            <div
+              className="text-[12px] rounded p-2"
+              style={{ background: 'rgba(220,90,90,0.12)', color: '#b04040', border: '1px solid rgba(220,90,90,0.3)' }}
+            >
+              {error}
+            </div>
+          )}
+          {result && (
+            <div className="flex flex-col gap-2">
+              {result.images.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {result.images.map((src, i) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={i}
+                      src={src}
+                      alt={`result ${i + 1}`}
+                      className="w-full h-auto rounded border border-panel-border"
+                      style={{ imageRendering: 'pixelated', background: 'var(--pb-paper)' }}
+                    />
+                  ))}
+                </div>
+              )}
+              {result.text && (
+                <pre
+                  className="text-[11px] whitespace-pre-wrap p-2 rounded"
+                  style={{ background: 'var(--pb-paper)', border: '1px solid var(--pb-line-2)', color: 'var(--pb-ink)' }}
+                >
+                  {result.text}
+                </pre>
+              )}
+              {result.images.length === 0 && !result.text && (
+                <p className="text-[11px]" style={{ color: 'var(--pb-ink-muted)' }}>
+                  Job queued. The tool returned no inline content — check PixelLab&apos;s dashboard or
+                  call <code>get_*</code> with the returned ID once the job completes.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Sticky footer */}
       <div
         className="shrink-0"
@@ -410,7 +502,7 @@ export function PixelLabToolForm({ tool, onBack }: PixelLabToolFormProps) {
           disabled={missingRequired.length > 0}
           loading={submitting}
         >
-          Generate
+          {submitting ? 'Generating…' : 'Generate'}
         </PanelActionButton>
         {missingRequired.length > 0 && (
           <p className="text-[11px] mt-2" style={{ color: '#a06f1f' }}>

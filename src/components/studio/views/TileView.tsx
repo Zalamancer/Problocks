@@ -307,11 +307,14 @@ export function TileView() {
 
       // ── Base layer pre-pass ─────────────────────────────────────
       // When `baseTextureId` is set, the map is conceptually filled
-      // edge-to-edge with that texture's pure tile. We stamp the visible
-      // viewport with it once, before any layered corners draw on top —
-      // and the layered pass below will substitute absent corners with
-      // baseTextureId so painted regions transition smoothly via the
-      // matching wang bridge tileset.
+      // edge-to-edge with that texture's pure tile. We render it as a
+      // SINGLE tiled fillRect via CanvasPattern — at low zoom a per-cell
+      // loop is O(viewport_cells), which is ~200k drawImage calls at 10%
+      // zoom on a 1080p canvas and ground the framerate to a halt. The
+      // pattern tiles natively and only costs one fillRect regardless of
+      // how many cells are visible. The layered pass below still
+      // substitutes absent corners with baseTexId so painted regions
+      // transition smoothly via the matching wang bridge tileset.
       const recolorMap = tileRecolorRef.current;
       const baseTexId = s.baseTextureId;
       if (baseTexId) {
@@ -325,9 +328,23 @@ export function TileView() {
             const baseUrl = baseRecolored ?? baseDataUrl;
             const baseImg = imgCacheRef.current.get(baseUrl);
             if (baseImg && imgReadyRef.current.has(baseUrl)) {
-              for (let cy = cy0; cy <= cy1; cy++) {
-                for (let cx = cx0; cx <= cx1; cx++) {
-                  ctx!.drawImage(baseImg, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+              const pattern = ctx!.createPattern(baseImg, 'repeat');
+              if (pattern) {
+                // Pattern tiles in CURRENT TRANSFORM space starting at world
+                // (0,0). Scale so one image tile = one cell (`ts` world units),
+                // independent of the source image's natural size.
+                const m = new DOMMatrix();
+                m.scaleSelf(ts / baseImg.width, ts / baseImg.height);
+                pattern.setTransform(m);
+                ctx!.fillStyle = pattern;
+                ctx!.fillRect(cx0 * ts, cy0 * ts, (cx1 - cx0 + 1) * ts, (cy1 - cy0 + 1) * ts);
+              } else {
+                // Pattern unavailable for any reason — fall back to per-cell
+                // drawImage. Won't be the hot path on real browsers.
+                for (let cy = cy0; cy <= cy1; cy++) {
+                  for (let cx = cx0; cx <= cx1; cx++) {
+                    ctx!.drawImage(baseImg, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+                  }
                 }
               }
             }
@@ -346,8 +363,35 @@ export function TileView() {
         ctx!.globalAlpha = layer.opacity;
         const corners = layer.corners;
         const transforms = layer.cellTransforms;
-        for (let cy = cy0; cy <= cy1; cy++) {
-          for (let cx = cx0; cx <= cx1; cx++) {
+        // Skip the entire viewport scan when this layer has nothing painted
+        // — at low zoom (10%) the viewport is ~600×340 = 200k cells and even
+        // an early `continue` per cell costs ~8 ms/frame in plain object
+        // lookups. With nothing to draw we can bail in O(1).
+        const cornerKeys = Object.keys(corners);
+        if (cornerKeys.length === 0) continue;
+        // Derive the painted bbox so we only iterate the cells that could
+        // possibly draw (intersected with the viewport). For dense maps the
+        // bbox covers the whole viewport anyway and this is a tiny tax;
+        // for sparse maps it shaves the iteration to just the painted
+        // region. We pad +1 cell because a corner at (cx, cy) influences
+        // the cells at (cx-1, cy-1) through (cx, cy).
+        let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity;
+        for (const k of cornerKeys) {
+          const i = k.indexOf(',');
+          if (i < 0) continue;
+          const x = +k.slice(0, i);
+          const y = +k.slice(i + 1);
+          if (x < bMinX) bMinX = x;
+          if (y < bMinY) bMinY = y;
+          if (x > bMaxX) bMaxX = x;
+          if (y > bMaxY) bMaxY = y;
+        }
+        const lcx0 = Math.max(cx0, bMinX - 1);
+        const lcy0 = Math.max(cy0, bMinY - 1);
+        const lcx1 = Math.min(cx1, bMaxX);
+        const lcy1 = Math.min(cy1, bMaxY);
+        for (let cy = lcy0; cy <= lcy1; cy++) {
+          for (let cx = lcx0; cx <= lcx1; cx++) {
             const nwRaw = corners[`${cx},${cy}`];
             const neRaw = corners[`${cx + 1},${cy}`];
             const swRaw = corners[`${cx},${cy + 1}`];

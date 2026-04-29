@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { Trash2, Upload, User, Film } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
-import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import {
@@ -73,19 +73,7 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
 
   return (
     <Shell>
-      <div
-        className="shrink-0 flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
-      >
-        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)' }}>
-          {character.name}
-        </span>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
-          CHARACTER
-        </span>
-      </div>
-
-      <PanelIconTabs
+      <IconOnlyTabs
         tabs={[
           { id: 'character', label: 'Character', icon: User },
           { id: 'animations', label: 'Animations', icon: Film },
@@ -131,6 +119,51 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
         </PanelActionButton>
       </footer>
     </Shell>
+  );
+}
+
+/**
+ * Icon-only segmented tab bar. Same outer dimensions and border as
+ * `PanelIconTabs` (px-3 py-2 + bottom border) so this row sits at the
+ * exact same vertical position as the left panel's [Objects | Groups |
+ * Characters] tab row — no expanding label, no context header above it.
+ */
+function IconOnlyTabs({
+  tabs, activeTab, onChange,
+}: {
+  tabs: { id: string; label: string; icon: LucideIcon }[];
+  activeTab: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div
+      className="shrink-0 flex items-center gap-1 px-3 py-2"
+      style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab;
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            title={tab.label}
+            style={{
+              flex: 1,
+              background: isActive ? 'var(--pb-butter)' : 'transparent',
+              color: isActive ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+              border: isActive ? '1.5px solid var(--pb-butter-ink)' : '1.5px solid transparent',
+              boxShadow: isActive ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+              transition: 'background-color 200ms, color 200ms, box-shadow 200ms, border-color 200ms',
+            }}
+            className="relative h-8 rounded-lg flex items-center justify-center hover:bg-[var(--pb-cream-2)] hover:text-[var(--pb-ink)]"
+          >
+            <Icon size={16} />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

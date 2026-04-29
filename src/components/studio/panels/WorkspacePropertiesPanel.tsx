@@ -11,6 +11,8 @@ import {
   type LightingPreset,
   type RGB,
 } from '@/store/lighting-store';
+import { useTile } from '@/store/tile-store';
+import { useStudio } from '@/store/studio-store';
 
 /**
  * Right-panel view shown when the user selects "Workspace" in the left-panel
@@ -41,6 +43,7 @@ export function WorkspacePropertiesPanel({ headless }: { headless?: boolean } = 
     <Shell>
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+        <TileCameraSection />
         <PanelSection title="Preset" collapsible defaultOpen>
           <PanelSelect
             label="Preset"
@@ -142,6 +145,48 @@ export function WorkspacePropertiesPanel({ headless }: { headless?: boolean } = 
         </PBButton>
       </footer>
     </Shell>
+  );
+}
+
+/**
+ * Play-mode camera controls for the 2D Tile workspace. Lives at the top of
+ * the Workspace properties tab so it's reachable without touching the
+ * Properties context-aware panel. Only renders when the active game
+ * system is 2D Tile — other workspaces have their own camera UX (3D
+ * orbit, freeform pan/zoom) so these controls would just be noise.
+ */
+function TileCameraSection() {
+  const gameSystem = useStudio((s) => s.gameSystem);
+  const follow = useTile((s) => s.playCameraFollow);
+  const setFollow = useTile((s) => s.setPlayCameraFollow);
+  const smoothing = useTile((s) => s.playCameraSmoothing);
+  const setSmoothing = useTile((s) => s.setPlayCameraSmoothing);
+  const zoom = useTile((s) => s.playCameraZoom);
+  const setZoom = useTile((s) => s.setPlayCameraZoom);
+
+  if (gameSystem !== '2d') return null;
+
+  return (
+    <PanelSection title="Camera" collapsible defaultOpen>
+      <PanelToggle
+        label="Follow player"
+        description="Keep the player centred while playing"
+        checked={follow}
+        onChange={setFollow}
+      />
+      <PanelSlider
+        label="Smoothing"
+        value={smoothing}
+        onChange={setSmoothing}
+        min={0} max={1} step={0.01} precision={2}
+      />
+      <PanelSlider
+        label="Zoom"
+        value={zoom}
+        onChange={setZoom}
+        min={0.5} max={4} step={0.1} precision={1} suffix="×"
+      />
+    </PanelSection>
   );
 }
 

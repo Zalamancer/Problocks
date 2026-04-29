@@ -237,11 +237,10 @@ export function TileView() {
   /** Pressed keys during play mode. Lower-cased Key value for case-insensitive
    *  matching against {w,a,s,d, arrowleft, ...}. */
   const playKeysRef = useRef<Set<string>>(new Set());
-  /** True while a procgen-on-play undo group has been committed but not yet
-   *  reverted. The Stop transition reads this to decide whether to call
-   *  `undo()` — without the flag, a Stop after the user pressed Play with
-   *  no tilesets (so no procgen happened) would undo a real edit. */
-  const procgenAppliedRef = useRef(false);
+  /** Pre-play camera snapshot — set on Play start, cleared on Stop. The
+   *  Stop transition restores this so leaving play mode drops the user
+   *  back to the exact framing they had when they pressed Play. */
+  const preCameraRef = useRef<{ x: number; y: number; zoom: number } | null>(null);
 
   const ensureImage = useCallback((dataUrl: string) => {
     let img = imgCacheRef.current.get(dataUrl);
@@ -474,12 +473,15 @@ export function TileView() {
       for (const [id, state] of rt) updateChar(id, { x: state.x, y: state.y });
       rt.clear();
       playKeysRef.current.clear();
-      // Revert the procgen paint we committed at Play start so the editor
-      // canvas isn't permanently filled. tileCharacters aren't in the undo
-      // snapshot, so the flush above survives this call.
-      if (procgenAppliedRef.current) {
-        useTile.getState().undo();
-        procgenAppliedRef.current = false;
+      // Drop the ephemeral procgen layer — clearing the ref is enough
+      // since playLayer is excluded from persist and isn't in undo state.
+      useTile.getState().setPlayLayer(null);
+      // Restore the pre-play camera so the editor framing is exactly where
+      // the user left it on Play. Only restore when we actually saved one
+      // (the Play body bails early when there are zero characters).
+      if (preCameraRef.current) {
+        useTile.getState().setCamera(preCameraRef.current);
+        preCameraRef.current = null;
       }
       requestRender.current();
       return;
@@ -496,8 +498,10 @@ export function TileView() {
     const playerId = ordered[0].id;
     const tile = useTile.getState();
     tile.updateTileCharacter(playerId, { x: 0, y: 0 });
-    // Centre the camera on the spawn so the player is visibly mid-canvas.
-    tile.setCamera({ x: 0, y: 0 });
+    // Snapshot the editor camera so we can restore exact framing on Stop,
+    // then snap to the spawn at the configured play zoom.
+    preCameraRef.current = { x: tile.camera.x, y: tile.camera.y, zoom: tile.camera.zoom };
+    tile.setCamera({ x: 0, y: 0, zoom: tile.playCameraZoom });
 
     // Procedurally generate the world around the spawn. Reserve a 128×128
     // cell square at origin (cells [-64..63]) so whatever the user has
@@ -509,9 +513,7 @@ export function TileView() {
       if (ts.upperTextureId) palette.push(ts.upperTextureId);
       if (ts.lowerTextureId) palette.push(ts.lowerTextureId);
     }
-    procgenAppliedRef.current = false;
-    const layerId = tile.activeLayerId;
-    if (palette.length > 0 && layerId) {
+    if (palette.length > 0) {
       const RESERVE = 64;  // half-extent in cells → 128×128 untouched
       const RADIUS = 256;  // half-extent of the generated band
       const cells = generateRegion({
@@ -525,22 +527,24 @@ export function TileView() {
         skipCell: (cx, cy) => Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE,
       });
       if (cells.length > 0) {
-        tile.beginUndoGroup();
-        tile.mutateCorners(layerId, (corners) => {
-          // Painting cell (cx, cy) means setting all 4 surrounding corners
-          // to the same texture id. Adjacent cells with different ids share
-          // a corner — the overwrite ordering is consistent (row-major
-          // generateRegion order), so the wang resolver gets a stable
-          // boundary pattern.
-          for (const { cx, cy, texId } of cells) {
-            corners[`${cx},${cy}`] = texId;
-            corners[`${cx + 1},${cy}`] = texId;
-            corners[`${cx},${cy + 1}`] = texId;
-            corners[`${cx + 1},${cy + 1}`] = texId;
-          }
+        // Build the synthetic play layer in-memory, then publish it in one
+        // setState — never goes through `mutateCorners`, never lands in the
+        // undo stack, never gets persisted.
+        const corners: Record<string, string> = {};
+        for (const { cx, cy, texId } of cells) {
+          corners[`${cx},${cy}`] = texId;
+          corners[`${cx + 1},${cy}`] = texId;
+          corners[`${cx},${cy + 1}`] = texId;
+          corners[`${cx + 1},${cy + 1}`] = texId;
+        }
+        tile.setPlayLayer({
+          id: '__play_overlay__',
+          name: 'Play Overlay',
+          visible: true,
+          opacity: 1,
+          tilesetId: null,
+          corners,
         });
-        tile.commitUndoGroup();
-        procgenAppliedRef.current = true;
       }
     }
 
@@ -580,7 +584,8 @@ export function TileView() {
     function tick(now: number) {
       const dt = Math.min(0.05, (now - lastT) / 1000);
       lastT = now;
-      const player = useTile.getState().tileCharacters[playerId];
+      const tileState = useTile.getState();
+      const player = tileState.tileCharacters[playerId];
       const cur = rt.get(playerId);
       if (player && cur) {
         const keys = playKeysRef.current;
@@ -598,6 +603,18 @@ export function TileView() {
         } else {
           cur.dir = 'idle';
         }
+        // Camera follow — frame-rate-independent exponential smoothing.
+        // alpha at 60 fps = playCameraSmoothing; the pow keeps the same
+        // half-life across refresh rates. smoothing=1 ⇒ alpha=1 (snap),
+        // smoothing=0 ⇒ alpha=0 (no follow).
+        if (tileState.playCameraFollow) {
+          const cam = tileState.camera;
+          const s = tileState.playCameraSmoothing;
+          const alpha = 1 - Math.pow(1 - Math.min(0.999, Math.max(0, s)), dt * 60);
+          const nextX = cam.x + (cur.x - cam.x) * alpha;
+          const nextY = cam.y + (cur.y - cam.y) * alpha;
+          tileState.setCamera({ x: nextX, y: nextY });
+        }
       }
       requestRender.current();
       rafId = requestAnimationFrame(tick);
@@ -610,6 +627,16 @@ export function TileView() {
       window.removeEventListener('keyup', onKeyUp);
     };
   }, [isPlaying]);
+
+  // While playing, applying a fresh playCameraZoom from the right panel
+  // should jump the live camera too — the tick only writes (x, y), zoom
+  // is set once on Play start. This effect bridges slider changes onto
+  // the live camera without re-running the whole play setup.
+  const playCameraZoom = useTile((s) => s.playCameraZoom);
+  useEffect(() => {
+    if (!isPlaying) return;
+    useTile.getState().setCamera({ zoom: playCameraZoom });
+  }, [playCameraZoom, isPlaying]);
 
   // ── Imperative canvas render loop ───────────────────────────────
   useEffect(() => {
@@ -747,7 +774,10 @@ export function TileView() {
       // tileset for the boundary cells contains both textures. When a base
       // texture is active, absent corners are treated as baseTexId so paint
       // borders blend into the base via wang bridges instead of a hard edge.
-      for (const layer of s.layers) {
+      // Order: ephemeral procgen play layer first (drawn beneath user paint),
+      // then user layers in their normal stacking order.
+      const layerSeq = s.playLayer ? [s.playLayer, ...s.layers] : s.layers;
+      for (const layer of layerSeq) {
         if (!layer.visible) continue;
         ctx!.globalAlpha = layer.opacity;
         const corners = layer.corners;

@@ -418,6 +418,15 @@ export interface TileStore {
 
   layers: TileLayer[];
   activeLayerId: string;
+  /**
+   * Ephemeral synthetic layer painted at Play start by the procgen pass.
+   * Lives OUTSIDE `layers[]` and is excluded from persist so the
+   * thousands of corner entries it generates never hit localStorage.
+   * Renderer treats it as a bottom-most layer (drawn before user
+   * layers) so user paint stays on top. Cleared back to null on Stop.
+   */
+  playLayer: TileLayer | null;
+  setPlayLayer: (layer: TileLayer | null) => void;
   addLayer: (name?: string) => void;
   removeLayer: (id: string) => void;
   renameLayer: (id: string, name: string) => void;
@@ -752,6 +761,21 @@ export interface TileStore {
   showGrid: boolean;
   toggleGrid: () => void;
   resetCamera: () => void;
+
+  // ── Play-mode camera ───────────────────────────────────────────
+  /** When true, the play loop drives the camera so the player stays
+   *  centred. Off = the camera is wherever the user left it on Stop. */
+  playCameraFollow: boolean;
+  setPlayCameraFollow: (v: boolean) => void;
+  /** Lerp factor per frame at 60 fps for the follow path: 1 = snap, lower
+   *  values smooth the chase. Internally scaled by frame dt so the feel
+   *  stays consistent across refresh rates. */
+  playCameraSmoothing: number;
+  setPlayCameraSmoothing: (v: number) => void;
+  /** Camera zoom held while playing. Restored to whatever the user had on
+   *  the canvas when Stop fires, so edit-mode framing isn't disturbed. */
+  playCameraZoom: number;
+  setPlayCameraZoom: (v: number) => void;
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
@@ -1107,6 +1131,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
 
   layers: [INITIAL_LAYER],
   activeLayerId: INITIAL_LAYER.id,
+  playLayer: null,
+  setPlayLayer: (layer) => set({ playLayer: layer }),
   addLayer: (name) => set((s) => {
     const layer = defaultLayer(name ?? `Layer ${s.layers.length + 1}`);
     return { ...recordUndoStep(s), layers: [...s.layers, layer], activeLayerId: layer.id };
@@ -1960,6 +1986,13 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
   resetCamera: () => set({ camera: { x: 0, y: 0, zoom: 1 } }),
 
+  playCameraFollow: true,
+  setPlayCameraFollow: (v) => set({ playCameraFollow: !!v }),
+  playCameraSmoothing: 0.15,
+  setPlayCameraSmoothing: (v) => set({ playCameraSmoothing: Math.max(0, Math.min(1, v)) }),
+  playCameraZoom: 1.5,
+  setPlayCameraZoom: (v) => set({ playCameraZoom: Math.max(0.1, Math.min(8, v)) }),
+
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
     layers: s.layers.map((l) => ({ ...l, corners: {} })),
@@ -2107,6 +2140,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // available is the whole point.
     tileCharacters: s.tileCharacters,
     selectedCharacterId: s.selectedCharacterId,
+    playCameraFollow: s.playCameraFollow,
+    playCameraSmoothing: s.playCameraSmoothing,
+    playCameraZoom: s.playCameraZoom,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {

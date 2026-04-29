@@ -5,11 +5,11 @@ import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
-  Pencil, GripVertical, X, Layers, Globe2, Folder, FolderPlus,
+  Pencil, X, Layers, Globe2, Folder, FolderPlus,
   Users, SlidersHorizontal,
 } from 'lucide-react';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
-import { PanelSearchInput } from '@/components/ui';
+import { PanelSearchInput, PanelSelect } from '@/components/ui';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
@@ -1644,6 +1644,10 @@ function ObjectsSection() {
    *  filter panel itself is a placeholder right now — real per-class /
    *  per-style filters land here later. */
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** Browse layout — list rows (default) or 2-col grid of large
+   *  thumbnails. Mirrors the View dropdown in the 3D Freeform Models
+   *  view so the muscle memory carries over. */
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   /** Per-class-folder open/closed state. Defaults to OPEN (entry absent
    *  → open) so users see what they just created without an extra click. */
   const [collapsedClasses, setCollapsedClasses] = useState<Record<string, boolean>>({});
@@ -1960,24 +1964,21 @@ function ObjectsSection() {
           </button>
         </div>
         {filtersOpen && (
-          <div
-            style={{
-              padding: '8px 10px',
-              fontSize: 11,
-              color: 'var(--pb-ink-muted)',
-              fontStyle: 'italic',
-              border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 8,
-              background: 'var(--pb-cream-2)',
-              textAlign: 'center',
-            }}
-          >
-            Filters coming soon — sort, class, and tag pickers.
+          <div className="flex flex-col gap-2">
+            <PanelSelect
+              label="View"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as typeof viewMode)}
+              options={[
+                { value: 'list', label: 'List' },
+                { value: 'grid', label: 'Grid' },
+              ]}
+            />
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 14px 14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 4px 14px' }}>
         {error && (
           <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600, margin: 0 }}>
             {error}
@@ -1989,6 +1990,7 @@ function ObjectsSection() {
               <AssetCard
                 key={asset.id}
                 asset={asset}
+                viewMode={viewMode}
                 isSelected={asset.id === selectedAssetId}
                 isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
                 onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
@@ -2166,7 +2168,12 @@ function ObjectsSection() {
                     </button>
                   </div>
                   {open && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 14 }}>
+                    <div
+                      className={viewMode === 'grid' && childClasses.length === 0
+                        ? 'grid grid-cols-2 gap-1'
+                        : 'flex flex-col gap-px'}
+                      style={{ paddingLeft: 14 }}
+                    >
                       {childClasses.map((c) => renderClassFolder(c, depth + 1))}
                       {childAssets.map(renderAssetCard)}
                       {childClasses.length === 0 && childAssets.length === 0 && (
@@ -2260,13 +2267,13 @@ function ObjectsSection() {
                   if (!fromId) return;
                   setAssetClass(fromId, null);
                 }}
-                className="flex flex-col gap-2 overflow-y-auto"
+                className={viewMode === 'grid'
+                  ? 'grid grid-cols-2 gap-1 overflow-y-auto'
+                  : 'flex flex-col gap-px overflow-y-auto'}
                 style={{
                   outline: 'none',
                   maxHeight: 480,
                   scrollbarGutter: 'stable',
-                  // Subtle ring when the user is dragging over the empty
-                  // gap — signals "drop here = uncategorised".
                   background: dropTargetClassId === 'root' ? 'rgba(0,0,0,0.03)' : undefined,
                   borderRadius: 6,
                   padding: 2,
@@ -2436,25 +2443,18 @@ function EmptySubTabPlaceholder({
 }
 
 /**
- * One asset row. Compact horizontal layout: grip + thumbnail + name + trash.
- * Clicking the row selects the asset (sets the OBJECT brush to its first
- * style and opens the right Properties panel where the user can edit /
- * slice / manage styles). Inline expand was removed — the styles list now
- * lives in TileAssetPropertiesPanel.
+ * One asset row/tile. Two layouts share state:
+ *   - list mode → wide row, large thumb on the left, name + meta on the right
+ *   - grid mode → square tile, thumb fills, label band underneath
  *
- * Drag interactions
- * -----------------
- * - The grip-handle on the LEFT initiates HTML5 drag for asset reorder.
- *   Hovering another row while dragging fires the parent's onDragOver/
- *   onDrop, which calls reorderAssets.
- *
- * Inline rename
- * -------------
- * - Pencil icon next to the asset name → click toggles edit mode (an
- *   inline input). Save on blur or Enter; Escape cancels.
+ * No card chrome (border / background) at rest — that gave the panel a
+ * "stack of pills" look. Selection paints a butter wash; hover surfaces
+ * the edit + delete affordances. Drag-to-reorder still works (parent's
+ * onDragOver/onDrop wire it up) but the visible grip is gone — the entire
+ * card is the drag handle.
  */
 function AssetCard({
-  asset, isSelected,
+  asset, isSelected, viewMode,
   onSelect, onRemoveAsset, onRenameAsset,
   onDragStart, onDragOverCard, onDropCard,
   isFocused = false,
@@ -2462,6 +2462,7 @@ function AssetCard({
 }: {
   asset: ObjectAsset;
   isSelected: boolean;
+  viewMode: 'list' | 'grid';
   onSelect: () => void;
   onRemoveAsset: () => void;
   onRenameAsset: (name: string) => void;
@@ -2471,18 +2472,14 @@ function AssetCard({
   isFocused?: boolean;
   onFocusAsset?: () => void;
 }) {
-  // The thumbnail prefers the brush style if this asset is the current
-  // brush, then styles[0] as a fallback. The arrow-key style focus that
-  // the inline-expand list used to drive is gone with the inline list.
   const brushStyle = useTile.getState().selectedStyleId
     ? asset.styles.find((s) => s.id === useTile.getState().selectedStyleId) ?? null
     : null;
   const headerStyle = (isSelected && brushStyle) ? brushStyle : asset.styles[0];
 
-  const dims = { thumb: 40, headerFont: 12.5, gripIcon: 12, padding: 8 };
-
   const [editingName, setEditingName] = useState(false);
-  const cardDragArmedRef = useRef(false);
+  const [hovered, setHovered] = useState(false);
+  const showActions = hovered || isSelected || editingName;
 
   function commitName(value: string) {
     setEditingName(false);
@@ -2490,72 +2487,165 @@ function AssetCard({
     if (trimmed && trimmed !== asset.name) onRenameAsset(trimmed);
   }
 
-  return (
-    <div
-      data-asset-id={asset.id}
-      draggable
-      onDragStart={(e) => {
-        if (!cardDragArmedRef.current) { e.preventDefault(); return; }
-        e.dataTransfer.effectAllowed = 'move';
-        // Some browsers ignore dragstart without setData — empty payload
-        // is fine because the parent uses a ref instead.
-        try { e.dataTransfer.setData('text/plain', asset.id); } catch { /* ignore */ }
-        onDragStart();
-      }}
-      onDragEnd={() => { cardDragArmedRef.current = false; }}
-      onDragOver={onDragOverCard}
-      onDrop={(e) => { cardDragArmedRef.current = false; onDropCard(e); }}
-      onClick={(e) => {
-        const t = e.target as HTMLElement;
-        // Don't double-fire when an inner button / input handles the click.
-        if (t.closest('button, input')) return;
-        onFocusAsset?.();
-        onSelect();
-      }}
+  // Selection wash + hover wash. No border / no shadow at rest.
+  const bg = isSelected
+    ? 'var(--pb-butter)'
+    : isFocused
+      ? 'rgba(14,165,233,0.10)'
+      : hovered
+        ? 'rgba(0,0,0,0.04)'
+        : 'transparent';
+
+  const containerStyle: React.CSSProperties = {
+    background: bg,
+    borderRadius: 6,
+    cursor: 'pointer',
+    overflow: 'hidden',
+    position: 'relative',
+  };
+
+  const editButton = (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+      title="Rename asset"
       style={{
-        background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-        // Focus ring uses a thicker accent border so it reads at a glance
-        // and never collides with the selection styling. Selection still
-        // wins on the chunky butter-ink border + drop shadow.
-        border: `${isFocused && !isSelected ? 2 : 1.5}px solid ${
-          isSelected ? 'var(--pb-butter-ink)' : isFocused ? '#0ea5e9' : 'var(--pb-line-2)'
-        }`,
-        borderRadius: 10,
-        boxShadow: isSelected
-          ? '0 2px 0 var(--pb-butter-ink)'
-          : isFocused
-            ? '0 0 0 2px rgba(14,165,233,0.18)'
-            : 'none',
-        overflow: 'hidden',
+        background: 'rgba(255,255,255,0.85)',
+        border: '1px solid var(--pb-line-2)',
+        borderRadius: 6,
         cursor: 'pointer',
+        color: 'var(--pb-ink)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 4,
       }}
     >
-      <div className="flex items-center gap-2" style={{ padding: dims.padding }}>
-        <span
-          onMouseDown={() => { cardDragArmedRef.current = true; }}
-          title="Drag to reorder"
-          style={{
-            display: 'flex', alignItems: 'center',
-            color: 'var(--pb-ink-muted)',
-            cursor: 'grab',
-            padding: '2px 0',
-            flexShrink: 0,
-          }}
-        >
-          <GripVertical size={dims.gripIcon} strokeWidth={2.4} />
-        </span>
+      <Pencil size={12} strokeWidth={2.4} />
+    </button>
+  );
+  const deleteButton = (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onRemoveAsset(); }}
+      title="Delete asset"
+      style={{
+        background: 'rgba(255,255,255,0.85)',
+        border: '1px solid var(--pb-line-2)',
+        borderRadius: 6,
+        cursor: 'pointer',
+        color: 'var(--pb-coral-ink)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 4,
+      }}
+    >
+      <Trash2 size={12} strokeWidth={2.4} />
+    </button>
+  );
+
+  const commonHandlers = {
+    'data-asset-id': asset.id,
+    draggable: !editingName,
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', asset.id); } catch { /* ignore */ }
+      onDragStart();
+    },
+    onDragOver: onDragOverCard,
+    onDrop: onDropCard,
+    onClick: (e: React.MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('button, input')) return;
+      onFocusAsset?.();
+      onSelect();
+    },
+  };
+
+  if (viewMode === 'grid') {
+    return (
+      <div {...commonHandlers} style={containerStyle}>
         <div
           style={{
-            width: dims.thumb, height: dims.thumb,
-            background: 'rgba(0,0,0,0.04)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 6,
-            padding: 2,
+            width: '100%',
+            aspectRatio: '1 / 1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: isSelected ? 'transparent' : 'rgba(0,0,0,0.03)',
+            overflow: 'hidden',
+          }}
+        >
+          {headerStyle && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={headerStyle.dataUrl}
+              alt={asset.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+              draggable={false}
+            />
+          )}
+        </div>
+        {editingName ? (
+          <input
+            autoFocus
+            defaultValue={asset.name}
+            onBlur={(e) => commitName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+              if (e.key === 'Escape') setEditingName(false);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 5,
+              padding: '3px 6px',
+              fontSize: 11,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+            }}
+          />
+        ) : (
+          <div
+            onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+            title={asset.name}
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              padding: '4px 4px 6px',
+              textAlign: 'center',
+            }}
+          >
+            {asset.name}
+          </div>
+        )}
+        {showActions && !editingName && (
+          <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
+            {editButton}
+            {deleteButton}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // list mode
+  return (
+    <div {...commonHandlers} style={containerStyle}>
+      <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+        <div
+          style={{
+            width: 56, height: 56,
             flexShrink: 0,
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            background: isSelected ? 'transparent' : 'rgba(0,0,0,0.03)',
+            borderRadius: 4,
           }}
         >
           {headerStyle && (
@@ -2578,49 +2668,43 @@ function AssetCard({
                 if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
                 if (e.key === 'Escape') setEditingName(false);
               }}
+              onClick={(e) => e.stopPropagation()}
               style={{
                 width: '100%',
                 background: 'var(--pb-paper)',
                 border: '1.5px solid var(--pb-line-2)',
                 borderRadius: 5,
                 padding: '4px 8px',
-                fontSize: dims.headerFont,
+                fontSize: 13,
                 fontWeight: 800,
                 color: 'var(--pb-ink)',
               }}
-              onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <div className="flex items-center gap-1">
-              <span
-                onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
-                title="Click row to open · double-click name to rename"
-                style={{ flex: 1, fontSize: dims.headerFont, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              >
-                {asset.name}
-              </span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
-                title="Rename asset"
-                style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 1 }}
-              >
-                <Pencil size={10} strokeWidth={2.4} />
-              </button>
-            </div>
+            <span
+              onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+              title="Click row to open · double-click name to rename"
+              style={{
+                display: 'block',
+                fontSize: 13,
+                fontWeight: 800,
+                color: 'var(--pb-ink)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
+              {asset.name}
+            </span>
           )}
-          <div style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+          <div style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
             {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
           </div>
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onRemoveAsset(); }}
-          title="Delete asset"
-          style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2 }}
-        >
-          <Trash2 size={11} strokeWidth={2.4} />
-        </button>
+        {showActions && !editingName && (
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            {editButton}
+            {deleteButton}
+          </div>
+        )}
       </div>
     </div>
   );

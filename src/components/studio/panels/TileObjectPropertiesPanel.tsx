@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash2, ChevronDown, Check } from 'lucide-react';
+import { Trash2, ChevronDown, Check, Scissors } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
@@ -25,6 +25,56 @@ export function TileObjectPropertiesPanel({ headless }: { headless?: boolean } =
   const updateObject = useTile((s) => s.updateObject);
   const removeObject = useTile((s) => s.removeObject);
   const setObjectStyle = useTile((s) => s.setObjectStyle);
+  const setStyleDataUrl = useTile((s) => s.setStyleDataUrl);
+
+  // Background-removal state — local to the panel so re-mounting a fresh
+  // selection clears any stale error/in-flight indicator.
+  const [removingBg, setRemovingBg] = useState(false);
+  const [bgError, setBgError] = useState<string | null>(null);
+  // Reset per-selection so the error toast doesn't bleed onto the next
+  // object. Watching obj.id (not selectedObjectId) so style swaps within
+  // the same object also leave the error dismissed.
+  useEffect(() => {
+    setBgError(null);
+  }, [obj?.id, obj?.styleId]);
+
+  async function onRemoveBackground() {
+    if (!obj || !asset) return;
+    const style = asset.styles.find((st) => st.id === obj.styleId);
+    if (!style) return;
+    setRemovingBg(true);
+    setBgError(null);
+    try {
+      const resp = await fetch('/api/recraft/remove-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: style.dataUrl }),
+      });
+      const json = await resp.json().catch(() => null);
+      if (!resp.ok || !json?.dataUrl) {
+        const detail = json?.detail || json?.error || `HTTP ${resp.status}`;
+        throw new Error(detail);
+      }
+      // Probe natural dims so the panel keeps the new image's true ratio
+      // even if Recraft cropped to the foreground bbox. Skip on probe
+      // failure — the existing width/height are a safe fallback.
+      const probe = new Image();
+      const dims = await new Promise<{ w: number; h: number } | null>((resolve) => {
+        probe.onload = () => resolve({ w: probe.naturalWidth || 0, h: probe.naturalHeight || 0 });
+        probe.onerror = () => resolve(null);
+        probe.src = json.dataUrl;
+      });
+      setStyleDataUrl(asset.id, style.id, {
+        dataUrl: json.dataUrl,
+        width: dims?.w || undefined,
+        height: dims?.h || undefined,
+      });
+    } catch (err) {
+      setBgError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRemovingBg(false);
+    }
+  }
 
   const Shell = headless
     ? (({ children }: { children: React.ReactNode }) => <>{children}</>)
@@ -124,6 +174,37 @@ export function TileObjectPropertiesPanel({ headless }: { headless?: boolean } =
             />
           </PanelSection>
         )}
+
+        <PanelSection title="Effects" collapsible defaultOpen>
+          <PanelActionButton
+            icon={Scissors}
+            fullWidth
+            loading={removingBg}
+            disabled={!asset}
+            onClick={onRemoveBackground}
+          >
+            {removingBg ? 'Removing background…' : 'Remove background'}
+          </PanelActionButton>
+          {bgError && (
+            <div
+              role="alert"
+              style={{
+                marginTop: 6,
+                padding: '6px 8px',
+                fontSize: 11,
+                fontWeight: 600,
+                lineHeight: 1.35,
+                color: 'var(--pb-coral-ink)',
+                background: 'var(--pb-coral)',
+                border: '1.5px solid var(--pb-coral-ink)',
+                borderRadius: 8,
+                wordBreak: 'break-word',
+              }}
+            >
+              {bgError}
+            </div>
+          )}
+        </PanelSection>
       </div>
 
       <footer

@@ -355,6 +355,18 @@ export interface TileStore {
   removeStyle: (assetId: string, styleId: string) => void;
   setStyleLabel: (assetId: string, styleId: string, label: string) => void;
   setStyleCloudId: (assetId: string, styleId: string, cloudId: string) => void;
+  /** Replace the bitmap on a style — used by the Recraft remove-background
+   *  flow and any future "edit the source sprite" path. Width/height
+   *  default to the existing values when the post-processed image keeps
+   *  the original dimensions; pass them explicitly if Recraft cropped.
+   *  Drops `cloudId` because the local bytes no longer match the saved
+   *  Supabase row — caller is responsible for re-uploading if they want
+   *  the change persisted. */
+  setStyleDataUrl: (
+    assetId: string,
+    styleId: string,
+    patch: { dataUrl: string; width?: number; height?: number },
+  ) => void;
   /** Rename an asset. Every style row inherits the new name on the
    *  cloud side via the panel's batch save — store-side it's just a
    *  single field update. */
@@ -1076,6 +1088,31 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         [assetId]: {
           ...asset,
           styles: asset.styles.map((st) => st.id === styleId ? { ...st, cloudId } : st),
+        },
+      },
+    };
+  }),
+  setStyleDataUrl: (assetId, styleId, { dataUrl, width, height }) => set((s) => {
+    const asset = s.objectAssets[assetId];
+    if (!asset) return {};
+    return {
+      objectAssets: {
+        ...s.objectAssets,
+        [assetId]: {
+          ...asset,
+          styles: asset.styles.map((st) => st.id === styleId
+            ? {
+                ...st,
+                dataUrl,
+                width: width ?? st.width,
+                height: height ?? st.height,
+                // Local bytes diverge from any saved Supabase row — drop
+                // the cloudId so a re-save creates a fresh row instead
+                // of overwriting the original (or being treated as
+                // already-saved by the dedupe path).
+                cloudId: undefined,
+              }
+            : st),
         },
       },
     };

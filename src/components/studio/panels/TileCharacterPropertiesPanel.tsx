@@ -136,18 +136,17 @@ const DIR_LABEL: Record<CharacterDir8, string> = {
   nw: 'North-West',
 };
 
-/** Cell index inside the 3×3 source sheet for a given direction. Uses
- *  the natural compass layout — direction's cell mirrors its position
- *  on the grid:
+/** Cell index inside the 3×3 source sheet for a given direction. Layout:
  *      NW(0) N(1)  NE(2)
  *       W(3) IDLE(4) E(5)
- *      SW(6) S(7)  SE(8)
- *  Cell 4 is idle; all 8 directions have unique cells so the preview
- *  rotation completes a clean 360° clockwise sweep. */
+ *      SW(6) S(7)  SE(disc)  ← cell 8 is discarded per the upload spec
+ *  Cell 4 is idle; cell 8 is intentionally blank in pixellab and other
+ *  standard 3×3 sheets, so SE has no dedicated frame and falls back to
+ *  S — better than rendering a blank cell. */
 const DIR_CELL: Record<CharacterDir8, number> = {
   nw: 0, n: 1, ne: 2,
   w: 3, e: 5,
-  sw: 6, s: 7, se: 8,
+  sw: 6, s: 7, se: 7,
 };
 
 // ─────────────────────────────────────────────────────────────────────

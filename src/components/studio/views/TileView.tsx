@@ -95,19 +95,19 @@ type Dir8 =
  * "visual position equals direction" layout:
  *   NW(0) N(1)  NE(2)
  *    W(3) IDLE(4) E(5)
- *   SW(6) S(7)  SE(8)
+ *   SW(6) S(7)  SE(disc)  ← cell 8 is intentionally discarded
  *
- * Cell 4 is the idle / face-forward standing pose. Cell 8 holds the SE
- * frame in pixellab and other standard compass-layout sheets, so SE
- * gets its own dedicated cell instead of falling back to S — that
- * fallback used to make the directional preview rotation appear to
- * stutter (SE and S rendered the same frame).
+ * Cell 4 is the idle / face-forward standing pose. Cell 8 is blank in
+ * pixellab and other standard 3×3 sheets, so SE falls back to S —
+ * authors who want a distinct SE pose can drop a custom frame in
+ * cell 8 (the cell-clip math will pick it up automatically) by
+ * editing the source sheet manually before upload.
  */
 const DIR_CELL_INDEX: Record<Dir8, number> = {
   nw: 0, n: 1, ne: 2,
   w: 3, idle: 4, e: 5,
   sw: 6, s: 7,
-  se: 8,
+  se: 7,
 };
 
 /**

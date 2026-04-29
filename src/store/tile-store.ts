@@ -1463,9 +1463,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         addedAt: Date.now(),
         sortIndex: maxIdx + 1,
       };
+      // Match setSelectedCharacterId's mutual-exclusion: a fresh upload
+      // jumps focus to the new character, so any prior asset/object
+      // selection should clear so the right panel swaps over.
       return {
         tileCharacters: { ...s.tileCharacters, [id]: character },
         selectedCharacterId: id,
+        selectedAssetId: null,
+        selectedObjectId: null,
       };
     });
     return id;
@@ -1508,7 +1513,19 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       },
     };
   }),
-  setSelectedCharacterId: (id) => set({ selectedCharacterId: id }),
+  setSelectedCharacterId: (id) => set((s) => {
+    // Selecting a character clears any active asset / canvas-object
+    // selection so the right-panel Properties tab swaps cleanly to the
+    // character branch — without this, picking a character while an
+    // object asset is selected would leave both ids set and the
+    // character panel could be hidden behind the object branch.
+    if (!id) return { selectedCharacterId: null };
+    return {
+      selectedCharacterId: id,
+      selectedAssetId: null,
+      selectedObjectId: null,
+    };
+  }),
   reorderStyles: (assetId, orderedStyleIds) => {
     const stateBefore = get();
     const asset = stateBefore.objectAssets[assetId];
@@ -1698,7 +1715,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // When switching assets, reset the style brush to the new asset's first
     // style so the OBJECT tool always has a valid sprite to place.
     const fallback = id ? s.objectAssets[id]?.styles[0]?.id ?? null : null;
-    return { selectedAssetId: id, selectedStyleId: fallback };
+    // Selecting an asset card clears any active character selection so the
+    // right-panel Properties tab swaps to the asset/object branch instead
+    // of staying stuck on the character panel.
+    return {
+      selectedAssetId: id,
+      selectedStyleId: fallback,
+      selectedCharacterId: id ? null : s.selectedCharacterId,
+    };
   }),
   selectedStyleId: null,
   setSelectedStyleId: (id) => set({ selectedStyleId: id }),

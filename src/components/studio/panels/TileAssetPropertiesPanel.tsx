@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Scissors, Pencil, Trash2, GripVertical, Plus, X, Upload,
+  Scissors, Pencil, Trash2, Plus, X, Upload,
 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
@@ -481,10 +481,13 @@ function ImagePreviewWithEdit({
 }
 
 /**
- * The same row layout the inline-expand list used to render: drag handle,
- * 24px thumbnail (clickable to set as the OBJECT-tool brush), label
- * (double-click to rename), pencil rename trigger, delete trash. Drag a
- * row onto another to reorder.
+ * Flat style list — mirrors the AssetCard treatment in TileAssetsView:
+ *   - No row chrome at rest (no border/background); selection paints a
+ *     butter wash and hover paints a soft tint.
+ *   - Pencil + Trash render only on hover or when the row is selected.
+ *   - Drag handle is gone — the entire row is the drag handle.
+ *   - View dropdown switches list ↔ grid layout (parity with the asset
+ *     browser).
  */
 function StylesList({
   asset, selectedStyleId, onPickStyle, onRemoveStyle, onRenameStyle, onReorder,
@@ -496,10 +499,10 @@ function StylesList({
   onRenameStyle: (styleId: string, label: string) => void;
   onReorder: (orderedStyleIds: string[]) => void;
 }) {
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const dragStyleIdRef = useRef<string | null>(null);
-  // Per-row refs so the arrow-key navigation in the parent can scroll the
-  // currently-selected style into view as the user cycles.
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   useEffect(() => {
     if (!selectedStyleId) return;
@@ -522,125 +525,230 @@ function StylesList({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      {asset.styles.map((style, i) => {
-        const isCurrent = style.id === selectedStyleId;
-        const isEditing = editingStyleId === style.id;
-        return (
-          <div
-            key={style.id}
-            ref={(el) => { rowRefs.current[style.id] = el; }}
-            draggable
-            onDragStart={(e) => {
-              dragStyleIdRef.current = style.id;
-              e.dataTransfer.effectAllowed = 'move';
-              try { e.dataTransfer.setData('text/plain', style.id); } catch { /* ignore */ }
-            }}
-            onDragOver={(e) => {
-              if (!dragStyleIdRef.current || dragStyleIdRef.current === style.id) return;
-              e.preventDefault();
-            }}
-            onDrop={(e) => { e.preventDefault(); reorderViaDrop(style.id); }}
-            className="flex items-center gap-2"
-            style={{
-              padding: 8,
-              background: isCurrent ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-              border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-              borderRadius: 8,
-            }}
-          >
-            <span
-              title="Drag to reorder"
-              style={{
-                display: 'flex', alignItems: 'center',
-                color: 'var(--pb-ink-muted)',
-                cursor: 'grab',
-                flexShrink: 0,
-              }}
-            >
-              <GripVertical size={14} strokeWidth={2.4} />
-            </span>
+    <div className="flex flex-col gap-2">
+      <PanelSelect
+        label="View"
+        value={viewMode}
+        onChange={(v) => setViewMode(v as typeof viewMode)}
+        options={[
+          { value: 'list', label: 'List' },
+          { value: 'grid', label: 'Grid' },
+        ]}
+      />
+      <div className={viewMode === 'grid' ? 'grid grid-cols-2 gap-1' : 'flex flex-col gap-px'}>
+        {asset.styles.map((style, i) => {
+          const isCurrent = style.id === selectedStyleId;
+          const isEditing = editingStyleId === style.id;
+          const isHovered = hoveredId === style.id;
+          const showActions = isHovered || isCurrent || isEditing;
+          const bg = isCurrent
+            ? 'var(--pb-butter)'
+            : isHovered
+              ? 'rgba(0,0,0,0.04)'
+              : 'transparent';
+          const labelText = style.label || `Style ${i + 1}`;
+          const containerStyle: React.CSSProperties = {
+            background: bg,
+            borderRadius: 6,
+            cursor: 'pointer',
+            overflow: 'hidden',
+            position: 'relative',
+          };
+          const editButton = (
             <button
               type="button"
-              onClick={() => onPickStyle(style.id)}
-              title={`Use "${style.label || `Style ${i + 1}`}" as the brush`}
-              style={{
-                width: 56, height: 56, flexShrink: 0,
-                background: 'rgba(0,0,0,0.06)',
-                border: '1.5px solid var(--pb-line-2)',
-                borderRadius: 6,
-                padding: 2,
-                cursor: 'pointer',
-                overflow: 'hidden',
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={style.dataUrl}
-                alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-                draggable={false}
-              />
-            </button>
-            {isEditing ? (
-              <input
-                autoFocus
-                defaultValue={style.label}
-                onBlur={(e) => { onRenameStyle(style.id, e.target.value); setEditingStyleId(null); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  if (e.key === 'Escape') setEditingStyleId(null);
-                }}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  background: 'var(--pb-paper)',
-                  border: '1.5px solid var(--pb-line-2)',
-                  borderRadius: 5,
-                  padding: '5px 8px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: 'var(--pb-ink)',
-                }}
-              />
-            ) : (
-              <span
-                onDoubleClick={() => setEditingStyleId(style.id)}
-                title="Double-click to rename"
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: 'var(--pb-ink)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  cursor: 'text',
-                }}
-              >
-                {style.label || `Style ${i + 1}`}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setEditingStyleId(style.id)}
+              onClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
               title="Rename style"
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}
+              style={{
+                background: 'rgba(255,255,255,0.85)',
+                border: '1px solid var(--pb-line-2)',
+                borderRadius: 6,
+                cursor: 'pointer',
+                color: 'var(--pb-ink)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: 4,
+              }}
             >
               <Pencil size={12} strokeWidth={2.4} />
             </button>
+          );
+          const deleteButton = (
             <button
               type="button"
-              onClick={() => onRemoveStyle(style)}
+              onClick={(e) => { e.stopPropagation(); onRemoveStyle(style); }}
               title="Delete style"
-              style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}
+              style={{
+                background: 'rgba(255,255,255,0.85)',
+                border: '1px solid var(--pb-line-2)',
+                borderRadius: 6,
+                cursor: 'pointer',
+                color: 'var(--pb-coral-ink)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: 4,
+              }}
             >
-              <Trash2 size={13} strokeWidth={2.4} />
+              <Trash2 size={12} strokeWidth={2.4} />
             </button>
-          </div>
-        );
-      })}
+          );
+          const commonHandlers = {
+            ref: (el: HTMLDivElement | null) => { rowRefs.current[style.id] = el; },
+            draggable: !isEditing,
+            onMouseEnter: () => setHoveredId(style.id),
+            onMouseLeave: () => setHoveredId((h) => (h === style.id ? null : h)),
+            onDragStart: (e: React.DragEvent) => {
+              dragStyleIdRef.current = style.id;
+              e.dataTransfer.effectAllowed = 'move';
+              try { e.dataTransfer.setData('text/plain', style.id); } catch { /* ignore */ }
+            },
+            onDragOver: (e: React.DragEvent) => {
+              if (!dragStyleIdRef.current || dragStyleIdRef.current === style.id) return;
+              e.preventDefault();
+            },
+            onDrop: (e: React.DragEvent) => { e.preventDefault(); reorderViaDrop(style.id); },
+            onClick: (e: React.MouseEvent) => {
+              const t = e.target as HTMLElement;
+              if (t.closest('button, input')) return;
+              onPickStyle(style.id);
+            },
+          };
+
+          if (viewMode === 'grid') {
+            return (
+              <div key={style.id} {...commonHandlers} style={containerStyle}>
+                <div
+                  style={{
+                    width: '100%',
+                    aspectRatio: '1 / 1',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={style.dataUrl}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+                    draggable={false}
+                  />
+                </div>
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    defaultValue={style.label}
+                    onBlur={(e) => { onRenameStyle(style.id, e.target.value); setEditingStyleId(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                      if (e.key === 'Escape') setEditingStyleId(null);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      width: '100%',
+                      background: 'var(--pb-paper)',
+                      border: '1.5px solid var(--pb-line-2)',
+                      borderRadius: 5,
+                      padding: '3px 6px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: 'var(--pb-ink)',
+                    }}
+                  />
+                ) : (
+                  <div
+                    onDoubleClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
+                    title={labelText}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: 'var(--pb-ink)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      padding: '4px 4px 6px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {labelText}
+                  </div>
+                )}
+                {showActions && !isEditing && (
+                  <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
+                    {editButton}
+                    {deleteButton}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <div key={style.id} {...commonHandlers} style={containerStyle}>
+              <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+                <div
+                  style={{
+                    width: 56, height: 56, flexShrink: 0,
+                    background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={style.dataUrl}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+                    draggable={false}
+                  />
+                </div>
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    defaultValue={style.label}
+                    onBlur={(e) => { onRenameStyle(style.id, e.target.value); setEditingStyleId(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                      if (e.key === 'Escape') setEditingStyleId(null);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      background: 'var(--pb-paper)',
+                      border: '1.5px solid var(--pb-line-2)',
+                      borderRadius: 5,
+                      padding: '5px 8px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: 'var(--pb-ink)',
+                    }}
+                  />
+                ) : (
+                  <span
+                    onDoubleClick={(e) => { e.stopPropagation(); setEditingStyleId(style.id); }}
+                    title="Double-click to rename"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: 'var(--pb-ink)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      cursor: 'text',
+                    }}
+                  >
+                    {labelText}
+                  </span>
+                )}
+                {showActions && !isEditing && (
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    {editButton}
+                    {deleteButton}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

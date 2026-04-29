@@ -247,6 +247,23 @@ export interface ObjectAsset {
   sortIndex: number;
 }
 
+/**
+ * A user-authored taxonomy folder for grouping ObjectAssets ("Trees",
+ * "Buildings", "Trees / Fruit Trees", etc.). Folders nest via `parentId`
+ * (null = top-level). Asset → class membership lives on the store as
+ * `assetClassIds[assetId] = classId` so cloud-hydrated assets pick up
+ * their class from local persisted state without round-tripping the
+ * server. Cycles are prevented at the action layer.
+ */
+export interface ObjectClass {
+  id: string;
+  name: string;
+  /** null = top-level folder. */
+  parentId: string | null;
+  /** Sort order among siblings sharing the same parentId. */
+  sortIndex: number;
+}
+
 export interface TileCamera {
   x: number;
   y: number;
@@ -380,6 +397,34 @@ export interface TileStore {
   reorderStyles: (assetId: string, orderedStyleIds: string[]) => ObjectStyle[];
   /** Switch the style on a placed instance ("upgrade"). */
   setObjectStyle: (objectId: string, styleId: string) => void;
+
+  // ── Object-asset taxonomy (folders/classes) ─────────────────────
+  /**
+   * User-authored folder tree for organising ObjectAssets ("Trees",
+   * "Trees / Fruit Trees", "Buildings", etc.). Persists in localStorage
+   * (small index, no blobs). Cloud-hydrated assets join the tree via
+   * `assetClassIds` below, which is also persisted locally.
+   */
+  objectClasses: Record<string, ObjectClass>;
+  /** Per-asset class membership. Absent / undefined = root (uncategorised). */
+  assetClassIds: Record<string, string>;
+  /** Create a new class folder. `parentId` null = top-level. Returns id. */
+  addObjectClass: (input: { name: string; parentId?: string | null }) => string;
+  renameObjectClass: (id: string, name: string) => void;
+  /** Delete a class. Children classes get re-parented to this class's parent
+   *  (so the tree collapses one level), and member assets become root. The
+   *  alternative — cascade-delete — would silently remove user assets, which
+   *  is too destructive for an organisational folder. */
+  removeObjectClass: (id: string) => void;
+  /** Move a class under a new parent (null = top-level). No-op if the move
+   *  would create a cycle (target is the class itself or one of its
+   *  descendants). */
+  setObjectClassParent: (id: string, parentId: string | null) => void;
+  /** Drag-reorder among siblings sharing `parentId`. Pass the full ordered
+   *  list of sibling ids; ids not in the list are appended after. */
+  reorderObjectClasses: (parentId: string | null, orderedIds: string[]) => void;
+  /** Move an asset into a class (or to root with classId=null). */
+  setAssetClass: (assetId: string, classId: string | null) => void;
 
   // ── Pen tool — collision boundaries on objects ─────────────────
   /** Currently-selected collision id (highlighted in the canvas, target of
@@ -1031,6 +1076,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const next = { ...s.objectAssets };
     delete next[assetId];
     const styleIds = new Set((s.objectAssets[assetId]?.styles ?? []).map((st) => st.id));
+    // Also drop the class membership entry so the assetClassIds map
+    // doesn't accumulate phantom keys after asset deletes.
+    const nextAssetClassIds = { ...s.assetClassIds };
+    delete nextAssetClassIds[assetId];
     return {
       objectAssets: next,
       // Drop placed objects referencing any style of this asset — they'd
@@ -1038,6 +1087,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       objects: s.objects.filter((o) => o.assetId !== assetId),
       selectedAssetId: s.selectedAssetId === assetId ? null : s.selectedAssetId,
       selectedStyleId: s.selectedStyleId && styleIds.has(s.selectedStyleId) ? null : s.selectedStyleId,
+      assetClassIds: nextAssetClassIds,
     };
   }),
   removeStyle: (assetId, styleId) => set((s) => {
@@ -1048,11 +1098,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       // Last style — drop the entire asset.
       const next = { ...s.objectAssets };
       delete next[assetId];
+      const nextAssetClassIds = { ...s.assetClassIds };
+      delete nextAssetClassIds[assetId];
       return {
         objectAssets: next,
         objects: s.objects.filter((o) => o.assetId !== assetId),
         selectedAssetId: s.selectedAssetId === assetId ? null : s.selectedAssetId,
         selectedStyleId: s.selectedStyleId === styleId ? null : s.selectedStyleId,
+        assetClassIds: nextAssetClassIds,
       };
     }
     // Remap placed objects on the removed style → the asset's first
@@ -1145,6 +1198,111 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       .sort((a, b) => a.addedAt - b.addedAt);
     for (const a of trailing) next[a.id] = { ...a, sortIndex: idx++ };
     return { objectAssets: next };
+  }),
+
+  // ── Object-class taxonomy ───────────────────────────────────────
+  objectClasses: {},
+  assetClassIds: {},
+  addObjectClass: ({ name, parentId = null }) => {
+    const id = cryptoId();
+    set((s) => {
+      // Validate parentId — silently re-root if the caller passed a stale id.
+      const validParent = parentId && s.objectClasses[parentId] ? parentId : null;
+      // New class lands at the end of its sibling group.
+      const maxSibling = Object.values(s.objectClasses).reduce(
+        (m, c) => (c.parentId === validParent ? Math.max(m, c.sortIndex) : m),
+        -1,
+      );
+      return {
+        objectClasses: {
+          ...s.objectClasses,
+          [id]: { id, name: name.trim() || 'New class', parentId: validParent, sortIndex: maxSibling + 1 },
+        },
+      };
+    });
+    return id;
+  },
+  renameObjectClass: (id, name) => set((s) => {
+    const cls = s.objectClasses[id];
+    if (!cls) return {};
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === cls.name) return {};
+    return {
+      objectClasses: { ...s.objectClasses, [id]: { ...cls, name: trimmed } },
+    };
+  }),
+  removeObjectClass: (id) => set((s) => {
+    const cls = s.objectClasses[id];
+    if (!cls) return {};
+    const next = { ...s.objectClasses };
+    delete next[id];
+    // Re-parent direct children to this class's parent. The tree just
+    // collapses one level under them — they don't disappear.
+    for (const c of Object.values(s.objectClasses)) {
+      if (c.parentId === id) next[c.id] = { ...c, parentId: cls.parentId };
+    }
+    // Member assets fall back to root. Tests showed cascade-delete was
+    // surprising — users expect the FOLDER to vanish, not the contents.
+    const nextAssetClassIds: Record<string, string> = {};
+    for (const [assetId, classId] of Object.entries(s.assetClassIds)) {
+      if (classId !== id) nextAssetClassIds[assetId] = classId;
+    }
+    return { objectClasses: next, assetClassIds: nextAssetClassIds };
+  }),
+  setObjectClassParent: (id, parentId) => set((s) => {
+    const cls = s.objectClasses[id];
+    if (!cls) return {};
+    if (parentId === id) return {}; // Can't be your own parent.
+    if (parentId !== null && !s.objectClasses[parentId]) return {};
+    // Cycle prevention: walk up from `parentId` and bail if we hit `id`.
+    let cur: string | null = parentId;
+    const guard = new Set<string>();
+    while (cur !== null) {
+      if (cur === id) return {};
+      if (guard.has(cur)) break; // corrupted state — give up safely
+      guard.add(cur);
+      cur = s.objectClasses[cur]?.parentId ?? null;
+    }
+    if (cls.parentId === parentId) return {};
+    // Place at the end of the new sibling group.
+    const maxSibling = Object.values(s.objectClasses).reduce(
+      (m, c) => (c.id !== id && c.parentId === parentId ? Math.max(m, c.sortIndex) : m),
+      -1,
+    );
+    return {
+      objectClasses: {
+        ...s.objectClasses,
+        [id]: { ...cls, parentId, sortIndex: maxSibling + 1 },
+      },
+    };
+  }),
+  reorderObjectClasses: (parentId, orderedIds) => set((s) => {
+    const seen = new Set<string>();
+    const next: Record<string, ObjectClass> = { ...s.objectClasses };
+    let idx = 0;
+    for (const id of orderedIds) {
+      const c = s.objectClasses[id];
+      if (!c || c.parentId !== parentId || seen.has(id)) continue;
+      seen.add(id);
+      next[id] = { ...c, sortIndex: idx++ };
+    }
+    // Append any sibling the caller forgot, keeping their original relative order.
+    const trailing = Object.values(s.objectClasses)
+      .filter((c) => c.parentId === parentId && !seen.has(c.id))
+      .sort((a, b) => a.sortIndex - b.sortIndex);
+    for (const c of trailing) next[c.id] = { ...c, sortIndex: idx++ };
+    return { objectClasses: next };
+  }),
+  setAssetClass: (assetId, classId) => set((s) => {
+    if (!s.objectAssets[assetId]) return {};
+    if (classId !== null && !s.objectClasses[classId]) return {};
+    const next = { ...s.assetClassIds };
+    if (classId === null) {
+      delete next[assetId];
+    } else {
+      next[assetId] = classId;
+    }
+    return { assetClassIds: next };
   }),
   reorderStyles: (assetId, orderedStyleIds) => {
     const stateBefore = get();
@@ -1466,7 +1624,13 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   // v8 — TileObject gained `collisions[]` (pen-tool boundaries). Optional,
   // back-filled on rehydrate, so the bump is purely defensive: existing
   // saves load fine, just without any collision polygons.
-  name: 'problocks-tile-v8',
+  // v9 — Added `objectClasses` (taxonomy folders) and `assetClassIds`
+  // (asset → class membership). Both are local-only persisted state with
+  // tiny payloads (no dataUrls), so they ship in partialize and back-fill
+  // to {} on rehydrate. Bump is defensive: pre-v9 stores load fine and
+  // simply show every asset under "Uncategorised" until the user creates
+  // a class.
+  name: 'problocks-tile-v9',
   // Coalesce localStorage writes — see makeDeferredLocalStorage above.
   // Painting at 90k corners was firing JSON.stringify of the whole map
   // on every cell, which alone burned 30–80 ms on Chromebook-class
@@ -1500,6 +1664,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     showGrid: s.showGrid,
     fencePosts: s.fencePosts,
     fenceEdges: s.fenceEdges,
+    // Class taxonomy: tiny local-only index (id/name/parentId/sortIndex
+    // per class + assetId→classId map). No image bytes here.
+    objectClasses: s.objectClasses,
+    assetClassIds: s.assetClassIds,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {
@@ -1574,6 +1742,24 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     if (needsBackfill) {
       const sorted = Object.values(state.objectAssets).sort((a, b) => (a.addedAt ?? 0) - (b.addedAt ?? 0));
       sorted.forEach((a, i) => { a.sortIndex = i; });
+    }
+    // v9: object-class taxonomy. Default to empty maps so existing
+    // (pre-v9) saves load with everything under "Uncategorised".
+    if (!state.objectClasses) state.objectClasses = {};
+    if (!state.assetClassIds) state.assetClassIds = {};
+    // Defensive: drop any assetClassIds entry whose class no longer exists
+    // (a class deleted in another tab, an import drift, etc.) so the
+    // recursive renderer doesn't see a phantom class id.
+    for (const [assetId, classId] of Object.entries(state.assetClassIds)) {
+      if (!state.objectClasses[classId]) delete state.assetClassIds[assetId];
+    }
+    // Defensive: also re-root any class whose parentId points at a
+    // class that vanished. Cycle detection would catch this on next move
+    // anyway, but the renderer reads parents directly.
+    for (const c of Object.values(state.objectClasses)) {
+      if (c.parentId !== null && !state.objectClasses[c.parentId]) {
+        c.parentId = null;
+      }
     }
   },
 }));

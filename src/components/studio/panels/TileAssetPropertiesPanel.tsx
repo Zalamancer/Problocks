@@ -7,11 +7,131 @@ import {
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
-import { useTile, type ObjectAsset, type ObjectStyle } from '@/store/tile-store';
+import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
+import { useTile, type ObjectAsset, type ObjectStyle, type ObjectClass } from '@/store/tile-store';
 import { fileToImage, imageToDataUrl, loadImage, sliceImage } from '@/lib/tile-slicer';
 import {
   saveTileObject, deleteTileObject, updateTileObject,
 } from '@/lib/object-cloud';
+
+/**
+ * Build a flat list of class options for the PanelSelect dropdown. Each
+ * option's label is the full breadcrumb path (e.g. "Trees / Fruit Trees")
+ * so the user sees nesting context inside a flat menu — alphabetised by
+ * full path so siblings at any level cluster together.
+ */
+function flatClassOptions(
+  objectClasses: Record<string, ObjectClass>,
+): { value: string; label: string }[] {
+  const pathOf = (id: string): string => {
+    const cls = objectClasses[id];
+    if (!cls) return '';
+    return cls.parentId === null
+      ? cls.name
+      : `${pathOf(cls.parentId)} / ${cls.name}`;
+  };
+  return Object.values(objectClasses)
+    .map((c) => ({ value: c.id, label: pathOf(c.id) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * The Class section's interactive controls — a PanelSelect listing every
+ * class as a flat breadcrumb path, plus a "+ New class" inline input that
+ * appears when the user picks the special "__new__" sentinel option. The
+ * sentinel keeps the UI compact: no class? pick one or create one without
+ * leaving the right panel.
+ */
+function ClassPickerRow({
+  currentClassId,
+  objectClasses,
+  onChange,
+  onCreateClass,
+}: {
+  currentClassId: string | null;
+  objectClasses: Record<string, ObjectClass>;
+  onChange: (classId: string | null) => void;
+  onCreateClass: (name: string) => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState('');
+  const options = [
+    { value: '__root__', label: 'Uncategorised (root)' },
+    ...flatClassOptions(objectClasses),
+    { value: '__new__', label: '+ New class…' },
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      <PanelSelect
+        fullWidth
+        value={currentClassId ?? '__root__'}
+        onChange={(v) => {
+          if (v === '__new__') {
+            setCreating(true);
+            setDraft('');
+            return;
+          }
+          onChange(v === '__root__' ? null : v);
+        }}
+        options={options}
+      />
+      {creating && (
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const v = draft.trim();
+                if (v) onCreateClass(v);
+                setCreating(false);
+                setDraft('');
+              }
+              if (e.key === 'Escape') {
+                setCreating(false);
+                setDraft('');
+              }
+            }}
+            placeholder="e.g. Trees, Buildings…"
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              fontSize: 12,
+              fontWeight: 700,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6,
+              color: 'var(--pb-ink)',
+              outline: 'none',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const v = draft.trim();
+              if (v) onCreateClass(v);
+              setCreating(false);
+              setDraft('');
+            }}
+            style={{
+              padding: '6px 10px',
+              fontSize: 11,
+              fontWeight: 800,
+              background: 'var(--pb-butter)',
+              border: '1.5px solid var(--pb-butter-ink)',
+              borderRadius: 6,
+              color: 'var(--pb-ink)',
+              cursor: 'pointer',
+            }}
+          >
+            Add
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Right-panel Properties view for an uploaded ObjectAsset. Shows the asset's
@@ -38,6 +158,14 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
   const setStyleLabel = useTile((s) => s.setStyleLabel);
   const setStyleCloudId = useTile((s) => s.setStyleCloudId);
   const reorderStyles = useTile((s) => s.reorderStyles);
+  // Class-taxonomy bindings — the dropdown lets the user move the
+  // currently-selected asset between class folders (or back to root).
+  // Adding/renaming classes happens in the left panel; this is purely
+  // a membership picker.
+  const objectClasses = useTile((s) => s.objectClasses);
+  const assetClassIds = useTile((s) => s.assetClassIds);
+  const setAssetClass = useTile((s) => s.setAssetClass);
+  const addObjectClass = useTile((s) => s.addObjectClass);
 
   const [sliceOpen, setSliceOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -202,6 +330,20 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
         />
 
         <div className="px-4 py-4 flex flex-col gap-4">
+          <PanelSection title="Class" collapsible defaultOpen>
+            <ClassPickerRow
+              currentClassId={asset && assetClassIds[asset.id] ? assetClassIds[asset.id] : null}
+              objectClasses={objectClasses}
+              onChange={(classId) => {
+                if (asset) setAssetClass(asset.id, classId);
+              }}
+              onCreateClass={(name) => {
+                if (!asset) return;
+                const id = addObjectClass({ name, parentId: null });
+                setAssetClass(asset.id, id);
+              }}
+            />
+          </PanelSection>
           <PanelSection title={`Styles (${asset.styles.length})`} collapsible defaultOpen>
           <StylesList
             asset={asset}

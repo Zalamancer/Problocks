@@ -2812,35 +2812,30 @@ function CharacterCard({
     </button>
   );
 
-  /** Render a single sheet cell by stretching the image to cols×rows
-   *  thumb size and offsetting it so cell (col,row) lands at (0,0). */
+  /** Render the South cell (cell 0, top-left) of the 3×3 sheet using a
+   *  background-image clip — `background-size: cols×100% rows×100%`
+   *  zooms the sheet so each cell fills the box, and `background-
+   *  position: 0% 0%` aligns cell 0 to the top-left corner. More
+   *  reliable than the absolute-positioned <img> with pixel widths I
+   *  tried first — that approach was rendering the entire top row
+   *  (S, SE, E) instead of clipping to one cell when the surrounding
+   *  flex layout interfered with overflow:hidden. */
   function CellThumb({ size }: { size: number }) {
     return (
       <div
         style={{
-          width: size, height: size,
-          position: 'relative',
-          overflow: 'hidden',
+          width: size,
+          height: size,
+          flexShrink: 0,
           background: isSelected ? 'transparent' : 'rgba(0,0,0,0.03)',
           borderRadius: 4,
-          flexShrink: 0,
+          backgroundImage: `url(${c.src})`,
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: `${c.cols * 100}% ${c.rows * 100}%`,
+          backgroundPosition: '0% 0%',
+          imageRendering: 'pixelated',
         }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={c.src}
-          alt={c.name}
-          draggable={false}
-          style={{
-            position: 'absolute',
-            left: 0, top: 0,
-            width: size * c.cols,
-            height: size * c.rows,
-            imageRendering: 'pixelated',
-            objectFit: 'fill',
-          }}
-        />
-      </div>
+      />
     );
   }
 
@@ -2861,26 +2856,14 @@ function CharacterCard({
           style={{
             width: '100%',
             aspectRatio: '1 / 1',
-            position: 'relative',
-            overflow: 'hidden',
             background: isSelected ? 'transparent' : 'rgba(0,0,0,0.03)',
+            backgroundImage: `url(${c.src})`,
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: `${c.cols * 100}% ${c.rows * 100}%`,
+            backgroundPosition: '0% 0%',
+            imageRendering: 'pixelated',
           }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={c.src}
-            alt={c.name}
-            draggable={false}
-            style={{
-              position: 'absolute',
-              left: 0, top: 0,
-              width: `${c.cols * 100}%`,
-              height: `${c.rows * 100}%`,
-              imageRendering: 'pixelated',
-              objectFit: 'fill',
-            }}
-          />
-        </div>
+        />
         {editingName ? (
           <input
             autoFocus

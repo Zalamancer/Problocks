@@ -722,9 +722,21 @@ function TerrainCard({
           onBaseClick={() => setBaseTexture(
             baseTextureId === tileset.upperTextureId ? null : tileset.upperTextureId,
           )}
-          onIslandClick={() => setIslandFill(
-            islandFillTextureId === tileset.upperTextureId ? null : tileset.upperTextureId,
-          )}
+          onIslandClick={() => {
+            const on = islandFillTextureId !== tileset.upperTextureId;
+            if (on) {
+              // Clicking island on UPPER auto-pairs LOWER as base so the
+              // wang transitions in this same sheet render the shoreline.
+              // Without this, picking island + base from different sheets
+              // yields no bridge → resolver falls back to pure dominant
+              // tile → hard rectangular edge.
+              setIslandFill(tileset.upperTextureId);
+              setBaseTexture(tileset.lowerTextureId);
+            } else {
+              setIslandFill(null);
+              if (baseTextureId === tileset.lowerTextureId) setBaseTexture(null);
+            }
+          }}
         />
         <BrushSwatch
           dataUrl={lowerDataUrl}
@@ -739,9 +751,16 @@ function TerrainCard({
           onBaseClick={() => setBaseTexture(
             baseTextureId === tileset.lowerTextureId ? null : tileset.lowerTextureId,
           )}
-          onIslandClick={() => setIslandFill(
-            islandFillTextureId === tileset.lowerTextureId ? null : tileset.lowerTextureId,
-          )}
+          onIslandClick={() => {
+            const on = islandFillTextureId !== tileset.lowerTextureId;
+            if (on) {
+              setIslandFill(tileset.lowerTextureId);
+              setBaseTexture(tileset.upperTextureId);
+            } else {
+              setIslandFill(null);
+              if (baseTextureId === tileset.upperTextureId) setBaseTexture(null);
+            }
+          }}
         />
       </div>
 

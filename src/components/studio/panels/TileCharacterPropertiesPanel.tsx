@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
+import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
 import { fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import {
   useTile,
@@ -249,67 +250,11 @@ function CharacterTab({
 
       <div className="px-4 py-4 flex flex-col gap-4">
       <PanelSection title="Rotation" collapsible defaultOpen>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            gap: 4,
-          }}
-        >
-          {CHARACTER_DIRS.map((dir) => {
-            const hasAnim = !!character.animations?.[dir];
-            const isCurrent = previewDir === dir;
-            return (
-              <button
-                key={dir}
-                type="button"
-                onClick={() => onPickDir(dir)}
-                className="flex items-center gap-2"
-                style={{
-                  padding: '6px 6px 6px 6px',
-                  background: isCurrent ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-                  border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <CellThumb
-                  src={character.src}
-                  cols={character.cols}
-                  rows={character.rows}
-                  cell={DIR_CELL[dir]}
-                  size={28}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    color: 'var(--pb-ink)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {DIR_LABEL[dir]}
-                </span>
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 999,
-                    background: hasAnim ? 'var(--pb-butter-ink)' : 'transparent',
-                    border: hasAnim ? 'none' : '1.5px solid var(--pb-line-2)',
-                  }}
-                  title={hasAnim ? 'Has 4×4 animation' : 'No animation yet'}
-                />
-              </button>
-            );
-          })}
-        </div>
+        <DirectionList
+          character={character}
+          activeDir={previewDir}
+          onPick={onPickDir}
+        />
       </PanelSection>
 
       <PanelSection title="Movement" collapsible defaultOpen={false}>
@@ -356,24 +301,119 @@ function AnimationsTab({
 
       <div className="px-4 py-4 flex flex-col gap-4">
         <PanelSection title="Direction" collapsible defaultOpen>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {CHARACTER_DIRS.map((dir) => {
-              const isCurrent = dir === activeDir;
-              const hasAnim = !!character.animations?.[dir];
-              return (
-                <button
-                  key={dir}
-                  type="button"
-                  onClick={() => setActiveDir(dir)}
-                  className="flex items-center gap-2"
+          <DirectionList
+            character={character}
+            activeDir={activeDir}
+            onPick={setActiveDir}
+          />
+        </PanelSection>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Verbatim port of `StylesList` from `TileAssetPropertiesPanel.tsx` —
+ * same View dropdown, same list/grid layout, same selection/hover
+ * styling, same row chrome — re-skinned for the 8 compass directions.
+ *
+ * Differences from StylesList:
+ *   • Data is the fixed `CHARACTER_DIRS` list, not asset.styles.
+ *   • Thumbnails are cell-clipped renders of the character's 3×3 sheet
+ *     (one cell per direction) instead of full sprite dataUrls.
+ *   • No rename / delete / drag-reorder — directions are immutable.
+ *     The right-side action slot shows whether a 4×4 animation has
+ *     been uploaded for that direction (small dot + "4×4" / "Empty"
+ *     badge) so the user can tell at a glance which slots are filled.
+ *
+ * Used by both the Character tab's Rotation list and the Animations
+ * tab's Direction list so the two surfaces are pixel-identical.
+ */
+function DirectionList({
+  character, activeDir, onPick,
+}: {
+  character: TileCharacter;
+  activeDir: CharacterDir8;
+  onPick: (dir: CharacterDir8) => void;
+}) {
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [hoveredDir, setHoveredDir] = useState<CharacterDir8 | null>(null);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <PanelSelect
+        label="View"
+        value={viewMode}
+        onChange={(v) => setViewMode(v as typeof viewMode)}
+        options={[
+          { value: 'list', label: 'List' },
+          { value: 'grid', label: 'Grid' },
+        ]}
+      />
+      <div className={viewMode === 'grid' ? 'grid grid-cols-2 gap-1' : 'flex flex-col gap-px'}>
+        {CHARACTER_DIRS.map((dir) => {
+          const isCurrent = dir === activeDir;
+          const isHovered = hoveredDir === dir;
+          const hasAnim = !!character.animations?.[dir];
+          const bg = isCurrent
+            ? 'var(--pb-butter)'
+            : isHovered
+              ? 'rgba(0,0,0,0.04)'
+              : 'transparent';
+          const labelText = DIR_LABEL[dir];
+          const containerStyle: React.CSSProperties = {
+            background: bg,
+            borderRadius: 6,
+            cursor: 'pointer',
+            overflow: 'hidden',
+            position: 'relative',
+          };
+          const statusBadge = (
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                color: hasAnim ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+                textTransform: 'uppercase',
+              }}
+              title={hasAnim ? 'Has 4×4 animation' : 'No animation yet'}
+            >
+              {hasAnim ? '4×4' : 'Empty'}
+            </span>
+          );
+          const dot = (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: hasAnim ? 'var(--pb-butter-ink)' : 'transparent',
+                border: hasAnim ? 'none' : '1.5px solid var(--pb-line-2)',
+              }}
+              title={hasAnim ? 'Has 4×4 animation' : 'No animation yet'}
+            />
+          );
+          const commonHandlers = {
+            onMouseEnter: () => setHoveredDir(dir),
+            onMouseLeave: () => setHoveredDir((d) => (d === dir ? null : d)),
+            onClick: (e: React.MouseEvent) => {
+              const t = e.target as HTMLElement;
+              if (t.closest('button, input')) return;
+              onPick(dir);
+            },
+          };
+
+          if (viewMode === 'grid') {
+            return (
+              <div key={dir} {...commonHandlers} style={containerStyle}>
+                <div
                   style={{
-                    padding: '6px 8px 6px 6px',
-                    background: isCurrent ? 'var(--pb-butter)' : 'transparent',
-                    border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'transparent'}`,
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'inherit',
+                    width: '100%',
+                    aspectRatio: '1 / 1',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
+                    overflow: 'hidden',
                   }}
                 >
                   <CellThumb
@@ -381,40 +421,71 @@ function AnimationsTab({
                     cols={character.cols}
                     rows={character.rows}
                     cell={DIR_CELL[dir]}
-                    size={28}
+                    size={'100%'}
+                    bare
                   />
-                  <span
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: 'var(--pb-ink)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {DIR_LABEL[dir]}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                      letterSpacing: 0.4,
-                      color: hasAnim ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {hasAnim ? '4×4' : 'Empty'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </PanelSection>
+                </div>
+                <div
+                  title={labelText}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--pb-ink)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    padding: '4px 4px 6px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {labelText}
+                </div>
+                <div style={{ position: 'absolute', top: 4, right: 4 }}>
+                  {dot}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={dir} {...commonHandlers} style={containerStyle}>
+              <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+                <div
+                  style={{
+                    width: 56, height: 56, flexShrink: 0,
+                    background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <CellThumb
+                    src={character.src}
+                    cols={character.cols}
+                    rows={character.rows}
+                    cell={DIR_CELL[dir]}
+                    size={'100%'}
+                    bare
+                  />
+                </div>
+                <span
+                  title={labelText}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: 'var(--pb-ink)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {labelText}
+                </span>
+                {statusBadge}
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }
 

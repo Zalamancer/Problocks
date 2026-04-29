@@ -15,6 +15,7 @@ import {
   tileDataUrlFor,
 } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
+import { useSceneStore } from '@/store/scene-store';
 import { useRoom } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
@@ -77,6 +78,54 @@ function buildCollisionPath2D(c: { anchors: TilePenAnchor[]; closed: boolean }):
     p.closePath();
   }
   return p;
+}
+
+/**
+ * 8-way compass directions used by the play-mode character renderer.
+ * `idle` is the not-moving state — renders the centre cell of the 3×3
+ * sprite sheet (cell 4) so authors can put a face-forward standing pose
+ * there.
+ */
+type Dir8 =
+  | 'idle'
+  | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
+
+/**
+ * Direction → cell-index map for a 3×3 character sprite sheet, using the
+ * "visual position equals direction" layout:
+ *   NW(0) N(1)  NE(2)
+ *    W(3) IDLE(4) E(5)
+ *   SW(6) S(7)  SE(disc)  ← cell 8 is intentionally discarded
+ *
+ * SE has no cell of its own, so we fall back to S — the character at
+ * least faces "down" rather than reusing E or NW. Authors who care
+ * about a distinct SE pose can drop a custom frame there manually.
+ */
+const DIR_CELL_INDEX: Record<Dir8, number> = {
+  nw: 0, n: 1, ne: 2,
+  w: 3, idle: 4, e: 5,
+  sw: 6, s: 7,
+  se: 7,
+};
+
+/**
+ * Snap a velocity vector (any non-zero direction) to one of the 8
+ * compass headings. The 8 sectors each span π/4 radians; we add an
+ * angle bias so straight-N points to 'n' rather than splitting across
+ * the boundary. Returns 'idle' when |v| ≈ 0 (caller already filters
+ * but this guards against jitter).
+ */
+function dirFromVelocity(vx: number, vy: number): Dir8 {
+  const mag = Math.hypot(vx, vy);
+  if (mag < 0.001) return 'idle';
+  // Y is screen-down (canvas convention) so up is negative; angle is
+  // measured clockwise from +x axis.
+  const angle = Math.atan2(vy, vx);
+  // Snap to nearest π/4 sector → -4..4. We want 8 unique buckets.
+  const sector = (Math.round(angle / (Math.PI / 4)) + 8) % 8;
+  // Sector mapping (clockwise from +x = E):
+  //   0 = E, 1 = SE, 2 = S, 3 = SW, 4 = W, 5 = NW, 6 = N, 7 = NE
+  return (['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'] as const)[sector];
 }
 
 function appendSegment(p: Path2D, prev: TilePenAnchor, cur: TilePenAnchor) {
@@ -173,6 +222,18 @@ export function TileView() {
    * canvases per frame would thrash the GPU on the Chromebook target.
    */
   const waveOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  /**
+   * Per-character runtime state for play mode. Keyed by character id.
+   * Position drifts every frame on the player's character via the play
+   * loop's RAF tick — writing each tick straight to the Zustand store
+   * would burn re-renders across the whole panel tree, so we keep live
+   * state in this ref and only flush back to the store when play stops.
+   * `dir` is the snapped 8-way facing used for cell selection on render.
+   */
+  const playRuntimeRef = useRef<Map<string, { x: number; y: number; dir: Dir8 }>>(new Map());
+  /** Pressed keys during play mode. Lower-cased Key value for case-insensitive
+   *  matching against {w,a,s,d, arrowleft, ...}. */
+  const playKeysRef = useRef<Set<string>>(new Set());
 
   const ensureImage = useCallback((dataUrl: string) => {
     let img = imgCacheRef.current.get(dataUrl);
@@ -211,6 +272,12 @@ export function TileView() {
   const clearMap = useTile((s) => s.clearMap);
   const camera = useTile((s) => s.camera);
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
+  // Global Play / Stop state — top bar in TopMenuBar flips this. When the
+  // user enters play mode, characters become controllable: WASD/arrows
+  // drive the FIRST character ("the player"), facing snaps to one of 8
+  // directions, and the rendered frame swaps to the matching cell of the
+  // 3×3 sprite sheet (cell 8 is intentionally discarded).
+  const isPlaying = useSceneStore((s) => s.isPlaying);
 
   // ── Realtime room channel ─────────────────────────────────────
   // Subscribes the TileView to the active room's Supabase Realtime
@@ -383,6 +450,97 @@ export function TileView() {
   }, [tilesetTints, tiles, tilesets]);
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
+
+  // ── Play mode: keyboard listeners + WASD/arrow movement loop ────
+  // Mirrors the freeform CharacterLayer pattern (see views/CharacterLayer.tsx)
+  // adapted for the tile canvas: runtime position lives in playRuntimeRef
+  // (NOT the store) so a 60 fps update loop doesn't fan out re-renders.
+  // On stop, we flush the final position back via updateTileCharacter so
+  // a re-play starts where the character last stood.
+  useEffect(() => {
+    if (!isPlaying) {
+      // Stop transition — flush runtime positions back to the store, then
+      // clear the runtime map so the renderer falls back to stored x/y.
+      const rt = playRuntimeRef.current;
+      const updateChar = useTile.getState().updateTileCharacter;
+      for (const [id, state] of rt) updateChar(id, { x: state.x, y: state.y });
+      rt.clear();
+      playKeysRef.current.clear();
+      requestRender.current();
+      return;
+    }
+    // Start transition — seed runtime state from current store positions.
+    const characters = Object.values(useTile.getState().tileCharacters);
+    if (characters.length === 0) return;
+    const rt = playRuntimeRef.current;
+    rt.clear();
+    for (const c of characters) {
+      rt.set(c.id, { x: c.x, y: c.y, dir: 'idle' });
+    }
+
+    function isTypingTarget(t: EventTarget | null): boolean {
+      const el = t as HTMLElement | null;
+      if (!el) return false;
+      return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable;
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      // Ignore keys when typing into a panel input — otherwise WASD would
+      // walk the player while the user names their character.
+      if (isTypingTarget(e.target)) return;
+      const k = e.key.toLowerCase();
+      if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'w', 'a', 's', 'd'].includes(k)) {
+        e.preventDefault();
+        playKeysRef.current.add(k);
+      }
+    }
+    function onKeyUp(e: KeyboardEvent) {
+      const k = e.key.toLowerCase();
+      playKeysRef.current.delete(k);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    // Pick the FIRST character (by addedAt) as "the player" — same single-
+    // character convention as the freeform play loop. Multi-character
+    // input routing can come later.
+    const ordered = [...characters].sort((a, b) => a.addedAt - b.addedAt);
+    const playerId = ordered[0].id;
+
+    let rafId = 0;
+    let lastT = performance.now();
+    function tick(now: number) {
+      const dt = Math.min(0.05, (now - lastT) / 1000);
+      lastT = now;
+      const player = useTile.getState().tileCharacters[playerId];
+      const cur = rt.get(playerId);
+      if (player && cur) {
+        const keys = playKeysRef.current;
+        let vx = 0, vy = 0;
+        if (keys.has('arrowleft') || keys.has('a')) vx -= 1;
+        if (keys.has('arrowright') || keys.has('d')) vx += 1;
+        if (keys.has('arrowup') || keys.has('w')) vy -= 1;
+        if (keys.has('arrowdown') || keys.has('s')) vy += 1;
+        const mag = Math.hypot(vx, vy);
+        if (mag > 0) {
+          vx /= mag; vy /= mag;
+          cur.x += vx * player.speed * dt;
+          cur.y += vy * player.speed * dt;
+          cur.dir = dirFromVelocity(vx, vy);
+        } else {
+          cur.dir = 'idle';
+        }
+      }
+      requestRender.current();
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [isPlaying]);
 
   // ── Imperative canvas render loop ───────────────────────────────
   useEffect(() => {
@@ -818,6 +976,59 @@ export function TileView() {
         }
       }
       ctx!.globalAlpha = 1;
+
+      // ── Playable characters ─────────────────────────────────────
+      // Drawn AFTER objects so the player sprite layers on top of any
+      // free-placed objects in the scene. During play mode, position
+      // is read from playRuntimeRef (updated every RAF tick); in edit
+      // mode it falls back to the stored x/y.
+      const characters = Object.values(s.tileCharacters);
+      if (characters.length > 0) {
+        // Read isPlaying via the store rather than the captured closure — the
+        // render useEffect doesn't depend on isPlaying, so the closure value
+        // is stale across play/stop transitions.
+        const playing = useSceneStore.getState().isPlaying;
+        const rt = playRuntimeRef.current;
+        // First character (by addedAt) is "the player" — same convention
+        // as the play loop, so the selection ring lands on the controllable
+        // character at a glance even before the user picks one.
+        const ordered = [...characters].sort((a, b) => a.addedAt - b.addedAt);
+        const playerId = ordered[0]?.id;
+        for (const c of ordered) {
+          const sheetReady = imgReadyRef.current.has(c.src);
+          const sheetImg = ensureImage(c.src);
+          if (!sheetReady) continue;
+          const cur = rt.get(c.id);
+          const px = playing && cur ? cur.x : c.x;
+          const py = playing && cur ? cur.y : c.y;
+          const dir: Dir8 = playing && cur ? cur.dir : 'idle';
+          const cellIdx = DIR_CELL_INDEX[dir];
+          const col = cellIdx % c.cols;
+          const row = Math.floor(cellIdx / c.cols);
+          // Source rect: one cell of the sheet. Destination rect: world
+          // size centered on the character's position.
+          ctx!.drawImage(
+            sheetImg,
+            col * c.frameW, row * c.frameH, c.frameW, c.frameH,
+            px - c.width / 2, py - c.height / 2, c.width, c.height,
+          );
+          // Selection ring — only in edit mode (play mode hides chrome
+          // so the player sees their game). Players selected via the
+          // panel get a green ring; the active "player" gets a blue one.
+          if (!playing && (c.id === s.selectedCharacterId || c.id === playerId)) {
+            const halfW = c.width / 2;
+            const halfH = c.height / 2;
+            ctx!.save();
+            ctx!.translate(px, py);
+            ctx!.strokeStyle = c.id === s.selectedCharacterId ? '#10b981' : '#0ea5e9';
+            ctx!.lineWidth = 2 / cam.zoom;
+            ctx!.setLineDash([4 / cam.zoom, 3 / cam.zoom]);
+            ctx!.strokeRect(-halfW, -halfH, c.width, c.height);
+            ctx!.setLineDash([]);
+            ctx!.restore();
+          }
+        }
+      }
 
       // ── Pending pen path overlay ────────────────────────────────
       // Drawn AFTER objects so committed sprites + collisions don't

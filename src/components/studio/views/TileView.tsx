@@ -366,49 +366,128 @@ export function TileView() {
       // the sub-pixel seams the rasterizer creates at fractional zoom/pan.
       const bleed = 0.5 / cam.zoom;
 
-      // ── Base layer pre-pass ─────────────────────────────────────
+      // ── Base + island pre-passes ────────────────────────────────
       // When `baseTextureId` is set, the map is conceptually filled
-      // edge-to-edge with that texture's pure tile. We render it as a
-      // SINGLE tiled fillRect via CanvasPattern — at low zoom a per-cell
-      // loop is O(viewport_cells), which is ~200k drawImage calls at 10%
-      // zoom on a 1080p canvas and ground the framerate to a halt. The
-      // pattern tiles natively and only costs one fillRect regardless of
-      // how many cells are visible. The layered pass below still
-      // substitutes absent corners with baseTexId so painted regions
+      // edge-to-edge with that texture's pure tile. When `islandFillTextureId`
+      // and `mapBounds` are also set, an island of the fill texture covers
+      // the bounded interior, with the wang resolver auto-rendering the
+      // shoreline transition tiles on the boundary ring.
+      //
+      // Both the base AND island fills are drawn as a SINGLE tiled fillRect
+      // via CanvasPattern — at low zoom a per-cell loop is O(viewport_cells),
+      // which is ~200k drawImage calls at 10% zoom on a 1080p canvas and
+      // grinds the framerate to a halt. The pattern tiles natively, costing
+      // one fillRect regardless of cell count. The boundary ring is the
+      // only piece that still needs per-cell drawImage (max ~520 cells for
+      // a 128×128 island), and the layered pass substitutes absent corners
+      // with islandFill (inside bounds) or base (outside) so painted regions
       // transition smoothly via the matching wang bridge tileset.
       const recolorMap = tileRecolorRef.current;
       const baseTexId = s.baseTextureId;
+      const islandFillId = s.islandFillTextureId;
+      const bounds = s.mapBounds;
+      // Per-corner substitution helper used by all the passes that need to
+      // resolve a virtual cell. A corner inside the bounds rectangle (when
+      // an island is active) resolves to the island fill, otherwise to the
+      // base. Returns undefined when neither is set so the resolver bails
+      // out cleanly (renders nothing).
+      const islandActive = !!(islandFillId && bounds);
+      const insideBounds = (x: number, y: number): boolean => {
+        if (!islandActive) return false;
+        return x >= bounds!.x && x <= bounds!.x + bounds!.w
+          && y >= bounds!.y && y <= bounds!.y + bounds!.h;
+      };
+      const fallback = (x: number, y: number): string | undefined => {
+        if (insideBounds(x, y)) return islandFillId!;
+        return baseTexId ?? undefined;
+      };
+      // Helper: tiled pattern fillRect over a cell-aligned rectangle. Reused
+      // for base + island fills so they share the cache-friendly fast path.
+      const drawTiledPattern = (texId: string, rcx0: number, rcy0: number, rcx1: number, rcy1: number) => {
+        const resolved = resolveCellTile(texId, texId, texId, texId, s.tilesets);
+        if (!resolved) return false;
+        const tileId = resolved.tileset.tileIds[resolved.index];
+        const tile = tileId ? s.tiles[tileId] : undefined;
+        if (!tile) return false;
+        const dataUrlBase = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
+        const recolored = recolorMap.get(tileId);
+        const url = recolored ?? dataUrlBase;
+        const img = imgCacheRef.current.get(url);
+        if (!img || !imgReadyRef.current.has(url)) return false;
+        const pattern = ctx!.createPattern(img, 'repeat');
+        if (pattern) {
+          const m = new DOMMatrix();
+          m.scaleSelf(ts / img.width, ts / img.height);
+          pattern.setTransform(m);
+          ctx!.fillStyle = pattern;
+          ctx!.fillRect(rcx0 * ts, rcy0 * ts, (rcx1 - rcx0) * ts, (rcy1 - rcy0) * ts);
+          return true;
+        }
+        // Per-cell drawImage fallback for browsers without setTransform.
+        for (let cy = rcy0; cy < rcy1; cy++) {
+          for (let cx = rcx0; cx < rcx1; cx++) {
+            ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+          }
+        }
+        return true;
+      };
+
       if (baseTexId) {
-        const baseResolved = resolveCellTile(baseTexId, baseTexId, baseTexId, baseTexId, s.tilesets);
-        if (baseResolved) {
-          const baseTileId = baseResolved.tileset.tileIds[baseResolved.index];
-          const baseTile = baseTileId ? s.tiles[baseTileId] : undefined;
-          if (baseTile) {
-            const baseDataUrl = tileDataUrlFor(baseResolved.tileset, baseResolved.index, baseTile.dataUrl);
-            const baseRecolored = recolorMap.get(baseTileId);
-            const baseUrl = baseRecolored ?? baseDataUrl;
-            const baseImg = imgCacheRef.current.get(baseUrl);
-            if (baseImg && imgReadyRef.current.has(baseUrl)) {
-              const pattern = ctx!.createPattern(baseImg, 'repeat');
-              if (pattern) {
-                // Pattern tiles in CURRENT TRANSFORM space starting at world
-                // (0,0). Scale so one image tile = one cell (`ts` world units),
-                // independent of the source image's natural size.
-                const m = new DOMMatrix();
-                m.scaleSelf(ts / baseImg.width, ts / baseImg.height);
-                pattern.setTransform(m);
-                ctx!.fillStyle = pattern;
-                ctx!.fillRect(cx0 * ts, cy0 * ts, (cx1 - cx0 + 1) * ts, (cy1 - cy0 + 1) * ts);
-              } else {
-                // Pattern unavailable for any reason — fall back to per-cell
-                // drawImage. Won't be the hot path on real browsers.
-                for (let cy = cy0; cy <= cy1; cy++) {
-                  for (let cx = cx0; cx <= cx1; cx++) {
-                    ctx!.drawImage(baseImg, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
-                  }
-                }
-              }
-            }
+        drawTiledPattern(baseTexId, cx0, cy0, cx1 + 1, cy1 + 1);
+      }
+
+      if (islandActive) {
+        // Cell-aligned interior of the bounds, intersected with viewport.
+        // These are the cells where ALL FOUR corners sit inside the bounds
+        // rect — i.e. cells (bounds.x, bounds.y) through (bounds.x + bounds.w
+        // - 1, bounds.y + bounds.h - 1). The boundary ring (one-cell-thick
+        // around this rect) renders below via per-cell drawImage so the
+        // wang shoreline transitions appear without per-cell drawImage cost
+        // for the entire interior.
+        const ix0 = Math.max(cx0, bounds!.x);
+        const iy0 = Math.max(cy0, bounds!.y);
+        const ix1 = Math.min(cx1 + 1, bounds!.x + bounds!.w);
+        const iy1 = Math.min(cy1 + 1, bounds!.y + bounds!.h);
+        if (ix0 < ix1 && iy0 < iy1) {
+          drawTiledPattern(islandFillId!, ix0, iy0, ix1, iy1);
+        }
+      }
+
+      // Boundary ring pre-pass: cells that straddle the bounds rect (some
+      // corners inside, some outside). The resolver picks the appropriate
+      // wang transition tile based on the substituted corner pattern. Only
+      // runs when both base and island are set and the rect intersects the
+      // viewport. Painted overrides on these cells are handled by the
+      // per-layer pass below — this pass renders the DEFAULT shoreline.
+      if (islandActive && baseTexId) {
+        const bx0 = Math.max(cx0, bounds!.x - 1);
+        const by0 = Math.max(cy0, bounds!.y - 1);
+        const bx1 = Math.min(cx1, bounds!.x + bounds!.w);
+        const by1 = Math.min(cy1, bounds!.y + bounds!.h);
+        for (let cy = by0; cy <= by1; cy++) {
+          for (let cx = bx0; cx <= bx1; cx++) {
+            // Skip pure-interior + pure-exterior cells (already pre-filled).
+            const nwIn = insideBounds(cx, cy);
+            const neIn = insideBounds(cx + 1, cy);
+            const swIn = insideBounds(cx, cy + 1);
+            const seIn = insideBounds(cx + 1, cy + 1);
+            if (nwIn && neIn && swIn && seIn) continue;
+            if (!nwIn && !neIn && !swIn && !seIn) continue;
+            const nw = nwIn ? islandFillId! : baseTexId;
+            const ne = neIn ? islandFillId! : baseTexId;
+            const sw = swIn ? islandFillId! : baseTexId;
+            const se = seIn ? islandFillId! : baseTexId;
+            const resolved = resolveCellTile(nw, ne, sw, se, s.tilesets);
+            if (!resolved) continue;
+            const tileId = resolved.tileset.tileIds[resolved.index];
+            const tile = tileId ? s.tiles[tileId] : undefined;
+            if (!tile) continue;
+            const dataUrlBase = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
+            const recolored = recolorMap.get(tileId);
+            const url = recolored ?? dataUrlBase;
+            const img = imgCacheRef.current.get(url);
+            if (!img || !imgReadyRef.current.has(url)) continue;
+            ctx!.drawImage(img, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
           }
         }
       }
@@ -457,13 +536,14 @@ export function TileView() {
             const neRaw = corners[`${cx + 1},${cy}`];
             const swRaw = corners[`${cx},${cy + 1}`];
             const seRaw = corners[`${cx + 1},${cy + 1}`];
-            // Fully-empty cells: the base pre-pass already drew them (or
-            // the canvas background shows through if no base is set).
+            // Fully-empty cells: the base + island pre-passes already drew
+            // them (or the canvas background shows through if neither is
+            // set).
             if (!nwRaw && !neRaw && !swRaw && !seRaw) continue;
-            const nw = nwRaw ?? baseTexId ?? undefined;
-            const ne = neRaw ?? baseTexId ?? undefined;
-            const sw = swRaw ?? baseTexId ?? undefined;
-            const se = seRaw ?? baseTexId ?? undefined;
+            const nw = nwRaw ?? fallback(cx, cy);
+            const ne = neRaw ?? fallback(cx + 1, cy);
+            const sw = swRaw ?? fallback(cx, cy + 1);
+            const se = seRaw ?? fallback(cx + 1, cy + 1);
             const resolved = resolveCellTile(nw, ne, sw, se, s.tilesets);
             if (!resolved) continue;
             const tileId = resolved.tileset.tileIds[resolved.index];

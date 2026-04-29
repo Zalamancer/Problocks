@@ -384,6 +384,25 @@ export interface TileStore {
   baseTextureId: string | null;
   setBaseTexture: (id: string | null) => void;
   /**
+   * Optional bounded island region. When set together with
+   * `islandFillTextureId`, the renderer treats absent corners INSIDE
+   * this rectangle as the island texture (instead of the base) and
+   * pattern-fills the interior with it. The wang resolver then emits
+   * shoreline transition tiles at the bounds edge automatically. Coords
+   * are in cells, not world pixels.
+   */
+  mapBounds: { x: number; y: number; w: number; h: number } | null;
+  setMapBounds: (b: { x: number; y: number; w: number; h: number } | null) => void;
+  /**
+   * Texture id used to fill the area inside `mapBounds`. Picked by the
+   * panel's "make this an island" button — typically the partner side of
+   * whichever tileset the user set as base. When set with no bounds, a
+   * 128×128 island is auto-created centered on origin so the user
+   * doesn't have to click a separate "create bounds" affordance.
+   */
+  islandFillTextureId: string | null;
+  setIslandFill: (id: string | null) => void;
+  /**
    * Per-tileset palette tints — keyed first by tileset id and then by
    * colour bucket (red/green/blue/etc., see `lib/tile-palette.ts`).
    * Each entry holds an HSL triple { hue, saturation, brightness }
@@ -748,7 +767,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       });
       const brushTextureId = s.brushTextureId === sourceTextureId ? targetTextureId : s.brushTextureId;
       const baseTextureId = s.baseTextureId === sourceTextureId ? targetTextureId : s.baseTextureId;
-      return { ...undoStep, tilesets, layers, brushTextureId, baseTextureId };
+      const islandFillTextureId = s.islandFillTextureId === sourceTextureId ? targetTextureId : s.islandFillTextureId;
+      return { ...undoStep, tilesets, layers, brushTextureId, baseTextureId, islandFillTextureId };
     });
     return changedIds;
   },
@@ -772,11 +792,16 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const baseTextureId = (s.baseTextureId === ts.upperTextureId || s.baseTextureId === ts.lowerTextureId)
       ? null
       : s.baseTextureId;
+    // Same for island fill — orphaned ids would render as nothing.
+    const islandFillTextureId = (s.islandFillTextureId === ts.upperTextureId || s.islandFillTextureId === ts.lowerTextureId)
+      ? null
+      : s.islandFillTextureId;
     return {
       tilesets: s.tilesets.filter((t) => t.id !== tilesetId),
       tiles: nextTiles,
       layers: nextLayers,
       baseTextureId,
+      islandFillTextureId,
     };
   }),
   addTilesetVariant: (tilesetId, { name, sheetDataUrl, tileDataUrls }) => {
@@ -1123,6 +1148,18 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   }),
   baseTextureId: null,
   setBaseTexture: (id) => set({ baseTextureId: id }),
+  mapBounds: null,
+  setMapBounds: (b) => set({ mapBounds: b }),
+  islandFillTextureId: null,
+  setIslandFill: (id) => set((s) => {
+    // Auto-bootstrap a 128×128 bounds centered on origin the first time
+    // an island fill is picked — saves the user a separate "create map
+    // bounds" click and matches the spec ("the island is 128x128").
+    if (id && !s.mapBounds) {
+      return { islandFillTextureId: id, mapBounds: { x: -64, y: -64, w: 128, h: 128 } };
+    }
+    return { islandFillTextureId: id };
+  }),
   tilesetTints: {},
   setTilesetBucketTint: (tilesetId, bucketId, patch) => set((s) => {
     const next: TileStore['tilesetTints'] = { ...s.tilesetTints };
@@ -1315,6 +1352,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomRotate: s.brushRandomRotate,
     wavyTextureIds: s.wavyTextureIds,
     baseTextureId: s.baseTextureId,
+    mapBounds: s.mapBounds,
+    islandFillTextureId: s.islandFillTextureId,
     tilesetTints: s.tilesetTints,
     showGrid: s.showGrid,
     fencePosts: s.fencePosts,

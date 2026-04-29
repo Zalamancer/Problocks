@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
-  Pencil, GripVertical, X, Layers, Globe2,
+  Pencil, GripVertical, X, Layers, Globe2, LandPlot,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
@@ -562,6 +562,8 @@ function TerrainCard({
   const setBrushTextureId = useTile((s) => s.setBrushTextureId);
   const baseTextureId = useTile((s) => s.baseTextureId);
   const setBaseTexture = useTile((s) => s.setBaseTexture);
+  const islandFillTextureId = useTile((s) => s.islandFillTextureId);
+  const setIslandFill = useTile((s) => s.setIslandFill);
   const setTool = useTile((s) => s.setTool);
   const addTilesetVariant = useTile((s) => s.addTilesetVariant);
   const removeTilesetVariant = useTile((s) => s.removeTilesetVariant);
@@ -700,16 +702,19 @@ function TerrainCard({
       </div>
 
       {/* Brush picker — choose which of the two base textures the paint tool
-          lays down. The chain icon on each swatch opens a small popover for
-          uploading a NEW tileset that shares this texture. The globe icon
-          marks the texture as the map-wide BASE (renderer fills the entire
-          viewport with it; layered corners override + transition into it). */}
+          lays down. Three small icons sit on each swatch:
+          - Globe (top-left): mark texture as map-wide BASE (infinite ocean)
+          - LandPlot (next to globe): mark texture as ISLAND FILL (interior
+            of bounded 128×128 region; toggling on the first time auto-
+            creates the bounds centred on origin)
+          - Chain (top-right): open the connect popover */}
       <div className="flex items-center gap-2 mt-2">
         <BrushSwatch
           dataUrl={upperDataUrl}
           label="UPPER"
           active={brushTextureId === tileset.upperTextureId}
           isBase={baseTextureId === tileset.upperTextureId}
+          isIsland={islandFillTextureId === tileset.upperTextureId}
           shareCount={sharedUpperCount}
           linking={linkingSide === 'u'}
           onClick={() => pickBrush('u')}
@@ -717,18 +722,25 @@ function TerrainCard({
           onBaseClick={() => setBaseTexture(
             baseTextureId === tileset.upperTextureId ? null : tileset.upperTextureId,
           )}
+          onIslandClick={() => setIslandFill(
+            islandFillTextureId === tileset.upperTextureId ? null : tileset.upperTextureId,
+          )}
         />
         <BrushSwatch
           dataUrl={lowerDataUrl}
           label="LOWER"
           active={brushTextureId === tileset.lowerTextureId}
           isBase={baseTextureId === tileset.lowerTextureId}
+          isIsland={islandFillTextureId === tileset.lowerTextureId}
           shareCount={sharedLowerCount}
           linking={linkingSide === 'l'}
           onClick={() => pickBrush('l')}
           onChainClick={() => setLinkingSide(linkingSide === 'l' ? null : 'l')}
           onBaseClick={() => setBaseTexture(
             baseTextureId === tileset.lowerTextureId ? null : tileset.lowerTextureId,
+          )}
+          onIslandClick={() => setIslandFill(
+            islandFillTextureId === tileset.lowerTextureId ? null : tileset.lowerTextureId,
           )}
         />
       </div>
@@ -812,7 +824,7 @@ function TerrainCard({
 }
 
 function BrushSwatch({
-  dataUrl, label, active, isBase, shareCount, linking, onClick, onChainClick, onBaseClick,
+  dataUrl, label, active, isBase, isIsland, shareCount, linking, onClick, onChainClick, onBaseClick, onIslandClick,
 }: {
   /** PNG dataUrl to render in the thumbnail. Variant-aware — the parent
    *  resolves the active variant's slice URL before passing it in. */
@@ -823,6 +835,8 @@ function BrushSwatch({
    *  globe icon and gives the swatch a subtle ring so the user can see
    *  at a glance which texture is filling the infinite viewport. */
   isBase: boolean;
+  /** True when this texture id is the bounded island fill. */
+  isIsland: boolean;
   /** Number of OTHER tilesets sharing this texture id. >0 means it's part
    *  of a chain — shown as a small badge next to the chain icon. */
   shareCount: number;
@@ -832,6 +846,9 @@ function BrushSwatch({
   /** Toggle this texture as the map-wide base layer. Clicking again on
    *  the active base unsets it (caller passes null). */
   onBaseClick: () => void;
+  /** Toggle this texture as the island-interior fill. First toggle on
+   *  auto-creates a 128×128 bounds centred on origin. */
+  onIslandClick: () => void;
 }) {
   return (
     <div
@@ -875,10 +892,10 @@ function BrushSwatch({
         </span>
       </button>
       {/* Base-layer toggle — marks this texture as the map-wide infinite
-          base. Click again to unset. Mirrors the chain button at top-right
-          but lives at top-left so the two never overlap. Highlighted green
-          when active so the user can spot which side is the base at a
-          glance. */}
+          base. Click again to unset. Lives at top-left; the island button
+          sits beside it so the two together communicate "outside vs inside
+          the bounded region". Highlighted green when active so the user
+          can spot which side is the base at a glance. */}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onBaseClick(); }}
@@ -901,6 +918,33 @@ function BrushSwatch({
         }}
       >
         <Globe2 size={10} strokeWidth={2.6} />
+      </button>
+      {/* Island-fill toggle — marks this texture as the interior fill of
+          the bounded map region. First click auto-creates 128×128 bounds
+          centred on origin. Pair this with the OTHER side as base for the
+          classic "land surrounded by water" island look. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onIslandClick(); }}
+        title={isIsland ? 'Island interior — click to unset' : 'Set as 128×128 island interior'}
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: 22,
+          width: 18,
+          height: 18,
+          padding: 0,
+          background: isIsland ? 'rgba(220,160,80,0.22)' : 'var(--pb-paper)',
+          border: `1.5px solid ${isIsland ? 'rgba(180,120,40,0.6)' : 'var(--pb-line-2)'}`,
+          color: isIsland ? 'rgb(120,70,20)' : 'var(--pb-ink-muted)',
+          borderRadius: 999,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LandPlot size={10} strokeWidth={2.6} />
       </button>
       {/* Chain button — opens the connect popover. Always visible so users
           discover the feature; gets a green tint when this texture already

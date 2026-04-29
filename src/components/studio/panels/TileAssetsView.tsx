@@ -8,7 +8,6 @@ import {
   Pencil, GripVertical, X, Layers, Globe2, Folder, FolderPlus,
   Users,
 } from 'lucide-react';
-import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
@@ -2313,9 +2312,9 @@ function ObjectsSection() {
 
 /**
  * Three-tab toggle for the 2D Tile Assets panel — Objects / Groups /
- * Characters. Mirrors the [Generate | History] `PanelIconTabs` toggle from
- * `panels/PartStudioPanel.tsx`: the active tab expands into a white pill
- * and shows its label, inactive tabs collapse to icon-only.
+ * Characters. Renders as a row of three chunky-pastel pill buttons
+ * (paper bg + 1.5px ink border + 0 2px 0 ink pop-shadow on active),
+ * matching the rest of the Problocks studio surfaces.
  */
 type AssetsSubTabId = 'objects' | 'groups' | 'characters';
 
@@ -2329,11 +2328,56 @@ function AssetsSubTabs() {
   const [tab, setTab] = useState<AssetsSubTabId>('objects');
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <PanelIconTabs
-        tabs={ASSETS_SUBTABS}
-        activeTab={tab}
-        onChange={(id) => setTab(id as AssetsSubTabId)}
-      />
+      <div
+        style={{
+          display: 'flex',
+          gap: 6,
+          padding: '10px 14px 6px',
+        }}
+      >
+        {ASSETS_SUBTABS.map((t) => {
+          const isActive = t.id === tab;
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              title={t.label}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                height: 32,
+                padding: '0 10px',
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                background: isActive ? 'var(--pb-paper)' : 'var(--pb-cream-2)',
+                border: `1.5px solid ${isActive ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+                borderRadius: 10,
+                boxShadow: isActive ? '0 2px 0 var(--pb-ink)' : 'none',
+                color: isActive ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+                cursor: 'pointer',
+                transition: 'background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'var(--pb-paper)';
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'var(--pb-cream-2)';
+              }}
+            >
+              <Icon size={13} strokeWidth={2.4} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {t.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       {tab === 'objects' && <ObjectsSection />}
       {tab === 'groups' && <EmptySubTabPlaceholder label="No groups yet — coming soon." />}
       {tab === 'characters' && <EmptySubTabPlaceholder label="No characters yet — coming soon." />}

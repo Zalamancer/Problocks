@@ -45,6 +45,38 @@ export function TileView() {
   const stateRef = useRef(useTile.getState());
   useEffect(() => useTile.subscribe((s) => { stateRef.current = s; }), []);
 
+  // Debug: when island bounds change, log the NW corner of the bounds
+  // rectangle and the actual top-left cell the renderer's pre-pass B fills.
+  // Useful for spotting any off-by-one between "what the user thinks the
+  // island starts at" and "what the renderer paints".
+  const islandDebugBounds = useTile((s) => s.mapBounds);
+  const islandDebugFill = useTile((s) => s.islandFillTextureId);
+  const islandDebugTs = useTile((s) => s.tileSize);
+  useEffect(() => {
+    if (!islandDebugBounds || !islandDebugFill) return;
+    const nwCellX = islandDebugBounds.x;
+    const nwCellY = islandDebugBounds.y;
+    const nwWorldX = nwCellX * islandDebugTs;
+    const nwWorldY = nwCellY * islandDebugTs;
+    // Pre-pass B fills cells [bounds.x .. bounds.x + bounds.w - 1]
+    // horizontally and the same vertically — so the top-left rendered
+    // island tile is the cell at (bounds.x, bounds.y), which is the same
+    // as the bounds NW corner. World pixel position of that tile's
+    // top-left corner:
+    const topLeftTileCellX = islandDebugBounds.x;
+    const topLeftTileCellY = islandDebugBounds.y;
+    const topLeftTileWorldX = topLeftTileCellX * islandDebugTs;
+    const topLeftTileWorldY = topLeftTileCellY * islandDebugTs;
+    console.log('[island] NW corner:', {
+      cell: { x: nwCellX, y: nwCellY },
+      world: { x: nwWorldX, y: nwWorldY },
+    });
+    console.log('[island] Top-left island tile:', {
+      cell: { x: topLeftTileCellX, y: topLeftTileCellY },
+      world: { x: topLeftTileWorldX, y: topLeftTileWorldY },
+    });
+  }, [islandDebugBounds, islandDebugFill, islandDebugTs]);
+
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const imgReadyRef = useRef<Set<string>>(new Set());
   const requestRender = useRef<() => void>(() => {});

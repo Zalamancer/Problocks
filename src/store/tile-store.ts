@@ -41,7 +41,38 @@ export type TileTool =
   | 'fill'
   | 'eyedropper'
   | 'object'
+  | 'pen'
   | 'fence';
+
+/**
+ * One node of a pen-drawn polygon attached to a TileObject.
+ * Coords are object-local: origin at the object's CENTER, +x right, +y down,
+ * un-rotated, so the polygon rides along when the object is moved/rotated/
+ * resized. Mirrors `FreeformAnchor` from the freeform editor — kept as a
+ * separate type so the two stores stay decoupled.
+ */
+export interface TilePenAnchor {
+  x: number;
+  y: number;
+  /** Bezier handle going INTO this anchor (relative). Reserved for v2. */
+  inX?: number;
+  inY?: number;
+  /** Bezier handle going OUT of this anchor. Reserved for v2. */
+  outX?: number;
+  outY?: number;
+}
+
+/**
+ * A pen-drawn polygonal boundary on a TileObject. `anchors` are stored in
+ * the owning object's local frame so the boundary travels with the object
+ * automatically. `closed` toggles the SVG/Canvas Z (close-path) command and
+ * the rendered fill.
+ */
+export interface TileCollision {
+  id: string;
+  anchors: TilePenAnchor[];
+  closed: boolean;
+}
 
 export interface Tile {
   id: string;
@@ -172,6 +203,10 @@ export interface TileObject {
    *  via ctx.filter so the source sprite is untouched. 0 = no shift. */
   hue: number;
   name: string;
+  /** Pen-drawn polygon boundaries that ride along with this object's
+   *  transform (move/rotate/scale/flip). Optional + back-fill on rehydrate
+   *  so older persisted objects don't crash. */
+  collisions?: TileCollision[];
 }
 
 /**
@@ -334,6 +369,28 @@ export interface TileStore {
   /** Switch the style on a placed instance ("upgrade"). */
   setObjectStyle: (objectId: string, styleId: string) => void;
 
+  // ── Pen tool — collision boundaries on objects ─────────────────
+  /** Currently-selected collision id (highlighted in the canvas, target of
+   *  Delete). Null when nothing is selected. */
+  selectedCollisionId: string | null;
+  /** Anchors the user has dropped while the pen tool is active and a path
+   *  is in progress. On commit they get appended to the owning object as
+   *  a fresh TileCollision. */
+  pendingPenAnchors: TilePenAnchor[];
+  /** Which TileObject the in-progress pen path belongs to. */
+  pendingPenObjectId: string | null;
+  beginPenPath: (objectId: string) => void;
+  addPenAnchor: (anchor: TilePenAnchor) => void;
+  /** Update the last anchor — used for live cursor preview / handle drag. */
+  updateLastPenAnchor: (patch: Partial<TilePenAnchor>) => void;
+  /** Commit the in-progress path to the object. `closed: true` when the
+   *  user clicked the first anchor or pressed Enter; false for an open
+   *  polyline finish (e.g. Enter without closing). */
+  commitPenPath: (closed: boolean) => string | null;
+  cancelPenPath: () => void;
+  selectCollision: (id: string | null) => void;
+  deleteCollision: (objectId: string, collisionId: string) => void;
+
   // ── Tools ──────────────────────────────────────────────────────
   tool: TileTool;
   setTool: (t: TileTool) => void;
@@ -383,25 +440,6 @@ export interface TileStore {
    */
   baseTextureId: string | null;
   setBaseTexture: (id: string | null) => void;
-  /**
-   * Optional bounded island region. When set together with
-   * `islandFillTextureId`, the renderer treats absent corners INSIDE
-   * this rectangle as the island texture (instead of the base) and
-   * pattern-fills the interior with it. The wang resolver then emits
-   * shoreline transition tiles at the bounds edge automatically. Coords
-   * are in cells, not world pixels.
-   */
-  mapBounds: { x: number; y: number; w: number; h: number } | null;
-  setMapBounds: (b: { x: number; y: number; w: number; h: number } | null) => void;
-  /**
-   * Texture id used to fill the area inside `mapBounds`. Picked by the
-   * panel's "make this an island" button — typically the partner side of
-   * whichever tileset the user set as base. When set with no bounds, a
-   * 128×128 island is auto-created centered on origin so the user
-   * doesn't have to click a separate "create bounds" affordance.
-   */
-  islandFillTextureId: string | null;
-  setIslandFill: (id: string | null) => void;
   /**
    * Per-tileset palette tints — keyed first by tileset id and then by
    * colour bucket (red/green/blue/etc., see `lib/tile-palette.ts`).
@@ -767,8 +805,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       });
       const brushTextureId = s.brushTextureId === sourceTextureId ? targetTextureId : s.brushTextureId;
       const baseTextureId = s.baseTextureId === sourceTextureId ? targetTextureId : s.baseTextureId;
-      const islandFillTextureId = s.islandFillTextureId === sourceTextureId ? targetTextureId : s.islandFillTextureId;
-      return { ...undoStep, tilesets, layers, brushTextureId, baseTextureId, islandFillTextureId };
+      return { ...undoStep, tilesets, layers, brushTextureId, baseTextureId };
     });
     return changedIds;
   },
@@ -792,16 +829,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const baseTextureId = (s.baseTextureId === ts.upperTextureId || s.baseTextureId === ts.lowerTextureId)
       ? null
       : s.baseTextureId;
-    // Same for island fill — orphaned ids would render as nothing.
-    const islandFillTextureId = (s.islandFillTextureId === ts.upperTextureId || s.islandFillTextureId === ts.lowerTextureId)
-      ? null
-      : s.islandFillTextureId;
     return {
       tilesets: s.tilesets.filter((t) => t.id !== tilesetId),
       tiles: nextTiles,
       layers: nextLayers,
       baseTextureId,
-      islandFillTextureId,
     };
   }),
   addTilesetVariant: (tilesetId, { name, sheetDataUrl, tileDataUrls }) => {
@@ -928,7 +960,20 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     selectedObjectId: s.selectedObjectId === id ? null : s.selectedObjectId,
   })),
   selectedObjectId: null,
-  selectObject: (id) => set({ selectedObjectId: id }),
+  selectObject: (id) => set((s) => {
+    // Switching the selection drops any in-progress pen path (its anchors
+    // are in the previous object's local frame and would land in the wrong
+    // place if reattached) and clears any highlighted collision.
+    if (s.pendingPenObjectId && s.pendingPenObjectId !== id) {
+      return {
+        selectedObjectId: id,
+        selectedCollisionId: null,
+        pendingPenAnchors: [],
+        pendingPenObjectId: null,
+      };
+    }
+    return { selectedObjectId: id, selectedCollisionId: null };
+  }),
 
   objectAssets: {},
   addObjectAsset: ({ assetId: providedAssetId, name, label, dataUrl, width, height, cloudId }) => {
@@ -1089,7 +1134,78 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   },
 
   tool: 'paint',
-  setTool: (t) => set({ tool: t }),
+  setTool: (t) => set((s) => {
+    // Switching away from the pen tool drops any in-progress path so the
+    // dashed preview doesn't linger on screen attached to a tool the user
+    // can no longer interact with.
+    if (s.tool === 'pen' && t !== 'pen') {
+      return { tool: t, pendingPenAnchors: [], pendingPenObjectId: null };
+    }
+    return { tool: t };
+  }),
+
+  selectedCollisionId: null,
+  pendingPenAnchors: [],
+  pendingPenObjectId: null,
+  beginPenPath: (objectId) => set({
+    tool: 'pen',
+    pendingPenObjectId: objectId,
+    pendingPenAnchors: [],
+  }),
+  addPenAnchor: (anchor) => set((s) => ({
+    pendingPenAnchors: [...s.pendingPenAnchors, anchor],
+  })),
+  updateLastPenAnchor: (patch) => set((s) => {
+    if (s.pendingPenAnchors.length === 0) return {};
+    const next = s.pendingPenAnchors.slice();
+    next[next.length - 1] = { ...next[next.length - 1], ...patch };
+    return { pendingPenAnchors: next };
+  }),
+  commitPenPath: (closed) => {
+    const s = get();
+    const { pendingPenAnchors, pendingPenObjectId } = s;
+    // Need at least 2 anchors for a meaningful path. Single accidental
+    // clicks (or pen-tool activation without input) get silently dropped.
+    if (!pendingPenObjectId || pendingPenAnchors.length < 2) {
+      set({ pendingPenAnchors: [], pendingPenObjectId: null });
+      return null;
+    }
+    const owner = s.objects.find((o) => o.id === pendingPenObjectId);
+    if (!owner) {
+      set({ pendingPenAnchors: [], pendingPenObjectId: null });
+      return null;
+    }
+    const cid = cryptoId();
+    const newCollision: TileCollision = {
+      id: cid,
+      anchors: pendingPenAnchors,
+      closed,
+    };
+    set((cur) => ({
+      ...recordUndoStep(cur),
+      objects: cur.objects.map((o) =>
+        o.id === pendingPenObjectId
+          ? { ...o, collisions: [...(o.collisions ?? []), newCollision] }
+          : o,
+      ),
+      pendingPenAnchors: [],
+      pendingPenObjectId: null,
+      selectedCollisionId: cid,
+    }));
+    return cid;
+  },
+  cancelPenPath: () => set({ pendingPenAnchors: [], pendingPenObjectId: null }),
+  selectCollision: (id) => set({ selectedCollisionId: id }),
+  deleteCollision: (objectId, collisionId) => set((s) => ({
+    ...recordUndoStep(s),
+    objects: s.objects.map((o) =>
+      o.id === objectId
+        ? { ...o, collisions: (o.collisions ?? []).filter((c) => c.id !== collisionId) }
+        : o,
+    ),
+    selectedCollisionId:
+      s.selectedCollisionId === collisionId ? null : s.selectedCollisionId,
+  })),
   brushSize: 1,
   setBrushSize: (size) => set({ brushSize: Math.max(1, Math.min(16, Math.round(size))) }),
   brushTextureId: null,
@@ -1148,30 +1264,6 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   }),
   baseTextureId: null,
   setBaseTexture: (id) => set({ baseTextureId: id }),
-  mapBounds: null,
-  setMapBounds: (b) => set({ mapBounds: b }),
-  islandFillTextureId: null,
-  setIslandFill: (id) => set((s) => {
-    // Toggle OFF: drop the bounds too so the next toggle-on re-creates
-    // bounds centred on the user's CURRENT camera position. Otherwise
-    // the bounds stick wherever they were first created and feel
-    // permanently off-centre after panning around.
-    if (id === null) {
-      return { islandFillTextureId: null, mapBounds: null };
-    }
-    // Toggle ON with no bounds yet: auto-create 128×128 bounds centred
-    // on the camera so the island appears wherever the user is looking,
-    // not at world origin (which is often off-screen at low zoom).
-    if (!s.mapBounds) {
-      const ccx = Math.round(s.camera.x / s.tileSize);
-      const ccy = Math.round(s.camera.y / s.tileSize);
-      return {
-        islandFillTextureId: id,
-        mapBounds: { x: ccx - 64, y: ccy - 64, w: 128, h: 128 },
-      };
-    }
-    return { islandFillTextureId: id };
-  }),
   tilesetTints: {},
   setTilesetBucketTint: (tilesetId, bucketId, patch) => set((s) => {
     const next: TileStore['tilesetTints'] = { ...s.tilesetTints };
@@ -1334,7 +1426,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   // `assetId` and would crash the renderer (no styleId → no style lookup),
   // so we let the persist key bump drop them. Cloud rehydrate will repopulate
   // assets/styles.
-  name: 'problocks-tile-v7',
+  // v8 — TileObject gained `collisions[]` (pen-tool boundaries). Optional,
+  // back-filled on rehydrate, so the bump is purely defensive: existing
+  // saves load fine, just without any collision polygons.
+  name: 'problocks-tile-v8',
   // Coalesce localStorage writes — see makeDeferredLocalStorage above.
   // Painting at 90k corners was firing JSON.stringify of the whole map
   // on every cell, which alone burned 30–80 ms on Chromebook-class
@@ -1364,8 +1459,6 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomRotate: s.brushRandomRotate,
     wavyTextureIds: s.wavyTextureIds,
     baseTextureId: s.baseTextureId,
-    mapBounds: s.mapBounds,
-    islandFillTextureId: s.islandFillTextureId,
     tilesetTints: s.tilesetTints,
     showGrid: s.showGrid,
     fencePosts: s.fencePosts,
@@ -1430,6 +1523,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // keeps the renderer simple (it never sees `undefined` for hue).
     for (const o of state.objects ?? []) {
       if (typeof o.hue !== 'number') o.hue = 0;
+      // v8: pen-tool collisions. Default to empty array so renderers and
+      // panels never have to nullish-coalesce when iterating.
+      if (!Array.isArray(o.collisions)) o.collisions = [];
     }
     // v7+: backfill sortIndex for assets that pre-date drag-reorder. Use
     // addedAt as a stable tie-breaker so the displayed order doesn't

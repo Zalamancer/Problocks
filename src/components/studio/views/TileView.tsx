@@ -4,8 +4,16 @@ import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
   Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw, Waves, Fence,
+  PenTool, Image as ImageIcon,
 } from 'lucide-react';
-import { useTile, type TileTool, findStyle, tileDataUrlFor } from '@/store/tile-store';
+import {
+  useTile,
+  type TileTool,
+  type TilePenAnchor,
+  type TileCollision,
+  findStyle,
+  tileDataUrlFor,
+} from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
 import { useRoom, canEditCell } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
@@ -18,6 +26,72 @@ import {
 import { ALL_CORNERS, type Corner } from '@/lib/room-geometry';
 import { RoomZoneOverlay } from './RoomZoneOverlay';
 import { RoomViewSwitcher } from './RoomViewSwitcher';
+
+/**
+ * Read a File as a data: URL so it survives a page reload. Mirrors the
+ * helper in FreeformView — kept local here so pasting an image into the
+ * tile canvas can hand it to `addObjectAsset` without round-tripping
+ * through the freeform store.
+ */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Encode raw SVG markup as a base64 data URL (UTF-8 safe). */
+function svgMarkupToDataUrl(markup: string): string {
+  const bytes = new TextEncoder().encode(markup);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return 'data:image/svg+xml;base64,' + btoa(bin);
+}
+
+/** Heuristic — does this string look like a self-contained SVG document? */
+function looksLikeSvgMarkup(text: string): boolean {
+  const t = text.trim();
+  return /^<\?xml[^>]*\?>\s*<svg[\s>]/i.test(t) || /^<svg[\s>]/i.test(t);
+}
+
+/**
+ * Build the Path2D segment list for a TileCollision in object-local coords.
+ * Mirrors `collisionToPath` from `lib/freeform-geom.ts` — kept inline so
+ * the renderer (Canvas2D, no SVG path strings) can stroke/fill directly
+ * via Path2D.
+ */
+function buildCollisionPath2D(c: { anchors: TilePenAnchor[]; closed: boolean }): Path2D {
+  const p = new Path2D();
+  if (c.anchors.length === 0) return p;
+  const a0 = c.anchors[0];
+  p.moveTo(a0.x, a0.y);
+  for (let i = 1; i < c.anchors.length; i++) {
+    const prev = c.anchors[i - 1];
+    const cur = c.anchors[i];
+    appendSegment(p, prev, cur);
+  }
+  if (c.closed) {
+    appendSegment(p, c.anchors[c.anchors.length - 1], a0);
+    p.closePath();
+  }
+  return p;
+}
+
+function appendSegment(p: Path2D, prev: TilePenAnchor, cur: TilePenAnchor) {
+  const hasOut = prev.outX !== undefined && prev.outY !== undefined;
+  const hasIn = cur.inX !== undefined && cur.inY !== undefined;
+  if (hasOut || hasIn) {
+    const c1x = hasOut ? prev.x + (prev.outX as number) : prev.x;
+    const c1y = hasOut ? prev.y + (prev.outY as number) : prev.y;
+    const c2x = hasIn ? cur.x + (cur.inX as number) : cur.x;
+    const c2y = hasIn ? cur.y + (cur.inY as number) : cur.y;
+    p.bezierCurveTo(c1x, c1y, c2x, c2y, cur.x, cur.y);
+  } else {
+    p.lineTo(cur.x, cur.y);
+  }
+}
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
@@ -41,6 +115,30 @@ import { RoomViewSwitcher } from './RoomViewSwitcher';
 export function TileView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  /** Hidden file picker for the toolbar's Add Image button. Same shape as
+   *  FreeformView's `fileInputRef` so the wiring is identical (multi-file,
+   *  image/* + svg, fileToDataUrl probe). */
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  /**
+   * Last canvas-DEVICE-pixel cursor position, kept so paste/drop can land
+   * the new image at the cursor instead of dead-centre when the user has
+   * the canvas hovered. Stored in the same units as `eventCanvasCoords`
+   * output (post DPR scaling) so screenToWorld() applies cleanly.
+   * Reset to null on pointerleave.
+   */
+  const cursorCanvasRef = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * Cursor position in object-local coords for the currently-pending pen
+   * path's owner. Drives the live rubber-band line from the last anchor
+   * to the cursor while the user is drawing.
+   */
+  const cursorLocalRef = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * Bridge between the JSX-mounted `<input type="file">` and the file-drop
+   * handler defined inside the canvas useEffect (where camera + helpers
+   * are in scope). Re-assigned on every effect mount; cleared on unmount.
+   */
+  const fileInputHandlerRef = useRef<((files: FileList | null) => void) | null>(null);
 
   const stateRef = useRef(useTile.getState());
   useEffect(() => useTile.subscribe((s) => { stateRef.current = s; }), []);
@@ -660,6 +758,29 @@ export function TileView() {
         ctx!.drawImage(img, -obj.width / 2, -obj.height / 2, obj.width, obj.height);
         ctx!.restore();
 
+        // Pen-drawn collision boundaries — always visible (not just on
+        // selection) so the user can see what they've drawn at a glance,
+        // matching FreeformView's behaviour. Drawn in the object's LOCAL
+        // rotated frame so they ride along with the sprite.
+        const collisions = obj.collisions ?? [];
+        if (collisions.length > 0) {
+          ctx!.save();
+          ctx!.translate(obj.x, obj.y);
+          if (obj.rotation) ctx!.rotate(obj.rotation * Math.PI / 180);
+          for (const c of collisions) {
+            const path = buildCollisionPath2D(c);
+            const isSel = c.id === s.selectedCollisionId;
+            ctx!.fillStyle = isSel ? 'rgba(56, 189, 248, 0.18)' : 'rgba(56, 189, 248, 0.10)';
+            ctx!.strokeStyle = isSel ? '#0284c7' : '#38bdf8';
+            ctx!.lineWidth = 2 / cam.zoom;
+            ctx!.lineJoin = 'round';
+            ctx!.lineCap = 'round';
+            if (c.closed) ctx!.fill(path);
+            ctx!.stroke(path);
+          }
+          ctx!.restore();
+        }
+
         if (obj.id === s.selectedObjectId) {
           // Bounding box: draw in the object's LOCAL rotated frame so the
           // box hugs the sprite even when rotated. Same trick the resize +
@@ -697,6 +818,62 @@ export function TileView() {
         }
       }
       ctx!.globalAlpha = 1;
+
+      // ── Pending pen path overlay ────────────────────────────────
+      // Drawn AFTER objects so committed sprites + collisions don't
+      // occlude the in-progress dashed polyline. The path is in the
+      // owning object's local frame (origin = object centre, un-rotated)
+      // so it visually attaches to the sprite the user is annotating.
+      if (s.tool === 'pen' && s.pendingPenObjectId && s.pendingPenAnchors.length > 0) {
+        const owner = s.objects.find((o) => o.id === s.pendingPenObjectId);
+        if (owner) {
+          ctx!.save();
+          ctx!.translate(owner.x, owner.y);
+          if (owner.rotation) ctx!.rotate(owner.rotation * Math.PI / 180);
+          const anchors = s.pendingPenAnchors;
+          // Solid amber stroke for the committed segments.
+          ctx!.strokeStyle = '#f59e0b';
+          ctx!.lineWidth = 2 / cam.zoom;
+          ctx!.lineJoin = 'round';
+          ctx!.lineCap = 'round';
+          ctx!.setLineDash([4 / cam.zoom, 3 / cam.zoom]);
+          ctx!.beginPath();
+          ctx!.moveTo(anchors[0].x, anchors[0].y);
+          for (let i = 1; i < anchors.length; i++) {
+            const a = anchors[i];
+            ctx!.lineTo(a.x, a.y);
+          }
+          ctx!.stroke();
+          // Live rubber-band — last anchor → cursor (in local coords).
+          if (cursorLocalRef.current && anchors.length > 0) {
+            const last = anchors[anchors.length - 1];
+            const cl = cursorLocalRef.current;
+            ctx!.setLineDash([3 / cam.zoom, 3 / cam.zoom]);
+            ctx!.globalAlpha = 0.5;
+            ctx!.beginPath();
+            ctx!.moveTo(last.x, last.y);
+            ctx!.lineTo(cl.x, cl.y);
+            ctx!.stroke();
+            ctx!.globalAlpha = 1;
+          }
+          ctx!.setLineDash([]);
+          // Anchor handles — square white-filled with amber border. The
+          // first anchor gets a slightly larger ring so the user sees
+          // where to click to close the loop.
+          for (let i = 0; i < anchors.length; i++) {
+            const a = anchors[i];
+            const rPx = (i === 0 ? 6 : 4) / cam.zoom;
+            ctx!.fillStyle = '#ffffff';
+            ctx!.strokeStyle = '#f59e0b';
+            ctx!.lineWidth = 1.5 / cam.zoom;
+            ctx!.beginPath();
+            ctx!.arc(a.x, a.y, rPx, 0, Math.PI * 2);
+            ctx!.fill();
+            ctx!.stroke();
+          }
+          ctx!.restore();
+        }
+      }
 
       // ── Fence component (procedural pixel-art posts + rails) ────
       // Edges first so posts overlap their ends. Edges are only drawn
@@ -1352,6 +1529,63 @@ export function TileView() {
         scheduleRender();
         return;
       }
+
+      if (s.tool === 'pen') {
+        // Pen tool requires a SELECTED object — anchors are stored in that
+        // object's local frame so they ride along with move/rotate/scale.
+        // Without a target, click-with-pen still picks an object (matches
+        // freeform: clicking a different image while pen-active reattaches
+        // the path to the new image). Empty-space click is a no-op.
+        const hit = pickObjectAt(w.x, w.y);
+        const targetId = s.pendingPenObjectId ?? s.selectedObjectId ?? hit?.id ?? null;
+        if (!targetId) {
+          if (hit) s.selectObject(hit.id);
+          scheduleRender();
+          return;
+        }
+        const target = s.objects.find((o) => o.id === targetId);
+        if (!target) return;
+        // Convert world cursor → object-local (origin = object centre,
+        // un-rotated). Same maths as the rotation/resize code paths.
+        const dx = w.x - target.x;
+        const dy = w.y - target.y;
+        const r = -(target.rotation || 0) * Math.PI / 180;
+        const lx = dx * Math.cos(r) - dy * Math.sin(r);
+        const ly = dx * Math.sin(r) + dy * Math.cos(r);
+
+        // First click on this object → start a fresh path AND select the
+        // object so the rest of the toolbar (resize, hue) reflects the
+        // pen's owner.
+        if (!s.pendingPenObjectId) {
+          if (s.selectedObjectId !== target.id) s.selectObject(target.id);
+          s.beginPenPath(target.id);
+          s.addPenAnchor({ x: lx, y: ly });
+          scheduleRender();
+          return;
+        }
+
+        // Continuing a path on the SAME object — close + commit if we
+        // clicked back near the first anchor (within ~8 screen px), else
+        // append a fresh anchor.
+        const anchors = s.pendingPenAnchors;
+        if (anchors.length >= 2) {
+          const first = anchors[0];
+          const distLocal = Math.hypot(lx - first.x, ly - first.y);
+          // Convert pen-tool click hit radius from screen pixels →
+          // object-local coords. The pen anchors live in un-rotated local
+          // space, so a screen radius of N px = (N / zoom) world units →
+          // (N / zoom) local units (uniform scale, no rotation distortion).
+          const screenHitR = 8 / s.camera.zoom;
+          if (distLocal <= screenHitR) {
+            s.commitPenPath(true);
+            scheduleRender();
+            return;
+          }
+        }
+        s.addPenAnchor({ x: lx, y: ly });
+        scheduleRender();
+        return;
+      }
       if (s.tool === 'paint') {
         isDrawing = 'paint';
         s.beginUndoGroup();
@@ -1377,6 +1611,26 @@ export function TileView() {
 
     function onPointerMove(e: PointerEvent) {
       const cc = eventCanvasCoords(e);
+      // Track canvas-device-pixel cursor for paste/drop fallback drops.
+      cursorCanvasRef.current = { x: cc.x, y: cc.y };
+      // Live rubber-band — when a pen path is in progress, derive the
+      // owning object's local coords for the cursor so the dashed line
+      // from the last anchor follows the pointer in real time.
+      const sNow = stateRef.current;
+      if (sNow.tool === 'pen' && sNow.pendingPenObjectId) {
+        const w0 = screenToWorld(cc.x, cc.y);
+        const target = sNow.objects.find((o) => o.id === sNow.pendingPenObjectId);
+        if (target) {
+          const dx = w0.x - target.x;
+          const dy = w0.y - target.y;
+          const r = -(target.rotation || 0) * Math.PI / 180;
+          cursorLocalRef.current = {
+            x: dx * Math.cos(r) - dy * Math.sin(r),
+            y: dx * Math.sin(r) + dy * Math.cos(r),
+          };
+          scheduleRender();
+        }
+      }
       if (isPanning) {
         const cam = stateRef.current.camera;
         const dx = (e.clientX - panStart.x) * (canvas!.width / canvas!.getBoundingClientRect().width);
@@ -1471,7 +1725,173 @@ export function TileView() {
 
     function onPointerLeave() {
       hoverRef.current = null;
+      cursorCanvasRef.current = null;
+      cursorLocalRef.current = null;
       scheduleRender();
+    }
+
+    /**
+     * Place an array of image sources onto the canvas as TileObjects.
+     * Used by the file picker, paste, and drag-and-drop. Probes natural
+     * dimensions to preserve aspect ratio (matches FreeformView's
+     * `placeImageSources`). Each image becomes a fresh ObjectAsset (so
+     * subsequent re-pastes share the asset) and a TileObject placed at
+     * the drop world coords (defaults to viewport centre).
+     */
+    function placeImageSources(
+      sources: Array<{ src: string; name: string }>,
+      drop?: { x: number; y: number },
+    ) {
+      if (sources.length === 0) return;
+      let cx = drop?.x;
+      let cy = drop?.y;
+      if (cx === undefined || cy === undefined) {
+        const center = screenToWorld(canvas!.width / 2, canvas!.height / 2);
+        cx = center.x; cy = center.y;
+      }
+      sources.forEach((s, i) => {
+        const probe = new Image();
+        probe.crossOrigin = 'anonymous';
+        const finalize = (nw: number, nh: number) => {
+          const maxDim = 320;
+          const ratio = nw / nh;
+          const w = ratio >= 1 ? maxDim : maxDim * ratio;
+          const h = ratio >= 1 ? maxDim / ratio : maxDim;
+          const st = useTile.getState();
+          // Cascade subsequent drops a few px so a multi-select doesn't
+          // stack identical sprites on top of each other.
+          const px = (cx as number) + i * 24;
+          const py = (cy as number) + i * 24;
+          const baseName = s.name.replace(/\.[^.]+$/, '') || 'pasted';
+          const { assetId, styleId } = st.addObjectAsset({
+            name: baseName,
+            dataUrl: s.src,
+            width: nw || w,
+            height: nh || h,
+          });
+          const objId = st.addObject({
+            layerId: st.activeLayerId,
+            x: px,
+            y: py,
+            assetId,
+            styleId,
+            width: w,
+            height: h,
+            rotation: 0,
+            flipX: false, flipY: false,
+            hue: 0,
+            name: baseName,
+          });
+          st.selectObject(objId);
+          scheduleRender();
+        };
+        probe.onload = () => finalize(probe.naturalWidth || 1, probe.naturalHeight || 1);
+        probe.onerror = () => finalize(1, 1);
+        probe.src = s.src;
+      });
+    }
+
+    function onFilesPicked(files: FileList | null) {
+      const arr = files ? Array.from(files).filter((f) =>
+        f.type.startsWith('image/') || /\.svg$/i.test(f.name),
+      ) : [];
+      if (arr.length === 0) return;
+      const drop = cursorCanvasRef.current
+        ? screenToWorld(cursorCanvasRef.current.x, cursorCanvasRef.current.y)
+        : undefined;
+      Promise.all(arr.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name })))
+        .then((sources) => placeImageSources(sources, drop))
+        .catch((err) => console.error('[tile] file read failed', err));
+    }
+    fileInputHandlerRef.current = onFilesPicked;
+
+    function onPaste(ev: ClipboardEvent) {
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+      const cd = ev.clipboardData;
+      if (!cd) return;
+      const files: File[] = [];
+      for (const item of Array.from(cd.items)) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      const httpSources: Array<{ src: string; name: string }> = [];
+      const svgSources: Array<{ src: string; name: string }> = [];
+      if (files.length === 0) {
+        const text = cd.getData('text/plain') || cd.getData('text/html') || '';
+        if (looksLikeSvgMarkup(text)) {
+          svgSources.push({ src: svgMarkupToDataUrl(text), name: 'pasted.svg' });
+        } else {
+          const uri = cd.getData('text/uri-list') || cd.getData('text/plain');
+          const trimmed = uri?.trim();
+          if (trimmed && /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?.*)?$/i.test(trimmed)) {
+            httpSources.push({
+              src: trimmed,
+              name: trimmed.split('/').pop()?.split('?')[0] ?? 'image',
+            });
+          }
+        }
+      }
+      if (files.length === 0 && httpSources.length === 0 && svgSources.length === 0) return;
+      ev.preventDefault();
+      const drop = cursorCanvasRef.current
+        ? screenToWorld(cursorCanvasRef.current.x, cursorCanvasRef.current.y)
+        : undefined;
+      if (httpSources.length > 0) placeImageSources(httpSources, drop);
+      if (svgSources.length > 0) placeImageSources(svgSources, drop);
+      if (files.length > 0) {
+        Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name || 'pasted' })))
+          .then((sources) => placeImageSources(sources, drop))
+          .catch((err) => console.error('[tile] paste read failed', err));
+      }
+    }
+
+    function onDragOver(ev: DragEvent) {
+      if (!ev.dataTransfer) return;
+      const types = Array.from(ev.dataTransfer.types);
+      if (types.includes('Files') || types.some((t) => t.startsWith('text/uri-list') || t.startsWith('text/plain'))) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'copy';
+      }
+    }
+
+    function onDrop(ev: DragEvent) {
+      ev.preventDefault();
+      const dt = ev.dataTransfer;
+      if (!dt) return;
+      const files: File[] = [];
+      for (const f of Array.from(dt.files)) {
+        if (f.type.startsWith('image/') || /\.svg$/i.test(f.name)) files.push(f);
+      }
+      const httpSources: Array<{ src: string; name: string }> = [];
+      const svgSources: Array<{ src: string; name: string }> = [];
+      if (files.length === 0) {
+        const text = dt.getData('text/plain') || dt.getData('text/html') || '';
+        if (looksLikeSvgMarkup(text)) {
+          svgSources.push({ src: svgMarkupToDataUrl(text), name: 'dropped.svg' });
+        } else {
+          const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
+          const trimmed = uri?.trim();
+          if (trimmed && /^https?:\/\//i.test(trimmed)) {
+            httpSources.push({
+              src: trimmed,
+              name: trimmed.split('/').pop()?.split('?')[0] ?? 'image',
+            });
+          }
+        }
+      }
+      if (files.length === 0 && httpSources.length === 0 && svgSources.length === 0) return;
+      const cc = eventCanvasCoords(ev);
+      const drop = screenToWorld(cc.x, cc.y);
+      if (httpSources.length > 0) placeImageSources(httpSources, drop);
+      if (svgSources.length > 0) placeImageSources(svgSources, drop);
+      if (files.length > 0) {
+        Promise.all(files.map(async (f) => ({ src: await fileToDataUrl(f), name: f.name })))
+          .then((sources) => placeImageSources(sources, drop))
+          .catch((err) => console.error('[tile] drop read failed', err));
+      }
     }
 
     function onWheel(e: WheelEvent) {
@@ -1534,10 +1954,18 @@ export function TileView() {
       else if (e.key === '5') s.setTool('eyedropper');
       else if (e.key === '6') s.setTool('object');
       else if (e.key === '7') s.setTool('fence');
+      else if (e.key === 'p' || e.key === 'P') s.setTool('pen');
+      else if (e.key === 'Enter' && s.tool === 'pen' && s.pendingPenObjectId) {
+        // Open polyline finish — closes the path with `closed: false`.
+        // commitPenPath drops the pending state regardless of result.
+        s.commitPenPath(false);
+        scheduleRender();
+      }
       else if (e.key === 'Escape') {
         // Bail out of any modal tool back to SELECT. Also drops any
         // object selection so the side panel goes away — the same key
         // doing both feels right because Escape == "stop what I'm doing".
+        if (s.tool === 'pen' && s.pendingPenObjectId) s.cancelPenPath();
         s.setTool('select');
         if (s.selectedObjectId) s.selectObject(null);
         if (s.selectedFencePostKey) s.setSelectedFencePostKey(null);
@@ -1546,9 +1974,17 @@ export function TileView() {
       else if (e.key === '[') s.setBrushSize(s.brushSize - 1);
       else if (e.key === ']') s.setBrushSize(s.brushSize + 1);
       else if (e.key === 'g' || e.key === 'G') s.toggleGrid();
-      else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selectedObjectId) {
-        s.removeObject(s.selectedObjectId);
-        scheduleRender();
+      else if ((e.key === 'Delete' || e.key === 'Backspace')) {
+        // Pen-tool ergonomics: Delete the highlighted collision before the
+        // selected object so the user can clear a single bad polygon
+        // without losing the whole sprite.
+        if (s.selectedCollisionId && s.selectedObjectId) {
+          s.deleteCollision(s.selectedObjectId, s.selectedCollisionId);
+          scheduleRender();
+        } else if (s.selectedObjectId) {
+          s.removeObject(s.selectedObjectId);
+          scheduleRender();
+        }
       }
     }
 
@@ -1576,8 +2012,11 @@ export function TileView() {
     canvas.addEventListener('pointerleave', onPointerLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('contextmenu', onContextMenu);
+    canvas.addEventListener('dragover', onDragOver);
+    canvas.addEventListener('drop', onDrop);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('paste', onPaste);
 
     const ro = new ResizeObserver(resize);
     ro.observe(container);
@@ -1595,8 +2034,12 @@ export function TileView() {
       canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('dragover', onDragOver);
+      canvas.removeEventListener('drop', onDrop);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('paste', onPaste);
+      fileInputHandlerRef.current = null;
       ro.disconnect();
       unsub();
     };
@@ -1615,6 +2058,19 @@ export function TileView() {
       <canvas
         ref={canvasRef}
         style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
+      />
+      {/* Hidden picker — mirrors FreeformView. Accepts image/* and bare
+          .svg files (some browsers leave SVG with empty MIME). */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,image/svg+xml,.svg"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          fileInputHandlerRef.current?.(e.target.files);
+          e.target.value = '';
+        }}
       />
 
       {/* Room zones (cross + 4 lots) drawn on top of the canvas. Renders
@@ -1659,6 +2115,20 @@ export function TileView() {
         </ToolBtn>
         <ToolBtn active={tool === 'fence'} title="Fence (7) — click to add a post; click an adjacent cell to connect with a segment · Esc to exit" onClick={() => setTool(tool === 'fence' ? 'select' : 'fence')}>
           <Fence size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <ToolBtn
+          active={tool === 'pen'}
+          title="Pen (P) — draw a polygon boundary on the selected object · click first anchor or Enter to close · Esc to cancel"
+          onClick={() => setTool(tool === 'pen' ? 'select' : 'pen')}
+        >
+          <PenTool size={14} strokeWidth={2.2} />
+        </ToolBtn>
+        <Separator />
+        <ToolBtn
+          title="Add image… — upload a PNG/JPG/SVG and place it on the canvas (Cmd+V also pastes)"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <ImageIcon size={14} strokeWidth={2.2} />
         </ToolBtn>
         <Separator />
         <BrushPill value={brushSize} onChange={setBrushSize} />
@@ -1786,6 +2256,7 @@ function cursorForTool(tool: TileTool, spaceHeld: boolean): string {
     case 'fill': return 'crosshair';
     case 'eyedropper': return 'crosshair';
     case 'object': return 'copy';
+    case 'pen': return 'crosshair';
     case 'fence': return 'crosshair';
   }
 }

@@ -7,6 +7,7 @@ import {
   type Corner,
   type RoomOrigin,
   ALL_CORNERS,
+  getZone,
 } from '@/lib/room-geometry';
 
 /**
@@ -83,9 +84,17 @@ export interface RoomStore {
   /**
    * Assign the given player to a corner lot. If no corner is passed, picks
    * the first vacant one ('NW' → 'NE' → 'SW' → 'SE'). No-op when the lot
-   * is already taken (use Ship 2's randomized helper for shuffled assignment).
+   * is already taken; use `assignLotRandom` for shuffled assignment.
    */
   assignLot: (roomId: string, playerId: string, corner?: Corner) => Corner | null;
+  /**
+   * Random-assignment variant: shuffles the vacant corners and picks one.
+   * No-op if the room is full or the player already owns a lot in this
+   * room. Used by `ensureLocalPlayerHasLot` so the local player doesn't
+   * always land in NW — same code path will run server-side in Ship 3
+   * once the realtime channel exists.
+   */
+  assignLotRandom: (roomId: string, playerId: string) => Corner | null;
   /** Set the local player's active room — used when Ship 3 lands and the
    *  player joins a remote room. Also sets currentRoomId. */
   setCurrentRoom: (roomId: string | null) => void;
@@ -184,6 +193,33 @@ export const useRoom = create<RoomStore>()(persist((set, get) => ({
     return assigned;
   },
 
+  assignLotRandom: (roomId, playerId) => {
+    let assigned: Corner | null = null;
+    set((s) => {
+      const rooms = s.rooms.map((r) => {
+        if (r.id !== roomId) return r;
+        const alreadyHere = ALL_CORNERS.find((c) => r.lots[c].ownerId === playerId);
+        if (alreadyHere) {
+          assigned = alreadyHere;
+          return r;
+        }
+        const vacant = ALL_CORNERS.filter((c) => r.lots[c].ownerId === null);
+        if (vacant.length === 0) return r;
+        // Fisher-Yates is overkill for n=4 — a single random index works.
+        const target = vacant[Math.floor(Math.random() * vacant.length)];
+        assigned = target;
+        const lots: Record<Corner, Lot> = {
+          ...r.lots,
+          [target]: { corner: target, ownerId: playerId },
+        };
+        const players = r.players.includes(playerId) ? r.players : [...r.players, playerId];
+        return { ...r, lots, players };
+      });
+      return { rooms };
+    });
+    return assigned;
+  },
+
   setCurrentRoom: (roomId) => set({ currentRoomId: roomId }),
   setCurrentPlayerId: (id) => set({ currentPlayerId: id }),
   setViewMode: (mode) => set({ viewMode: mode }),
@@ -204,7 +240,10 @@ export const useRoom = create<RoomStore>()(persist((set, get) => ({
       ALL_CORNERS.some((c) => r.lots[c].ownerId === null),
     );
     const targetId = vacant?.id ?? get().createRoom();
-    get().assignLot(targetId, playerId);
+    // Randomise assignment so repeated reloads don't always land the
+    // local player in NW. Ship 3 will run the same code path server-side
+    // once a Supabase channel hands out lots.
+    get().assignLotRandom(targetId, playerId);
     set({ currentRoomId: targetId });
     return targetId;
   },
@@ -214,3 +253,48 @@ export const useRoom = create<RoomStore>()(persist((set, get) => ({
   // (no PNG dataUrls or 90k-corner maps), so no need for a custom storage
   // shim like tile-store has.
 }));
+
+/**
+ * Permission resolver — pure function over a snapshot of room state.
+ * Returns true when `playerId` is allowed to paint / erase the cell at
+ * the given tile coords, false otherwise. Rules:
+ *
+ *   • Inside a room's CORNER LOT → only the lot's owner can edit.
+ *   • Inside a room's CROSS arm  → any player in that room can edit.
+ *   • Inside the MAIN WORLD area → any player can edit (collaborative).
+ *   • Outside every room and main-world → free canvas; anyone can edit.
+ *     (Ship 3+ may tighten this, e.g. only main-world space is paintable.)
+ *
+ * Read-only — doesn't mutate the store. Designed to be called from the
+ * paint/erase handlers in TileView, where the player needs an answer per
+ * cell at every brush step. Cheap: a linear scan over rooms (typically
+ * < 10) plus an axis-aligned rectangle check for main world.
+ */
+export function canEditCell(
+  snapshot: Pick<RoomStore, 'rooms' | 'mainWorld' | 'currentPlayerId'>,
+  x: number,
+  y: number,
+  playerIdOverride?: string,
+): boolean {
+  const playerId = playerIdOverride ?? snapshot.currentPlayerId;
+  // Main world: a half-plane below `mainWorld.origin.y` for now. Ship 4
+  // will tighten this when the procedural generator defines actual world
+  // bounds; for Ship 2 the relevant fact is "main-world cells are
+  // collaborative" so we just say any cell ≥ origin counts.
+  const mw = snapshot.mainWorld;
+  if (y >= mw.origin.y && x >= mw.origin.x) return true;
+  // Walk rooms and find the one (if any) containing this cell. Rooms are
+  // tiled left-to-right with a gap, so most cells fall in 'outside'.
+  for (const room of snapshot.rooms) {
+    const zone = getZone(x, y, room.origin);
+    if (zone === 'outside') continue;
+    if (zone === 'cross') {
+      return room.players.includes(playerId);
+    }
+    return room.lots[zone].ownerId === playerId;
+  }
+  // Cell lies outside every room and outside main-world space → free
+  // canvas. Anyone can paint (e.g. for the empty area between rooms while
+  // the layout is still being designed).
+  return true;
+}

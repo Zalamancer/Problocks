@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ArrowDownLeft, ArrowDownRight, ArrowUpLeft, ArrowUpRight } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useTile } from '@/store/tile-store';
 import { useRoom } from '@/store/room-store';
 import {
@@ -8,6 +10,7 @@ import {
   getCrossBounds,
   getCrossCenterBounds,
   getLotBounds,
+  type Corner,
   type TileBounds,
 } from '@/lib/room-geometry';
 
@@ -179,7 +182,9 @@ export function RoomZoneOverlay() {
             paint={paint}
             label={isMine ? `${c} (you)` : c}
             scale={scale}
-          />
+          >
+            <LotFacingArrow corner={c} colour={paint.label} />
+          </ZoneRect>
         );
       })}
 
@@ -201,7 +206,7 @@ interface ZonePaint {
 }
 
 function ZoneRect({
-  bounds, rectStyle, paint, label, scale, labelHidden,
+  bounds, rectStyle, paint, label, scale, labelHidden, children,
 }: {
   bounds: TileBounds;
   rectStyle: (b: TileBounds) => React.CSSProperties;
@@ -209,6 +214,7 @@ function ZoneRect({
   label: string;
   scale: number;
   labelHidden?: boolean;
+  children?: React.ReactNode;
 }) {
   const style = rectStyle(bounds);
   return (
@@ -245,6 +251,50 @@ function ZoneRect({
           {label}
         </span>
       )}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Diagonal arrow placed in each lot's CROSS-FACING corner (the corner of
+ * the lot rectangle nearest the cross centre), pointing toward the cross.
+ * This is the visual "auto-rotate" hint — every player's lot has a
+ * matching arrow, all pointing inward at the same social space, so it's
+ * clear at a glance which way is "front" for each corner.
+ */
+function LotFacingArrow({ corner, colour }: { corner: Corner; colour: string }) {
+  // Arrow icon + position correspond to the diagonal direction from the
+  // lot's outer corner toward its inner (cross-facing) corner:
+  //   NW lot → arrow at bottom-right pointing down-right.
+  //   NE lot → arrow at bottom-left pointing down-left.
+  //   SE lot → arrow at top-left pointing up-left.
+  //   SW lot → arrow at top-right pointing up-right.
+  const config: Record<Corner, { Icon: LucideIcon; pos: React.CSSProperties }> = {
+    NW: { Icon: ArrowDownRight, pos: { right: 8, bottom: 8 } },
+    NE: { Icon: ArrowDownLeft,  pos: { left: 8,  bottom: 8 } },
+    SE: { Icon: ArrowUpLeft,    pos: { left: 8,  top: 8 } },
+    SW: { Icon: ArrowUpRight,   pos: { right: 8, top: 8 } },
+  };
+  const { Icon, pos } = config[corner];
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        ...pos,
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        background: 'rgba(255, 253, 240, 0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: colour,
+        pointerEvents: 'none',
+      }}
+      title="Faces the cross — your lot's local 'front'"
+    >
+      <Icon size={14} strokeWidth={2.4} />
     </div>
   );
 }

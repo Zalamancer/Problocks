@@ -82,7 +82,7 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
         onChange={(id) => setTab(id as typeof tab)}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         {tab === 'character' ? (
           <CharacterTab
             character={character}
@@ -214,19 +214,25 @@ function CharacterTab({
 
   return (
     <>
-      <PanelSection title="Preview" collapsible defaultOpen>
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '1 / 1',
+          flexShrink: 0,
+          background: 'rgba(0,0,0,0.06)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+          overflow: 'hidden',
+          padding: 12,
+        }}
+      >
         <div
           style={{
-            width: '100%',
-            aspectRatio: '1 / 1',
-            background: 'var(--pb-cream-2)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 8,
+            position: 'absolute',
+            inset: 12,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            overflow: 'hidden',
-            position: 'relative',
           }}
         >
           <CellThumb
@@ -234,45 +240,12 @@ function CharacterTab({
             cols={character.cols}
             rows={character.rows}
             cell={DIR_CELL[previewDir]}
-            size={'80%'}
+            size={'88%'}
           />
-          <span
-            style={{
-              position: 'absolute',
-              bottom: 6,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: 0.6,
-              color: 'var(--pb-ink-muted)',
-              textTransform: 'uppercase',
-            }}
-          >
-            {DIR_LABEL[previewDir]}
-          </span>
         </div>
-        {pinnedDir && (
-          <button
-            type="button"
-            onClick={() => onPickDir(pinnedDir)}
-            style={{
-              alignSelf: 'flex-start',
-              fontSize: 10,
-              fontWeight: 700,
-              color: 'var(--pb-ink-muted)',
-              background: 'transparent',
-              border: 0,
-              padding: '4px 0',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-            }}
-          >
-            Open animation slot →
-          </button>
-        )}
-      </PanelSection>
+      </div>
 
+      <div className="px-4 py-4 flex flex-col gap-4">
       <PanelSection title="Rotation" collapsible defaultOpen>
         <div
           style={{
@@ -356,6 +329,7 @@ function CharacterTab({
           step={1}
         />
       </PanelSection>
+      </div>
     </>
   );
 }
@@ -376,68 +350,68 @@ function AnimationsTab({
 
   return (
     <>
-      <PanelSection title="Direction" collapsible defaultOpen>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {CHARACTER_DIRS.map((dir) => {
-            const isCurrent = dir === activeDir;
-            const hasAnim = !!character.animations?.[dir];
-            return (
-              <button
-                key={dir}
-                type="button"
-                onClick={() => setActiveDir(dir)}
-                className="flex items-center gap-2"
-                style={{
-                  padding: '6px 8px 6px 6px',
-                  background: isCurrent ? 'var(--pb-butter)' : 'transparent',
-                  border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'transparent'}`,
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <CellThumb
-                  src={character.src}
-                  cols={character.cols}
-                  rows={character.rows}
-                  cell={DIR_CELL[dir]}
-                  size={28}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 11,
-                    fontWeight: 800,
-                    color: 'var(--pb-ink)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {DIR_LABEL[dir]}
-                </span>
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    letterSpacing: 0.4,
-                    color: hasAnim ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {hasAnim ? '4×4' : 'Empty'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </PanelSection>
+      <AnimationSlot characterId={character.id} direction={activeDir} />
 
-      <PanelSection title={`Sprite sheet — ${DIR_LABEL[activeDir]}`} collapsible defaultOpen>
-        <AnimationSlot characterId={character.id} direction={activeDir} />
-      </PanelSection>
+      <div className="px-4 py-4 flex flex-col gap-4">
+        <PanelSection title="Direction" collapsible defaultOpen>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {CHARACTER_DIRS.map((dir) => {
+              const isCurrent = dir === activeDir;
+              const hasAnim = !!character.animations?.[dir];
+              return (
+                <button
+                  key={dir}
+                  type="button"
+                  onClick={() => setActiveDir(dir)}
+                  className="flex items-center gap-2"
+                  style={{
+                    padding: '6px 8px 6px 6px',
+                    background: isCurrent ? 'var(--pb-butter)' : 'transparent',
+                    border: `1.5px solid ${isCurrent ? 'var(--pb-butter-ink)' : 'transparent'}`,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <CellThumb
+                    src={character.src}
+                    cols={character.cols}
+                    rows={character.rows}
+                    cell={DIR_CELL[dir]}
+                    size={28}
+                  />
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: 'var(--pb-ink)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {DIR_LABEL[dir]}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      letterSpacing: 0.4,
+                      color: hasAnim ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {hasAnim ? '4×4' : 'Empty'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </PanelSection>
+      </div>
     </>
   );
 }
@@ -517,7 +491,7 @@ function AnimationSlot({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <>
       <input
         ref={fileInputRef}
         type="file"
@@ -531,15 +505,22 @@ function AnimationSlot({
       />
 
       {animation ? (
-        <>
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '1 / 1',
+            flexShrink: 0,
+            background: 'rgba(0,0,0,0.06)',
+            borderBottom: '1.5px solid var(--pb-line-2)',
+            overflow: 'hidden',
+            padding: 12,
+          }}
+        >
           <div
             style={{
-              width: '100%',
-              aspectRatio: '1 / 1',
-              background: 'var(--pb-cream-2)',
-              border: '1.5px solid var(--pb-line-2)',
-              borderRadius: 8,
-              padding: 4,
+              position: 'absolute',
+              inset: 12,
               display: 'grid',
               gridTemplateColumns: `repeat(${animation.cols}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${animation.rows}, minmax(0, 1fr))`,
@@ -558,24 +539,53 @@ function AnimationSlot({
               />
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <PanelActionButton
-              icon={Upload}
-              fullWidth
-              loading={uploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploading ? 'Uploading…' : 'Replace'}
-            </PanelActionButton>
-            <PanelActionButton
-              variant="destructive"
-              icon={Trash2}
-              onClick={() => setCharacterAnimation(characterId, direction, null)}
-            >
-              Clear
-            </PanelActionButton>
-          </div>
-        </>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+            title={uploading ? 'Uploading…' : 'Replace sheet'}
+            disabled={uploading}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 44,
+              width: 30,
+              height: 30,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 8,
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--pb-ink)',
+              opacity: uploading ? 0.55 : 1,
+            }}
+          >
+            <Upload size={14} strokeWidth={2.4} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setCharacterAnimation(characterId, direction, null); }}
+            title="Clear sheet"
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              width: 30,
+              height: 30,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--pb-coral-ink)',
+            }}
+          >
+            <Trash2 size={14} strokeWidth={2.4} />
+          </button>
+        </div>
       ) : (
         <button
           type="button"
@@ -589,26 +599,27 @@ function AnimationSlot({
           disabled={uploading}
           style={{
             width: '100%',
-            padding: 16,
-            background: dragging ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-            border: `1.5px dashed ${dragging ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-            borderRadius: 8,
+            aspectRatio: '1 / 1',
+            flexShrink: 0,
+            background: dragging ? 'var(--pb-butter)' : 'rgba(0,0,0,0.06)',
+            borderBottom: '1.5px solid var(--pb-line-2)',
             cursor: uploading ? 'not-allowed' : 'pointer',
             opacity: uploading ? 0.55 : 1,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 6,
             fontFamily: 'inherit',
             color: 'var(--pb-ink)',
           }}
         >
-          <Upload size={18} strokeWidth={2.4} style={{ color: 'var(--pb-ink-muted)' }} />
-          <span style={{ fontSize: 11, fontWeight: 800 }}>
+          <Upload size={20} strokeWidth={2.4} style={{ color: 'var(--pb-ink-muted)' }} />
+          <span style={{ fontSize: 12, fontWeight: 800 }}>
             {uploading ? 'Uploading…' : 'Upload 4×4 sheet'}
           </span>
-          <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-            16 frames laid out left-to-right, top-to-bottom for {DIR_LABEL[direction]}.
+          <span style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', textAlign: 'center', lineHeight: 1.4, padding: '0 24px' }}>
+            16 frames left-to-right, top-to-bottom for {DIR_LABEL[direction]}.
           </span>
         </button>
       )}
@@ -617,7 +628,7 @@ function AnimationSlot({
         <p
           role="alert"
           style={{
-            margin: 0,
+            margin: '8px 16px 0',
             padding: '6px 8px',
             fontSize: 11,
             fontWeight: 600,
@@ -632,7 +643,7 @@ function AnimationSlot({
           {error}
         </p>
       )}
-    </div>
+    </>
   );
 }
 

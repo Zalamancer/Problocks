@@ -483,6 +483,7 @@ function AnimationsTab({
         onUpload={() => addInputRef.current?.click()}
         directionLabel={DIR_LABEL[activeDir]}
         uploading={uploading}
+        fps={character.fps}
       />
 
       <div className="px-4 py-4 flex flex-col gap-3">
@@ -730,22 +731,45 @@ function AnimationNameField({
 
 /**
  * Edge-to-edge top tile for the Animations tab. When an animation is
- * selected, paints the full 4×4 grid (one cell per frame) so the user
- * sees every frame of the action at a glance, with floating Replace /
- * Delete buttons in the corner. When no animation is uploaded yet for
- * the active direction, paints a dashed upload prompt.
+ * selected, autoplays the sheet — one frame at a time, cycling through
+ * the cols×rows cells at the character's `fps` (default 8) so the user
+ * sees the motion the way it'll render in-game. Floating Replace /
+ * Delete buttons sit on top. When no animation is uploaded yet for the
+ * active direction, paints a dashed upload prompt instead.
  */
 function AnimationPreview({
-  animation, directionLabel, uploading,
+  animation, directionLabel, uploading, fps,
   onReplace, onClear, onUpload,
 }: {
   animation: CharacterAnimation | null;
   directionLabel: string;
   uploading: boolean;
+  /** Frame rate for autoplay. Defaults to 8 so brand-new characters
+   *  without a fps yet still preview at a sensible cadence. */
+  fps?: number;
   onReplace: () => void;
   onClear?: () => void;
   onUpload: () => void;
 }) {
+  const [frame, setFrame] = useState(0);
+  // Reset frame on src change so swapping/replacing the sheet doesn't
+  // briefly show a frame index past the new sheet's last cell.
+  useEffect(() => {
+    setFrame(0);
+  }, [animation?.src, animation?.cols, animation?.rows]);
+  // Autoplay loop. Stops cleanly when there's no animation OR the cell
+  // count is 0; otherwise ticks at 1/fps and wraps back to 0.
+  useEffect(() => {
+    if (!animation) return;
+    const total = animation.cols * animation.rows;
+    if (total <= 1) return;
+    const interval = 1000 / Math.max(1, fps ?? 8);
+    const handle = window.setInterval(() => {
+      setFrame((f) => (f + 1) % total);
+    }, interval);
+    return () => window.clearInterval(handle);
+  }, [animation, fps]);
+
   if (!animation) {
     return (
       <button
@@ -797,23 +821,19 @@ function AnimationPreview({
         style={{
           position: 'absolute',
           inset: 12,
-          display: 'grid',
-          gridTemplateColumns: `repeat(${animation.cols}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${animation.rows}, minmax(0, 1fr))`,
-          gap: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {Array.from({ length: animation.cols * animation.rows }, (_, i) => (
-          <CellThumb
-            key={i}
-            src={animation.src}
-            cols={animation.cols}
-            rows={animation.rows}
-            cell={i}
-            size={'100%'}
-            bare
-          />
-        ))}
+        <CellThumb
+          src={animation.src}
+          cols={animation.cols}
+          rows={animation.rows}
+          cell={frame}
+          size={'100%'}
+          bare
+        />
       </div>
       <button
         type="button"

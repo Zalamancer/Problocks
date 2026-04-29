@@ -604,15 +604,21 @@ function AnimationSlot({
 }
 
 /**
- * Render a single cell of a sprite sheet by clipping the source image
- * with `object-fit: none` and a negative offset, then scaling the cell
- * up to the requested `size`. Mirrors the technique used by
- * `CharacterCard` in `TileAssetsView` so the two surfaces show identical
- * thumbnails for a given (sheet, cell) pair.
+ * Render a single cell of a sprite sheet using a `background-image`
+ * trick: `background-size: cols×100% rows×100%` zooms the sheet so each
+ * cell fills the box, and `background-position` shifts the sheet so the
+ * requested `(col,row)` lands at (0,0).
  *
- * `size` accepts both pixel numbers (from list rows) and CSS strings
+ * This is more reliable than the absolute-positioned `<img>` percentages
+ * I tried first — those don't always isolate a single cell when the
+ * outer box itself uses a percentage width (e.g. `size = "80%"` inside a
+ * flex parent), which is what was making the Character preview look
+ * like the whole 3×3 sheet instead of one direction.
+ *
+ * `size` accepts both pixel numbers (list rows) and CSS strings
  * (`'80%'`, `'100%'`) so the same component works for the large preview
- * tile and the small list rows.
+ * tile, the small list rows, and the per-cell tiles inside the 4×4
+ * Animations grid.
  */
 function CellThumb({
   src, cols, rows, cell, size, bare,
@@ -627,34 +633,26 @@ function CellThumb({
   const col = cell % cols;
   const row = Math.floor(cell / cols);
   const sizeCss = typeof size === 'number' ? `${size}px` : size;
+  // Multi-cell sheets need cols/rows > 1 to make `cols / (cols-1)` etc
+  // resolve cleanly. With cols=1 or rows=1 the math collapses, but we
+  // never get those here — the panel only renders 3×3 source sheets and
+  // 4×4 animation sheets.
+  const bgPosX = cols > 1 ? `${(col / (cols - 1)) * 100}%` : '0%';
+  const bgPosY = rows > 1 ? `${(row / (rows - 1)) * 100}%` : '0%';
   return (
     <div
       style={{
         width: sizeCss,
         height: sizeCss,
-        position: 'relative',
-        overflow: 'hidden',
         background: bare ? 'rgba(0,0,0,0.04)' : 'rgba(0,0,0,0.03)',
         borderRadius: bare ? 2 : 4,
         flexShrink: 0,
+        backgroundImage: `url(${src})`,
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: `${cols * 100}% ${rows * 100}%`,
+        backgroundPosition: `${bgPosX} ${bgPosY}`,
+        imageRendering: 'pixelated',
       }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt=""
-        draggable={false}
-        style={{
-          position: 'absolute',
-          width: `${cols * 100}%`,
-          height: `${rows * 100}%`,
-          left: `${-col * 100}%`,
-          top: `${-row * 100}%`,
-          imageRendering: 'pixelated',
-          objectFit: 'fill',
-          pointerEvents: 'none',
-        }}
-      />
-    </div>
+    />
   );
 }

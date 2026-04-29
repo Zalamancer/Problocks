@@ -509,15 +509,11 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
 type CardActionVariant = 'edit' | 'delete';
 
 function CardActionButton({
-  variant, title, onClick, fullSize,
+  variant, title, onClick,
 }: {
   variant: CardActionVariant;
   title: string;
   onClick: (e: React.MouseEvent) => void;
-  /** When true, drops the fixed 28×28 square sizing and fills its
-   *  parent (used by CharacterCard's stacked column where each
-   *  button takes half of the row's height). */
-  fullSize?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const Icon = variant === 'edit' ? Pencil : Trash2;
@@ -532,15 +528,14 @@ function CardActionButton({
       style={{
         background: hovered ? 'var(--pb-cream-2)' : 'rgba(255,255,255,0.85)',
         border: `1px solid ${hovered ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-        borderRadius: fullSize ? 0 : 6,
+        borderRadius: 6,
         cursor: 'pointer',
         color: iconColor,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: fullSize ? 0 : 4,
+        padding: 4,
         margin: 0,
-        ...(fullSize
-          ? { flex: 1, width: 28, minWidth: 28 }
-          : { width: 26, height: 26 }),
+        width: 26,
+        height: 26,
         transition: 'background-color 120ms, border-color 120ms',
       }}
     >
@@ -2837,7 +2832,6 @@ function CharacterCard({
       variant="edit"
       title="Rename character"
       onClick={() => setEditingName(true)}
-      fullSize
     />
   );
   const deleteButton = (
@@ -2845,7 +2839,6 @@ function CharacterCard({
       variant="delete"
       title="Delete character"
       onClick={() => onRemove()}
-      fullSize
     />
   );
 
@@ -2950,12 +2943,9 @@ function CharacterCard({
 
   return (
     <div {...commonHandlers} style={containerStyle}>
-      <div
-        className="flex items-stretch gap-2"
-        style={{ padding: 0, minHeight: 56 }}
-      >
+      <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
         <CellThumb size={56} />
-        <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6 }}>
+        <div className="flex-1 min-w-0">
           {editingName ? (
             <input
               autoFocus
@@ -2997,16 +2987,7 @@ function CharacterCard({
           </div>
         </div>
         {showActions && !editingName && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0,
-              flexShrink: 0,
-              marginLeft: 'auto',
-              alignSelf: 'stretch',
-            }}
-          >
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
             {editButton}
             {deleteButton}
           </div>

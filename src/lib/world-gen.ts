@@ -75,17 +75,41 @@ function valueNoise(x: number, y: number, seed: number): number {
 }
 
 /**
- * Two-octave value noise — base scale + a halved-amplitude octave at
- * 2× frequency. Output normalised to [0, 1). The 0.66 / 0.33 weights
- * keep the dominant biome shape from the low-frequency pass while the
- * high-frequency pass adds enough texture variation to avoid blocky
- * patches.
+ * N-octave value noise. Each octave doubles frequency and multiplies
+ * amplitude by `roughness` (lacunarity 2, persistence configurable):
+ * roughness 0.5 ≈ classic Perlin-style fractal noise; roughness near 1
+ * gives a nearly-flat spectrum that looks scratchy; near 0 collapses to
+ * the base octave. Output is normalised to [0, 1) by dividing the
+ * accumulated value by the sum of amplitudes.
+ *
+ * Each octave also xors the seed with a different magic so adjacent
+ * octaves don't share lattice corners — without that, the layered
+ * value-noise grids visibly stack into a moiré pattern at high
+ * frequencies.
  */
-function fractalNoise(x: number, y: number, seed: number, scale: number): number {
-  const a = valueNoise(x / scale, y / scale, seed);
-  const b = valueNoise(x / (scale * 0.5), y / (scale * 0.5), seed ^ 0x9747b28c);
-  const v = a * 0.66 + b * 0.33;
-  return v;
+function fractalNoise(
+  x: number,
+  y: number,
+  seed: number,
+  scale: number,
+  octaves: number,
+  roughness: number,
+): number {
+  const oct = Math.max(1, Math.min(8, Math.floor(octaves)));
+  const r = Math.max(0, Math.min(0.99, roughness));
+  let amp = 1;
+  let freq = 1 / scale;
+  let sum = 0;
+  let total = 0;
+  let s = seed >>> 0;
+  for (let i = 0; i < oct; i++) {
+    sum += valueNoise(x * freq, y * freq, s) * amp;
+    total += amp;
+    amp *= r;
+    freq *= 2;
+    s = (s ^ 0x9747b28c) >>> 0;
+  }
+  return total > 0 ? sum / total : 0;
 }
 
 /**
@@ -172,19 +196,55 @@ export function generateRegion(args: {
    *  Larger = bigger blobs. ~16 fits a 64-cell starter zone with a
    *  few patches inside. */
   scale?: number;
+  /** How many fractal octaves to sum. 1 = smooth blobs only, 2 = the
+   *  classic shape, 3-4 = increasingly detailed shorelines. Past ~4 the
+   *  high-frequency noise just looks like static. */
+  octaves?: number;
+  /** Per-octave amplitude multiplier (a.k.a. persistence). 0.5 is the
+   *  Perlin default; lower values dampen detail, higher values blow it
+   *  up. Clamped to [0, 0.99] inside `fractalNoise`. */
+  roughness?: number;
   /** Optional per-texture weights — see `pickTextureForNoise`. Lets the
    *  caller skew the distribution (e.g. lots of grass, a thin border of
    *  sand) without rebuilding the palette. */
   weights?: Record<string, number>;
+  /**
+   * Optional radial fade. When set, cells outside the inner radius see
+   * their noise pulled toward 0 (so the lowest-band texture wins),
+   * giving the map an "island" look. `radius` is the falloff midpoint
+   * in cells; `inner` is the fraction of the radius that stays at full
+   * strength (default 0.6). Beyond `radius` the noise is fully zeroed.
+   */
+  island?: { radius: number; inner?: number };
   skipCell?: (cx: number, cy: number) => boolean;
 }): Array<{ cx: number; cy: number; texId: string }> {
-  const { x0, y0, x1, y1, seed, palette, scale = 18, weights, skipCell } = args;
+  const {
+    x0, y0, x1, y1, seed, palette,
+    scale = 18,
+    octaves = 2,
+    roughness = 0.5,
+    weights, island, skipCell,
+  } = args;
   if (palette.length === 0) return [];
   const out: Array<{ cx: number; cy: number; texId: string }> = [];
+  // Smootherstep helper for the falloff edge — same Hermite curve used
+  // for the noise interpolation, kept inline so this file stays free of
+  // module-internal coupling.
+  const smoothstep = (edge0: number, edge1: number, t: number) => {
+    const k = Math.max(0, Math.min(1, (t - edge0) / (edge1 - edge0)));
+    return k * k * (3 - 2 * k);
+  };
+  const innerFrac = Math.max(0, Math.min(0.95, island?.inner ?? 0.6));
   for (let cy = y0; cy < y1; cy++) {
     for (let cx = x0; cx < x1; cx++) {
       if (skipCell && skipCell(cx, cy)) continue;
-      const n = fractalNoise(cx, cy, seed, scale);
+      let n = fractalNoise(cx, cy, seed, scale, octaves, roughness);
+      if (island && island.radius > 0) {
+        const d = Math.hypot(cx, cy) / island.radius;
+        // 1 inside `inner`, fades smoothly to 0 at d == 1.
+        const falloff = 1 - smoothstep(innerFrac, 1, d);
+        n = n * falloff;
+      }
       const texId = pickTextureForNoise(n, palette, weights);
       if (texId) out.push({ cx, cy, texId });
     }

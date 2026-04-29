@@ -514,8 +514,12 @@ export function TileView() {
       if (ts.lowerTextureId) palette.push(ts.lowerTextureId);
     }
     if (palette.length > 0) {
-      const RESERVE = 64;  // half-extent in cells → 128×128 untouched
-      const RADIUS = 256;  // half-extent of the generated band
+      // Pull the half-extent from the user's reserve setting; the
+      // generated band always extends at least far enough past it to
+      // cover any sane viewport.
+      const RESERVE = tile.genReserveRadius;
+      const RADIUS = Math.max(256, RESERVE + 192);
+      const reserveShape = tile.genReserveShape;
       const cells = generateRegion({
         x0: -RADIUS,
         y0: -RADIUS,
@@ -524,8 +528,18 @@ export function TileView() {
         seed: tile.genSeed,
         palette,
         scale: tile.genScale,
+        octaves: tile.genOctaves,
+        roughness: tile.genRoughness,
         weights: tile.genTextureWeights,
-        skipCell: (cx, cy) => Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE,
+        island: tile.genIslandEnabled
+          ? { radius: tile.genIslandRadius }
+          : undefined,
+        skipCell: (cx, cy) => {
+          if (reserveShape === 'circle') {
+            return cx * cx + cy * cy < RESERVE * RESERVE;
+          }
+          return Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
+        },
       });
       if (cells.length > 0) {
         // Build the synthetic play layer in-memory, then publish it in one

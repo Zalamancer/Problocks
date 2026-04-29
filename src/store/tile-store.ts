@@ -795,6 +795,32 @@ export interface TileStore {
    *  newly-uploaded tilesets show up immediately. */
   genTextureWeights: Record<string, number>;
   setGenTextureWeight: (textureId: string, weight: number) => void;
+  /** Number of fractal octaves summed by the noise. 1 = smooth blobs,
+   *  2 = standard biomes, 3-4 = detailed shorelines. */
+  genOctaves: number;
+  setGenOctaves: (v: number) => void;
+  /** Per-octave amplitude multiplier (persistence). 0.5 ≈ classic
+   *  Perlin; higher = noisier, lower = smoother. */
+  genRoughness: number;
+  setGenRoughness: (v: number) => void;
+  /** When true, cells outside `genIslandRadius` fade toward the
+   *  lowest-band texture so the map reads as an island. */
+  genIslandEnabled: boolean;
+  setGenIslandEnabled: (v: boolean) => void;
+  /** Falloff midpoint in cells. Inside ~60% of this radius the noise is
+   *  full strength; the outer 40% smoothly fades to zero. */
+  genIslandRadius: number;
+  setGenIslandRadius: (v: number) => void;
+  /** Reserve half-extent (square) or radius (circle), in cells. The
+   *  Play-loop spawn pad lives at the centre of this; user paint inside
+   *  it survives generation. */
+  genReserveRadius: number;
+  setGenReserveRadius: (v: number) => void;
+  /** Square = legacy [-r..r]² zone. Circle = round zone of the same
+   *  radius — better when paired with `genIslandEnabled` so the reserve
+   *  stays inside the island shape. */
+  genReserveShape: 'square' | 'circle';
+  setGenReserveShape: (v: 'square' | 'circle') => void;
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
@@ -2021,6 +2047,18 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setGenTextureWeight: (textureId, weight) => set((s) => ({
     genTextureWeights: { ...s.genTextureWeights, [textureId]: Math.max(0, Math.min(2, weight)) },
   })),
+  genOctaves: 2,
+  setGenOctaves: (v) => set({ genOctaves: Math.max(1, Math.min(4, Math.round(v))) }),
+  genRoughness: 0.5,
+  setGenRoughness: (v) => set({ genRoughness: Math.max(0, Math.min(0.99, v)) }),
+  genIslandEnabled: false,
+  setGenIslandEnabled: (v) => set({ genIslandEnabled: !!v }),
+  genIslandRadius: 200,
+  setGenIslandRadius: (v) => set({ genIslandRadius: Math.max(32, Math.min(512, Math.round(v))) }),
+  genReserveRadius: 64,
+  setGenReserveRadius: (v) => set({ genReserveRadius: Math.max(8, Math.min(256, Math.round(v))) }),
+  genReserveShape: 'square',
+  setGenReserveShape: (v) => set({ genReserveShape: v === 'circle' ? 'circle' : 'square' }),
 
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
@@ -2175,6 +2213,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     genSeed: s.genSeed,
     genScale: s.genScale,
     genTextureWeights: s.genTextureWeights,
+    genOctaves: s.genOctaves,
+    genRoughness: s.genRoughness,
+    genIslandEnabled: s.genIslandEnabled,
+    genIslandRadius: s.genIslandRadius,
+    genReserveRadius: s.genReserveRadius,
+    genReserveShape: s.genReserveShape,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {

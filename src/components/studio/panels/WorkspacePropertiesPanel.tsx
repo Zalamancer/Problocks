@@ -206,6 +206,18 @@ function TileGenerationSection() {
   const reroll = useTile((s) => s.rerollGenSeed);
   const scale = useTile((s) => s.genScale);
   const setScale = useTile((s) => s.setGenScale);
+  const octaves = useTile((s) => s.genOctaves);
+  const setOctaves = useTile((s) => s.setGenOctaves);
+  const roughness = useTile((s) => s.genRoughness);
+  const setRoughness = useTile((s) => s.setGenRoughness);
+  const islandEnabled = useTile((s) => s.genIslandEnabled);
+  const setIslandEnabled = useTile((s) => s.setGenIslandEnabled);
+  const islandRadius = useTile((s) => s.genIslandRadius);
+  const setIslandRadius = useTile((s) => s.setGenIslandRadius);
+  const reserveRadius = useTile((s) => s.genReserveRadius);
+  const setReserveRadius = useTile((s) => s.setGenReserveRadius);
+  const reserveShape = useTile((s) => s.genReserveShape);
+  const setReserveShape = useTile((s) => s.setGenReserveShape);
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const weights = useTile((s) => s.genTextureWeights);
@@ -263,6 +275,49 @@ function TileGenerationSection() {
         value={scale}
         onChange={setScale}
         min={4} max={64} step={1} precision={0}
+        suffix=" cells"
+      />
+      <PanelSlider
+        label="Octaves"
+        value={octaves}
+        onChange={setOctaves}
+        min={1} max={4} step={1} precision={0}
+      />
+      <PanelSlider
+        label="Roughness"
+        value={roughness}
+        onChange={setRoughness}
+        min={0} max={0.95} step={0.05} precision={2}
+      />
+      <PanelToggle
+        label="Island falloff"
+        description="Fade to lowest band outside the radius"
+        checked={islandEnabled}
+        onChange={setIslandEnabled}
+      />
+      {islandEnabled && (
+        <PanelSlider
+          label="Island radius"
+          value={islandRadius}
+          onChange={setIslandRadius}
+          min={32} max={512} step={1} precision={0}
+          suffix=" cells"
+        />
+      )}
+      <PanelSelect
+        label="Reserve shape"
+        value={reserveShape}
+        onChange={(v) => setReserveShape(v as 'square' | 'circle')}
+        options={[
+          { value: 'square', label: 'Square' },
+          { value: 'circle', label: 'Circle' },
+        ]}
+      />
+      <PanelSlider
+        label="Reserve size"
+        value={reserveRadius}
+        onChange={setReserveRadius}
+        min={8} max={256} step={1} precision={0}
         suffix=" cells"
       />
       {rows.length === 0 ? (

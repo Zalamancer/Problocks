@@ -6,8 +6,10 @@ import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
   Pencil, GripVertical, X, Layers, Globe2, Folder, FolderPlus,
-  Users,
+  Users, SlidersHorizontal,
 } from 'lucide-react';
+import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
+import { PanelSearchInput } from '@/components/ui';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
@@ -1635,7 +1637,13 @@ function ObjectsSection() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
-  const [collapsed, setCollapsed] = useState(false);
+  /** Toolbar search query (filters the asset list by case-insensitive
+   *  substring match on asset.name). Empty string = show everything. */
+  const [search, setSearch] = useState('');
+  /** Whether the filter dropdown next to the search bar is open. The
+   *  filter panel itself is a placeholder right now — real per-class /
+   *  per-style filters land here later. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   /** Per-class-folder open/closed state. Defaults to OPEN (entry absent
    *  → open) so users see what they just created without an extra click. */
   const [collapsedClasses, setCollapsedClasses] = useState<Record<string, boolean>>({});
@@ -1803,11 +1811,18 @@ function ObjectsSection() {
       .filter((c) => c.parentId === parentId)
       .sort((a, b) => a.sortIndex - b.sortIndex);
   }
-  /** Assets that belong to a class (null = root / uncategorised). */
+  /** Lower-cased search query — empty string when the user has not typed
+   *  anything. Computed once per render and reused in `assetsInClass` so
+   *  every list (root + every class folder) honours the search filter. */
+  const q = search.trim().toLowerCase();
+  /** Assets that belong to a class (null = root / uncategorised), with the
+   *  current search query applied. */
   function assetsInClass(classId: string | null): ObjectAsset[] {
     return assetList.filter((a) => {
       const cid = assetClassIds[a.id] ?? null;
-      return cid === classId;
+      if (cid !== classId) return false;
+      if (q && !a.name.toLowerCase().includes(q)) return false;
+      return true;
     });
   }
   /** Total assets recursively under a class (for the count badge). */
@@ -1873,139 +1888,101 @@ function ObjectsSection() {
         className="hidden"
       />
 
-      {/* Category header — mirrors ScenePanel category-row pattern: grape ToneBadge + label + count, with a + IconButton on the right and a chevron. */}
-      <div
-        onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((c) => !c); } }}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '8px 14px',
-          cursor: 'pointer',
-          transition: 'background 120ms ease',
-          userSelect: 'none',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-      >
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--pb-grape)',
-            color: 'var(--pb-grape-ink)',
-            border: '1.5px solid var(--pb-grape-ink)',
-          }}
-        >
-          <Box size={14} strokeWidth={2.2} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: 'var(--pb-ink)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Objects
+      {/* Search / filter / new-class / upload toolbar — mirrors the
+          search+filter+action pattern from Freeform3DAssetsView (3D
+          Freeform). Replaces the previous grape-icon chunky-pastel
+          accordion header. */}
+      <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 [&>div]:!mb-0">
+            <PanelSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search objects..."
+            />
           </div>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="relative shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: filtersOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              border: `1.5px solid ${filtersOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: filtersOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+              color: filtersOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            title="Filters"
+          >
+            <SlidersHorizontal size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            onClick={() => {
+              const id = addObjectClass({ name: 'New class', parentId: null });
+              setRenamingClassId(id);
+            }}
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            title="New class folder (e.g. Trees, Buildings)"
+          >
+            <FolderPlus size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              opacity: uploading ? 0.55 : 1,
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            title={uploading ? 'Uploading…' : 'Upload sprite'}
+          >
+            <Upload size={15} strokeWidth={2.2} />
+          </button>
+        </div>
+        {filtersOpen && (
           <div
             style={{
-              fontSize: 10.5,
+              padding: '8px 10px',
+              fontSize: 11,
               color: 'var(--pb-ink-muted)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              fontStyle: 'italic',
+              border: '1.5px dashed var(--pb-line-2)',
+              borderRadius: 8,
+              background: 'var(--pb-cream-2)',
+              textAlign: 'center',
             }}
           >
-            {assetList.length} {assetList.length === 1 ? 'asset' : 'assets'} · Sprites you can drop on the canvas
+            Filters coming soon — sort, class, and tag pickers.
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            const id = addObjectClass({ name: 'New class', parentId: null });
-            setRenamingClassId(id);
-            setCollapsed(false);
-          }}
-          aria-label="Add class"
-          title="Add class folder (e.g. Trees, Buildings)"
-          style={{
-            width: 26,
-            height: 26,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 7,
-            color: 'var(--pb-ink-soft)',
-            cursor: 'pointer',
-          }}
-        >
-          <FolderPlus size={13} strokeWidth={2.4} />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-          disabled={uploading}
-          aria-label={uploading ? 'Uploading…' : 'Upload sprite'}
-          title={uploading ? 'Uploading…' : 'Upload sprite'}
-          style={{
-            width: 26,
-            height: 26,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 7,
-            color: 'var(--pb-ink-soft)',
-            cursor: uploading ? 'not-allowed' : 'pointer',
-            opacity: uploading ? 0.55 : 1,
-          }}
-        >
-          <Upload size={13} strokeWidth={2.4} />
-        </button>
-        <span
-          aria-label={collapsed ? 'Expand' : 'Collapse'}
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--pb-ink-muted)',
-            flexShrink: 0,
-          }}
-        >
-          {collapsed ? <ChevronRight size={14} strokeWidth={2.4} /> : <ChevDown size={14} strokeWidth={2.4} />}
-        </span>
+        )}
       </div>
 
-      {!collapsed && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 14px 14px' }}>
-          {error && (
-            <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600, margin: 0 }}>
-              {error}
-            </p>
-          )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 14px 14px' }}>
+        {error && (
+          <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600, margin: 0 }}>
+            {error}
+          </p>
+        )}
 
           {(() => {
             const renderAssetCard = (asset: ObjectAsset) => (
@@ -2301,20 +2278,19 @@ function ObjectsSection() {
             );
           })()}
 
-          {cloudStatus !== 'idle' && cloudStatus !== 'synced' && (
-            <CloudStatusPill status={cloudStatus} />
-          )}
-        </div>
-      )}
+        {cloudStatus !== 'idle' && cloudStatus !== 'synced' && (
+          <CloudStatusPill status={cloudStatus} />
+        )}
+      </div>
     </div>
   );
 }
 
 /**
  * Three-tab toggle for the 2D Tile Assets panel — Objects / Groups /
- * Characters. Renders as a row of three chunky-pastel pill buttons
- * (paper bg + 1.5px ink border + 0 2px 0 ink pop-shadow on active),
- * matching the rest of the Problocks studio surfaces.
+ * Characters. Mirrors the [Generate | History] `PanelIconTabs` toggle from
+ * `panels/PartStudioPanel.tsx`: the active tab expands into a white pill
+ * and shows its label, inactive tabs collapse to icon-only.
  */
 type AssetsSubTabId = 'objects' | 'groups' | 'characters';
 
@@ -2328,79 +2304,132 @@ function AssetsSubTabs() {
   const [tab, setTab] = useState<AssetsSubTabId>('objects');
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div
-        style={{
-          display: 'flex',
-          gap: 6,
-          padding: '10px 14px 6px',
-        }}
-      >
-        {ASSETS_SUBTABS.map((t) => {
-          const isActive = t.id === tab;
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              title={t.label}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                height: 32,
-                padding: '0 10px',
-                fontSize: 12,
-                fontWeight: 700,
-                fontFamily: 'inherit',
-                background: isActive ? 'var(--pb-paper)' : 'var(--pb-cream-2)',
-                border: `1.5px solid ${isActive ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-                borderRadius: 10,
-                boxShadow: isActive ? '0 2px 0 var(--pb-ink)' : 'none',
-                color: isActive ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
-                cursor: 'pointer',
-                transition: 'background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, color 120ms ease',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.background = 'var(--pb-paper)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.background = 'var(--pb-cream-2)';
-              }}
-            >
-              <Icon size={13} strokeWidth={2.4} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {t.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <PanelIconTabs
+        tabs={ASSETS_SUBTABS}
+        activeTab={tab}
+        onChange={(id) => setTab(id as AssetsSubTabId)}
+      />
       {tab === 'objects' && <ObjectsSection />}
-      {tab === 'groups' && <EmptySubTabPlaceholder label="No groups yet — coming soon." />}
-      {tab === 'characters' && <EmptySubTabPlaceholder label="No characters yet — coming soon." />}
+      {tab === 'groups' && (
+        <EmptySubTabPlaceholder
+          searchPlaceholder="Search groups..."
+          newTitle="New group"
+          uploadTitle="Upload group preset"
+          emptyLabel="No groups yet — coming soon."
+        />
+      )}
+      {tab === 'characters' && (
+        <EmptySubTabPlaceholder
+          searchPlaceholder="Search characters..."
+          newTitle="New character"
+          uploadTitle="Upload character sprite"
+          emptyLabel="No characters yet — coming soon."
+        />
+      )}
     </div>
   );
 }
 
-function EmptySubTabPlaceholder({ label }: { label: string }) {
+/**
+ * Visual-only toolbar + empty-state card for tabs whose data model isn't
+ * wired up yet. Renders the same search/filter/new/upload row used by the
+ * Objects tab so the three sub-tabs feel consistent, but every control is
+ * a no-op. Real handlers land here when the Groups + Characters models
+ * are added.
+ */
+function EmptySubTabPlaceholder({
+  searchPlaceholder,
+  newTitle,
+  uploadTitle,
+  emptyLabel,
+}: {
+  searchPlaceholder: string;
+  newTitle: string;
+  uploadTitle: string;
+  emptyLabel: string;
+}) {
+  const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   return (
-    <div style={{ padding: '12px 14px' }}>
-      <div
-        style={{
-          padding: '14px 12px',
-          fontSize: 11,
-          color: 'var(--pb-ink-muted)',
-          fontStyle: 'italic',
-          border: '1.5px dashed var(--pb-line-2)',
-          borderRadius: 8,
-          background: 'var(--pb-cream-2)',
-          textAlign: 'center',
-        }}
-      >
-        {label}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 [&>div]:!mb-0">
+            <PanelSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder={searchPlaceholder}
+            />
+          </div>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="relative shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: filtersOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              border: `1.5px solid ${filtersOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: filtersOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+              color: filtersOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            title="Filters"
+          >
+            <SlidersHorizontal size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            disabled
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
+              cursor: 'not-allowed',
+              opacity: 0.55,
+            }}
+            title={newTitle}
+          >
+            <FolderPlus size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            disabled
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
+              cursor: 'not-allowed',
+              opacity: 0.55,
+            }}
+            title={uploadTitle}
+          >
+            <Upload size={15} strokeWidth={2.2} />
+          </button>
+        </div>
+      </div>
+      <div style={{ padding: '4px 14px 14px' }}>
+        <div
+          style={{
+            padding: '14px 12px',
+            fontSize: 11,
+            color: 'var(--pb-ink-muted)',
+            fontStyle: 'italic',
+            border: '1.5px dashed var(--pb-line-2)',
+            borderRadius: 8,
+            background: 'var(--pb-cream-2)',
+            textAlign: 'center',
+          }}
+        >
+          {emptyLabel}
+        </div>
       </div>
     </div>
   );

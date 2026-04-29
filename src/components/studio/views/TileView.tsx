@@ -19,6 +19,7 @@ import { useSceneStore } from '@/store/scene-store';
 import { useRoom } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
+import { generateRegion } from '@/lib/world-gen';
 import {
   useTileRealtime,
   buildPaintEvent,
@@ -236,6 +237,11 @@ export function TileView() {
   /** Pressed keys during play mode. Lower-cased Key value for case-insensitive
    *  matching against {w,a,s,d, arrowleft, ...}. */
   const playKeysRef = useRef<Set<string>>(new Set());
+  /** True while a procgen-on-play undo group has been committed but not yet
+   *  reverted. The Stop transition reads this to decide whether to call
+   *  `undo()` — without the flag, a Stop after the user pressed Play with
+   *  no tilesets (so no procgen happened) would undo a real edit. */
+  const procgenAppliedRef = useRef(false);
 
   const ensureImage = useCallback((dataUrl: string) => {
     let img = imgCacheRef.current.get(dataUrl);
@@ -468,15 +474,79 @@ export function TileView() {
       for (const [id, state] of rt) updateChar(id, { x: state.x, y: state.y });
       rt.clear();
       playKeysRef.current.clear();
+      // Revert the procgen paint we committed at Play start so the editor
+      // canvas isn't permanently filled. tileCharacters aren't in the undo
+      // snapshot, so the flush above survives this call.
+      if (procgenAppliedRef.current) {
+        useTile.getState().undo();
+        procgenAppliedRef.current = false;
+      }
       requestRender.current();
       return;
     }
     // Start transition — seed runtime state from current store positions.
     const characters = Object.values(useTile.getState().tileCharacters);
     if (characters.length === 0) return;
+
+    // Spawn the player at world origin (centre of the 10×10 tile pad). The
+    // FIRST character (by addedAt) is "the player" — same convention the
+    // tick loop below uses for input routing. Snapping the store position
+    // makes the runtime seed below pick up (0, 0) too.
+    const ordered = [...characters].sort((a, b) => a.addedAt - b.addedAt);
+    const playerId = ordered[0].id;
+    const tile = useTile.getState();
+    tile.updateTileCharacter(playerId, { x: 0, y: 0 });
+    // Centre the camera on the spawn so the player is visibly mid-canvas.
+    tile.setCamera({ x: 0, y: 0 });
+
+    // Procedurally generate the world around the spawn. Reserve a 128×128
+    // cell square at origin (cells [-64..63]) so whatever the user has
+    // hand-painted around the spawn pad survives play. The generated band
+    // extends out to ±256 cells which more than covers the visible area
+    // at any sane zoom; everything beyond stays unpainted.
+    const palette: string[] = [];
+    for (const ts of tile.tilesets) {
+      if (ts.upperTextureId) palette.push(ts.upperTextureId);
+      if (ts.lowerTextureId) palette.push(ts.lowerTextureId);
+    }
+    procgenAppliedRef.current = false;
+    const layerId = tile.activeLayerId;
+    if (palette.length > 0 && layerId) {
+      const RESERVE = 64;  // half-extent in cells → 128×128 untouched
+      const RADIUS = 256;  // half-extent of the generated band
+      const cells = generateRegion({
+        x0: -RADIUS,
+        y0: -RADIUS,
+        x1: RADIUS,
+        y1: RADIUS,
+        seed: 0xC0FFEE,
+        palette,
+        scale: 18,
+        skipCell: (cx, cy) => Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE,
+      });
+      if (cells.length > 0) {
+        tile.beginUndoGroup();
+        tile.mutateCorners(layerId, (corners) => {
+          // Painting cell (cx, cy) means setting all 4 surrounding corners
+          // to the same texture id. Adjacent cells with different ids share
+          // a corner — the overwrite ordering is consistent (row-major
+          // generateRegion order), so the wang resolver gets a stable
+          // boundary pattern.
+          for (const { cx, cy, texId } of cells) {
+            corners[`${cx},${cy}`] = texId;
+            corners[`${cx + 1},${cy}`] = texId;
+            corners[`${cx},${cy + 1}`] = texId;
+            corners[`${cx + 1},${cy + 1}`] = texId;
+          }
+        });
+        tile.commitUndoGroup();
+        procgenAppliedRef.current = true;
+      }
+    }
+
     const rt = playRuntimeRef.current;
     rt.clear();
-    for (const c of characters) {
+    for (const c of Object.values(useTile.getState().tileCharacters)) {
       rt.set(c.id, { x: c.x, y: c.y, dir: 'idle' });
     }
 
@@ -502,11 +572,8 @@ export function TileView() {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // Pick the FIRST character (by addedAt) as "the player" — same single-
-    // character convention as the freeform play loop. Multi-character
-    // input routing can come later.
-    const ordered = [...characters].sort((a, b) => a.addedAt - b.addedAt);
-    const playerId = ordered[0].id;
+    // `playerId` was already resolved above (used for the spawn snap) —
+    // the tick loop reuses it to drive WASD on the same character.
 
     let rafId = 0;
     let lastT = performance.now();

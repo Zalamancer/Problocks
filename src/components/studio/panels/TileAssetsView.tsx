@@ -2787,7 +2787,9 @@ function CharacterCard({
         cursor: 'pointer',
         color: 'var(--pb-ink)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 4,
+        padding: '0 6px',
+        flex: 1,
+        minWidth: 26,
       }}
     >
       <Pencil size={12} strokeWidth={2.4} />
@@ -2805,7 +2807,9 @@ function CharacterCard({
         cursor: 'pointer',
         color: 'var(--pb-coral-ink)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 4,
+        padding: '0 6px',
+        flex: 1,
+        minWidth: 26,
       }}
     >
       <Trash2 size={12} strokeWidth={2.4} />
@@ -2913,9 +2917,12 @@ function CharacterCard({
 
   return (
     <div {...commonHandlers} style={containerStyle}>
-      <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+      <div
+        className="flex items-stretch gap-2"
+        style={{ padding: '4px 6px', minHeight: 56 + 8 }}
+      >
         <CellThumb size={56} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
           {editingName ? (
             <input
               autoFocus
@@ -2957,7 +2964,16 @@ function CharacterCard({
           </div>
         </div>
         {showActions && !editingName && (
-          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              flexShrink: 0,
+              marginLeft: 'auto',
+              alignSelf: 'stretch',
+            }}
+          >
             {editButton}
             {deleteButton}
           </div>

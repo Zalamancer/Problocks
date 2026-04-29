@@ -28,6 +28,7 @@ import { Freeform3DPropertiesPanel } from './panels/Freeform3DPropertiesPanel';
 import { Freeform2DPropertiesPanel } from './panels/Freeform2DPropertiesPanel';
 import { TileObjectPropertiesPanel } from './panels/TileObjectPropertiesPanel';
 import { TileAssetPropertiesPanel } from './panels/TileAssetPropertiesPanel';
+import { TileCharacterPropertiesPanel } from './panels/TileCharacterPropertiesPanel';
 import { useTile } from '@/store/tile-store';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
@@ -141,6 +142,10 @@ export function StudioLayout() {
   // tab can swap to TileAssetPropertiesPanel (image preview + slice
   // controls). Object selection still wins — see the if-chain below.
   const tileSelectedAssetId = useTile((s) => s.selectedAssetId);
+  // Re-render when the user picks a character in the Characters left-panel
+  // section so the Properties tab can swap to TileCharacterPropertiesPanel
+  // (preview + per-direction animation slots).
+  const tileSelectedCharacterId = useTile((s) => s.selectedCharacterId);
   // Subscribe so the Code tab re-renders when the agent edits the
   // scene script via setScript ACTION.
   const freeform3dScript = useFreeform3D((s) => s.scene.script);
@@ -635,6 +640,13 @@ export function StudioLayout() {
               // of the in-canvas popup that used to live in TileView.
               if (gameSystem === '2d' && tileSelectedObjectId) {
                 return <TileObjectPropertiesPanel headless />;
+              }
+              // 2D Tile — when a character is selected (left-panel Characters
+              // tab or canvas pick), show its preview + per-direction
+              // animation slots. Sits above the asset-card branch so picking
+              // a character wins over a still-selected asset card.
+              if (gameSystem === '2d' && tileSelectedCharacterId) {
+                return <TileCharacterPropertiesPanel headless />;
               }
               // 2D Tile — when no canvas object is selected but an uploaded
               // asset card is, show its image + slice (rows/cols) controls.

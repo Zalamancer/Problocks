@@ -271,6 +271,37 @@ export interface TileCamera {
 }
 
 /**
+ * Eight compass directions for character animation. Used as keys in
+ * `TileCharacter.animations` so each pose has its own action sheet
+ * (e.g. an "attack" 4×4 sheet for `n`, a different one for `e`, etc.).
+ *
+ * Mirrors the `Dir8` type used by the play-mode renderer in TileView,
+ * minus 'idle' (idle is the centre cell of the 3×3 source sheet, not a
+ * separate animation track).
+ */
+export type CharacterDir8 = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
+
+/** All 8 directions in canonical order (N → clockwise → NW). */
+export const CHARACTER_DIRS: CharacterDir8[] = [
+  'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw',
+];
+
+/**
+ * One uploaded action sprite sheet for a character + direction. Always a
+ * 4×4 grid (16 frames) per the upload pipeline — `cols/rows/frameW/frameH`
+ * are stored explicitly so future formats can vary, just like `TileCharacter`.
+ */
+export interface CharacterAnimation {
+  /** PNG/WEBP data URL of the full 4×4 sheet. */
+  src: string;
+  cols: number;
+  rows: number;
+  frameW: number;
+  frameH: number;
+  addedAt: number;
+}
+
+/**
  * A 2D playable character — uploaded as a 3×3 sprite sheet where each
  * of the 9 cells is one frame. Cells 0..7 (row-major) map to the eight
  * compass directions; cell 8 (bottom-right) is intentionally discarded
@@ -288,6 +319,11 @@ export interface TileCamera {
  * Width / height are display size in world (pixel) units; `cols` and
  * `rows` are the sheet's grid (currently always 3×3 for the upload
  * pipeline but stored explicitly so future formats can vary).
+ *
+ * `animations` is a per-direction map of optional 4×4 action sheets
+ * uploaded by the user from the Animations sub-tab in the right-panel
+ * properties view. Empty by default — the play loop falls back to the
+ * 3×3 idle/walk frame whenever a direction has no animation yet.
  */
 export interface TileCharacter {
   id: string;
@@ -310,6 +346,9 @@ export interface TileCharacter {
   fps: number;
   /** Movement speed in world units per second during play mode. */
   speed: number;
+  /** Optional per-direction 4×4 action animation sheets. Missing keys =
+   *  no animation uploaded yet for that direction. */
+  animations: Partial<Record<CharacterDir8, CharacterAnimation>>;
   addedAt: number;
   sortIndex: number;
 }
@@ -505,6 +544,14 @@ export interface TileStore {
   /** Patch a character's runtime / display fields (position, size, fps,
    *  speed). The play loop calls this with new x/y on every tick. */
   updateTileCharacter: (id: string, patch: Partial<Omit<TileCharacter, 'id' | 'src' | 'addedAt' | 'sortIndex'>>) => void;
+  /** Set or clear a 4×4 action animation sheet for one direction. Pass
+   *  `null` for `animation` to remove (the direction key is deleted from
+   *  the map so persisted size doesn't grow forever). */
+  setCharacterAnimation: (
+    id: string,
+    direction: CharacterDir8,
+    animation: CharacterAnimation | null,
+  ) => void;
   setSelectedCharacterId: (id: string | null) => void;
 
   // ── Pen tool — collision boundaries on objects ─────────────────
@@ -1412,6 +1459,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         height: h,
         fps: fps ?? 8,
         speed: speed ?? 220,
+        animations: {},
         addedAt: Date.now(),
         sortIndex: maxIdx + 1,
       };
@@ -1441,6 +1489,24 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const c = s.tileCharacters[id];
     if (!c) return {};
     return { tileCharacters: { ...s.tileCharacters, [id]: { ...c, ...patch } } };
+  }),
+  setCharacterAnimation: (id, direction, animation) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    const nextAnimations: Partial<Record<CharacterDir8, CharacterAnimation>> = {
+      ...(c.animations ?? {}),
+    };
+    if (animation === null) {
+      delete nextAnimations[direction];
+    } else {
+      nextAnimations[direction] = animation;
+    }
+    return {
+      tileCharacters: {
+        ...s.tileCharacters,
+        [id]: { ...c, animations: nextAnimations },
+      },
+    };
   }),
   setSelectedCharacterId: (id) => set({ selectedCharacterId: id }),
   reorderStyles: (assetId, orderedStyleIds) => {
@@ -1918,6 +1984,15 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // (e.g. user removed it before reload).
     if (state.selectedCharacterId && !state.tileCharacters[state.selectedCharacterId]) {
       state.selectedCharacterId = null;
+    }
+    // Backfill the per-direction `animations` map on characters persisted
+    // before the Animations sub-tab was added. Default to {} so the
+    // properties panel never has to nullish-coalesce when iterating
+    // CHARACTER_DIRS.
+    for (const c of Object.values(state.tileCharacters)) {
+      if (!c.animations || typeof c.animations !== 'object') {
+        c.animations = {};
+      }
     }
   },
 }));

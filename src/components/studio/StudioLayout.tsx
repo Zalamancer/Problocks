@@ -522,8 +522,17 @@ export function StudioLayout() {
                   {/* Native Roblox-Studio-style editor toolbar. Operates on
                       the scene store directly (no iframe needed); the Part
                       button spawns primitives you can Move/Rotate/Scale with
-                      the gizmo below. */}
-                  <GameToolbar />
+                      the gizmo below.
+                      Skipped for game systems whose viewport carries its own
+                      tools — 2D Tile/Freeform, voxel, quiz, and the kid-style
+                      3D freeform editor all render their own top bars and
+                      would otherwise show a duplicate Select/Part/Trash row
+                      above an unrelated canvas. */}
+                  {gameSystem === '3d-tile'
+                    || gameSystem === '3d-lego'
+                    || gameSystem === 'topdown' ? (
+                    <GameToolbar />
+                  ) : null}
                   <div className="flex-1 min-h-0 overflow-hidden">
                     <WorkspaceView />
                   </div>

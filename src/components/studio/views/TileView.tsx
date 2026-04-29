@@ -2054,11 +2054,7 @@ export function TileView() {
   const totalCorners = activeLayer ? Object.keys(activeLayer.corners).length : 0;
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden" style={{ background: '#fafaf7' }}>
-      <canvas
-        ref={canvasRef}
-        style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
-      />
+    <div className="flex flex-col w-full h-full overflow-hidden" style={{ background: '#fafaf7' }}>
       {/* Hidden picker — mirrors FreeformView. Accepts image/* and bare
           .svg files (some browsers leave SVG with empty MIME). */}
       <input
@@ -2073,23 +2069,18 @@ export function TileView() {
         }}
       />
 
-      {/* Room zones (cross + 4 lots) drawn on top of the canvas. Renders
-          nothing in viewMode 'main-world'. Pointer-events: none so the
-          paint/erase tools below still receive every click. */}
-      {/* <RoomZoneOverlay /> */}
-
-      {/* Top-right pill bar to jump between Room / My Lot / Cross /
-          World. Mounts alongside the existing tool toolbar (top-left). */}
-      {/* <RoomViewSwitcher /> */}
-
+      {/* Top toolbar — formerly an absolute floating pill above the canvas.
+          De-floated so the studio top-bar slot (where GameToolbar lives for
+          3D modes) holds it in 2D Tile mode, removing the duplicate
+          Select/Trash row that used to stack above this one. Horizontal
+          scroll on narrow shells so the brush pill / wave / grid keep
+          reachable without truncation. */}
       <div
-        className="absolute top-3 left-3 z-10 flex items-center gap-1 p-1.5"
+        className="shrink-0 flex items-center gap-1 px-2 py-1.5 overflow-x-auto"
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           background: 'var(--pb-paper)',
-          border: '1.5px solid var(--pb-ink)',
-          borderRadius: 12,
-          boxShadow: '0 3px 0 var(--pb-ink)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
         }}
       >
         <ToolBtn active={tool === 'select'} title="Select / move objects (1) · Esc" onClick={() => setTool('select')}>
@@ -2182,6 +2173,15 @@ export function TileView() {
         </ToolBtn>
       </div>
 
+      {/* Canvas viewport. The container ref must stay on the canvas's
+          immediate parent because ResizeObserver + getBoundingClientRect
+          drive the device-pixel canvas sizing. */}
+      <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
+        />
+
       {Object.keys(tiles).length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ color: 'var(--pb-ink-muted)' }}>
           <div className="flex flex-col items-center gap-3 text-center" style={{ maxWidth: 380 }}>
@@ -2242,6 +2242,7 @@ export function TileView() {
         <span>Layers <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{layers.length}</span></span>
         <Sep />
         <span>Corners <span style={{ color: 'var(--pb-ink)', fontWeight: 700 }}>{totalCorners}</span></span>
+      </div>
       </div>
     </div>
   );

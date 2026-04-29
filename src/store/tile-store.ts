@@ -1152,11 +1152,23 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setMapBounds: (b) => set({ mapBounds: b }),
   islandFillTextureId: null,
   setIslandFill: (id) => set((s) => {
-    // Auto-bootstrap a 128×128 bounds centered on origin the first time
-    // an island fill is picked — saves the user a separate "create map
-    // bounds" click and matches the spec ("the island is 128x128").
-    if (id && !s.mapBounds) {
-      return { islandFillTextureId: id, mapBounds: { x: -64, y: -64, w: 128, h: 128 } };
+    // Toggle OFF: drop the bounds too so the next toggle-on re-creates
+    // bounds centred on the user's CURRENT camera position. Otherwise
+    // the bounds stick wherever they were first created and feel
+    // permanently off-centre after panning around.
+    if (id === null) {
+      return { islandFillTextureId: null, mapBounds: null };
+    }
+    // Toggle ON with no bounds yet: auto-create 128×128 bounds centred
+    // on the camera so the island appears wherever the user is looking,
+    // not at world origin (which is often off-screen at low zoom).
+    if (!s.mapBounds) {
+      const ccx = Math.round(s.camera.x / s.tileSize);
+      const ccy = Math.round(s.camera.y / s.tileSize);
+      return {
+        islandFillTextureId: id,
+        mapBounds: { x: ccx - 64, y: ccy - 64, w: 128, h: 128 },
+      };
     }
     return { islandFillTextureId: id };
   }),

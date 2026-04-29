@@ -9,6 +9,8 @@ import { useTile, type TileTool, findStyle, tileDataUrlFor } from '@/store/tile-
 import { useStudio } from '@/store/studio-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
+import { RoomZoneOverlay } from './RoomZoneOverlay';
+import { RoomViewSwitcher } from './RoomViewSwitcher';
 
 /**
  * 2D Tile-based editor canvas — Wang/dual-grid auto-tiling.
@@ -1512,6 +1514,15 @@ export function TileView() {
         ref={canvasRef}
         style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
       />
+
+      {/* Room zones (cross + 4 lots) drawn on top of the canvas. Renders
+          nothing in viewMode 'main-world'. Pointer-events: none so the
+          paint/erase tools below still receive every click. */}
+      <RoomZoneOverlay />
+
+      {/* Top-right pill bar to jump between Room / My Lot / Cross /
+          World. Mounts alongside the existing tool toolbar (top-left). */}
+      <RoomViewSwitcher />
 
       <div
         className="absolute top-3 left-3 z-10 flex items-center gap-1 p-1.5"

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Trash2, Upload, User, Film, Pencil, Plus } from 'lucide-react';
+import { Trash2, Upload, User, Film, Pencil } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
@@ -344,28 +344,32 @@ function AnimationsTab({
   useEffect(() => {
     if (initialDir) setActiveDir(initialDir);
   }, [initialDir]);
-
-  function pickDir(dir: CharacterDir8) {
-    setActiveDir(dir);
-    onChangeDir(dir);
-    setSelectedAnimationId(null);
-  }
-
-  const animations = character.animations?.[activeDir] ?? [];
-  const [selectedAnimationId, setSelectedAnimationId] = useState<string | null>(null);
-  // Reset selection on direction change so the preview doesn't show a
-  // stale animation when the user hops to a different direction.
+  // Surface activeDir back to the parent on first mount so the rotation
+  // dot in CharacterTab stays in sync — the picker UI used to do this on
+  // every change but was removed; this keeps the contract intact.
   useEffect(() => {
-    setSelectedAnimationId(null);
+    onChangeDir(activeDir);
+  }, [activeDir, onChangeDir]);
+
+  // Single-slot UI per direction — preview shows the first animation, and
+  // upload either adds (when empty) or replaces (when populated). The
+  // underlying multi-animation data model is untouched so older characters
+  // with multiple slots aren't lost; we just don't expose the list here.
+  const animations = character.animations?.[activeDir] ?? [];
+  const animation = animations[0] ?? null;
+
+  // Set immediately after a fresh upload so the name input grabs focus +
+  // selects its current text — the user starts typing the animation name
+  // without an extra click. Cleared on commit / blur / direction change.
+  const [pendingNameId, setPendingNameId] = useState<string | null>(null);
+  useEffect(() => {
+    setPendingNameId(null);
   }, [activeDir]);
-  const selectedAnimation =
-    animations.find((a) => a.id === selectedAnimationId) ?? animations[0] ?? null;
 
   const addCharacterAnimation = useTile((s) => s.addCharacterAnimation);
   const removeCharacterAnimation = useTile((s) => s.removeCharacterAnimation);
   const renameCharacterAnimation = useTile((s) => s.renameCharacterAnimation);
   const setCharacterAnimationSrc = useTile((s) => s.setCharacterAnimationSrc);
-  const reorderCharacterAnimations = useTile((s) => s.reorderCharacterAnimations);
 
   const addInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
@@ -374,31 +378,30 @@ function AnimationsTab({
 
   async function ingestNewAnimation(files: File[]) {
     if (files.length === 0) return;
+    const file = files[0];
     setUploading(true);
     setError(null);
     try {
-      for (const file of files) {
-        const baseName = file.name.replace(/\.[^.]+$/, '');
-        const img = await fileToImage(file);
-        const cols = 4;
-        const rows = 4;
-        if (img.naturalWidth % cols !== 0 || img.naturalHeight % rows !== 0) {
-          throw new Error(
-            `"${baseName}" must divide cleanly into a ${cols}×${rows} grid ` +
-              `(got ${img.naturalWidth}×${img.naturalHeight}).`,
-          );
-        }
-        const dataUrl = imageToDataUrl(img);
-        const newId = addCharacterAnimation(character.id, activeDir, {
-          label: baseName,
-          src: dataUrl,
-          cols,
-          rows,
-          frameW: Math.floor(img.naturalWidth / cols),
-          frameH: Math.floor(img.naturalHeight / rows),
-        });
-        setSelectedAnimationId(newId);
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      const img = await fileToImage(file);
+      const cols = 4;
+      const rows = 4;
+      if (img.naturalWidth % cols !== 0 || img.naturalHeight % rows !== 0) {
+        throw new Error(
+          `"${baseName}" must divide cleanly into a ${cols}×${rows} grid ` +
+            `(got ${img.naturalWidth}×${img.naturalHeight}).`,
+        );
       }
+      const dataUrl = imageToDataUrl(img);
+      const newId = addCharacterAnimation(character.id, activeDir, {
+        label: baseName,
+        src: dataUrl,
+        cols,
+        rows,
+        frameW: Math.floor(img.naturalWidth / cols),
+        frameH: Math.floor(img.naturalHeight / rows),
+      });
+      setPendingNameId(newId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -407,7 +410,7 @@ function AnimationsTab({
   }
 
   async function ingestReplaceAnimation(file: File) {
-    if (!selectedAnimation) return;
+    if (!animation) return;
     setUploading(true);
     setError(null);
     try {
@@ -420,13 +423,14 @@ function AnimationsTab({
             `(got ${img.naturalWidth}×${img.naturalHeight}).`,
         );
       }
-      setCharacterAnimationSrc(character.id, activeDir, selectedAnimation.id, {
+      setCharacterAnimationSrc(character.id, activeDir, animation.id, {
         src: imageToDataUrl(img),
         cols,
         rows,
         frameW: Math.floor(img.naturalWidth / cols),
         frameH: Math.floor(img.naturalHeight / rows),
       });
+      setPendingNameId(animation.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -440,7 +444,6 @@ function AnimationsTab({
         ref={addInputRef}
         type="file"
         accept="image/png,image/webp,image/jpeg"
-        multiple
         style={{ display: 'none' }}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
@@ -461,11 +464,11 @@ function AnimationsTab({
       />
 
       <AnimationPreview
-        animation={selectedAnimation}
+        animation={animation}
         onReplace={() => replaceInputRef.current?.click()}
         onClear={
-          selectedAnimation
-            ? () => removeCharacterAnimation(character.id, activeDir, selectedAnimation.id)
+          animation
+            ? () => removeCharacterAnimation(character.id, activeDir, animation.id)
             : undefined
         }
         onUpload={() => addInputRef.current?.click()}
@@ -473,7 +476,7 @@ function AnimationsTab({
         uploading={uploading}
       />
 
-      <div className="px-4 py-4 flex flex-col gap-4">
+      <div className="px-4 py-4 flex flex-col gap-3">
         {error && (
           <p
             role="alert"
@@ -494,53 +497,90 @@ function AnimationsTab({
           </p>
         )}
 
-        <PanelSection title="Direction" collapsible defaultOpen>
-          <PanelSelect
-            label=""
-            value={activeDir}
-            onChange={(v) => pickDir(v as CharacterDir8)}
-            options={CHARACTER_DIRS.map((d) => ({ value: d, label: DIR_LABEL[d] }))}
-          />
-        </PanelSection>
-
-        <PanelSection title={`Animations (${animations.length})`} collapsible defaultOpen>
-          <AnimationsList
-            characterId={character.id}
-            direction={activeDir}
-            animations={animations}
-            selectedAnimationId={selectedAnimation?.id ?? null}
-            onPick={setSelectedAnimationId}
-            onRemove={(animId) => removeCharacterAnimation(character.id, activeDir, animId)}
-            onRename={(animId, label) =>
-              renameCharacterAnimation(character.id, activeDir, animId, label)
-            }
-            onReorder={(orderedIds) =>
-              reorderCharacterAnimations(character.id, activeDir, orderedIds)
-            }
-          />
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => addInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 mt-2"
-            style={{
-              padding: '10px 12px',
-              background: 'var(--pb-paper)',
-              border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 8,
-              color: 'var(--pb-ink)',
-              fontSize: 12.5,
-              fontWeight: 800,
-              cursor: uploading ? 'not-allowed' : 'pointer',
-              opacity: uploading ? 0.6 : 1,
+        {animation && (
+          <AnimationNameField
+            value={animation.label}
+            autoFocus={pendingNameId === animation.id}
+            onCommit={(label) => {
+              renameCharacterAnimation(character.id, activeDir, animation.id, label);
+              setPendingNameId(null);
             }}
-          >
-            {uploading ? <Upload size={13} strokeWidth={2.4} /> : <Plus size={13} strokeWidth={2.4} />}
-            {uploading ? 'Uploading…' : 'Add animation'}
-          </button>
-        </PanelSection>
+          />
+        )}
       </div>
     </>
+  );
+}
+
+/**
+ * Inline name input that pops below the preview after a fresh upload.
+ * Auto-focuses + selects the auto-derived basename so the user can type
+ * over it immediately. Commits on Enter / blur; Esc reverts and bails.
+ */
+function AnimationNameField({
+  value, autoFocus, onCommit,
+}: {
+  value: string;
+  autoFocus: boolean;
+  onCommit: (label: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // Sync external label changes (e.g. user uploads a new sheet whose
+  // basename becomes the new label) into the local draft.
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+  // Grab focus + select on the upload tick so the user starts typing
+  // straight away. Runs once per pendingNameId set by the parent.
+  useEffect(() => {
+    if (!autoFocus) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [autoFocus]);
+
+  function commit() {
+    const next = draft.trim();
+    if (next.length === 0) {
+      setDraft(value);
+      return;
+    }
+    if (next !== value) onCommit(next);
+  }
+
+  return (
+    <label
+      className="flex flex-col gap-1.5"
+      style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}
+    >
+      ANIMATION NAME
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            setDraft(value);
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder="e.g. walk, idle, attack…"
+        style={{
+          padding: '7px 9px',
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 7,
+          fontSize: 12,
+          fontWeight: 700,
+          color: 'var(--pb-ink)',
+        }}
+      />
+    </label>
   );
 }
 

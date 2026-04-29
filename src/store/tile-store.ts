@@ -451,6 +451,39 @@ export interface TileStore {
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
+
+  // ── Undo / Redo ─────────────────────────────────────────────────
+  /**
+   * Snapshot stacks of "world data" — what the user paints / places /
+   * arranges. Tool state, camera, brush settings, asset library, and
+   * tints are deliberately NOT snapshotted: an undo of a paint stroke
+   * shouldn't also revert the active tool the user just switched to.
+   */
+  _undoPast: TileSnapshot[];
+  _undoFuture: TileSnapshot[];
+  /**
+   * True between `beginUndoGroup` and `commitUndoGroup`. While true,
+   * mutating methods skip their auto-snapshot — the snapshot was taken
+   * once at group open. Strokes (paint/erase) and drags (move/resize/
+   * rotate) wrap their many small mutations in a group so the user gets
+   * one undo step per stroke / drag, not one per cell or pointer move.
+   */
+  _undoOpen: boolean;
+  /** Open an undo group: capture a snapshot, clear redo history. */
+  beginUndoGroup: () => void;
+  /** Close an undo group. Safe to call when no group is open. */
+  commitUndoGroup: () => void;
+  /** Undo the last group / single mutation. No-op when stack is empty. */
+  undo: () => void;
+  /** Redo the most recently undone group. No-op when stack is empty. */
+  redo: () => void;
+}
+
+export interface TileSnapshot {
+  layers: TileLayer[];
+  objects: TileObject[];
+  fencePosts: Record<string, true>;
+  fenceEdges: Record<string, true>;
 }
 
 /**
@@ -536,6 +569,50 @@ function makeDeferredLocalStorage(delayMs = 500): PersistStorage<unknown> {
 }
 
 const INITIAL_LAYER = defaultLayer('Ground');
+
+/**
+ * Cap on the undo stack — at ~25 entries × ~1 MB worst-case clone
+ * (90k corners × 5 layers), peak memory stays under ~25 MB on a
+ * worst-case map. Older strokes silently drop off the bottom of the
+ * stack rather than blocking the user from continuing to paint.
+ */
+const UNDO_LIMIT = 25;
+
+/**
+ * Deep-clone the world-data slice so a later undo can restore it
+ * without aliasing the live (mutated) maps. `corners` and
+ * `cellTransforms` are mutated in place by `mutateCorners` /
+ * `mutateCellTransforms` for paint-stroke speed, so a shallow layer
+ * clone is NOT enough — we have to clone those two maps explicitly.
+ */
+function takeSnapshot(s: Pick<TileStore, 'layers' | 'objects' | 'fencePosts' | 'fenceEdges'>): TileSnapshot {
+  return {
+    layers: s.layers.map((l) => ({
+      ...l,
+      corners: { ...l.corners },
+      cellTransforms: l.cellTransforms ? { ...l.cellTransforms } : {},
+    })),
+    objects: s.objects.map((o) => ({ ...o })),
+    fencePosts: { ...s.fencePosts },
+    fenceEdges: { ...s.fenceEdges },
+  };
+}
+
+/**
+ * Build the partial-state patch for "record an undo step before this
+ * mutation": push a fresh snapshot onto past[], cap the stack, and
+ * blow away any future[] redo history (a fresh mutation invalidates
+ * all undone steps). Returns `{}` when an undo group is open — the
+ * caller's `beginUndoGroup` already snapshotted.
+ */
+function recordUndoStep(s: TileStore): Partial<TileStore> {
+  if (s._undoOpen) return {};
+  const snap = takeSnapshot(s);
+  const past = s._undoPast.length >= UNDO_LIMIT
+    ? [...s._undoPast.slice(-(UNDO_LIMIT - 1)), snap]
+    : [...s._undoPast, snap];
+  return { _undoPast: past, _undoFuture: [] };
+}
 
 export const useTile = create<TileStore>()(persist((set, get) => ({
   tilesets: [],
@@ -635,6 +712,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     if (sourceTextureId === targetTextureId) return [];
     const changedIds: string[] = [];
     set((s) => {
+      const undoStep = recordUndoStep(s);
       const tilesets = s.tilesets.map((t) => {
         const upperHit = t.upperTextureId === sourceTextureId;
         const lowerHit = t.lowerTextureId === sourceTextureId;
@@ -658,7 +736,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         return touched ? { ...l, corners } : l;
       });
       const brushTextureId = s.brushTextureId === sourceTextureId ? targetTextureId : s.brushTextureId;
-      return { tilesets, layers, brushTextureId };
+      return { ...undoStep, tilesets, layers, brushTextureId };
     });
     return changedIds;
   },
@@ -720,22 +798,25 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   activeLayerId: INITIAL_LAYER.id,
   addLayer: (name) => set((s) => {
     const layer = defaultLayer(name ?? `Layer ${s.layers.length + 1}`);
-    return { layers: [...s.layers, layer], activeLayerId: layer.id };
+    return { ...recordUndoStep(s), layers: [...s.layers, layer], activeLayerId: layer.id };
   }),
   removeLayer: (id) => set((s) => {
     if (s.layers.length <= 1) return {};
     const layers = s.layers.filter((l) => l.id !== id);
     const activeLayerId = s.activeLayerId === id ? layers[0].id : s.activeLayerId;
     const objects = s.objects.filter((o) => o.layerId !== id);
-    return { layers, activeLayerId, objects };
+    return { ...recordUndoStep(s), layers, activeLayerId, objects };
   }),
   renameLayer: (id, name) => set((s) => ({
+    ...recordUndoStep(s),
     layers: s.layers.map((l) => l.id === id ? { ...l, name } : l),
   })),
   toggleLayerVisibility: (id) => set((s) => ({
+    ...recordUndoStep(s),
     layers: s.layers.map((l) => l.id === id ? { ...l, visible: !l.visible } : l),
   })),
   setLayerOpacity: (id, opacity) => set((s) => ({
+    ...recordUndoStep(s),
     layers: s.layers.map((l) => l.id === id ? { ...l, opacity: Math.max(0, Math.min(1, opacity)) } : l),
   })),
   reorderLayer: (id, direction) => set((s) => {
@@ -746,10 +827,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const layers = s.layers.slice();
     const [layer] = layers.splice(idx, 1);
     layers.splice(target, 0, layer);
-    return { layers };
+    return { ...recordUndoStep(s), layers };
   }),
   setActiveLayer: (id) => set({ activeLayerId: id }),
   setLayerTileset: (layerId, tilesetId) => set((s) => ({
+    ...recordUndoStep(s),
     layers: s.layers.map((l) => l.id === layerId ? { ...l, tilesetId } : l),
   })),
   mutateCorners: (layerId, mutator) => set((s) => {
@@ -762,27 +844,43 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // layers array so zustand subscribers re-render.
     const layer = s.layers.find((l) => l.id === layerId);
     if (!layer) return {};
+    // Snapshot BEFORE mutator runs so the past entry preserves the
+    // pre-paint corners. Inside an undo group (paint stroke), the
+    // snapshot was taken at beginUndoGroup and recordUndoStep is a
+    // no-op — strokes get one undo step, not one per cell.
+    const undoStep = recordUndoStep(s);
     mutator(layer.corners);
-    return { layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
+    return { ...undoStep, layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
   }),
   mutateCellTransforms: (layerId, mutator) => set((s) => {
     const layer = s.layers.find((l) => l.id === layerId);
     if (!layer) return {};
     if (!layer.cellTransforms) layer.cellTransforms = {};
+    const undoStep = recordUndoStep(s);
     mutator(layer.cellTransforms);
-    return { layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
+    return { ...undoStep, layers: s.layers.map((l) => l.id === layerId ? { ...l } : l) };
   }),
 
   objects: [],
   addObject: (obj) => {
     const id = cryptoId();
-    set((s) => ({ objects: [...s.objects, { ...obj, id }] }));
+    set((s) => ({
+      ...recordUndoStep(s),
+      objects: [...s.objects, { ...obj, id }],
+    }));
     return id;
   },
+  // updateObject is intentionally NOT auto-recorded — slider drags
+  // (hue, position, size) fire many calls per second and would flood
+  // the undo stack with one entry per pointer move. Canvas drags
+  // already wrap multi-call sequences in a beginUndoGroup, so a
+  // single Cmd+Z reverts the whole drag. Panel slider undo (one step
+  // per drag completion) is intentionally deferred.
   updateObject: (id, patch) => set((s) => ({
     objects: s.objects.map((o) => o.id === id ? { ...o, ...patch } : o),
   })),
   removeObject: (id) => set((s) => ({
+    ...recordUndoStep(s),
     objects: s.objects.filter((o) => o.id !== id),
     selectedObjectId: s.selectedObjectId === id ? null : s.selectedObjectId,
   })),
@@ -1050,7 +1148,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   placeFenceAt: (cx, cy) => set((s) => {
     const newKey = `${cx},${cy}`;
     const sel = s.selectedFencePostKey;
-    // Toggle deselect when clicking the same post.
+    // Toggle deselect when clicking the same post — pure selection
+    // change, no world mutation, so don't burn an undo step on it.
     if (sel === newKey) return { selectedFencePostKey: null };
     const posts = { ...s.fencePosts, [newKey]: true as const };
     let edges = s.fenceEdges;
@@ -1065,10 +1164,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         if (!edges[ek]) edges = { ...edges, [ek]: true };
       }
     }
-    return { fencePosts: posts, fenceEdges: edges, selectedFencePostKey: newKey };
+    return { ...recordUndoStep(s), fencePosts: posts, fenceEdges: edges, selectedFencePostKey: newKey };
   }),
   setSelectedFencePostKey: (key) => set({ selectedFencePostKey: key }),
-  clearFences: () => set({ fencePosts: {}, fenceEdges: {}, selectedFencePostKey: null }),
+  clearFences: () => set((s) => ({ ...recordUndoStep(s), fencePosts: {}, fenceEdges: {}, selectedFencePostKey: null })),
 
   camera: { x: 0, y: 0, zoom: 1 },
   setCamera: (cam) => set((s) => ({ camera: { ...s.camera, ...cam } })),
@@ -1077,12 +1176,89 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   resetCamera: () => set({ camera: { x: 0, y: 0, zoom: 1 } }),
 
   clearMap: () => set((s) => ({
+    ...recordUndoStep(s),
     layers: s.layers.map((l) => ({ ...l, corners: {} })),
     objects: [],
     fencePosts: {},
     fenceEdges: {},
     selectedFencePostKey: null,
   })),
+
+  // ── Undo / Redo ─────────────────────────────────────────────────
+  _undoPast: [],
+  _undoFuture: [],
+  _undoOpen: false,
+  beginUndoGroup: () => set((s) => {
+    // Idempotent: a re-entrant begin (e.g. paint-down → paint-down
+    // because pointer never lifted) shouldn't double-snapshot.
+    if (s._undoOpen) return {};
+    const snap = takeSnapshot(s);
+    const past = s._undoPast.length >= UNDO_LIMIT
+      ? [...s._undoPast.slice(-(UNDO_LIMIT - 1)), snap]
+      : [...s._undoPast, snap];
+    return { _undoPast: past, _undoFuture: [], _undoOpen: true };
+  }),
+  commitUndoGroup: () => set((s) => {
+    if (!s._undoOpen) return {};
+    return { _undoOpen: false };
+  }),
+  undo: () => set((s) => {
+    if (s._undoPast.length === 0) return {};
+    const past = s._undoPast.slice();
+    const prev = past.pop()!;
+    const current = takeSnapshot(s);
+    const future = s._undoFuture.length >= UNDO_LIMIT
+      ? [...s._undoFuture.slice(-(UNDO_LIMIT - 1)), current]
+      : [...s._undoFuture, current];
+    return {
+      layers: prev.layers,
+      objects: prev.objects,
+      fencePosts: prev.fencePosts,
+      fenceEdges: prev.fenceEdges,
+      _undoPast: past,
+      _undoFuture: future,
+      _undoOpen: false,
+      // Drop selections that point at things the snapshot doesn't have.
+      selectedObjectId: s.selectedObjectId && prev.objects.some((o) => o.id === s.selectedObjectId)
+        ? s.selectedObjectId
+        : null,
+      selectedFencePostKey: s.selectedFencePostKey && prev.fencePosts[s.selectedFencePostKey]
+        ? s.selectedFencePostKey
+        : null,
+      // Active layer might have been a layer that didn't exist yet
+      // pre-snapshot; snap back to a layer that does exist.
+      activeLayerId: prev.layers.some((l) => l.id === s.activeLayerId)
+        ? s.activeLayerId
+        : prev.layers[0]?.id ?? s.activeLayerId,
+    };
+  }),
+  redo: () => set((s) => {
+    if (s._undoFuture.length === 0) return {};
+    const future = s._undoFuture.slice();
+    const next = future.pop()!;
+    const current = takeSnapshot(s);
+    const past = s._undoPast.length >= UNDO_LIMIT
+      ? [...s._undoPast.slice(-(UNDO_LIMIT - 1)), current]
+      : [...s._undoPast, current];
+    return {
+      layers: next.layers,
+      objects: next.objects,
+      fencePosts: next.fencePosts,
+      fenceEdges: next.fenceEdges,
+      _undoPast: past,
+      _undoFuture: future,
+      _undoOpen: false,
+      selectedObjectId: s.selectedObjectId && next.objects.some((o) => o.id === s.selectedObjectId)
+        ? s.selectedObjectId
+        : null,
+      selectedFencePostKey: s.selectedFencePostKey && next.fencePosts[s.selectedFencePostKey]
+        ? s.selectedFencePostKey
+        : null,
+      activeLayerId: next.layers.some((l) => l.id === s.activeLayerId)
+        ? s.activeLayerId
+        : next.layers[0]?.id ?? s.activeLayerId,
+    };
+  }),
 }), {
   // v7 — ObjectAsset gained nested `styles[]` (multi-variant per asset);
   // TileObject gained `styleId`. Old v6 persisted objects only had

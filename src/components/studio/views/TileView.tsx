@@ -1059,6 +1059,7 @@ export function TileView() {
       const s = stateRef.current;
       if (e.button === 2) {
         isDrawing = 'erase';
+        s.beginUndoGroup();
         applyErase(cell);
         canvas!.setPointerCapture(e.pointerId);
         scheduleRender();
@@ -1089,6 +1090,11 @@ export function TileView() {
             origRotation: obj.rotation || 0,
           };
         }
+        // Group the many updateObject calls during the drag into one
+        // undo step. Without this, updateObject doesn't auto-record
+        // (slider drags would flood the stack), so resize/rotate would
+        // be invisible to undo entirely.
+        s.beginUndoGroup();
         canvas!.setPointerCapture(e.pointerId);
         return;
       }
@@ -1108,6 +1114,7 @@ export function TileView() {
             startWX: w.x, startWY: w.y,
             origX: hitExisting.x, origY: hitExisting.y,
           };
+          s.beginUndoGroup();
           canvas!.setPointerCapture(e.pointerId);
           scheduleRender();
           return;
@@ -1148,6 +1155,7 @@ export function TileView() {
             startWX: w.x, startWY: w.y,
             origX: hit.x, origY: hit.y,
           };
+          s.beginUndoGroup();
           canvas!.setPointerCapture(e.pointerId);
         }
         scheduleRender();
@@ -1159,9 +1167,24 @@ export function TileView() {
         scheduleRender();
         return;
       }
-      if (s.tool === 'paint') { isDrawing = 'paint'; applyPaint(cell); }
-      else if (s.tool === 'erase') { isDrawing = 'erase'; applyErase(cell); }
-      else if (s.tool === 'fill') { applyFill(cell); }
+      if (s.tool === 'paint') {
+        isDrawing = 'paint';
+        s.beginUndoGroup();
+        applyPaint(cell);
+      }
+      else if (s.tool === 'erase') {
+        isDrawing = 'erase';
+        s.beginUndoGroup();
+        applyErase(cell);
+      }
+      else if (s.tool === 'fill') {
+        // Fill mutates corners + cellTransforms in one click. Without
+        // a group, that's two undo steps for one user action; group
+        // them here so a single Cmd+Z reverts the whole fill.
+        s.beginUndoGroup();
+        applyFill(cell);
+        s.commitUndoGroup();
+      }
       else if (s.tool === 'eyedropper') { applyEyedropper(cell); }
       canvas!.setPointerCapture(e.pointerId);
       scheduleRender();
@@ -1248,6 +1271,11 @@ export function TileView() {
 
     function onPointerUp(e: PointerEvent) {
       if (canvas!.hasPointerCapture(e.pointerId)) canvas!.releasePointerCapture(e.pointerId);
+      // Close any undo group opened by a stroke (paint/erase/RMB-erase)
+      // or an object drag/resize/rotate. commitUndoGroup is a no-op
+      // when no group is open, so the panning case doesn't trip it.
+      const wasGrouped = isDrawing || objectDragRef.current || resizeDragRef.current || rotateDragRef.current;
+      if (wasGrouped) stateRef.current.commitUndoGroup();
       isDrawing = null;
       isPanning = false;
       objectDragRef.current = null;
@@ -1290,6 +1318,24 @@ export function TileView() {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
       const s = stateRef.current;
+      // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z (or Cmd/Ctrl+Y) = redo.
+      // Suppressed mid-stroke / mid-drag so the user can't half-undo
+      // a paint that's still being painted; they have to release first.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (isDrawing || objectDragRef.current || resizeDragRef.current || rotateDragRef.current) return;
+        if (e.shiftKey) s.redo();
+        else s.undo();
+        scheduleRender();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        if (isDrawing || objectDragRef.current || resizeDragRef.current || rotateDragRef.current) return;
+        s.redo();
+        scheduleRender();
+        return;
+      }
       if (e.code === 'Space' && !spaceHeld) {
         spaceHeld = true;
         canvas!.style.cursor = 'grab';

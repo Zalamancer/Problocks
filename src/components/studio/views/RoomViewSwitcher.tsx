@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Home, Compass, Map as MapIcon, Globe2, Wifi, WifiOff } from 'lucide-react';
+import { Home, Compass, Map as MapIcon, Globe2, Wifi, WifiOff, Shuffle } from 'lucide-react';
 import { useTile } from '@/store/tile-store';
 import { useRoom, type RoomViewMode } from '@/store/room-store';
 import {
@@ -66,6 +66,8 @@ export function RoomViewSwitcher() {
   const ensureLocalPlayerHasLot = useRoom((s) => s.ensureLocalPlayerHasLot);
   const mainWorld = useRoom((s) => s.mainWorld);
   const realtimeLive = useRoom((s) => s.realtimeLive);
+  const generateMainWorld = useRoom((s) => s.generateMainWorld);
+  const regenerateMainWorld = useRoom((s) => s.regenerateMainWorld);
 
   // First mount: spawn room 0 + assign the local player to NW (or first
   // vacant corner) if not already done. Idempotent — safe across reloads
@@ -124,12 +126,23 @@ export function RoomViewSwitcher() {
         frame(getCrossCenterBounds(room.origin));
         return;
       case 'main-world': {
-        // Cover the default starter zone of the main world. Ship 4 will
-        // expand this beyond the starter zone as the procedural pass fills
-        // in past it.
+        // First-time switch to the main world triggers the procedural
+        // pass — cheap if no tilesets exist (early-return), otherwise
+        // fills the outer band around the default zone with biome
+        // terrain. Idempotent: subsequent switches no-op.
+        generateMainWorld();
+        // Frame the procedurally-filled square (4× the default zone).
+        // The starter zone sits at its centre; the outer band carries
+        // the procedural noise.
         const o = mainWorld.origin;
         const s = mainWorld.defaultZoneSize;
-        frame({ x0: o.x, y0: o.y, x1: o.x + s, y1: o.y + s });
+        const span = s * 4;
+        frame({
+          x0: o.x - Math.floor(span / 2) + Math.floor(s / 2),
+          y0: o.y - Math.floor(span / 2) + Math.floor(s / 2),
+          x1: o.x + Math.ceil(span / 2) + Math.floor(s / 2),
+          y1: o.y + Math.ceil(span / 2) + Math.floor(s / 2),
+        });
         return;
       }
     }
@@ -219,6 +232,43 @@ export function RoomViewSwitcher() {
           </button>
         );
       })}
+      {/* Regen-world button — only meaningful when looking at the main
+          world. Re-rolls the seed, clears every procedurally-painted
+          cell on the active layer, and generates a fresh band on next
+          switch. Hidden in other views to keep the toolbar tight. */}
+      {viewMode === 'main-world' && (
+        <>
+          <div style={{ width: 1.5, height: 18, background: 'var(--pb-line-2)', margin: '0 2px' }} />
+          <button
+            type="button"
+            title="Regenerate the main world (clears procedural terrain, picks a fresh seed)"
+            onClick={() => {
+              regenerateMainWorld();
+              // Re-trigger generation immediately so the player sees the
+              // new layout without having to switch views first.
+              generateMainWorld();
+            }}
+            className="flex items-center gap-1.5 transition-colors"
+            style={{
+              height: 30,
+              padding: '0 10px',
+              borderRadius: 8,
+              background: 'var(--pb-paper)',
+              color: 'var(--pb-ink-soft)',
+              border: '1.5px solid var(--pb-line-2)',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: 0.4,
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <Shuffle size={13} strokeWidth={2.4} />
+            Regen
+          </button>
+        </>
+      )}
     </div>
   );
 }

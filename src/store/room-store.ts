@@ -9,6 +9,8 @@ import {
   ALL_CORNERS,
   getZone,
 } from '@/lib/room-geometry';
+import { useTile } from '@/store/tile-store';
+import { generateRegion } from '@/lib/world-gen';
 
 /**
  * Room / main-world state for the 2D tile system.
@@ -84,6 +86,11 @@ export interface RoomStore {
    *  show up. Not persisted (set fresh on every reload). */
   realtimeLive: boolean;
   setRealtimeLive: (live: boolean) => void;
+  /** Whether the procedural pass has filled the main world's outer
+   *  band. Tripped once per session (on first switch to main-world
+   *  view); `regenerateMainWorld` clears it so the user can re-roll
+   *  if they don't like the layout. */
+  mainWorldGenerated: boolean;
 
   // ── Room lifecycle ─────────────────────────────────────────────
   createRoom: () => string;
@@ -116,6 +123,23 @@ export interface RoomStore {
    * caller can `setCurrentRoom` after.
    */
   ensureLocalPlayerHasLot: () => string;
+
+  /**
+   * Procedurally fill the main world's outer band with biome terrain.
+   * Idempotent: no-op when `mainWorldGenerated === true`. Skips the
+   * central default zone (kept clear for hand-painting) and any cell
+   * the active layer has already painted. Texture palette is the union
+   * of every uploaded tileset's upper + lower texture ids; falls back
+   * to a no-op when no tilesets exist (the player hasn't uploaded
+   * anything yet).
+   */
+  generateMainWorld: () => void;
+  /** Force a regenerate — useful when the player wants a different
+   *  noise seed. Clears the painted main-world band on the active
+   *  layer (only cells outside the default zone), bumps `seed`, and
+   *  flips `mainWorldGenerated` back to false so the next switch to
+   *  main-world view triggers a fresh pass. */
+  regenerateMainWorld: () => void;
 }
 
 function emptyLots(): Record<Corner, Lot> {
@@ -155,6 +179,7 @@ export const useRoom = create<RoomStore>()(persist((set, get) => ({
   viewMode: 'room',
   realtimeLive: false,
   setRealtimeLive: (live) => set({ realtimeLive: live }),
+  mainWorldGenerated: false,
 
   createRoom: () => {
     const id = cryptoId();
@@ -254,6 +279,113 @@ export const useRoom = create<RoomStore>()(persist((set, get) => ({
     get().assignLotRandom(targetId, playerId);
     set({ currentRoomId: targetId });
     return targetId;
+  },
+
+  generateMainWorld: () => {
+    if (get().mainWorldGenerated) return;
+    const tile = useTile.getState();
+    // Palette = every distinct texture id across every uploaded tileset.
+    // Order doesn't matter much — `pickTextureForNoise` band-splits the
+    // [0,1) noise range evenly, so the noise distribution lands the
+    // textures roughly equally regardless of their order.
+    const palette = Array.from(
+      new Set(
+        tile.tilesets.flatMap((ts) => [ts.upperTextureId, ts.lowerTextureId]),
+      ),
+    );
+    if (palette.length === 0) {
+      // No tilesets uploaded yet — bail silently. The next call (after
+      // the user uploads a sheet) will proceed.
+      return;
+    }
+    const layer = tile.layers.find((l) => l.id === tile.activeLayerId)
+      ?? tile.layers[0];
+    if (!layer) return;
+    const mw = get().mainWorld;
+    // Generate a square `defaultZoneSize * 4` cells on a side, centred on
+    // the main-world origin. The hand-painted starter zone is preserved
+    // by `skipCell`. Past these bounds, painting / panning still works —
+    // just no procedurally-generated cells past the edge for now. A
+    // chunked, camera-driven generator (one chunk per pan) is a
+    // future ship.
+    const span = mw.defaultZoneSize * 4;
+    const x0 = mw.origin.x - Math.floor(span / 2);
+    const y0 = mw.origin.y - Math.floor(span / 2);
+    const x1 = mw.origin.x + Math.ceil(span / 2);
+    const y1 = mw.origin.y + Math.ceil(span / 2);
+    const dx0 = mw.origin.x;
+    const dy0 = mw.origin.y;
+    const dx1 = mw.origin.x + mw.defaultZoneSize;
+    const dy1 = mw.origin.y + mw.defaultZoneSize;
+    const cornerKey = (cx: number, cy: number) => `${cx},${cy}`;
+    const cells = generateRegion({
+      x0, y0, x1, y1,
+      seed: mw.seed,
+      palette,
+      scale: 18,
+      skipCell: (cx, cy) => {
+        // 1. Default zone is hand-painting territory — leave alone.
+        if (cx >= dx0 && cx < dx1 && cy >= dy0 && cy < dy1) return true;
+        // 2. Cells the player (or a previous gen pass) has already
+        //    painted — don't overwrite.
+        if (cornerKey(cx, cy) in layer.corners) return true;
+        return false;
+      },
+    });
+    if (cells.length === 0) {
+      // Could happen if every target cell is already painted. Mark
+      // generated so we don't re-scan on every switch.
+      set({ mainWorldGenerated: true });
+      return;
+    }
+    tile.beginUndoGroup();
+    tile.mutateCorners(layer.id, (corners) => {
+      for (const { cx, cy, texId } of cells) {
+        corners[`${cx},${cy}`] = texId;
+        corners[`${cx + 1},${cy}`] = texId;
+        corners[`${cx},${cy + 1}`] = texId;
+        corners[`${cx + 1},${cy + 1}`] = texId;
+      }
+    });
+    tile.commitUndoGroup();
+    set({ mainWorldGenerated: true });
+  },
+
+  regenerateMainWorld: () => {
+    // Clear the previously generated band on the active layer so the
+    // next pass runs onto fresh cells, then bump the seed + flip the
+    // flag. The default zone is preserved (skipCell would have skipped
+    // it during generate, so it never had any procedural corners).
+    const tile = useTile.getState();
+    const layer = tile.layers.find((l) => l.id === tile.activeLayerId)
+      ?? tile.layers[0];
+    const mw = get().mainWorld;
+    if (layer) {
+      const span = mw.defaultZoneSize * 4;
+      const x0 = mw.origin.x - Math.floor(span / 2);
+      const y0 = mw.origin.y - Math.floor(span / 2);
+      const x1 = mw.origin.x + Math.ceil(span / 2);
+      const y1 = mw.origin.y + Math.ceil(span / 2);
+      const dx0 = mw.origin.x;
+      const dy0 = mw.origin.y;
+      const dx1 = mw.origin.x + mw.defaultZoneSize;
+      const dy1 = mw.origin.y + mw.defaultZoneSize;
+      tile.beginUndoGroup();
+      tile.mutateCorners(layer.id, (corners) => {
+        for (let cy = y0; cy <= y1; cy++) {
+          for (let cx = x0; cx <= x1; cx++) {
+            // Preserve default-zone hand-painting.
+            if (cx >= dx0 && cx < dx1 && cy >= dy0 && cy < dy1) continue;
+            delete corners[`${cx},${cy}`];
+          }
+        }
+      });
+      tile.commitUndoGroup();
+    }
+    set((s) => ({
+      mainWorld: { ...s.mainWorld, seed: Math.floor(Math.random() * 0xffff_ffff) },
+      mainWorldGenerated: false,
+    }));
   },
 }), {
   name: 'problocks-room-v1',

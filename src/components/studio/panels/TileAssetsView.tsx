@@ -2783,13 +2783,14 @@ function CharacterCard({
       style={{
         background: 'rgba(255,255,255,0.85)',
         border: '1px solid var(--pb-line-2)',
-        borderRadius: 6,
         cursor: 'pointer',
         color: 'var(--pb-ink)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '0 6px',
+        padding: 0,
+        margin: 0,
         flex: 1,
-        minWidth: 26,
+        minWidth: 28,
+        width: 28,
       }}
     >
       <Pencil size={12} strokeWidth={2.4} />
@@ -2803,13 +2804,14 @@ function CharacterCard({
       style={{
         background: 'rgba(255,255,255,0.85)',
         border: '1px solid var(--pb-line-2)',
-        borderRadius: 6,
         cursor: 'pointer',
         color: 'var(--pb-coral-ink)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '0 6px',
+        padding: 0,
+        margin: 0,
         flex: 1,
-        minWidth: 26,
+        minWidth: 28,
+        width: 28,
       }}
     >
       <Trash2 size={12} strokeWidth={2.4} />
@@ -2919,10 +2921,10 @@ function CharacterCard({
     <div {...commonHandlers} style={containerStyle}>
       <div
         className="flex items-stretch gap-2"
-        style={{ padding: '4px 6px', minHeight: 56 + 8 }}
+        style={{ padding: 0, minHeight: 56 }}
       >
         <CellThumb size={56} />
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
+        <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6 }}>
           {editingName ? (
             <input
               autoFocus
@@ -2968,7 +2970,7 @@ function CharacterCard({
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 4,
+              gap: 0,
               flexShrink: 0,
               marginLeft: 'auto',
               alignSelf: 'stretch',

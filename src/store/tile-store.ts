@@ -290,8 +290,16 @@ export const CHARACTER_DIRS: CharacterDir8[] = [
  * One uploaded action sprite sheet for a character + direction. Always a
  * 4×4 grid (16 frames) per the upload pipeline — `cols/rows/frameW/frameH`
  * are stored explicitly so future formats can vary, just like `TileCharacter`.
+ *
+ * Each direction can hold MULTIPLE animations (e.g. "walk", "attack",
+ * "cast"), so each gets its own id + label and lives inside an ordered
+ * list keyed by direction on `TileCharacter.animations`. Same shape as
+ * `ObjectStyle` so the right-panel list reuses the styles row UI
+ * (rename + drag-reorder + hover delete).
  */
 export interface CharacterAnimation {
+  id: string;
+  label: string;
   /** PNG/WEBP data URL of the full 4×4 sheet. */
   src: string;
   cols: number;
@@ -299,6 +307,7 @@ export interface CharacterAnimation {
   frameW: number;
   frameH: number;
   addedAt: number;
+  sortIndex: number;
 }
 
 /**
@@ -346,9 +355,10 @@ export interface TileCharacter {
   fps: number;
   /** Movement speed in world units per second during play mode. */
   speed: number;
-  /** Optional per-direction 4×4 action animation sheets. Missing keys =
-   *  no animation uploaded yet for that direction. */
-  animations: Partial<Record<CharacterDir8, CharacterAnimation>>;
+  /** Per-direction ordered list of 4×4 action animation sheets. Empty
+   *  list (or missing key) = no animation uploaded yet. Ordered by
+   *  `sortIndex`, persisted via the per-direction setters below. */
+  animations: Partial<Record<CharacterDir8, CharacterAnimation[]>>;
   addedAt: number;
   sortIndex: number;
 }
@@ -544,13 +554,48 @@ export interface TileStore {
   /** Patch a character's runtime / display fields (position, size, fps,
    *  speed). The play loop calls this with new x/y on every tick. */
   updateTileCharacter: (id: string, patch: Partial<Omit<TileCharacter, 'id' | 'src' | 'addedAt' | 'sortIndex'>>) => void;
-  /** Set or clear a 4×4 action animation sheet for one direction. Pass
-   *  `null` for `animation` to remove (the direction key is deleted from
-   *  the map so persisted size doesn't grow forever). */
-  setCharacterAnimation: (
+  /** Append a new 4×4 animation to the given direction's list. Returns
+   *  the new id so callers can scroll/select the freshly-added row. */
+  addCharacterAnimation: (
     id: string,
     direction: CharacterDir8,
-    animation: CharacterAnimation | null,
+    input: { label?: string; src: string; cols: number; rows: number; frameW: number; frameH: number },
+  ) => string;
+  removeCharacterAnimation: (
+    id: string,
+    direction: CharacterDir8,
+    animationId: string,
+  ) => void;
+  renameCharacterAnimation: (
+    id: string,
+    direction: CharacterDir8,
+    animationId: string,
+    label: string,
+  ) => void;
+  /** Replace a single animation's bitmap (Replace flow on the row).
+   *  Width/height fall back to existing values when omitted. */
+  setCharacterAnimationSrc: (
+    id: string,
+    direction: CharacterDir8,
+    animationId: string,
+    patch: { src: string; cols?: number; rows?: number; frameW?: number; frameH?: number },
+  ) => void;
+  /** Drag-reorder action: pass the full ordered list of animation ids
+   *  for that direction. Animations not in the list keep their existing
+   *  index (defensive — usually all ids are listed). */
+  reorderCharacterAnimations: (
+    id: string,
+    direction: CharacterDir8,
+    orderedAnimationIds: string[],
+  ) => void;
+  /** Replace the whole 3×3 sheet for a character. Clears every per-
+   *  direction animation list because the new poses no longer match the
+   *  uploaded action sheets — those rotation frames the animations were
+   *  paired with don't exist any more. Width/height fall back to
+   *  defaults when omitted. */
+  replaceCharacterSheet: (
+    id: string,
+    input: { src: string; cols: number; rows: number; frameW: number; frameH: number },
   ) => void;
   setSelectedCharacterId: (id: string | null) => void;
 
@@ -1495,21 +1540,156 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     if (!c) return {};
     return { tileCharacters: { ...s.tileCharacters, [id]: { ...c, ...patch } } };
   }),
-  setCharacterAnimation: (id, direction, animation) => set((s) => {
+  addCharacterAnimation: (id, direction, input) => {
+    const animationId = cryptoId();
+    set((s) => {
+      const c = s.tileCharacters[id];
+      if (!c) return {};
+      const list = c.animations?.[direction] ?? [];
+      const maxIdx = list.reduce((m, a) => Math.max(m, a.sortIndex ?? -1), -1);
+      const animation: CharacterAnimation = {
+        id: animationId,
+        label: input.label || `Animation ${list.length + 1}`,
+        src: input.src,
+        cols: input.cols,
+        rows: input.rows,
+        frameW: input.frameW,
+        frameH: input.frameH,
+        addedAt: Date.now(),
+        sortIndex: maxIdx + 1,
+      };
+      return {
+        tileCharacters: {
+          ...s.tileCharacters,
+          [id]: {
+            ...c,
+            animations: {
+              ...(c.animations ?? {}),
+              [direction]: [...list, animation],
+            },
+          },
+        },
+      };
+    });
+    return animationId;
+  },
+  removeCharacterAnimation: (id, direction, animationId) => set((s) => {
     const c = s.tileCharacters[id];
     if (!c) return {};
-    const nextAnimations: Partial<Record<CharacterDir8, CharacterAnimation>> = {
+    const list = c.animations?.[direction] ?? [];
+    const next = list.filter((a) => a.id !== animationId);
+    if (next.length === list.length) return {};
+    const nextAnimations: Partial<Record<CharacterDir8, CharacterAnimation[]>> = {
       ...(c.animations ?? {}),
     };
-    if (animation === null) {
+    if (next.length === 0) {
       delete nextAnimations[direction];
     } else {
-      nextAnimations[direction] = animation;
+      nextAnimations[direction] = next;
     }
     return {
       tileCharacters: {
         ...s.tileCharacters,
         [id]: { ...c, animations: nextAnimations },
+      },
+    };
+  }),
+  renameCharacterAnimation: (id, direction, animationId, label) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    const list = c.animations?.[direction] ?? [];
+    const trimmed = label.trim();
+    if (!trimmed) return {};
+    let changed = false;
+    const next = list.map((a) => {
+      if (a.id !== animationId || a.label === trimmed) return a;
+      changed = true;
+      return { ...a, label: trimmed };
+    });
+    if (!changed) return {};
+    return {
+      tileCharacters: {
+        ...s.tileCharacters,
+        [id]: {
+          ...c,
+          animations: { ...(c.animations ?? {}), [direction]: next },
+        },
+      },
+    };
+  }),
+  setCharacterAnimationSrc: (id, direction, animationId, patch) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    const list = c.animations?.[direction] ?? [];
+    const idx = list.findIndex((a) => a.id === animationId);
+    if (idx < 0) return {};
+    const cur = list[idx];
+    const next = list.slice();
+    next[idx] = {
+      ...cur,
+      src: patch.src,
+      cols: patch.cols ?? cur.cols,
+      rows: patch.rows ?? cur.rows,
+      frameW: patch.frameW ?? cur.frameW,
+      frameH: patch.frameH ?? cur.frameH,
+    };
+    return {
+      tileCharacters: {
+        ...s.tileCharacters,
+        [id]: {
+          ...c,
+          animations: { ...(c.animations ?? {}), [direction]: next },
+        },
+      },
+    };
+  }),
+  reorderCharacterAnimations: (id, direction, orderedIds) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    const list = c.animations?.[direction] ?? [];
+    const byId = new Map(list.map((a) => [a.id, a]));
+    const seen = new Set<string>();
+    const next: CharacterAnimation[] = [];
+    for (const animId of orderedIds) {
+      const a = byId.get(animId);
+      if (!a || seen.has(animId)) continue;
+      seen.add(animId);
+      next.push(a);
+    }
+    // Defensive: append any animations missing from the caller's order
+    // so a buggy caller can't accidentally drop entries.
+    for (const a of list) {
+      if (!seen.has(a.id)) next.push(a);
+    }
+    const reindexed = next.map((a, i) => ({ ...a, sortIndex: i }));
+    return {
+      tileCharacters: {
+        ...s.tileCharacters,
+        [id]: {
+          ...c,
+          animations: { ...(c.animations ?? {}), [direction]: reindexed },
+        },
+      },
+    };
+  }),
+  replaceCharacterSheet: (id, input) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    return {
+      tileCharacters: {
+        ...s.tileCharacters,
+        [id]: {
+          ...c,
+          src: input.src,
+          cols: input.cols,
+          rows: input.rows,
+          frameW: input.frameW,
+          frameH: input.frameH,
+          // Wipe every per-direction animation list — the new sheet's
+          // 8 poses no longer match the prior 4×4 sheets the user had
+          // uploaded against the old rotation frames.
+          animations: {},
+        },
       },
     };
   }),
@@ -2010,13 +2190,51 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       state.selectedCharacterId = null;
     }
     // Backfill the per-direction `animations` map on characters persisted
-    // before the Animations sub-tab was added. Default to {} so the
-    // properties panel never has to nullish-coalesce when iterating
-    // CHARACTER_DIRS.
+    // before the Animations sub-tab was added.
+    //
+    // Two shapes have existed: the original was `Partial<Record<dir,
+    // CharacterAnimation>>` (one sheet per direction) and the current is
+    // `Partial<Record<dir, CharacterAnimation[]>>` (ordered list). Saves
+    // from the original shape are migrated by wrapping the single sheet
+    // in a one-element list with a generated id + default label, so the
+    // new panel sees the previously-uploaded data without crashing.
     for (const c of Object.values(state.tileCharacters)) {
       if (!c.animations || typeof c.animations !== 'object') {
         c.animations = {};
+        continue;
       }
+      const next: Partial<Record<CharacterDir8, CharacterAnimation[]>> = {};
+      for (const dirKey of Object.keys(c.animations) as CharacterDir8[]) {
+        const value = (c.animations as Partial<Record<CharacterDir8, unknown>>)[dirKey];
+        if (Array.isArray(value)) {
+          next[dirKey] = value.map((a, i) => ({
+            id: typeof a.id === 'string' ? a.id : cryptoId(),
+            label: typeof a.label === 'string' ? a.label : `Animation ${i + 1}`,
+            src: a.src,
+            cols: a.cols,
+            rows: a.rows,
+            frameW: a.frameW,
+            frameH: a.frameH,
+            addedAt: typeof a.addedAt === 'number' ? a.addedAt : Date.now(),
+            sortIndex: typeof a.sortIndex === 'number' ? a.sortIndex : i,
+          })) as CharacterAnimation[];
+        } else if (value && typeof value === 'object' && 'src' in (value as object)) {
+          // Pre-list shape: a single CharacterAnimation. Wrap it.
+          const a = value as { src: string; cols: number; rows: number; frameW: number; frameH: number; addedAt?: number };
+          next[dirKey] = [{
+            id: cryptoId(),
+            label: 'Animation 1',
+            src: a.src,
+            cols: a.cols,
+            rows: a.rows,
+            frameW: a.frameW,
+            frameH: a.frameH,
+            addedAt: a.addedAt ?? Date.now(),
+            sortIndex: 0,
+          }];
+        }
+      }
+      c.animations = next;
     }
   },
 }));

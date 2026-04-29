@@ -305,11 +305,42 @@ export function TileView() {
       // the sub-pixel seams the rasterizer creates at fractional zoom/pan.
       const bleed = 0.5 / cam.zoom;
 
+      // ── Base layer pre-pass ─────────────────────────────────────
+      // When `baseTextureId` is set, the map is conceptually filled
+      // edge-to-edge with that texture's pure tile. We stamp the visible
+      // viewport with it once, before any layered corners draw on top —
+      // and the layered pass below will substitute absent corners with
+      // baseTextureId so painted regions transition smoothly via the
+      // matching wang bridge tileset.
+      const recolorMap = tileRecolorRef.current;
+      const baseTexId = s.baseTextureId;
+      if (baseTexId) {
+        const baseResolved = resolveCellTile(baseTexId, baseTexId, baseTexId, baseTexId, s.tilesets);
+        if (baseResolved) {
+          const baseTileId = baseResolved.tileset.tileIds[baseResolved.index];
+          const baseTile = baseTileId ? s.tiles[baseTileId] : undefined;
+          if (baseTile) {
+            const baseDataUrl = tileDataUrlFor(baseResolved.tileset, baseResolved.index, baseTile.dataUrl);
+            const baseRecolored = recolorMap.get(baseTileId);
+            const baseUrl = baseRecolored ?? baseDataUrl;
+            const baseImg = imgCacheRef.current.get(baseUrl);
+            if (baseImg && imgReadyRef.current.has(baseUrl)) {
+              for (let cy = cy0; cy <= cy1; cy++) {
+                for (let cx = cx0; cx <= cx1; cx++) {
+                  ctx!.drawImage(baseImg, cx * ts - bleed, cy * ts - bleed, ts + bleed * 2, ts + bleed * 2);
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Render each layer's corners; per-cell, the resolver picks whichever
       // tileset bridges the textures present at the 4 corners. Two chained
       // tilesets sharing a texture transition smoothly because the bridge
-      // tileset for the boundary cells contains both textures.
-      const recolorMap = tileRecolorRef.current;
+      // tileset for the boundary cells contains both textures. When a base
+      // texture is active, absent corners are treated as baseTexId so paint
+      // borders blend into the base via wang bridges instead of a hard edge.
       for (const layer of s.layers) {
         if (!layer.visible) continue;
         ctx!.globalAlpha = layer.opacity;
@@ -317,11 +348,17 @@ export function TileView() {
         const transforms = layer.cellTransforms;
         for (let cy = cy0; cy <= cy1; cy++) {
           for (let cx = cx0; cx <= cx1; cx++) {
-            const nw = corners[`${cx},${cy}`];
-            const ne = corners[`${cx + 1},${cy}`];
-            const sw = corners[`${cx},${cy + 1}`];
-            const se = corners[`${cx + 1},${cy + 1}`];
-            if (!nw && !ne && !sw && !se) continue;
+            const nwRaw = corners[`${cx},${cy}`];
+            const neRaw = corners[`${cx + 1},${cy}`];
+            const swRaw = corners[`${cx},${cy + 1}`];
+            const seRaw = corners[`${cx + 1},${cy + 1}`];
+            // Fully-empty cells: the base pre-pass already drew them (or
+            // the canvas background shows through if no base is set).
+            if (!nwRaw && !neRaw && !swRaw && !seRaw) continue;
+            const nw = nwRaw ?? baseTexId ?? undefined;
+            const ne = neRaw ?? baseTexId ?? undefined;
+            const sw = swRaw ?? baseTexId ?? undefined;
+            const se = seRaw ?? baseTexId ?? undefined;
             const resolved = resolveCellTile(nw, ne, sw, se, s.tilesets);
             if (!resolved) continue;
             const tileId = resolved.tileset.tileIds[resolved.index];

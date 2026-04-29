@@ -373,6 +373,17 @@ export interface TileStore {
    *  list; when false, the id and all its siblings are removed. */
   setWavyTexture: (textureId: string, on: boolean) => void;
   /**
+   * Optional base-layer texture id. When set, the renderer fills the
+   * entire visible viewport with this texture's pure tile and treats
+   * absent corners as this id when resolving cells — so painted regions
+   * smoothly transition into the base via the matching wang bridge.
+   * The map is conceptually infinite while only painted overrides
+   * (corners that differ from the base) get stored on layers. Null =
+   * classic mode where empty cells render as the page background.
+   */
+  baseTextureId: string | null;
+  setBaseTexture: (id: string | null) => void;
+  /**
    * Per-tileset palette tints — keyed first by tileset id and then by
    * colour bucket (red/green/blue/etc., see `lib/tile-palette.ts`).
    * Each entry holds an HSL triple { hue, saturation, brightness }
@@ -736,7 +747,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         return touched ? { ...l, corners } : l;
       });
       const brushTextureId = s.brushTextureId === sourceTextureId ? targetTextureId : s.brushTextureId;
-      return { ...undoStep, tilesets, layers, brushTextureId };
+      const baseTextureId = s.baseTextureId === sourceTextureId ? targetTextureId : s.baseTextureId;
+      return { ...undoStep, tilesets, layers, brushTextureId, baseTextureId };
     });
     return changedIds;
   },
@@ -755,10 +767,16 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const nextLayers = s.layers.map((l) =>
       l.tilesetId === tilesetId ? { ...l, tilesetId: null } : l,
     );
+    // If the base texture pointed into the removed tileset, drop it —
+    // otherwise the renderer would fail to resolve a tile every frame.
+    const baseTextureId = (s.baseTextureId === ts.upperTextureId || s.baseTextureId === ts.lowerTextureId)
+      ? null
+      : s.baseTextureId;
     return {
       tilesets: s.tilesets.filter((t) => t.id !== tilesetId),
       tiles: nextTiles,
       layers: nextLayers,
+      baseTextureId,
     };
   }),
   addTilesetVariant: (tilesetId, { name, sheetDataUrl, tileDataUrls }) => {
@@ -1103,6 +1121,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     else for (const id of family) current.delete(id);
     return { wavyTextureIds: Array.from(current) };
   }),
+  baseTextureId: null,
+  setBaseTexture: (id) => set({ baseTextureId: id }),
   tilesetTints: {},
   setTilesetBucketTint: (tilesetId, bucketId, patch) => set((s) => {
     const next: TileStore['tilesetTints'] = { ...s.tilesetTints };
@@ -1294,6 +1314,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomFlipV: s.brushRandomFlipV,
     brushRandomRotate: s.brushRandomRotate,
     wavyTextureIds: s.wavyTextureIds,
+    baseTextureId: s.baseTextureId,
     tilesetTints: s.tilesetTints,
     showGrid: s.showGrid,
     fencePosts: s.fencePosts,

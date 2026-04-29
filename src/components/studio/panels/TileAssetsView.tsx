@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
-  Pencil, GripVertical, X, Layers,
+  Pencil, GripVertical, X, Layers, Globe2,
 } from 'lucide-react';
 import { useTile, type Tileset, type Tile, type ObjectAsset } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
@@ -560,6 +560,8 @@ function TerrainCard({
   const lowerTile = tiles[tileset.tileIds[PURE_LOWER_INDEX]];
   const brushTextureId = useTile((s) => s.brushTextureId);
   const setBrushTextureId = useTile((s) => s.setBrushTextureId);
+  const baseTextureId = useTile((s) => s.baseTextureId);
+  const setBaseTexture = useTile((s) => s.setBaseTexture);
   const setTool = useTile((s) => s.setTool);
   const addTilesetVariant = useTile((s) => s.addTilesetVariant);
   const removeTilesetVariant = useTile((s) => s.removeTilesetVariant);
@@ -699,25 +701,35 @@ function TerrainCard({
 
       {/* Brush picker — choose which of the two base textures the paint tool
           lays down. The chain icon on each swatch opens a small popover for
-          uploading a NEW tileset that shares this texture. */}
+          uploading a NEW tileset that shares this texture. The globe icon
+          marks the texture as the map-wide BASE (renderer fills the entire
+          viewport with it; layered corners override + transition into it). */}
       <div className="flex items-center gap-2 mt-2">
         <BrushSwatch
           dataUrl={upperDataUrl}
           label="UPPER"
           active={brushTextureId === tileset.upperTextureId}
+          isBase={baseTextureId === tileset.upperTextureId}
           shareCount={sharedUpperCount}
           linking={linkingSide === 'u'}
           onClick={() => pickBrush('u')}
           onChainClick={() => setLinkingSide(linkingSide === 'u' ? null : 'u')}
+          onBaseClick={() => setBaseTexture(
+            baseTextureId === tileset.upperTextureId ? null : tileset.upperTextureId,
+          )}
         />
         <BrushSwatch
           dataUrl={lowerDataUrl}
           label="LOWER"
           active={brushTextureId === tileset.lowerTextureId}
+          isBase={baseTextureId === tileset.lowerTextureId}
           shareCount={sharedLowerCount}
           linking={linkingSide === 'l'}
           onClick={() => pickBrush('l')}
           onChainClick={() => setLinkingSide(linkingSide === 'l' ? null : 'l')}
+          onBaseClick={() => setBaseTexture(
+            baseTextureId === tileset.lowerTextureId ? null : tileset.lowerTextureId,
+          )}
         />
       </div>
 
@@ -800,19 +812,26 @@ function TerrainCard({
 }
 
 function BrushSwatch({
-  dataUrl, label, active, shareCount, linking, onClick, onChainClick,
+  dataUrl, label, active, isBase, shareCount, linking, onClick, onChainClick, onBaseClick,
 }: {
   /** PNG dataUrl to render in the thumbnail. Variant-aware — the parent
    *  resolves the active variant's slice URL before passing it in. */
   dataUrl: string | undefined;
   label: 'UPPER' | 'LOWER';
   active: boolean;
+  /** True when this texture id is the map-wide base. Highlights the
+   *  globe icon and gives the swatch a subtle ring so the user can see
+   *  at a glance which texture is filling the infinite viewport. */
+  isBase: boolean;
   /** Number of OTHER tilesets sharing this texture id. >0 means it's part
    *  of a chain — shown as a small badge next to the chain icon. */
   shareCount: number;
   linking: boolean;
   onClick: () => void;
   onChainClick: () => void;
+  /** Toggle this texture as the map-wide base layer. Clicking again on
+   *  the active base unsets it (caller passes null). */
+  onBaseClick: () => void;
 }) {
   return (
     <div
@@ -820,9 +839,9 @@ function BrushSwatch({
       style={{
         position: 'relative',
         background: active ? 'var(--pb-paper)' : 'transparent',
-        border: `1.5px solid ${linking ? 'var(--pb-mint-ink, #2d8f5b)' : (active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)')}`,
+        border: `1.5px solid ${linking ? 'var(--pb-mint-ink, #2d8f5b)' : (isBase ? 'rgba(60,140,40,0.7)' : (active ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'))}`,
         borderRadius: 8,
-        boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+        boxShadow: active ? '0 2px 0 var(--pb-butter-ink)' : (isBase ? '0 0 0 2px rgba(110,180,90,0.25)' : 'none'),
       }}
     >
       <button
@@ -854,6 +873,34 @@ function BrushSwatch({
         <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.5 }}>
           {label}
         </span>
+      </button>
+      {/* Base-layer toggle — marks this texture as the map-wide infinite
+          base. Click again to unset. Mirrors the chain button at top-right
+          but lives at top-left so the two never overlap. Highlighted green
+          when active so the user can spot which side is the base at a
+          glance. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onBaseClick(); }}
+        title={isBase ? 'This is the map-wide base — click to unset' : 'Set as map-wide base layer'}
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: 2,
+          width: 18,
+          height: 18,
+          padding: 0,
+          background: isBase ? 'rgba(110,180,90,0.18)' : 'var(--pb-paper)',
+          border: `1.5px solid ${isBase ? 'rgba(60,140,40,0.55)' : 'var(--pb-line-2)'}`,
+          color: isBase ? 'rgb(40,100,30)' : 'var(--pb-ink-muted)',
+          borderRadius: 999,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Globe2 size={10} strokeWidth={2.6} />
       </button>
       {/* Chain button — opens the connect popover. Always visible so users
           discover the feature; gets a green tint when this texture already

@@ -15,9 +15,14 @@ interface PanelIconTabsProps {
 }
 
 /**
- * Animated expanding pill tab bar — copied exactly from AutoAnimation's MediaPanel.
- * Active tab expands (flex: 2) to reveal the label; inactive tabs show icon only (flex: 1).
- * Uses bg-white / text-black for the active pill.
+ * Animated expanding pill tab bar — copied from AutoAnimation's MediaPanel,
+ * re-skinned to the Problocks chunky-pastel palette: active pill is butter
+ * yellow (`--pb-butter` / `--pb-butter-ink`) with a 1.5px chunky border and
+ * 2px hard shadow; inactive tabs use the muted-ink colour and pick up the
+ * cream-2 hover background.
+ *
+ * Active tab expands (flex: 2) to reveal the label; inactive tabs show icon
+ * only (flex: 1).
  */
 export function PanelIconTabs({ tabs, activeTab, onChange, className }: PanelIconTabsProps) {
   return (
@@ -33,11 +38,15 @@ export function PanelIconTabs({ tabs, activeTab, onChange, className }: PanelIco
             style={{
               flex: isActive ? 2 : 1,
               transition:
-                'flex 300ms cubic-bezier(0.25, 1, 0.5, 1), background-color 200ms, color 200ms, padding 200ms',
+                'flex 300ms cubic-bezier(0.25, 1, 0.5, 1), background-color 200ms, color 200ms, padding 200ms, box-shadow 200ms, border-color 200ms',
+              background: isActive ? 'var(--pb-butter)' : 'transparent',
+              color: isActive ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+              border: isActive ? '1.5px solid var(--pb-butter-ink)' : '1.5px solid transparent',
+              boxShadow: isActive ? '0 2px 0 var(--pb-butter-ink)' : 'none',
             }}
             className={cn(
               'relative h-8 rounded-lg flex items-center justify-center gap-1.5 overflow-hidden',
-              isActive ? 'bg-white text-black px-2' : 'text-gray-400 hover:text-white hover:bg-panel-surface',
+              isActive ? 'px-2' : 'hover:bg-[var(--pb-cream-2)] hover:text-[var(--pb-ink)]',
             )}
           >
             <Icon size={16} className="shrink-0" />

@@ -521,8 +521,137 @@ function AnimationsTab({
             }}
           />
         )}
+
+        <SavedAnimationsList
+          animations={animations}
+          excludeId={pendingNameId}
+          onRemove={(animId) => removeCharacterAnimation(character.id, activeDir, animId)}
+          onRename={(animId, label) =>
+            renameCharacterAnimation(character.id, activeDir, animId, label)
+          }
+        />
       </div>
     </>
+  );
+}
+
+/**
+ * Compact list of every saved animation for the active direction. Hidden
+ * when empty so the panel still feels minimal on a brand-new direction.
+ * The currently-being-named animation (`excludeId`) is omitted because
+ * it's already on display in the preview tile above. Each row shows a
+ * single-frame thumbnail (top-left cell of the sheet), the user-given
+ * name as a click-to-rename input, and a delete button.
+ */
+function SavedAnimationsList({
+  animations, excludeId, onRemove, onRename,
+}: {
+  animations: CharacterAnimation[];
+  excludeId: string | null;
+  onRemove: (animationId: string) => void;
+  onRename: (animationId: string, label: string) => void;
+}) {
+  const visible = animations.filter((a) => a.id !== excludeId);
+  if (visible.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
+        SAVED ({visible.length})
+      </span>
+      {visible.map((anim) => (
+        <SavedAnimationRow
+          key={anim.id}
+          animation={anim}
+          onRemove={() => onRemove(anim.id)}
+          onRename={(label) => onRename(anim.id, label)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SavedAnimationRow({
+  animation, onRemove, onRename,
+}: {
+  animation: CharacterAnimation;
+  onRemove: () => void;
+  onRename: (label: string) => void;
+}) {
+  const [draft, setDraft] = useState(animation.label);
+  useEffect(() => { setDraft(animation.label); }, [animation.label]);
+
+  function commit() {
+    const next = draft.trim();
+    if (next.length === 0) {
+      setDraft(animation.label);
+      return;
+    }
+    if (next !== animation.label) onRename(next);
+  }
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{
+        background: 'var(--pb-cream-2)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 7,
+        padding: '5px 6px',
+      }}
+    >
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          flexShrink: 0,
+          borderRadius: 5,
+          border: '1.5px solid var(--pb-line-2)',
+          background: 'rgba(0,0,0,0.05)',
+          backgroundImage: `url(${animation.src})`,
+          backgroundSize: `${animation.cols * 100}% ${animation.rows * 100}%`,
+          backgroundPosition: '0% 0%',
+          imageRendering: 'pixelated',
+        }}
+      />
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            setDraft(animation.label);
+            e.currentTarget.blur();
+          }
+        }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          padding: '4px 6px',
+          background: 'transparent',
+          border: 0,
+          fontSize: 12,
+          fontWeight: 700,
+          color: 'var(--pb-ink)',
+          outline: 'none',
+        }}
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Delete animation"
+        style={{
+          background: 'transparent',
+          border: 0,
+          padding: 4,
+          cursor: 'pointer',
+          color: 'var(--pb-coral-ink)',
+          display: 'flex',
+        }}
+      >
+        <Trash2 size={12} strokeWidth={2.4} />
+      </button>
+    </div>
   );
 }
 

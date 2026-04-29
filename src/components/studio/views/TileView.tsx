@@ -75,6 +75,9 @@ export function TileView() {
       cell: { x: topLeftTileCellX, y: topLeftTileCellY },
       world: { x: topLeftTileWorldX, y: topLeftTileWorldY },
     });
+    // Reset the renderer's one-shot log flag so the next render logs the
+    // actual fillRect coords used by pre-pass B against these bounds.
+    (window as unknown as { __islandLogged?: boolean }).__islandLogged = false;
   }, [islandDebugBounds, islandDebugFill, islandDebugTs]);
 
   const imgCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -481,6 +484,21 @@ export function TileView() {
         const ix1 = Math.min(cx1 + 1, bounds!.x + bounds!.w);
         const iy1 = Math.min(cy1 + 1, bounds!.y + bounds!.h);
         if (ix0 < ix1 && iy0 < iy1) {
+          // One-shot debug — print the actual fillRect coords used by
+          // pre-pass B vs the bounds NW corner so we can see whether
+          // they're consistent or there's an off-by-half-island-size.
+          if (!(window as unknown as { __islandLogged?: boolean }).__islandLogged) {
+            (window as unknown as { __islandLogged?: boolean }).__islandLogged = true;
+            console.log('[island/render] camera world:', { x: cam.x, y: cam.y }, 'zoom:', cam.zoom);
+            console.log('[island/render] viewport cells:', { cx0, cy0, cx1, cy1 });
+            console.log('[island/render] bounds:', bounds);
+            console.log('[island/render] pre-pass B fillRect cells:', { ix0, iy0, ix1, iy1 });
+            console.log('[island/render] pre-pass B fillRect world:', {
+              x: ix0 * ts, y: iy0 * ts,
+              w: (ix1 - ix0) * ts, h: (iy1 - iy0) * ts,
+              right: ix1 * ts, bottom: iy1 * ts,
+            });
+          }
           drawTiledPattern(islandFillId!, ix0, iy0, ix1, iy1);
         }
       }

@@ -78,6 +78,12 @@ export interface RoomStore {
    *  tile-store camera), but this flag also drives the zone-overlay /
    *  permission tinting in the canvas. */
   viewMode: RoomViewMode;
+  /** Realtime channel join state — written by `useTileRealtime` in
+   *  TileView and read by the view switcher's status badge so the
+   *  player can see at a glance whether other players' edits will
+   *  show up. Not persisted (set fresh on every reload). */
+  realtimeLive: boolean;
+  setRealtimeLive: (live: boolean) => void;
 
   // ── Room lifecycle ─────────────────────────────────────────────
   createRoom: () => string;
@@ -147,6 +153,8 @@ export const useRoom = create<RoomStore>()(persist((set, get) => ({
   currentRoomId: null,
   currentPlayerId: LOCAL_PLAYER_ID,
   viewMode: 'room',
+  realtimeLive: false,
+  setRealtimeLive: (live) => set({ realtimeLive: live }),
 
   createRoom: () => {
     const id = cryptoId();

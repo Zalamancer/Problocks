@@ -10,6 +10,12 @@ import { useStudio } from '@/store/studio-store';
 import { useRoom, canEditCell } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
+import {
+  useTileRealtime,
+  buildPaintEvent,
+  buildEraseEvent,
+} from '@/hooks/use-tile-realtime';
+import { ALL_CORNERS, type Corner } from '@/lib/room-geometry';
 import { RoomZoneOverlay } from './RoomZoneOverlay';
 import { RoomViewSwitcher } from './RoomViewSwitcher';
 
@@ -107,6 +113,58 @@ export function TileView() {
   const clearMap = useTile((s) => s.clearMap);
   const camera = useTile((s) => s.camera);
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
+
+  // ── Realtime room channel ─────────────────────────────────────
+  // Subscribes the TileView to the active room's Supabase Realtime
+  // channel; remote paint/erase/lot-claim events apply directly to the
+  // local stores. We keep the broadcast handle in a ref so the paint /
+  // erase / fill apply functions inside the canvas useEffect can reach
+  // it without re-mounting the entire effect on every reconnect.
+  const currentRoomId = useRoom((s) => s.currentRoomId);
+  const currentPlayerId = useRoom((s) => s.currentPlayerId);
+  const rooms = useRoom((s) => s.rooms);
+  const realtime = useTileRealtime(currentRoomId);
+  const realtimeRef = useRef(realtime);
+  realtimeRef.current = realtime;
+  // Mirror the channel join status into room-store so the switcher's
+  // status badge can read it without subscribing to the channel itself.
+  const setRealtimeLive = useRoom((s) => s.setRealtimeLive);
+  useEffect(() => {
+    setRealtimeLive(realtime.live);
+  }, [realtime.live, setRealtimeLive]);
+  // Stable per-tab sender id — same one the hook uses internally — so
+  // every event we broadcast carries the same origin tag.
+  const senderIdRef = useRef<string>(
+    typeof window !== 'undefined'
+      ? window.sessionStorage.getItem('problocks:tile-realtime:sender') ?? 'local'
+      : 'local',
+  );
+
+  // ── Broadcast lot claims ──────────────────────────────────────
+  // When the local player gets assigned a corner (either via the initial
+  // ensureLocalPlayerHasLot or by remote conflict resolution), tell the
+  // rest of the room. We dedupe with a ref so a re-render that doesn't
+  // change the corner doesn't re-broadcast.
+  const lastClaimRef = useRef<{ roomId: string; corner: Corner } | null>(null);
+  useEffect(() => {
+    if (!currentRoomId) return;
+    const room = rooms.find((r) => r.id === currentRoomId);
+    if (!room) return;
+    const myCorner = ALL_CORNERS.find(
+      (c) => room.lots[c].ownerId === currentPlayerId,
+    );
+    if (!myCorner) return;
+    const last = lastClaimRef.current;
+    if (last && last.roomId === currentRoomId && last.corner === myCorner) return;
+    lastClaimRef.current = { roomId: currentRoomId, corner: myCorner };
+    realtime.broadcast({
+      type: 'lot-claim',
+      roomId: currentRoomId,
+      playerId: currentPlayerId,
+      corner: myCorner,
+      sender: senderIdRef.current,
+    });
+  }, [rooms, currentRoomId, currentPlayerId, realtime]);
 
   // When the user picks an object on the canvas, jump the right panel to
   // its Properties tab so TileObjectPropertiesPanel comes into view. The
@@ -1004,6 +1062,15 @@ export function TileView() {
           }
         }
       });
+      // Broadcast to other players in the room. We send the FINAL texId
+      // (post-sibling swap), not the brush input, so remote clients
+      // apply exactly the same texture choice the local renderer used.
+      // Per-cell random transforms are intentionally NOT synced —
+      // visual variety is rolled independently per-client. Drops to a
+      // no-op when offline / not in a room.
+      realtimeRef.current.broadcast(
+        buildPaintEvent(layer.id, allowed, texId, senderIdRef.current),
+      );
     }
 
     function applyErase(cell: { cx: number; cy: number }) {
@@ -1020,6 +1087,9 @@ export function TileView() {
       s.mutateCellTransforms(layer.id, (t) => {
         for (const [cx, cy] of cells) delete t[`${cx},${cy}`];
       });
+      realtimeRef.current.broadcast(
+        buildEraseEvent(layer.id, cells, senderIdRef.current),
+      );
     }
 
     /** Flood-fill connected empty cells with the brush texture. */
@@ -1079,6 +1149,13 @@ export function TileView() {
           }
         }
       });
+      // Fills can run thousands of cells — broadcasting them as a single
+      // event keeps the websocket payload count low. Remote receivers
+      // apply the deltas in one mutateCorners call by virtue of the
+      // batched cells array.
+      realtimeRef.current.broadcast(
+        buildPaintEvent(layer.id, allowed, adjustedTexId, senderIdRef.current),
+      );
     }
 
     /** Pick the texture id under the cursor → set as the brush. */

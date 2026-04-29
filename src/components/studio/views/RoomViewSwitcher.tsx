@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Home, Layers, Compass, Map as MapIcon, Globe2 } from 'lucide-react';
+import { Home, Compass, Map as MapIcon, Globe2, Wifi, WifiOff } from 'lucide-react';
 import { useTile } from '@/store/tile-store';
 import { useRoom, type RoomViewMode } from '@/store/room-store';
 import {
@@ -65,6 +65,7 @@ export function RoomViewSwitcher() {
   const setViewMode = useRoom((s) => s.setViewMode);
   const ensureLocalPlayerHasLot = useRoom((s) => s.ensureLocalPlayerHasLot);
   const mainWorld = useRoom((s) => s.mainWorld);
+  const realtimeLive = useRoom((s) => s.realtimeLive);
 
   // First mount: spawn room 0 + assign the local player to NW (or first
   // vacant corner) if not already done. Idempotent — safe across reloads
@@ -149,6 +150,35 @@ export function RoomViewSwitcher() {
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
+      {/* Live-status pill — green wifi when joined to the realtime
+          channel, grey wifi-off when offline (no Supabase configured,
+          or still connecting). Sits inline with the view buttons so the
+          player sees at a glance whether other players' edits will
+          arrive. */}
+      <div
+        title={realtimeLive
+          ? 'Connected — other players in this room see your edits live.'
+          : 'Offline — single-player mode. Edits stay on this device.'}
+        style={{
+          height: 30,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '0 8px',
+          borderRadius: 8,
+          background: realtimeLive ? 'var(--pb-mint, #d4f3d4)' : 'var(--pb-paper)',
+          color: realtimeLive ? 'var(--pb-mint-ink, #2f7a39)' : 'var(--pb-ink-muted)',
+          border: `1.5px solid ${realtimeLive ? 'var(--pb-mint-ink, #2f7a39)' : 'var(--pb-line-2)'}`,
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: 0.4,
+          textTransform: 'uppercase',
+        }}
+      >
+        {realtimeLive ? <Wifi size={11} strokeWidth={2.4} /> : <WifiOff size={11} strokeWidth={2.4} />}
+        {realtimeLive ? 'Live' : 'Solo'}
+      </div>
+      <div style={{ width: 1.5, height: 18, background: 'var(--pb-line-2)', margin: '0 2px' }} />
       {BUTTONS.map((btn) => {
         const active = viewMode === btn.id;
         // "main-world" stays enabled in Ship 1 — it just pans to an empty

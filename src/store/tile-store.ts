@@ -777,6 +777,25 @@ export interface TileStore {
   playCameraZoom: number;
   setPlayCameraZoom: (v: number) => void;
 
+  // ── Procedural map generation (Play-mode worldgen) ─────────────
+  /** 32-bit seed driving the deterministic noise. Same seed + palette =
+   *  same map across reloads / sessions / players. */
+  genSeed: number;
+  setGenSeed: (seed: number) => void;
+  /** Replace `genSeed` with a fresh random 32-bit value — drives the
+   *  "Reroll" button next to the seed input. */
+  rerollGenSeed: () => void;
+  /** Spatial frequency of the dominant biome blob, in tile cells.
+   *  Higher = bigger blobs (smoother map); lower = patchier. */
+  genScale: number;
+  setGenScale: (v: number) => void;
+  /** Per-texture-id weights mapping into the noise→texture picker. A
+   *  weight of 0 excludes that texture from the generator (effectively
+   *  the "terrain enabled" toggle). Missing entries default to 1.0 so
+   *  newly-uploaded tilesets show up immediately. */
+  genTextureWeights: Record<string, number>;
+  setGenTextureWeight: (textureId: string, weight: number) => void;
+
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
 
@@ -1993,6 +2012,16 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   playCameraZoom: 1.5,
   setPlayCameraZoom: (v) => set({ playCameraZoom: Math.max(0.1, Math.min(8, v)) }),
 
+  genSeed: 0xC0FFEE,
+  setGenSeed: (seed) => set({ genSeed: (Math.floor(seed) >>> 0) }),
+  rerollGenSeed: () => set({ genSeed: ((Math.random() * 0x100000000) >>> 0) }),
+  genScale: 18,
+  setGenScale: (v) => set({ genScale: Math.max(2, Math.min(128, v)) }),
+  genTextureWeights: {},
+  setGenTextureWeight: (textureId, weight) => set((s) => ({
+    genTextureWeights: { ...s.genTextureWeights, [textureId]: Math.max(0, Math.min(2, weight)) },
+  })),
+
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
     layers: s.layers.map((l) => ({ ...l, corners: {} })),
@@ -2143,6 +2172,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     playCameraFollow: s.playCameraFollow,
     playCameraSmoothing: s.playCameraSmoothing,
     playCameraZoom: s.playCameraZoom,
+    genSeed: s.genSeed,
+    genScale: s.genScale,
+    genTextureWeights: s.genTextureWeights,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {

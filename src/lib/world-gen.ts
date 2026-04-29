@@ -90,16 +90,57 @@ function fractalNoise(x: number, y: number, seed: number, scale: number): number
 
 /**
  * Map a noise value to a texture id from the available palette.
- * Thresholds split the [0, 1) noise range into bands of equal width;
- * the player gets a recognisable biome layout (lots of "ground" with
- * occasional "highland" patches) without needing per-tileset tuning.
+ * When `weights` is provided, the noise range is split into bands
+ * proportional to each entry's weight (so a 0.6 grass / 0.3 dirt /
+ * 0.1 sand weighting gives 60% grass cover etc.). Without weights,
+ * bands are equal-width — same behaviour as before.
+ *
+ * Zero-weight entries are skipped entirely; if every weight is zero
+ * the function falls back to equal bands across the full palette so
+ * the user never gets a blank map by accidentally clearing all
+ * sliders.
  *
  * Returns null when the palette is empty — caller should skip the
  * cell so we don't write a null corner that the wang autotiler can't
  * resolve.
  */
-export function pickTextureForNoise(noise: number, palette: string[]): string | null {
+export function pickTextureForNoise(
+  noise: number,
+  palette: string[],
+  weights?: Record<string, number>,
+): string | null {
   if (palette.length === 0) return null;
+
+  if (weights) {
+    // Build cumulative thresholds over the active (non-zero) entries.
+    // Active palette is the same as the input palette when every
+    // weight is positive; entries with weight 0 are skipped so they
+    // claim no bandwidth and never get picked.
+    let total = 0;
+    for (const id of palette) {
+      const w = weights[id];
+      if (w && w > 0) total += w;
+    }
+    if (total > 0) {
+      const target = Math.min(0.99999, Math.max(0, noise)) * total;
+      let acc = 0;
+      for (const id of palette) {
+        const w = weights[id];
+        if (!w || w <= 0) continue;
+        acc += w;
+        if (target < acc) return id;
+      }
+      // Numerical safety — if we somehow fell through (e.g. noise was
+      // 1.0 exactly), return the last active entry.
+      for (let i = palette.length - 1; i >= 0; i--) {
+        const w = weights[palette[i]];
+        if (w && w > 0) return palette[i];
+      }
+    }
+    // Every weight is zero — fall through to the equal-bands path so
+    // the user still sees a generated map.
+  }
+
   // Band width = 1 / palette.length. Index = floor(noise * len), clamped
   // because `valueNoise` can return exactly 1.0 at lattice corners on
   // some hardware (rounding) which would index out of bounds.
@@ -131,16 +172,20 @@ export function generateRegion(args: {
    *  Larger = bigger blobs. ~16 fits a 64-cell starter zone with a
    *  few patches inside. */
   scale?: number;
+  /** Optional per-texture weights — see `pickTextureForNoise`. Lets the
+   *  caller skew the distribution (e.g. lots of grass, a thin border of
+   *  sand) without rebuilding the palette. */
+  weights?: Record<string, number>;
   skipCell?: (cx: number, cy: number) => boolean;
 }): Array<{ cx: number; cy: number; texId: string }> {
-  const { x0, y0, x1, y1, seed, palette, scale = 18, skipCell } = args;
+  const { x0, y0, x1, y1, seed, palette, scale = 18, weights, skipCell } = args;
   if (palette.length === 0) return [];
   const out: Array<{ cx: number; cy: number; texId: string }> = [];
   for (let cy = y0; cy < y1; cy++) {
     for (let cx = x0; cx < x1; cx++) {
       if (skipCell && skipCell(cx, cy)) continue;
       const n = fractalNoise(cx, cy, seed, scale);
-      const texId = pickTextureForNoise(n, palette);
+      const texId = pickTextureForNoise(n, palette, weights);
       if (texId) out.push({ cx, cy, texId });
     }
   }

@@ -521,9 +521,10 @@ export function TileView() {
         y0: -RADIUS,
         x1: RADIUS,
         y1: RADIUS,
-        seed: 0xC0FFEE,
+        seed: tile.genSeed,
         palette,
-        scale: 18,
+        scale: tile.genScale,
+        weights: tile.genTextureWeights,
         skipCell: (cx, cy) => Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE,
       });
       if (cells.length > 0) {

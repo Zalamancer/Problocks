@@ -1,9 +1,11 @@
 'use client';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Dices } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
+import { PanelInput } from '@/components/ui/panel-controls/PanelInput';
+import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelColorSwatches } from '@/components/ui/panel-controls/PanelColorSwatches';
 import { PBButton } from '@/components/ui';
 import {
@@ -11,7 +13,7 @@ import {
   type LightingPreset,
   type RGB,
 } from '@/store/lighting-store';
-import { useTile } from '@/store/tile-store';
+import { useTile, tileDataUrlFor } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
 
 /**
@@ -44,6 +46,7 @@ export function WorkspacePropertiesPanel({ headless }: { headless?: boolean } = 
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         <TileCameraSection />
+        <TileGenerationSection />
         <PanelSection title="Preset" collapsible defaultOpen>
           <PanelSelect
             label="Preset"
@@ -187,6 +190,137 @@ function TileCameraSection() {
         min={0.5} max={4} step={0.1} precision={1} suffix="×"
       />
     </PanelSection>
+  );
+}
+
+/**
+ * Procedural-map controls for the 2D Tile Play loop. Lets the user pick
+ * a seed, set the biome blob size, and weight each terrain texture so
+ * (e.g.) grass dominates while sand stays a thin border. Weight 0 takes
+ * a texture out of the generator entirely.
+ */
+function TileGenerationSection() {
+  const gameSystem = useStudio((s) => s.gameSystem);
+  const seed = useTile((s) => s.genSeed);
+  const setSeed = useTile((s) => s.setGenSeed);
+  const reroll = useTile((s) => s.rerollGenSeed);
+  const scale = useTile((s) => s.genScale);
+  const setScale = useTile((s) => s.setGenScale);
+  const tilesets = useTile((s) => s.tilesets);
+  const tiles = useTile((s) => s.tiles);
+  const weights = useTile((s) => s.genTextureWeights);
+  const setWeight = useTile((s) => s.setGenTextureWeight);
+
+  if (gameSystem !== '2d') return null;
+
+  // Collect every unique texture id across tilesets so newly-uploaded
+  // sheets show up automatically. Each entry carries a display label
+  // (uses `upperLabel`/`lowerLabel` when set, otherwise a short id) and
+  // a swatch dataUrl pulled from the corresponding side's first tile.
+  type Row = { textureId: string; label: string; swatch?: string };
+  const seen = new Map<string, Row>();
+  for (const ts of tilesets) {
+    for (const side of ['u', 'l'] as const) {
+      const texId = side === 'u' ? ts.upperTextureId : ts.lowerTextureId;
+      if (!texId || seen.has(texId)) continue;
+      const label =
+        (side === 'u' ? ts.upperLabel : ts.lowerLabel)
+          ?? `Terrain ${texId.slice(0, 4)}`;
+      // First tile of the matching half gives a representative swatch.
+      // Tilesets are 4×4 wang sheets — index 0 is the pure-lower tile,
+      // index 15 is the pure-upper tile, so we pick those when present.
+      const tileIdx = side === 'u' ? 15 : 0;
+      const tileId = ts.tileIds[tileIdx];
+      const tile = tileId ? tiles[tileId] : undefined;
+      const swatch = tile ? tileDataUrlFor(ts, tileIdx, tile.dataUrl) : undefined;
+      seen.set(texId, { textureId: texId, label, swatch });
+    }
+  }
+  const rows = [...seen.values()];
+
+  return (
+    <PanelSection title="Generation" collapsible defaultOpen>
+      <div className="flex items-end gap-2">
+        <PanelInput
+          label="Seed"
+          value={String(seed)}
+          onChange={(v) => {
+            const n = Number(v);
+            if (Number.isFinite(n)) setSeed(n);
+          }}
+        />
+        <PanelActionButton
+          icon={Dices}
+          variant="secondary"
+          onClick={reroll}
+          aria-label="Reroll seed"
+        >
+          Reroll
+        </PanelActionButton>
+      </div>
+      <PanelSlider
+        label="Biome scale"
+        value={scale}
+        onChange={setScale}
+        min={4} max={64} step={1} precision={0}
+        suffix=" cells"
+      />
+      {rows.length === 0 ? (
+        <div
+          className="text-xs"
+          style={{ color: 'var(--pb-ink-muted)', padding: '8px 2px' }}
+        >
+          Upload a tileset to control its weight here.
+        </div>
+      ) : (
+        rows.map((r) => (
+          <TerrainWeightRow
+            key={r.textureId}
+            label={r.label}
+            swatch={r.swatch}
+            value={weights[r.textureId] ?? 1}
+            onChange={(v) => setWeight(r.textureId, v)}
+          />
+        ))
+      )}
+    </PanelSection>
+  );
+}
+
+function TerrainWeightRow({
+  label,
+  swatch,
+  value,
+  onChange,
+}: {
+  label: string;
+  swatch?: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="shrink-0 rounded-md overflow-hidden"
+        style={{
+          width: 24,
+          height: 24,
+          border: '1.5px solid var(--pb-line-2)',
+          backgroundImage: swatch ? `url(${swatch})` : undefined,
+          backgroundSize: 'cover',
+          backgroundColor: swatch ? undefined : 'var(--pb-paper)',
+          imageRendering: 'pixelated',
+        }}
+      />
+      <div className="flex-1 min-w-0">
+        <PanelSlider
+          label={label}
+          value={value}
+          onChange={onChange}
+          min={0} max={2} step={0.05} precision={2}
+        />
+      </div>
+    </div>
   );
 }
 

@@ -56,24 +56,15 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
     setSelectedDir(null);
   }, [character?.id]);
 
-  const Shell = headless
-    ? (({ children }: { children: React.ReactNode }) => <>{children}</>)
-    : (({ children }: { children: React.ReactNode }) => (
-        <aside
-          className="w-full md:w-[260px] flex flex-col rounded-xl overflow-hidden shrink-0"
-          style={{
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-line-2)',
-          }}
-        >
-          {children}
-        </aside>
-      ));
-
   if (!selectedCharacterId || !character) return null;
 
-  return (
-    <Shell>
+  // Inline shell — defining a Shell component variable inside the body
+  // creates a NEW component identity on every render, which causes React
+  // to unmount/remount the entire subtree (and wipe local state like
+  // `pendingNameId` on the Animations tab). Compose it as plain JSX so
+  // the children stay mounted across re-renders.
+  const body = (
+    <>
       <PanelIconTabs
         tabs={[
           { id: 'character', label: 'Character', icon: User },
@@ -121,7 +112,20 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
           Delete character
         </PanelActionButton>
       </footer>
-    </Shell>
+    </>
+  );
+
+  if (headless) return body;
+  return (
+    <aside
+      className="w-full md:w-[260px] flex flex-col rounded-xl overflow-hidden shrink-0"
+      style={{
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+      }}
+    >
+      {body}
+    </aside>
   );
 }
 

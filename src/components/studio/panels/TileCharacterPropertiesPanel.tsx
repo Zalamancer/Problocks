@@ -47,13 +47,18 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
   const updateTileCharacter = useTile((s) => s.updateTileCharacter);
 
   const [tab, setTab] = useState<'character' | 'animations'>('character');
-  const [pinnedDir, setPinnedDir] = useState<CharacterDir8 | null>(null);
+  // The direction the user has CLICKED. Independent of the preview's
+  // own rotation cycle — the preview keeps cycling regardless of what's
+  // selected, the green dot in the rotation list just marks "this is
+  // the slot the user opened" so they can find their place when they
+  // hop over to the Animations tab.
+  const [selectedDir, setSelectedDir] = useState<CharacterDir8 | null>(null);
 
-  // Reset tab + pinned direction when the selection changes so each
-  // character starts with the rotating preview.
+  // Reset tab + selected direction when the selection changes so each
+  // character starts cleanly without a stale dot from a prior session.
   useEffect(() => {
     setTab('character');
-    setPinnedDir(null);
+    setSelectedDir(null);
   }, [character?.id]);
 
   const Shell = headless
@@ -87,9 +92,9 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
         {tab === 'character' ? (
           <CharacterTab
             character={character}
-            pinnedDir={pinnedDir}
+            selectedDir={selectedDir}
             onPickDir={(dir) => {
-              setPinnedDir(dir);
+              setSelectedDir(dir);
               setTab('animations');
             }}
             onUpdateCharacter={(patch) => updateTileCharacter(character.id, patch)}
@@ -97,7 +102,7 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
         ) : (
           <AnimationsTab
             character={character}
-            initialDir={pinnedDir}
+            initialDir={selectedDir}
           />
         )}
       </div>
@@ -190,28 +195,26 @@ const DIR_CELL: Record<CharacterDir8, number> = {
 };
 
 function CharacterTab({
-  character, pinnedDir, onPickDir, onUpdateCharacter,
+  character, selectedDir, onPickDir, onUpdateCharacter,
 }: {
   character: TileCharacter;
-  pinnedDir: CharacterDir8 | null;
+  selectedDir: CharacterDir8 | null;
   onPickDir: (dir: CharacterDir8) => void;
   onUpdateCharacter: (patch: Partial<TileCharacter>) => void;
 }) {
-  // Rotation cycles through the 8 directions in canonical order. Pause
-  // when the user has clicked a direction (pin) so they can study a
-  // single pose before swapping to Animations. Default rotation period
-  // mirrors the play-loop walk cycle (~140 ms per frame at 8 fps).
+  // Rotation cycles through the 8 directions in canonical order. Runs
+  // unconditionally — clicks in the rotation list pick a slot to edit
+  // but DO NOT pause the preview. Default rotation period mirrors the
+  // play-loop walk cycle (~140 ms per frame at 8 fps).
   const [rotationIndex, setRotationIndex] = useState(0);
   useEffect(() => {
-    if (pinnedDir) return;
     const handle = window.setInterval(() => {
       setRotationIndex((i) => (i + 1) % CHARACTER_DIRS.length);
     }, 140);
     return () => window.clearInterval(handle);
-  }, [pinnedDir]);
+  }, []);
 
-  const previewDir: CharacterDir8 =
-    pinnedDir ?? CHARACTER_DIRS[rotationIndex];
+  const previewDir: CharacterDir8 = CHARACTER_DIRS[rotationIndex];
 
   return (
     <>
@@ -252,8 +255,9 @@ function CharacterTab({
       <PanelSection title="Rotation" collapsible defaultOpen>
         <DirectionList
           character={character}
-          activeDir={previewDir}
+          activeDir={selectedDir}
           onPick={onPickDir}
+          markStyle="dot"
         />
       </PanelSection>
 
@@ -330,11 +334,18 @@ function AnimationsTab({
  * tab's Direction list so the two surfaces are pixel-identical.
  */
 function DirectionList({
-  character, activeDir, onPick,
+  character, activeDir, onPick, markStyle = 'highlight',
 }: {
   character: TileCharacter;
-  activeDir: CharacterDir8;
+  /** The direction the user has selected. With `markStyle: 'highlight'`
+   *  this row gets a butter wash; with `markStyle: 'dot'` it shows a
+   *  small green dot in the corner instead — used by the Character tab
+   *  where the preview keeps cycling regardless of which slot was
+   *  clicked, so the dot is the only signal of "here's what you're
+   *  about to edit". `null` means nothing's been clicked yet. */
+  activeDir: CharacterDir8 | null;
   onPick: (dir: CharacterDir8) => void;
+  markStyle?: 'highlight' | 'dot';
 }) {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [hoveredDir, setHoveredDir] = useState<CharacterDir8 | null>(null);
@@ -355,11 +366,24 @@ function DirectionList({
           const isCurrent = dir === activeDir;
           const isHovered = hoveredDir === dir;
           const hasAnim = !!character.animations?.[dir];
-          const bg = isCurrent
+          const useHighlight = markStyle === 'highlight';
+          const bg = isCurrent && useHighlight
             ? 'var(--pb-butter)'
             : isHovered
               ? 'rgba(0,0,0,0.04)'
               : 'transparent';
+          const greenDot = isCurrent && !useHighlight ? (
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: '#22c55e',
+                boxShadow: '0 0 0 1.5px var(--pb-paper)',
+              }}
+              title="Selected for animation editing"
+            />
+          ) : null;
           const labelText = DIR_LABEL[dir];
           const containerStyle: React.CSSProperties = {
             background: bg,
@@ -438,8 +462,13 @@ function DirectionList({
                 >
                   {labelText}
                 </div>
+                {/* Top-right corner gets either the green selection dot
+                    (Character tab) or the small "has animation" dot
+                    (Animations tab). When markStyle='dot' the green
+                    selection dot wins; otherwise the animation indicator
+                    shows. */}
                 <div style={{ position: 'absolute', top: 4, right: 4 }}>
-                  {dot}
+                  {greenDot ?? dot}
                 </div>
               </div>
             );
@@ -455,6 +484,7 @@ function DirectionList({
                     borderRadius: 4,
                     overflow: 'hidden',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    position: 'relative',
                   }}
                 >
                   <CellThumb
@@ -465,6 +495,11 @@ function DirectionList({
                     size={'100%'}
                     bare
                   />
+                  {greenDot && (
+                    <div style={{ position: 'absolute', top: 3, right: 3 }}>
+                      {greenDot}
+                    </div>
+                  )}
                 </div>
                 <span
                   title={labelText}

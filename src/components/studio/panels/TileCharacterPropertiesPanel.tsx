@@ -230,19 +230,21 @@ function CharacterTab({
           style={{
             position: 'absolute',
             inset: 12,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            backgroundImage: `url(${character.src})`,
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: `${character.cols * 100}% ${character.rows * 100}%`,
+            backgroundPosition: `${
+              character.cols > 1
+                ? ((DIR_CELL[previewDir] % character.cols) / (character.cols - 1)) * 100
+                : 0
+            }% ${
+              character.rows > 1
+                ? (Math.floor(DIR_CELL[previewDir] / character.cols) / (character.rows - 1)) * 100
+                : 0
+            }%`,
+            imageRendering: 'pixelated',
           }}
-        >
-          <CellThumb
-            src={character.src}
-            cols={character.cols}
-            rows={character.rows}
-            cell={DIR_CELL[previewDir]}
-            size={'88%'}
-          />
-        </div>
+        />
       </div>
 
       <div className="px-4 py-4 flex flex-col gap-4">

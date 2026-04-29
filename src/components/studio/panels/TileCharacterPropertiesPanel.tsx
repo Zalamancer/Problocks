@@ -184,14 +184,22 @@ const DIR_LABEL: Record<CharacterDir8, string> = {
   nw: 'North-West',
 };
 
-/** Cell index inside the 3×3 source sheet for a given direction. Same
- *  layout used by the play-mode renderer in TileView (NW=0, N=1, NE=2,
- *  W=3, idle=4, E=5, SW=6, S=7, SE→fallback to S since cell 8 is the
- *  discarded slot). */
+/** Cell index inside the 3×3 source sheet for a given direction. Uses
+ *  the natural compass layout — direction's cell mirrors its position
+ *  on the grid:
+ *      NW(0) N(1)  NE(2)
+ *       W(3) IDLE(4) E(5)
+ *      SW(6) S(7)  SE(8)
+ *  Cell 4 is idle. Pixellab and most other 3×3 directional sheets
+ *  follow this layout — using cell 8 as a real SE frame removes the
+ *  visual stutter the previous SE→S fallback introduced (the rotation
+ *  preview appeared to bounce 180° forward then 180° back because SE
+ *  and S rendered the same frame, then the cycle continued through W
+ *  whose pose matches a mirrored E). */
 const DIR_CELL: Record<CharacterDir8, number> = {
   nw: 0, n: 1, ne: 2,
   w: 3, e: 5,
-  sw: 6, s: 7, se: 7,
+  sw: 6, s: 7, se: 8,
 };
 
 function CharacterTab({

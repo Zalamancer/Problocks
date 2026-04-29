@@ -2730,9 +2730,15 @@ function CharactersSection() {
 
 /**
  * One character row/tile. Mirrors AssetCard's flat treatment but the
- * thumbnail clips the sprite sheet to its first cell (cell 0 = NW frame)
- * so the card shows what the character looks like rather than the whole
- * 3×3 sheet.
+ * thumbnail clips the sprite sheet to its first cell (cell 0 = S
+ * frame, the face-camera standing pose) so the card shows what the
+ * character looks like rather than the whole 3×3 sheet.
+ *
+ * Sheet layout (sequential reading order — see `tile-store.TileCharacter`
+ * for the canonical map):
+ *   S(0)  SE(1) E(2)
+ *   NE(3) N(4)  NW(5)
+ *   W(6)  SW(7) [discarded]
  */
 function CharacterCard({
   character: c, viewMode, isSelected,

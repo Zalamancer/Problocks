@@ -554,6 +554,9 @@ export function TileView() {
     let rafId = 0;
     const hoverRef = { current: null as { cx: number; cy: number } | null };
     const objectDragRef = { current: null as { id: string; startWX: number; startWY: number; origX: number; origY: number } | null };
+    /** Same shape as objectDragRef but for playable characters — they
+     *  don't rotate, so no angle field is needed. */
+    const characterDragRef = { current: null as { id: string; startWX: number; startWY: number; origX: number; origY: number } | null };
     /** Resize-handle drag state. localCx/localCy are the cursor's local-frame
      *  coords at drag start, used to keep cursor → handle position aligned
      *  even when the object is rotated. */
@@ -1542,6 +1545,22 @@ export function TileView() {
       }
     }
 
+    /** Hit-test characters at a world point. Characters never rotate, so
+     *  the bounds test is a plain AABB around the character's center.
+     *  Top-most-first ordering matches pickObjectAt: later-added (or
+     *  closer-to-camera) characters win when stacked. */
+    function pickCharacterAt(wx: number, wy: number) {
+      const s = stateRef.current;
+      const sorted = Object.values(s.tileCharacters).sort((a, b) => b.addedAt - a.addedAt);
+      for (const c of sorted) {
+        if (
+          wx >= c.x - c.width / 2 && wx <= c.x + c.width / 2 &&
+          wy >= c.y - c.height / 2 && wy <= c.y + c.height / 2
+        ) return c;
+      }
+      return null;
+    }
+
     function pickObjectAt(wx: number, wy: number) {
       const s = stateRef.current;
       const sorted = [...s.objects].sort((a, b) => b.y - a.y);
@@ -1698,9 +1717,32 @@ export function TileView() {
       }
 
       if (s.tool === 'select') {
+        // Character hit-test wins over object hit-test when both stack at
+        // the same point — characters are typically placed on top of map
+        // objects (a player walking over a rug, etc.) and the user
+        // expects clicking to grab the character, not the rug under it.
+        // Skipped during play mode so a click never wrests the player
+        // away from WASD control.
+        const playingNow = useSceneStore.getState().isPlaying;
+        const charHit = !playingNow ? pickCharacterAt(w.x, w.y) : null;
+        if (charHit) {
+          s.setSelectedCharacterId(charHit.id);
+          s.selectObject(null);
+          characterDragRef.current = {
+            id: charHit.id,
+            startWX: w.x, startWY: w.y,
+            origX: charHit.x, origY: charHit.y,
+          };
+          canvas!.setPointerCapture(e.pointerId);
+          scheduleRender();
+          return;
+        }
         const hit = pickObjectAt(w.x, w.y);
         s.selectObject(hit?.id ?? null);
         if (hit) {
+          // Clicking an object also clears any character selection so the
+          // green selection ring doesn't linger on the wrong target.
+          s.setSelectedCharacterId(null);
           objectDragRef.current = {
             id: hit.id,
             startWX: w.x, startWY: w.y,
@@ -1708,6 +1750,8 @@ export function TileView() {
           };
           s.beginUndoGroup();
           canvas!.setPointerCapture(e.pointerId);
+        } else {
+          s.setSelectedCharacterId(null);
         }
         scheduleRender();
         return;
@@ -1845,6 +1889,16 @@ export function TileView() {
         return;
       }
 
+      if (characterDragRef.current) {
+        const drag = characterDragRef.current;
+        stateRef.current.updateTileCharacter(drag.id, {
+          x: drag.origX + (w.x - drag.startWX),
+          y: drag.origY + (w.y - drag.startWY),
+        });
+        scheduleRender();
+        return;
+      }
+
       if (resizeDragRef.current) {
         const drag = resizeDragRef.current;
         const obj = stateRef.current.objects.find((x) => x.id === drag.id);
@@ -1907,6 +1961,7 @@ export function TileView() {
       isDrawing = null;
       isPanning = false;
       objectDragRef.current = null;
+      characterDragRef.current = null;
       resizeDragRef.current = null;
       rotateDragRef.current = null;
       canvas!.style.cursor = cursorForTool(stateRef.current.tool, spaceHeld);
@@ -2117,7 +2172,7 @@ export function TileView() {
       // a paint that's still being painted; they have to release first.
       if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
-        if (isDrawing || objectDragRef.current || resizeDragRef.current || rotateDragRef.current) return;
+        if (isDrawing || objectDragRef.current || characterDragRef.current || resizeDragRef.current || rotateDragRef.current) return;
         if (e.shiftKey) s.redo();
         else s.undo();
         scheduleRender();
@@ -2125,7 +2180,7 @@ export function TileView() {
       }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
-        if (isDrawing || objectDragRef.current || resizeDragRef.current || rotateDragRef.current) return;
+        if (isDrawing || objectDragRef.current || characterDragRef.current || resizeDragRef.current || rotateDragRef.current) return;
         s.redo();
         scheduleRender();
         return;

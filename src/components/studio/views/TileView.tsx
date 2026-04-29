@@ -15,7 +15,7 @@ import {
   tileDataUrlFor,
 } from '@/store/tile-store';
 import { useStudio } from '@/store/studio-store';
-import { useRoom, canEditCell } from '@/store/room-store';
+import { useRoom } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
 import {
@@ -1189,25 +1189,13 @@ export function TileView() {
       return out;
     }
 
-    /**
-     * Drop any cell the local player isn't allowed to edit (other lots,
-     * other rooms). Brush, fill, and erase all funnel through this so the
-     * player can paint a brush near a permission boundary and only the
-     * cells they own actually mutate — the rest silently no-op rather
-     * than blocking the whole stroke.
-     */
-    function filterEditable(cells: Array<[number, number]>): Array<[number, number]> {
-      const rs = useRoom.getState();
-      return cells.filter(([cx, cy]) => canEditCell(rs, cx, cy));
-    }
-
     function applyPaint(cell: { cx: number; cy: number }) {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
       if (!layer) return;
       const baseTexId = s.brushTextureId;
       if (!baseTexId) return;
-      const cells = filterEditable(brushCells(cell.cx, cell.cy, s.brushSize));
+      const cells = brushCells(cell.cx, cell.cy, s.brushSize);
       if (cells.length === 0) return;
       // Swap to a sibling brush when the surrounding region's dominant
       // texture has no bridge with the chosen one, so two independently-
@@ -1254,7 +1242,7 @@ export function TileView() {
       const s = stateRef.current;
       const layer = s.layers.find((l) => l.id === s.activeLayerId);
       if (!layer) return;
-      const cells = filterEditable(brushCells(cell.cx, cell.cy, s.brushSize));
+      const cells = brushCells(cell.cx, cell.cy, s.brushSize);
       if (cells.length === 0) return;
       s.mutateCorners(layer.id, (c) => {
         for (const [cx, cy] of cells) eraseCell(c, cx, cy);
@@ -1282,11 +1270,6 @@ export function TileView() {
       }
       const start = cell;
       if (!isEmpty(layer.corners, start.cx, start.cy)) return;
-      // Refuse to start the fill from a cell the player can't edit — the
-      // brush gating in onPointerDown already drops these strokes, but
-      // belt-and-braces.
-      const rs = useRoom.getState();
-      if (!canEditCell(rs, start.cx, start.cy)) return;
       const visited = new Set<string>();
       const stack: Array<[number, number]> = [[start.cx, start.cy]];
       const writes: Array<[number, number]> = [];
@@ -1297,11 +1280,6 @@ export function TileView() {
         if (visited.has(k)) continue;
         visited.add(k);
         if (!isEmpty(layer.corners, cx, cy)) continue;
-        // Stop the flood at permission boundaries — a fill in the
-        // player's lot must not bleed into a neighbouring lot or another
-        // room's cross. We re-read the snapshot once outside the loop to
-        // keep the per-step cost a single rectangle test.
-        if (!canEditCell(rs, cx, cy)) continue;
         writes.push([cx, cy]);
         stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
       }

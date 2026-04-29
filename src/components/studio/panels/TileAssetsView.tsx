@@ -86,6 +86,9 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
   const brushTextureId = useTile((s) => s.brushTextureId);
+  const selectedTextureId = useTile((s) => s.selectedTextureId);
+  const setSelectedTextureId = useTile((s) => s.setSelectedTextureId);
+  const setBrushTextureId = useTile((s) => s.setBrushTextureId);
 
   // Hydrate from Supabase on mount. We re-slice each saved sheet client-side
   // (cheap canvas blits) rather than persisting the 16 derived tiles. Names
@@ -467,25 +470,17 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {tilesets.map((ts) => (
-                <TerrainCard
-                  key={ts.id}
-                  tileset={ts}
-                  tiles={tiles}
-                  allTilesets={tilesets}
-                  active={brushTextureId === ts.upperTextureId || brushTextureId === ts.lowerTextureId}
-                  onPick={() => pickTileset(ts.id)}
-                  onRemove={() => handleRemoveTileset(ts)}
-                  onConnect={(sourceSide, newSide) => startLink(ts.id, sourceSide, newSide)}
-                  onMerge={(sourceSide, targetTextureId) => {
-                    const sourceId = sourceSide === 'u' ? ts.upperTextureId : ts.lowerTextureId;
-                    void mergeWithExisting(sourceId, targetTextureId);
-                  }}
-                  onLabelChange={(side, label) => { void handleLabelChange(ts.id, side, label); }}
-                />
-              ))}
-            </div>
+            <TextureGrid
+              tilesets={tilesets}
+              tiles={tiles}
+              selectedTextureId={selectedTextureId}
+              brushTextureId={brushTextureId}
+              onPick={(textureId) => {
+                setSelectedTextureId(textureId);
+                setBrushTextureId(textureId);
+                setTool('paint');
+              }}
+            />
           )}
         </div>
       )}
@@ -528,6 +523,115 @@ function Section({
         <span>{title}</span>
       </button>
       {open && children}
+    </div>
+  );
+}
+
+/**
+ * Deduplicated grid of texture thumbnails. Each unique textureId across
+ * every tileset's upper/lower side renders once — chained sheets sharing
+ * an id collapse to a single tile here. Clicking a thumbnail selects it
+ * for the right-panel Properties view AND sets it as the paint brush so
+ * the user can immediately start painting without a second click.
+ */
+function TextureGrid({
+  tilesets,
+  tiles,
+  selectedTextureId,
+  brushTextureId,
+  onPick,
+}: {
+  tilesets: Tileset[];
+  tiles: Record<string, Tile>;
+  selectedTextureId: string | null;
+  brushTextureId: string | null;
+  onPick: (textureId: string) => void;
+}) {
+  type TextureEntry = {
+    id: string;
+    dataUrl: string | undefined;
+    label: string | undefined;
+  };
+  const seen = new Map<string, TextureEntry>();
+  for (const ts of tilesets) {
+    const activeIdx = ts.activeVariantIndex ?? 0;
+    const variantUrls = activeIdx > 0
+      ? ts.variants?.[activeIdx - 1]?.tileDataUrls
+      : undefined;
+    if (!seen.has(ts.upperTextureId)) {
+      const url = variantUrls?.[PURE_UPPER_INDEX] ?? tiles[ts.tileIds[PURE_UPPER_INDEX]]?.dataUrl;
+      seen.set(ts.upperTextureId, { id: ts.upperTextureId, dataUrl: url, label: ts.upperLabel });
+    }
+    if (!seen.has(ts.lowerTextureId)) {
+      const url = variantUrls?.[PURE_LOWER_INDEX] ?? tiles[ts.tileIds[PURE_LOWER_INDEX]]?.dataUrl;
+      seen.set(ts.lowerTextureId, { id: ts.lowerTextureId, dataUrl: url, label: ts.lowerLabel });
+    }
+  }
+  const entries = Array.from(seen.values());
+
+  return (
+    <div
+      className="grid gap-2"
+      style={{
+        gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))',
+      }}
+    >
+      {entries.map((entry) => {
+        const isSelected = entry.id === selectedTextureId;
+        const isBrush = entry.id === brushTextureId;
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => onPick(entry.id)}
+            className="flex flex-col items-stretch gap-1"
+            style={{
+              padding: 4,
+              background: isSelected ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+              border: `1.5px solid ${isSelected ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+              borderRadius: 8,
+              boxShadow: isSelected ? '0 2px 0 var(--pb-butter-ink)' : 'none',
+              cursor: 'pointer',
+            }}
+            title={entry.label ? `Texture: ${entry.label}` : 'Texture'}
+          >
+            <div
+              style={{
+                width: '100%',
+                aspectRatio: '1 / 1',
+                background: 'rgba(0,0,0,0.06)',
+                border: `1.5px solid ${isBrush ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+                borderRadius: 5,
+                overflow: 'hidden',
+              }}
+            >
+              {entry.dataUrl && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={entry.dataUrl}
+                  alt={entry.label ?? 'texture'}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+                  draggable={false}
+                />
+              )}
+            </div>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                color: 'var(--pb-ink)',
+                textAlign: 'center',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                letterSpacing: 0.3,
+              }}
+            >
+              {entry.label || '—'}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -29,6 +29,7 @@ import { Freeform2DPropertiesPanel } from './panels/Freeform2DPropertiesPanel';
 import { TileObjectPropertiesPanel } from './panels/TileObjectPropertiesPanel';
 import { TileAssetPropertiesPanel } from './panels/TileAssetPropertiesPanel';
 import { TileCharacterPropertiesPanel } from './panels/TileCharacterPropertiesPanel';
+import { TileTexturePropertiesPanel } from './panels/TileTexturePropertiesPanel';
 import { useTile } from '@/store/tile-store';
 import { useFreeform3D } from '@/store/freeform3d-store';
 import { ExpandedFieldEditor } from './panels/task-sections';
@@ -146,6 +147,10 @@ export function StudioLayout() {
   // section so the Properties tab can swap to TileCharacterPropertiesPanel
   // (preview + per-direction animation slots).
   const tileSelectedCharacterId = useTile((s) => s.selectedCharacterId);
+  // Re-render when the user clicks a texture in the Terrain left-panel tab
+  // so the Properties tab can swap to TileTexturePropertiesPanel (label,
+  // base, water, sheet ownership).
+  const tileSelectedTextureId = useTile((s) => s.selectedTextureId);
   // Subscribe so the Code tab re-renders when the agent edits the
   // scene script via setScript ACTION.
   const freeform3dScript = useFreeform3D((s) => s.scene.script);
@@ -634,6 +639,15 @@ export function StudioLayout() {
               // non-selection global settings.
               if (gameSystem === '2d-freeform') {
                 return <Freeform2DPropertiesPanel headless />;
+              }
+              // 2D Tile — when a texture is selected via the left-panel
+              // Terrain tab show its identity / base / water / ownership
+              // controls. Texture selection is mutually exclusive with
+              // object/asset/character (setSelectedTextureId clears them),
+              // so order vs. the others is mostly cosmetic — kept first so
+              // a stale selection on a sibling doesn't shadow it.
+              if (gameSystem === '2d' && tileSelectedTextureId) {
+                return <TileTexturePropertiesPanel headless />;
               }
               // 2D Tile — when an object is selected on the canvas show its
               // transform / hue / style controls in the right panel instead

@@ -713,6 +713,12 @@ export interface TileStore {
    *  preview and final placement. */
   selectedStyleId: string | null;
   setSelectedStyleId: (id: string | null) => void;
+  /** Currently-selected texture id — set when the user clicks a texture
+   *  thumbnail in the left-panel Terrain tab. Drives the right-panel
+   *  TileTexturePropertiesPanel. Setter clears asset/character/object
+   *  selections so the right-panel branch swaps cleanly. */
+  selectedTextureId: string | null;
+  setSelectedTextureId: (id: string | null) => void;
 
   // ── Fence component (procedural pixel-art) ─────────────────────
   /**
@@ -1200,9 +1206,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
         selectedCollisionId: null,
         pendingPenAnchors: [],
         pendingPenObjectId: null,
+        selectedTextureId: id ? null : s.selectedTextureId,
       };
     }
-    return { selectedObjectId: id, selectedCollisionId: null };
+    return {
+      selectedObjectId: id,
+      selectedCollisionId: null,
+      selectedTextureId: id ? null : s.selectedTextureId,
+    };
   }),
 
   objectAssets: {},
@@ -1704,6 +1715,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       selectedCharacterId: id,
       selectedAssetId: null,
       selectedObjectId: null,
+      selectedTextureId: null,
     };
   }),
   reorderStyles: (assetId, orderedStyleIds) => {
@@ -1902,10 +1914,18 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       selectedAssetId: id,
       selectedStyleId: fallback,
       selectedCharacterId: id ? null : s.selectedCharacterId,
+      selectedTextureId: id ? null : s.selectedTextureId,
     };
   }),
   selectedStyleId: null,
   setSelectedStyleId: (id) => set({ selectedStyleId: id }),
+  selectedTextureId: null,
+  setSelectedTextureId: (id) => set((s) => ({
+    selectedTextureId: id,
+    selectedAssetId: id ? null : s.selectedAssetId,
+    selectedCharacterId: id ? null : s.selectedCharacterId,
+    selectedObjectId: id ? null : s.selectedObjectId,
+  })),
 
   fencePosts: {},
   fenceEdges: {},

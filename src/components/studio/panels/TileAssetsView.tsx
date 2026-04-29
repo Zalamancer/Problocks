@@ -492,6 +492,63 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
   );
 }
 
+/**
+ * Shared hover-revealed action button used by AssetCard, CharacterCard,
+ * and any other left-panel row that wants the [Pencil / Trash] pair.
+ *
+ * Renders a square pill with a 1px border, white-ish surface, and an
+ * icon. Tracks hover via React state so the surface darkens to
+ * `var(--pb-cream-2)` and the border thickens to ink — feedback that's
+ * visible even on a butter-yellow selected row where the white surface
+ * blends into the highlight.
+ *
+ * `variant` picks the icon colour: 'edit' = ink, 'delete' = coral. The
+ * caller controls layout (side-by-side flex, stacked column, etc.) by
+ * positioning the button — every row is free to place these wherever.
+ */
+type CardActionVariant = 'edit' | 'delete';
+
+function CardActionButton({
+  variant, title, onClick, fullSize,
+}: {
+  variant: CardActionVariant;
+  title: string;
+  onClick: (e: React.MouseEvent) => void;
+  /** When true, drops the fixed 28×28 square sizing and fills its
+   *  parent (used by CharacterCard's stacked column where each
+   *  button takes half of the row's height). */
+  fullSize?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const Icon = variant === 'edit' ? Pencil : Trash2;
+  const iconColor = variant === 'edit' ? 'var(--pb-ink)' : 'var(--pb-coral-ink)';
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(e); }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={title}
+      style={{
+        background: hovered ? 'var(--pb-cream-2)' : 'rgba(255,255,255,0.85)',
+        border: `1px solid ${hovered ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+        borderRadius: fullSize ? 0 : 6,
+        cursor: 'pointer',
+        color: iconColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: fullSize ? 0 : 4,
+        margin: 0,
+        ...(fullSize
+          ? { flex: 1, width: 28, minWidth: 28 }
+          : { width: 26, height: 26 }),
+        transition: 'background-color 120ms, border-color 120ms',
+      }}
+    >
+      <Icon size={12} strokeWidth={2.4} />
+    </button>
+  );
+}
+
 function Section({
   title, icon, open, onToggle, children,
 }: {
@@ -2776,46 +2833,20 @@ function CharacterCard({
   };
 
   const editButton = (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+    <CardActionButton
+      variant="edit"
       title="Rename character"
-      style={{
-        background: 'rgba(255,255,255,0.85)',
-        border: '1px solid var(--pb-line-2)',
-        cursor: 'pointer',
-        color: 'var(--pb-ink)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 0,
-        margin: 0,
-        flex: 1,
-        minWidth: 28,
-        width: 28,
-      }}
-    >
-      <Pencil size={12} strokeWidth={2.4} />
-    </button>
+      onClick={() => setEditingName(true)}
+      fullSize
+    />
   );
   const deleteButton = (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onRemove(); }}
+    <CardActionButton
+      variant="delete"
       title="Delete character"
-      style={{
-        background: 'rgba(255,255,255,0.85)',
-        border: '1px solid var(--pb-line-2)',
-        cursor: 'pointer',
-        color: 'var(--pb-coral-ink)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 0,
-        margin: 0,
-        flex: 1,
-        minWidth: 28,
-        width: 28,
-      }}
-    >
-      <Trash2 size={12} strokeWidth={2.4} />
-    </button>
+      onClick={() => onRemove()}
+      fullSize
+    />
   );
 
   /** Render the South cell (cell 0, top-left) of the 3×3 sheet using a
@@ -3048,40 +3079,18 @@ function AssetCard({
   };
 
   const editButton = (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+    <CardActionButton
+      variant="edit"
       title="Rename asset"
-      style={{
-        background: 'rgba(255,255,255,0.85)',
-        border: '1px solid var(--pb-line-2)',
-        borderRadius: 6,
-        cursor: 'pointer',
-        color: 'var(--pb-ink)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 4,
-      }}
-    >
-      <Pencil size={12} strokeWidth={2.4} />
-    </button>
+      onClick={() => setEditingName(true)}
+    />
   );
   const deleteButton = (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onRemoveAsset(); }}
+    <CardActionButton
+      variant="delete"
       title="Delete asset"
-      style={{
-        background: 'rgba(255,255,255,0.85)',
-        border: '1px solid var(--pb-line-2)',
-        borderRadius: 6,
-        cursor: 'pointer',
-        color: 'var(--pb-coral-ink)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 4,
-      }}
-    >
-      <Trash2 size={12} strokeWidth={2.4} />
-    </button>
+      onClick={() => onRemoveAsset()}
+    />
   );
 
   const commonHandlers = {

@@ -351,20 +351,22 @@ function AnimationsTab({
     onChangeDir(activeDir);
   }, [activeDir, onChangeDir]);
 
-  // Single-slot UI per direction — preview shows the first animation, and
-  // upload either adds (when empty) or replaces (when populated). The
-  // underlying multi-animation data model is untouched so older characters
-  // with multiple slots aren't lost; we just don't expose the list here.
+  // Assembly-line UI: preview only shows the animation that was JUST
+  // uploaded and is awaiting a name. Once the user commits the name (or
+  // dismisses the field) the slot clears and the preview reverts to its
+  // empty upload prompt — ready for the next sheet. Saved animations
+  // accumulate in the data model for the runtime; this view never
+  // re-surfaces them.
   const animations = character.animations?.[activeDir] ?? [];
-  const animation = animations[0] ?? null;
-
-  // Set immediately after a fresh upload so the name input grabs focus +
-  // selects its current text — the user starts typing the animation name
-  // without an extra click. Cleared on commit / blur / direction change.
   const [pendingNameId, setPendingNameId] = useState<string | null>(null);
+  // Direction switch wipes the pending slot — the new direction's tile
+  // should start empty regardless of the previous one's in-flight state.
   useEffect(() => {
     setPendingNameId(null);
   }, [activeDir]);
+  const animation = pendingNameId
+    ? animations.find((a) => a.id === pendingNameId) ?? null
+    : null;
 
   const addCharacterAnimation = useTile((s) => s.addCharacterAnimation);
   const removeCharacterAnimation = useTile((s) => s.removeCharacterAnimation);
@@ -468,7 +470,10 @@ function AnimationsTab({
         onReplace={() => replaceInputRef.current?.click()}
         onClear={
           animation
-            ? () => removeCharacterAnimation(character.id, activeDir, animation.id)
+            ? () => {
+                removeCharacterAnimation(character.id, activeDir, animation.id);
+                setPendingNameId(null);
+              }
             : undefined
         }
         onUpload={() => addInputRef.current?.click()}
@@ -502,7 +507,12 @@ function AnimationsTab({
             value={animation.label}
             autoFocus={pendingNameId === animation.id}
             onCommit={(label) => {
-              renameCharacterAnimation(character.id, activeDir, animation.id, label);
+              if (label !== animation.label) {
+                renameCharacterAnimation(character.id, activeDir, animation.id, label);
+              }
+              // Always clear the pending slot so the preview reverts to its
+              // empty upload prompt — the user can drop the next sheet
+              // without first deleting this one.
               setPendingNameId(null);
             }}
           />
@@ -541,13 +551,12 @@ function AnimationNameField({
     el.select();
   }, [autoFocus]);
 
-  function commit() {
-    const next = draft.trim();
-    if (next.length === 0) {
-      setDraft(value);
-      return;
-    }
-    if (next !== value) onCommit(next);
+  // Ref so Esc/blur paths can hand the parent the original `value`
+  // without first re-rendering through `setDraft`. Avoids racing the
+  // parent's `setPendingNameId(null)` against our local state.
+  function commit(label: string) {
+    const next = label.trim();
+    onCommit(next.length === 0 ? value : next);
   }
 
   return (
@@ -560,12 +569,14 @@ function AnimationNameField({
         ref={inputRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onBlur={() => commit(draft)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.currentTarget.blur();
           } else if (e.key === 'Escape') {
-            setDraft(value);
+            // Commit the original value so the parent still clears the
+            // pending slot — Escape means "stop editing", not "stay open".
+            commit(value);
             e.currentTarget.blur();
           }
         }}

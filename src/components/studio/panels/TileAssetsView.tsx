@@ -8,6 +8,7 @@ import {
   Pencil, GripVertical, X, Layers, Globe2, Folder, FolderPlus,
   Users,
 } from 'lucide-react';
+import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
@@ -488,13 +489,7 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
         </div>
       )}
 
-      {view === 'assets' && (
-        <>
-          <ObjectsSection />
-          <GroupsSection />
-          <CharactersSection />
-        </>
-      )}
+      {view === 'assets' && <AssetsSubTabs />}
 
       {namePrompt && <NameTerrainModal {...namePrompt} />}
     </div>
@@ -2317,214 +2312,52 @@ function ObjectsSection() {
 }
 
 /**
- * Placeholder collapsible section for "Groups" — a future taxonomy that lets
- * users bundle multiple objects (e.g. a tree + bushes + rocks ensemble) into
- * one stamp-on-canvas unit. Mirrors the chunky-pastel header pattern used by
- * ObjectsSection so the three sub-tabs read as a consistent stack.
+ * Three-tab toggle for the 2D Tile Assets panel — Objects / Groups /
+ * Characters. Mirrors the [Generate | History] `PanelIconTabs` toggle from
+ * `panels/PartStudioPanel.tsx`: the active tab expands into a white pill
+ * and shows its label, inactive tabs collapse to icon-only.
  */
-function GroupsSection() {
-  const [collapsed, setCollapsed] = useState(true);
+type AssetsSubTabId = 'objects' | 'groups' | 'characters';
+
+const ASSETS_SUBTABS: { id: AssetsSubTabId; label: string; icon: typeof Box }[] = [
+  { id: 'objects',    label: 'Objects',    icon: Box },
+  { id: 'groups',     label: 'Groups',     icon: Layers },
+  { id: 'characters', label: 'Characters', icon: Users },
+];
+
+function AssetsSubTabs() {
+  const [tab, setTab] = useState<AssetsSubTabId>('objects');
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div
-        onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((c) => !c); } }}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '8px 14px',
-          cursor: 'pointer',
-          transition: 'background 120ms ease',
-          userSelect: 'none',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-      >
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--pb-sky)',
-            color: 'var(--pb-sky-ink)',
-            border: '1.5px solid var(--pb-sky-ink)',
-          }}
-        >
-          <Layers size={14} strokeWidth={2.2} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: 'var(--pb-ink)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Groups
-          </div>
-          <div
-            style={{
-              fontSize: 10.5,
-              color: 'var(--pb-ink-muted)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Bundles of objects you can stamp together
-          </div>
-        </div>
-        <span
-          aria-label={collapsed ? 'Expand' : 'Collapse'}
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--pb-ink-muted)',
-            flexShrink: 0,
-          }}
-        >
-          {collapsed ? <ChevronRight size={14} strokeWidth={2.4} /> : <ChevDown size={14} strokeWidth={2.4} />}
-        </span>
-      </div>
-      {!collapsed && (
-        <div style={{ padding: '4px 14px 14px' }}>
-          <div
-            style={{
-              padding: '12px 10px',
-              fontSize: 11,
-              color: 'var(--pb-ink-muted)',
-              fontStyle: 'italic',
-              border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 8,
-              background: 'var(--pb-cream-2)',
-              textAlign: 'center',
-            }}
-          >
-            No groups yet — coming soon.
-          </div>
-        </div>
-      )}
+      <PanelIconTabs
+        tabs={ASSETS_SUBTABS}
+        activeTab={tab}
+        onChange={(id) => setTab(id as AssetsSubTabId)}
+      />
+      {tab === 'objects' && <ObjectsSection />}
+      {tab === 'groups' && <EmptySubTabPlaceholder label="No groups yet — coming soon." />}
+      {tab === 'characters' && <EmptySubTabPlaceholder label="No characters yet — coming soon." />}
     </div>
   );
 }
 
-/**
- * Placeholder collapsible section for "Characters" — animated/special sprites
- * (player, NPCs, enemies). Same chunky-pastel header pattern as Objects and
- * Groups so all three read as one stack.
- */
-function CharactersSection() {
-  const [collapsed, setCollapsed] = useState(true);
+function EmptySubTabPlaceholder({ label }: { label: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ padding: '12px 14px' }}>
       <div
-        onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed((c) => !c); } }}
         style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '8px 14px',
-          cursor: 'pointer',
-          transition: 'background 120ms ease',
-          userSelect: 'none',
+          padding: '14px 12px',
+          fontSize: 11,
+          color: 'var(--pb-ink-muted)',
+          fontStyle: 'italic',
+          border: '1.5px dashed var(--pb-line-2)',
+          borderRadius: 8,
+          background: 'var(--pb-cream-2)',
+          textAlign: 'center',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--pb-cream-2)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--pb-mint)',
-            color: 'var(--pb-mint-ink)',
-            border: '1.5px solid var(--pb-mint-ink)',
-          }}
-        >
-          <Users size={14} strokeWidth={2.2} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: 'var(--pb-ink)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Characters
-          </div>
-          <div
-            style={{
-              fontSize: 10.5,
-              color: 'var(--pb-ink-muted)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Player, NPCs, and animated sprites
-          </div>
-        </div>
-        <span
-          aria-label={collapsed ? 'Expand' : 'Collapse'}
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--pb-ink-muted)',
-            flexShrink: 0,
-          }}
-        >
-          {collapsed ? <ChevronRight size={14} strokeWidth={2.4} /> : <ChevDown size={14} strokeWidth={2.4} />}
-        </span>
+        {label}
       </div>
-      {!collapsed && (
-        <div style={{ padding: '4px 14px 14px' }}>
-          <div
-            style={{
-              padding: '12px 10px',
-              fontSize: 11,
-              color: 'var(--pb-ink-muted)',
-              fontStyle: 'italic',
-              border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 8,
-              background: 'var(--pb-cream-2)',
-              textAlign: 'center',
-            }}
-          >
-            No characters yet — coming soon.
-          </div>
-        </div>
-      )}
     </div>
   );
 }

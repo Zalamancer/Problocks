@@ -91,23 +91,23 @@ type Dir8 =
   | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
 
 /**
- * Direction → cell-index map for a 3×3 character sprite sheet, using the
- * "visual position equals direction" layout:
- *   NW(0) N(1)  NE(2)
- *    W(3) IDLE(4) E(5)
- *   SW(6) S(7)  SE(disc)  ← cell 8 is intentionally discarded
+ * Direction → cell-index map for a 3×3 character sprite sheet.
+ * Sheet layout is sequential reading order (top-to-bottom, left-to-right):
  *
- * Cell 4 is the idle / face-forward standing pose. Cell 8 is blank in
- * pixellab and other standard 3×3 sheets, so SE falls back to S —
- * authors who want a distinct SE pose can drop a custom frame in
- * cell 8 (the cell-clip math will pick it up automatically) by
- * editing the source sheet manually before upload.
+ *   S(0)  SE(1) E(2)
+ *   NE(3) N(4)  NW(5)
+ *   W(6)  SW(7) [discarded(8)]
+ *
+ * All 8 directions have unique cells; cell 8 is intentionally discarded
+ * per the upload spec. There's no dedicated idle frame in this layout,
+ * so `idle` reuses S (cell 0) — the natural face-camera standing pose
+ * for a character at rest.
  */
 const DIR_CELL_INDEX: Record<Dir8, number> = {
-  nw: 0, n: 1, ne: 2,
-  w: 3, idle: 4, e: 5,
-  sw: 6, s: 7,
-  se: 7,
+  s: 0, se: 1, e: 2,
+  ne: 3, n: 4, nw: 5,
+  w: 6, sw: 7,
+  idle: 0,
 };
 
 /**

@@ -312,18 +312,18 @@ export interface CharacterAnimation {
 
 /**
  * A 2D playable character — uploaded as a 3×3 sprite sheet where each
- * of the 9 cells is one frame. Cells 0..7 (row-major) map to the eight
- * compass directions; cell 8 (bottom-right) is intentionally discarded
- * so authors can use it as a comment / signature slot or leave blank.
+ * of the 9 cells is one direction frame. The eight directions are laid
+ * out in sequential reading order (top-to-bottom, left-to-right):
  *
- * Direction → cell index map (row-major, top-left origin):
- *   NW=0 N=1 NE=2
- *    W=3 ?=4  E=5
- *   SW=6 S=7 SE=(reused W or S frame)
+ *   S(0)  SE(1) E(2)
+ *   NE(3) N(4)  NW(5)
+ *   W(6)  SW(7) [discarded(8)]
  *
- * Cell 4 (the center) is the idle frame used when the character is not
- * moving; whatever direction the user last walked is preserved by
- * `facing`. Cell 8 is the discarded slot per the user's spec.
+ * Cell 8 is intentionally discarded per the upload spec. There's no
+ * dedicated idle frame — the play loop reuses S (cell 0) as the resting
+ * face-camera pose. The actual cell mapping lives in
+ * `TileView.DIR_CELL_INDEX` and the right-panel preview's `DIR_CELL`,
+ * both of which mirror this layout.
  *
  * Width / height are display size in world (pixel) units; `cols` and
  * `rows` are the sheet's grid (currently always 3×3 for the upload

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { PanelSearchInput, PanelSelect } from '@/components/ui';
-import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass } from '@/store/tile-store';
+import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass, type TileCharacter } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
 import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
@@ -2325,14 +2325,7 @@ function AssetsSubTabs() {
           emptyLabel="No groups yet — coming soon."
         />
       )}
-      {tab === 'characters' && (
-        <EmptySubTabPlaceholder
-          searchPlaceholder="Search characters..."
-          newTitle="New character"
-          uploadTitle="Upload character sprite"
-          emptyLabel="No characters yet — coming soon."
-        />
-      )}
+      {tab === 'characters' && <CharactersSection />}
     </div>
   );
 }
@@ -2437,6 +2430,445 @@ function EmptySubTabPlaceholder({
         >
           {emptyLabel}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Characters sub-tab — upload a 3×3 sprite sheet, slice into 8 directional
+ * frames (cell 8 / bottom-right is intentionally discarded), and render
+ * the first cell as the row thumbnail. The TileView renders + animates
+ * the character once it exists; this section only manages the library.
+ */
+function CharactersSection() {
+  const tileCharacters = useTile((s) => s.tileCharacters);
+  const addTileCharacter = useTile((s) => s.addTileCharacter);
+  const removeTileCharacter = useTile((s) => s.removeTileCharacter);
+  const renameTileCharacter = useTile((s) => s.renameTileCharacter);
+  const selectedCharacterId = useTile((s) => s.selectedCharacterId);
+  const setSelectedCharacterId = useTile((s) => s.setSelectedCharacterId);
+
+  const [search, setSearch] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const characters = Object.values(tileCharacters)
+    .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.sortIndex - b.sortIndex);
+
+  async function handleUpload(files: File[]) {
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of files) {
+        const baseName = file.name.replace(/\.[^.]+$/, '');
+        const img = await fileToImage(file);
+        const dataUrl = imageToDataUrl(img);
+        const cols = 3;
+        const rows = 3;
+        // Hard-fail when the sheet can't divide cleanly into 3×3 cells —
+        // a 100×100 sheet would otherwise produce 33×33 frames with a
+        // 1px gutter that bleeds the wrong rows of pixels.
+        if (img.naturalWidth % cols !== 0 || img.naturalHeight % rows !== 0) {
+          setError(
+            `"${baseName}" must divide cleanly into a ${cols}×${rows} grid ` +
+            `(got ${img.naturalWidth}×${img.naturalHeight}). ` +
+            `Trim or pad the sheet so width is a multiple of ${cols} and height is a multiple of ${rows}.`,
+          );
+          continue;
+        }
+        const frameW = Math.floor(img.naturalWidth / cols);
+        const frameH = Math.floor(img.naturalHeight / rows);
+        addTileCharacter({
+          name: baseName,
+          src: dataUrl,
+          cols, rows,
+          frameW, frameH,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ''; // allow re-pick of same file
+    if (files.length === 0) return;
+    await handleUpload(files);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/webp,image/jpeg"
+        multiple
+        style={{ display: 'none' }}
+        onChange={onFileInputChange}
+      />
+      <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 [&>div]:!mb-0">
+            <PanelSearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search characters..."
+            />
+          </div>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="relative shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: filtersOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              border: `1.5px solid ${filtersOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: filtersOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+              color: filtersOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+            }}
+            title="Filters"
+          >
+            <SlidersHorizontal size={15} strokeWidth={2.2} />
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              opacity: uploading ? 0.55 : 1,
+            }}
+            title={uploading ? 'Uploading…' : 'Upload character sprite (3×3 sheet)'}
+          >
+            <Upload size={15} strokeWidth={2.2} />
+          </button>
+        </div>
+        {filtersOpen && (
+          <div className="flex flex-col gap-2">
+            <PanelSelect
+              label="View"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as typeof viewMode)}
+              options={[
+                { value: 'list', label: 'List' },
+                { value: 'grid', label: 'Grid' },
+              ]}
+            />
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 4px 14px' }}>
+        {error && (
+          <p style={{ fontSize: 11, color: 'var(--pb-coral-ink)', fontWeight: 600, margin: 0, padding: '0 10px' }}>
+            {error}
+          </p>
+        )}
+        {characters.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="rounded-lg p-4 text-center"
+            style={{
+              width: '100%',
+              background: 'var(--pb-cream-2)',
+              border: '1.5px dashed var(--pb-line-2)',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            <Upload size={16} strokeWidth={2.4} style={{ color: 'var(--pb-ink-muted)', margin: '0 auto 6px' }} />
+            <p style={{ fontSize: 11.5, color: 'var(--pb-ink-muted)', lineHeight: 1.45, margin: 0, fontWeight: 600 }}>
+              Drop a 3×3 sprite sheet to add a playable character.
+              <br />
+              <span style={{ fontSize: 10.5, opacity: 0.85 }}>
+                8 directional frames; bottom-right cell is ignored.
+              </span>
+            </p>
+          </button>
+        ) : (
+          <div className={viewMode === 'grid'
+            ? 'grid grid-cols-2 gap-1'
+            : 'flex flex-col gap-px'}>
+            {characters.map((c) => (
+              <CharacterCard
+                key={c.id}
+                character={c}
+                viewMode={viewMode}
+                isSelected={c.id === selectedCharacterId}
+                onSelect={() => setSelectedCharacterId(c.id)}
+                onRemove={() => removeTileCharacter(c.id)}
+                onRename={(name) => renameTileCharacter(c.id, name)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One character row/tile. Mirrors AssetCard's flat treatment but the
+ * thumbnail clips the sprite sheet to its first cell (cell 0 = NW frame)
+ * so the card shows what the character looks like rather than the whole
+ * 3×3 sheet.
+ */
+function CharacterCard({
+  character: c, viewMode, isSelected,
+  onSelect, onRemove, onRename,
+}: {
+  character: TileCharacter;
+  viewMode: 'list' | 'grid';
+  isSelected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onRename: (name: string) => void;
+}) {
+  const [editingName, setEditingName] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const showActions = hovered || isSelected || editingName;
+
+  function commitName(value: string) {
+    setEditingName(false);
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== c.name) onRename(trimmed);
+  }
+
+  const bg = isSelected
+    ? 'var(--pb-butter)'
+    : hovered
+      ? 'rgba(0,0,0,0.04)'
+      : 'transparent';
+
+  const containerStyle: React.CSSProperties = {
+    background: bg,
+    borderRadius: 6,
+    cursor: 'pointer',
+    overflow: 'hidden',
+    position: 'relative',
+  };
+
+  const editButton = (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+      title="Rename character"
+      style={{
+        background: 'rgba(255,255,255,0.85)',
+        border: '1px solid var(--pb-line-2)',
+        borderRadius: 6,
+        cursor: 'pointer',
+        color: 'var(--pb-ink)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 4,
+      }}
+    >
+      <Pencil size={12} strokeWidth={2.4} />
+    </button>
+  );
+  const deleteButton = (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onRemove(); }}
+      title="Delete character"
+      style={{
+        background: 'rgba(255,255,255,0.85)',
+        border: '1px solid var(--pb-line-2)',
+        borderRadius: 6,
+        cursor: 'pointer',
+        color: 'var(--pb-coral-ink)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 4,
+      }}
+    >
+      <Trash2 size={12} strokeWidth={2.4} />
+    </button>
+  );
+
+  /** Render a single sheet cell by stretching the image to cols×rows
+   *  thumb size and offsetting it so cell (col,row) lands at (0,0). */
+  function CellThumb({ size }: { size: number }) {
+    return (
+      <div
+        style={{
+          width: size, height: size,
+          position: 'relative',
+          overflow: 'hidden',
+          background: isSelected ? 'transparent' : 'rgba(0,0,0,0.03)',
+          borderRadius: 4,
+          flexShrink: 0,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={c.src}
+          alt={c.name}
+          draggable={false}
+          style={{
+            position: 'absolute',
+            left: 0, top: 0,
+            width: size * c.cols,
+            height: size * c.rows,
+            imageRendering: 'pixelated',
+            objectFit: 'fill',
+          }}
+        />
+      </div>
+    );
+  }
+
+  const commonHandlers = {
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    onClick: (e: React.MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('button, input')) return;
+      onSelect();
+    },
+  };
+
+  if (viewMode === 'grid') {
+    return (
+      <div {...commonHandlers} style={containerStyle}>
+        <div
+          style={{
+            width: '100%',
+            aspectRatio: '1 / 1',
+            position: 'relative',
+            overflow: 'hidden',
+            background: isSelected ? 'transparent' : 'rgba(0,0,0,0.03)',
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={c.src}
+            alt={c.name}
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: 0, top: 0,
+              width: `${c.cols * 100}%`,
+              height: `${c.rows * 100}%`,
+              imageRendering: 'pixelated',
+              objectFit: 'fill',
+            }}
+          />
+        </div>
+        {editingName ? (
+          <input
+            autoFocus
+            defaultValue={c.name}
+            onBlur={(e) => commitName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+              if (e.key === 'Escape') setEditingName(false);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 5,
+              padding: '3px 6px',
+              fontSize: 11,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+            }}
+          />
+        ) : (
+          <div
+            onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+            title={c.name}
+            style={{
+              fontSize: 11,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              padding: '4px 4px 6px',
+              textAlign: 'center',
+            }}
+          >
+            {c.name}
+          </div>
+        )}
+        {showActions && !editingName && (
+          <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
+            {editButton}
+            {deleteButton}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div {...commonHandlers} style={containerStyle}>
+      <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+        <CellThumb size={56} />
+        <div className="flex-1 min-w-0">
+          {editingName ? (
+            <input
+              autoFocus
+              defaultValue={c.name}
+              onBlur={(e) => commitName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                if (e.key === 'Escape') setEditingName(false);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                background: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-line-2)',
+                borderRadius: 5,
+                padding: '4px 8px',
+                fontSize: 13,
+                fontWeight: 800,
+                color: 'var(--pb-ink)',
+              }}
+            />
+          ) : (
+            <span
+              onDoubleClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+              title="Double-click to rename"
+              style={{
+                display: 'block',
+                fontSize: 13,
+                fontWeight: 800,
+                color: 'var(--pb-ink)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
+              {c.name}
+            </span>
+          )}
+          <div style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+            {c.cols}×{c.rows} sheet · {c.frameW}×{c.frameH}px frame
+          </div>
+        </div>
+        {showActions && !editingName && (
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            {editButton}
+            {deleteButton}
+          </div>
+        )}
       </div>
     </div>
   );

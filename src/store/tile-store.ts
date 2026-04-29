@@ -270,6 +270,50 @@ export interface TileCamera {
   zoom: number;
 }
 
+/**
+ * A 2D playable character — uploaded as a 3×3 sprite sheet where each
+ * of the 9 cells is one frame. Cells 0..7 (row-major) map to the eight
+ * compass directions; cell 8 (bottom-right) is intentionally discarded
+ * so authors can use it as a comment / signature slot or leave blank.
+ *
+ * Direction → cell index map (row-major, top-left origin):
+ *   NW=0 N=1 NE=2
+ *    W=3 ?=4  E=5
+ *   SW=6 S=7 SE=(reused W or S frame)
+ *
+ * Cell 4 (the center) is the idle frame used when the character is not
+ * moving; whatever direction the user last walked is preserved by
+ * `facing`. Cell 8 is the discarded slot per the user's spec.
+ *
+ * Width / height are display size in world (pixel) units; `cols` and
+ * `rows` are the sheet's grid (currently always 3×3 for the upload
+ * pipeline but stored explicitly so future formats can vary).
+ */
+export interface TileCharacter {
+  id: string;
+  name: string;
+  /** Sprite-sheet data URL — the whole 3×3 sheet, not pre-sliced. */
+  src: string;
+  /** Sheet grid (always 3×3 for now; stored for future flexibility). */
+  cols: number;
+  rows: number;
+  /** Source frame size (one cell of the sheet, in source pixels). */
+  frameW: number;
+  frameH: number;
+  /** Spawn point in world coords (center of character). */
+  x: number;
+  y: number;
+  /** Display size per frame in world units. */
+  width: number;
+  height: number;
+  /** Animation speed (frames per second for the walk cycle, when we add one). */
+  fps: number;
+  /** Movement speed in world units per second during play mode. */
+  speed: number;
+  addedAt: number;
+  sortIndex: number;
+}
+
 export interface TileStore {
   // ── Asset library ───────────────────────────────────────────────
   tilesets: Tileset[];
@@ -425,6 +469,43 @@ export interface TileStore {
   reorderObjectClasses: (parentId: string | null, orderedIds: string[]) => void;
   /** Move an asset into a class (or to root with classId=null). */
   setAssetClass: (assetId: string, classId: string | null) => void;
+
+  // ── Playable characters (Characters sub-tab in 2D Tile assets) ──
+  /** Map of character id → record. Stored alongside object assets so the
+   *  panel can render thumbnails without round-tripping the cloud. The
+   *  data URL DOES persist locally (sheets are typically <200 KB) so an
+   *  offline reload still has the player available — see persist's
+   *  partialize for the included keys. */
+  tileCharacters: Record<string, TileCharacter>;
+  /** Currently-selected character (highlighted in the canvas, picked up by
+   *  the play loop as "the player"). Null when nothing is selected. */
+  selectedCharacterId: string | null;
+  /** Add a new character from an uploaded sprite sheet. The slicer extracts
+   *  cols×rows frames; cells 0..7 are usable, cell 8 is discarded per the
+   *  upload-pipeline spec. Returns the new id so callers can show the
+   *  character in their list immediately. */
+  addTileCharacter: (
+    input: {
+      name: string;
+      src: string;
+      cols: number;
+      rows: number;
+      frameW: number;
+      frameH: number;
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      fps?: number;
+      speed?: number;
+    },
+  ) => string;
+  removeTileCharacter: (id: string) => void;
+  renameTileCharacter: (id: string, name: string) => void;
+  /** Patch a character's runtime / display fields (position, size, fps,
+   *  speed). The play loop calls this with new x/y on every tick. */
+  updateTileCharacter: (id: string, patch: Partial<Omit<TileCharacter, 'id' | 'src' | 'addedAt' | 'sortIndex'>>) => void;
+  setSelectedCharacterId: (id: string | null) => void;
 
   // ── Pen tool — collision boundaries on objects ─────────────────
   /** Currently-selected collision id (highlighted in the canvas, target of
@@ -1304,6 +1385,64 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     }
     return { assetClassIds: next };
   }),
+
+  // ── Playable characters ─────────────────────────────────────────
+  tileCharacters: {},
+  selectedCharacterId: null,
+  addTileCharacter: ({ name, src, cols, rows, frameW, frameH, x, y, width, height, fps, speed }) => {
+    const id = cryptoId();
+    set((s) => {
+      const maxIdx = Object.values(s.tileCharacters).reduce(
+        (m, c) => Math.max(m, c.sortIndex), -1,
+      );
+      // Default world size = one frame at 4× source pixel density so a
+      // 32×32 source renders at 128×128 world units (visible at default
+      // zoom). The character spawns at the world origin; the user can
+      // drag it later (Phase 2) once the canvas-side handlers land.
+      const w = width ?? Math.max(64, frameW * 2);
+      const h = height ?? Math.max(64, frameH * 2);
+      const character: TileCharacter = {
+        id,
+        name: name || 'Character',
+        src,
+        cols, rows, frameW, frameH,
+        x: x ?? 0,
+        y: y ?? 0,
+        width: w,
+        height: h,
+        fps: fps ?? 8,
+        speed: speed ?? 220,
+        addedAt: Date.now(),
+        sortIndex: maxIdx + 1,
+      };
+      return {
+        tileCharacters: { ...s.tileCharacters, [id]: character },
+        selectedCharacterId: id,
+      };
+    });
+    return id;
+  },
+  removeTileCharacter: (id) => set((s) => {
+    if (!s.tileCharacters[id]) return {};
+    const next = { ...s.tileCharacters };
+    delete next[id];
+    return {
+      tileCharacters: next,
+      selectedCharacterId: s.selectedCharacterId === id ? null : s.selectedCharacterId,
+    };
+  }),
+  renameTileCharacter: (id, name) => set((s) => {
+    const c = s.tileCharacters[id];
+    const trimmed = name.trim();
+    if (!c || !trimmed || trimmed === c.name) return {};
+    return { tileCharacters: { ...s.tileCharacters, [id]: { ...c, name: trimmed } } };
+  }),
+  updateTileCharacter: (id, patch) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    return { tileCharacters: { ...s.tileCharacters, [id]: { ...c, ...patch } } };
+  }),
+  setSelectedCharacterId: (id) => set({ selectedCharacterId: id }),
   reorderStyles: (assetId, orderedStyleIds) => {
     const stateBefore = get();
     const asset = stateBefore.objectAssets[assetId];
@@ -1630,7 +1769,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   // to {} on rehydrate. Bump is defensive: pre-v9 stores load fine and
   // simply show every asset under "Uncategorised" until the user creates
   // a class.
-  name: 'problocks-tile-v9',
+  // v10 — Added `tileCharacters` (Characters sub-tab playable sprites)
+  // and `selectedCharacterId`. Sheets persist as data URLs so an offline
+  // reload keeps the player available; pre-v10 stores load fine and
+  // simply hydrate to {} / null.
+  name: 'problocks-tile-v10',
   // Coalesce localStorage writes — see makeDeferredLocalStorage above.
   // Painting at 90k corners was firing JSON.stringify of the whole map
   // on every cell, which alone burned 30–80 ms on Chromebook-class
@@ -1668,6 +1811,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // per class + assetId→classId map). No image bytes here.
     objectClasses: s.objectClasses,
     assetClassIds: s.assetClassIds,
+    // Playable characters — sheet src DOES persist (sheets are typically
+    // <200 KB so even a few characters stay well under the 5–10 MB
+    // localStorage cap). Letting an offline reload keep the player
+    // available is the whole point.
+    tileCharacters: s.tileCharacters,
+    selectedCharacterId: s.selectedCharacterId,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {
@@ -1760,6 +1909,15 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       if (c.parentId !== null && !state.objectClasses[c.parentId]) {
         c.parentId = null;
       }
+    }
+    // v10: playable characters. Pre-v10 saves had no characters map;
+    // default to empty so the panel mounts without errors.
+    if (!state.tileCharacters) state.tileCharacters = {};
+    if (state.selectedCharacterId === undefined) state.selectedCharacterId = null;
+    // Drop a selectedCharacterId pointing at a character that vanished
+    // (e.g. user removed it before reload).
+    if (state.selectedCharacterId && !state.tileCharacters[state.selectedCharacterId]) {
+      state.selectedCharacterId = null;
     }
   },
 }));

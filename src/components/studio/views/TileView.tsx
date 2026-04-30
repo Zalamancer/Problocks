@@ -1411,8 +1411,13 @@ export function TileView() {
           // keys + movement, so the renderer just plays it.
           let used = false;
           if (playing && cur && c.id === playerId) {
-            const actionId: CharacterActionId = cur.action;
-            const anim = findCharacterAnimation(c, cur.facing, actionId);
+            // `cur.action` is set every tick, but a runtime entry that
+            // was created by an older code revision (HMR'd into this
+            // session) can be missing the field. Default to 'idle' so
+            // the lookup doesn't blow up on the first render.
+            const actionId: CharacterActionId = cur.action ?? 'idle';
+            const facingDir: CharacterDir8 = cur.facing ?? 's';
+            const anim = findCharacterAnimation(c, facingDir, actionId);
             if (anim) {
               const animReady = imgReadyRef.current.has(anim.src);
               const animImg = ensureImage(anim.src);

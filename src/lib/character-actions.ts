@@ -74,11 +74,17 @@ export function findCharacterAnimation(
   dir: CharacterDir8,
   actionId: CharacterActionId,
 ): CharacterAnimation | null {
+  // Defensive: callers in the play loop can race the first frame
+  // before the tick has populated `cur.action`, and persisted runtime
+  // state from a previous code revision can leak `undefined` here.
+  // Treat any falsy / unknown id as "no animation" rather than crashing.
+  if (!actionId) return null;
   const list = character.animations?.[dir] ?? [];
   if (list.length === 0) return null;
   const tagged = list.find((a) => a.actionId === actionId);
   if (tagged) return tagged;
   const preset = PRESET_BY_ID[actionId];
+  if (!preset) return null;
   const want = new Set([actionId.toLowerCase(), preset.label.toLowerCase()]);
   return list.find((a) => want.has(a.label.trim().toLowerCase())) ?? null;
 }

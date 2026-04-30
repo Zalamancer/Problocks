@@ -320,9 +320,14 @@ function TileAnimationSection({
   const tiles = useTile((s) => s.tiles);
   const setTileAnimation = useTile((s) => s.setTileAnimation);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [frameCount, setFrameCount] = useState(16);
+  // Sheet layout. Most sprite sheets are square-ish grids (4×4 = 16,
+  // 5×5 = 25) — defaulting to 4×4 covers the common case. Users with
+  // a single horizontal strip just set rows=1 and cols=N.
+  const [cols, setCols] = useState(4);
+  const [rows, setRows] = useState(4);
   const [fps, setFps] = useState(8);
   const [busy, setBusy] = useState(false);
+  const frameCount = cols * rows;
   // Which slot in the wang grid the upload targets. Defaults to the
   // texture's pure corner tile (centre-of-biome slot) but the user can
   // click any of the 16 tiles to retarget — handy when only the
@@ -353,13 +358,15 @@ function TileAnimationSection({
         im.onerror = () => reject(new Error('image load failed'));
         im.src = dataUrl;
       });
-      // Slice the strip horizontally. Frame width is the source width
-      // divided by frameCount (rounded down so we never read past the
-      // edge); frame height is the full source height. This matches
-      // the most common sprite-sheet convention (one row, N columns).
-      const N = Math.max(2, Math.min(64, Math.floor(frameCount)));
-      const fw = Math.floor(img.width / N);
-      const fh = img.height;
+      // Slice the sheet as a `cols × rows` grid. Frame i is at
+      // (i % cols, floor(i / cols)) — left-to-right, top-to-bottom,
+      // matching how the user reads the sheet. Floor on dims so we
+      // never read past the edge if the user's PNG width isn't an
+      // exact multiple of cols.
+      const C = Math.max(1, Math.min(16, Math.floor(cols)));
+      const R = Math.max(1, Math.min(16, Math.floor(rows)));
+      const fw = Math.floor(img.width / C);
+      const fh = Math.floor(img.height / R);
       if (fw < 1 || fh < 1) {
         setBusy(false);
         return;
@@ -371,9 +378,11 @@ function TileAnimationSection({
       if (!ctx) { setBusy(false); return; }
       ctx.imageSmoothingEnabled = false;
       const frames: string[] = [];
-      for (let i = 0; i < N; i++) {
+      for (let i = 0; i < C * R; i++) {
+        const cx = i % C;
+        const cy = Math.floor(i / C);
         ctx.clearRect(0, 0, fw, fh);
-        ctx.drawImage(img, i * fw, 0, fw, fh, 0, 0, fw, fh);
+        ctx.drawImage(img, cx * fw, cy * fh, fw, fh, 0, 0, fw, fh);
         frames.push(canvas.toDataURL('image/png'));
       }
       setTileAnimation(tile!.id, { frames, fps });
@@ -399,11 +408,26 @@ function TileAnimationSection({
         onSelect={setSelectedTileIdx}
       />
       <PanelSlider
-        label="Frame count"
-        value={frameCount}
-        onChange={(v) => setFrameCount(v)}
-        min={2} max={32} step={1} precision={0}
+        label="Sheet columns"
+        value={cols}
+        onChange={(v) => setCols(v)}
+        min={1} max={16} step={1} precision={0}
       />
+      <PanelSlider
+        label="Sheet rows"
+        value={rows}
+        onChange={(v) => setRows(v)}
+        min={1} max={16} step={1} precision={0}
+      />
+      <div
+        style={{
+          fontSize: 10,
+          color: 'var(--pb-ink-muted)',
+          padding: '2px 2px 0',
+        }}
+      >
+        {cols} × {rows} = {frameCount} frame{frameCount === 1 ? '' : 's'}
+      </div>
       <PanelSlider
         label="Frames per second"
         value={fps}
@@ -435,7 +459,7 @@ function TileAnimationSection({
       <div
         style={{ fontSize: 10, color: 'var(--pb-ink-muted)', padding: '4px 2px' }}
       >
-        Sheet should be a horizontal strip — each frame {tile.width}×{tile.height}px.
+        Frames slice as a {cols}×{rows} grid — each cell {tile.width}×{tile.height}px target.
       </div>
       <input
         ref={fileInputRef}

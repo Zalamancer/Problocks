@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Scissors, Pencil, Trash2, Plus, X, Upload,
+  Scissors, Pencil, Trash2, Plus, X, Upload, ImagePlus,
 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
@@ -344,9 +344,25 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        <ImagePreviewWithEdit
-          dataUrl={baseStyle?.dataUrl ?? ''}
-          onEdit={() => setSliceOpen(true)}
+        <UploadGridSection
+          asset={asset}
+          onImport={async (cells) => {
+            if (!asset) return;
+            setUploading(true);
+            try {
+              for (const { dataUrl, width, height, label } of cells) {
+                const styleId = addStyleToAsset(asset.id, { label, dataUrl, width, height });
+                saveTileObject({
+                  name: asset.name, dataUrl, width, height,
+                  groupId: asset.id, label, sortIndex: asset.styles.length,
+                })
+                  .then((cloud) => setStyleCloudId(asset.id, styleId, cloud.id))
+                  .catch((err) => console.warn('[upload-grid] save style failed', err));
+              }
+            } finally {
+              setUploading(false);
+            }
+          }}
         />
 
         {showFruitsView ? (
@@ -416,6 +432,260 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
         />
       )}
     </Shell>
+  );
+}
+
+/**
+ * Drop zone → grid preview → per-cell selection → import as styles.
+ * Replaces the old static preview header with an interactive import flow.
+ * Default grid is 8×8. The user can click individual cells to toggle
+ * selection; "Import selected" adds only the ticked cells as new styles.
+ */
+function UploadGridSection({
+  asset,
+  onImport,
+}: {
+  asset: ObjectAsset;
+  onImport: (cells: { dataUrl: string; width: number; height: number; label: string }[]) => Promise<void>;
+}) {
+  const [pendingImage, setPendingImage] = useState<{
+    img: HTMLImageElement;
+    dataUrl: string;
+    name: string;
+  } | null>(null);
+  const [rows, setRows] = useState(8);
+  const [cols, setCols] = useState(8);
+  const [selectedCells, setSelectedCells] = useState<Set<number>>(new Set());
+  const [dragHover, setDragHover] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [dragSelecting, setDragSelecting] = useState<boolean | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const stageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const img = await fileToImage(file);
+    const dataUrl = imageToDataUrl(img);
+    setPendingImage({ img, dataUrl, name: file.name.replace(/\.[^.]+$/, '') });
+    setSelectedCells(new Set());
+  }, []);
+
+  function toggleCell(idx: number, forceTo?: boolean) {
+    setSelectedCells((prev) => {
+      const next = new Set(prev);
+      const on = forceTo !== undefined ? forceTo : !next.has(idx);
+      if (on) next.add(idx); else next.delete(idx);
+      return next;
+    });
+  }
+
+  function handleCellPointerDown(idx: number) {
+    const nextOn = !selectedCells.has(idx);
+    setDragSelecting(nextOn);
+    toggleCell(idx, nextOn);
+  }
+  function handleCellPointerEnter(idx: number) {
+    if (dragSelecting === null) return;
+    toggleCell(idx, dragSelecting);
+  }
+  function handlePointerUp() { setDragSelecting(null); }
+
+  async function handleImport() {
+    if (!pendingImage || selectedCells.size === 0) return;
+    const sliced = sliceImage(pendingImage.img, { rows, cols });
+    const cells = Array.from(selectedCells)
+      .sort((a, b) => a - b)
+      .map((idx) => {
+        const r = Math.floor(idx / cols);
+        const c = idx % cols;
+        return {
+          dataUrl: sliced.tiles[idx],
+          width: sliced.tileWidth,
+          height: sliced.tileHeight,
+          label: `${pendingImage.name}_${r + 1}_${c + 1}`,
+        };
+      });
+    setImporting(true);
+    await onImport(cells);
+    setImporting(false);
+    setPendingImage(null);
+    setSelectedCells(new Set());
+  }
+
+  const totalCells = rows * cols;
+
+  if (!pendingImage) {
+    return (
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragHover(true); }}
+        onDragLeave={() => setDragHover(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragHover(false);
+          const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+          if (file) await stageFile(file);
+        }}
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          margin: 12,
+          padding: '18px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          border: `1.5px dashed ${dragHover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+          borderRadius: 10,
+          background: dragHover ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+          cursor: 'pointer',
+          transition: 'background 120ms ease, border-color 120ms ease',
+          flexShrink: 0,
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) await stageFile(file);
+          }}
+        />
+        <ImagePlus size={22} strokeWidth={2} style={{ color: 'var(--pb-ink-soft)' }} />
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--pb-ink-soft)', textAlign: 'center' }}>
+          Drop a sprite sheet here<br />
+          <span style={{ fontWeight: 600, color: 'var(--pb-ink-muted)' }}>or click to browse</span>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: 0, flexShrink: 0 }}
+      onPointerUp={handlePointerUp}
+    >
+      {/* Grid preview with clickable cells */}
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '1 / 1',
+          flexShrink: 0,
+          background: 'rgba(0,0,0,0.06)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+          overflow: 'hidden',
+          userSelect: 'none',
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={pendingImage.dataUrl}
+          alt=""
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'contain', imageRendering: 'pixelated',
+            pointerEvents: 'none',
+          }}
+          draggable={false}
+        />
+        {/* Clickable grid cells overlaid on the image */}
+        <div
+          style={{
+            position: 'absolute', inset: 0,
+            display: 'grid',
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateRows: `repeat(${rows}, 1fr)`,
+          }}
+        >
+          {Array.from({ length: totalCells }, (_, idx) => {
+            const selected = selectedCells.has(idx);
+            return (
+              <div
+                key={idx}
+                onPointerDown={(e) => { e.preventDefault(); handleCellPointerDown(idx); }}
+                onPointerEnter={() => handleCellPointerEnter(idx)}
+                style={{
+                  border: '0.5px solid rgba(0,0,0,0.18)',
+                  background: selected ? 'rgba(237,204,75,0.55)' : 'transparent',
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                  transition: 'background 60ms ease',
+                }}
+              />
+            );
+          })}
+        </div>
+        {/* Top-right controls: clear + select-all */}
+        <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>
+          <button
+            type="button"
+            onClick={() => setSelectedCells(new Set(Array.from({ length: totalCells }, (_, i) => i)))}
+            title="Select all"
+            style={{
+              padding: '3px 7px', fontSize: 10, fontWeight: 800,
+              background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6, cursor: 'pointer', color: 'var(--pb-ink)',
+              boxShadow: '0 1px 0 var(--pb-line-2)',
+            }}
+          >All</button>
+          <button
+            type="button"
+            onClick={() => setSelectedCells(new Set())}
+            title="Deselect all"
+            style={{
+              padding: '3px 7px', fontSize: 10, fontWeight: 800,
+              background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6, cursor: 'pointer', color: 'var(--pb-ink)',
+              boxShadow: '0 1px 0 var(--pb-line-2)',
+            }}
+          >None</button>
+          <button
+            type="button"
+            onClick={() => { setPendingImage(null); setSelectedCells(new Set()); }}
+            title="Remove image"
+            style={{
+              width: 26, height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6, cursor: 'pointer', color: 'var(--pb-ink)',
+              boxShadow: '0 1px 0 var(--pb-line-2)',
+            }}
+          ><X size={12} strokeWidth={2.4} /></button>
+        </div>
+      </div>
+
+      {/* Rows / cols sliders + import button */}
+      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '1.5px solid var(--pb-line-2)' }}>
+        <PanelSlider
+          label="Rows"
+          value={rows}
+          onChange={(v) => { setRows(Math.max(1, Math.round(v))); setSelectedCells(new Set()); }}
+          min={1} max={32} step={1}
+        />
+        <PanelSlider
+          label="Columns"
+          value={cols}
+          onChange={(v) => { setCols(Math.max(1, Math.round(v))); setSelectedCells(new Set()); }}
+          min={1} max={32} step={1}
+        />
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--pb-ink-muted)', textAlign: 'center' }}>
+          {selectedCells.size} of {totalCells} cells selected
+        </div>
+        <PanelActionButton
+          variant="primary"
+          icon={Upload}
+          fullWidth
+          loading={importing}
+          disabled={selectedCells.size === 0 || importing}
+          onClick={handleImport}
+        >
+          {importing ? 'Importing…' : `Import ${selectedCells.size} cell${selectedCells.size === 1 ? '' : 's'}`}
+        </PanelActionButton>
+      </div>
+    </div>
   );
 }
 

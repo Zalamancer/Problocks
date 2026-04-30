@@ -344,25 +344,9 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        <UploadGridSection
-          asset={asset}
-          onImport={async (cells) => {
-            if (!asset) return;
-            setUploading(true);
-            try {
-              for (const { dataUrl, width, height, label } of cells) {
-                const styleId = addStyleToAsset(asset.id, { label, dataUrl, width, height });
-                saveTileObject({
-                  name: asset.name, dataUrl, width, height,
-                  groupId: asset.id, label, sortIndex: asset.styles.length,
-                })
-                  .then((cloud) => setStyleCloudId(asset.id, styleId, cloud.id))
-                  .catch((err) => console.warn('[upload-grid] save style failed', err));
-              }
-            } finally {
-              setUploading(false);
-            }
-          }}
+        <ImagePreviewWithEdit
+          dataUrl={baseStyle?.dataUrl ?? ''}
+          onEdit={() => setSliceOpen(true)}
         />
 
         {showFruitsView ? (
@@ -399,26 +383,26 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
                 onRenameStyle={handleRenameStyle}
                 onReorder={handleReorder}
               />
-              <button
-                type="button"
-                disabled={uploading}
-                onClick={() => styleInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 mt-2"
-                style={{
-                  padding: '10px 12px',
-                  background: 'var(--pb-paper)',
-                  border: '1.5px dashed var(--pb-line-2)',
-                  borderRadius: 8,
-                  color: 'var(--pb-ink)',
-                  fontSize: 12.5,
-                  fontWeight: 800,
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  opacity: uploading ? 0.6 : 1,
+              <UploadGridSection
+                asset={asset}
+                onImport={async (cells) => {
+                  if (!asset) return;
+                  setUploading(true);
+                  try {
+                    for (const { dataUrl, width, height, label } of cells) {
+                      const styleId = addStyleToAsset(asset.id, { label, dataUrl, width, height });
+                      saveTileObject({
+                        name: asset.name, dataUrl, width, height,
+                        groupId: asset.id, label, sortIndex: asset.styles.length,
+                      })
+                        .then((cloud) => setStyleCloudId(asset.id, styleId, cloud.id))
+                        .catch((err) => console.warn('[upload-grid] save style failed', err));
+                    }
+                  } finally {
+                    setUploading(false);
+                  }
                 }}
-              >
-                {uploading ? <Upload size={13} strokeWidth={2.4} /> : <Plus size={13} strokeWidth={2.4} />}
-                {uploading ? 'Uploading…' : 'Add style'}
-              </button>
+              />
             </PanelSection>
           </div>
         )}

@@ -300,6 +300,13 @@ export const CHARACTER_DIRS: CharacterDir8[] = [
 export interface CharacterAnimation {
   id: string;
   label: string;
+  /** Canonical action tag (idle / walk / run / jump / attack / defend /
+   *  hurt / die / swim / cast). Optional — free-form uploads have no
+   *  tag. The runtime looks up animations by `actionId` first, falling
+   *  back to label matching for legacy uploads. Keep the type as the
+   *  union from `lib/character-actions` but stored as a plain string
+   *  so older persisted state still parses. */
+  actionId?: string;
   /** PNG/WEBP data URL of the full 4×4 sheet. */
   src: string;
   cols: number;
@@ -568,7 +575,18 @@ export interface TileStore {
   addCharacterAnimation: (
     id: string,
     direction: CharacterDir8,
-    input: { label?: string; src: string; cols: number; rows: number; frameW: number; frameH: number },
+    input: {
+      label?: string;
+      /** Canonical action tag — when set, the runtime can find this
+       *  animation by id without depending on the user's free-text
+       *  label. See `lib/character-actions.ts`. */
+      actionId?: string;
+      src: string;
+      cols: number;
+      rows: number;
+      frameW: number;
+      frameH: number;
+    },
   ) => string;
   removeCharacterAnimation: (
     id: string,
@@ -1684,6 +1702,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       const animation: CharacterAnimation = {
         id: animationId,
         label: input.label || `Animation ${list.length + 1}`,
+        ...(input.actionId ? { actionId: input.actionId } : {}),
         src: input.src,
         cols: input.cols,
         rows: input.rows,

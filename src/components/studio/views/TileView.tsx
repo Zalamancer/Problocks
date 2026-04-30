@@ -11,9 +11,14 @@ import {
   type TileTool,
   type TilePenAnchor,
   type TileCollision,
+  type CharacterDir8,
   findStyle,
   tileDataUrlFor,
 } from '@/store/tile-store';
+import {
+  findCharacterAnimation,
+  type CharacterActionId,
+} from '@/lib/character-actions';
 import { useStudio } from '@/store/studio-store';
 import { useSceneStore } from '@/store/scene-store';
 import { useRoom } from '@/store/room-store';
@@ -379,9 +384,12 @@ export function TileView() {
    * loop's RAF tick — writing each tick straight to the Zustand store
    * would burn re-renders across the whole panel tree, so we keep live
    * state in this ref and only flush back to the store when play stops.
-   * `dir` is the snapped 8-way facing used for cell selection on render.
+   * `dir` is the current Dir8 (includes 'idle' when stationary). `facing`
+   * remembers the last non-idle direction so an idle character keeps
+   * looking the way it last walked, and the animation lookup always has
+   * a directional CharacterDir8 even at rest.
    */
-  const playRuntimeRef = useRef<Map<string, { x: number; y: number; dir: Dir8 }>>(new Map());
+  const playRuntimeRef = useRef<Map<string, { x: number; y: number; dir: Dir8; facing: CharacterDir8 }>>(new Map());
   /** Pressed keys during play mode. Lower-cased Key value for case-insensitive
    *  matching against {w,a,s,d, arrowleft, ...}. */
   const playKeysRef = useRef<Set<string>>(new Set());
@@ -661,11 +669,18 @@ export function TileView() {
     // zone at origin so the spawn pad and any user paint inside it
     // survive play.
     buildPlayOverlay();
+    // Kick the canvas right away — the tick loop below also schedules
+    // renders, but the first one is a frame later, which is long
+    // enough to look like Play "did nothing" on slower machines.
+    requestRender.current();
 
     const rt = playRuntimeRef.current;
     rt.clear();
     for (const c of Object.values(useTile.getState().tileCharacters)) {
-      rt.set(c.id, { x: c.x, y: c.y, dir: 'idle' });
+      // `facing` defaults to 's' (face the camera) — the canonical
+      // resting pose. The tick loop overwrites it as soon as the player
+      // moves; non-player characters keep this default.
+      rt.set(c.id, { x: c.x, y: c.y, dir: 'idle', facing: 's' });
     }
 
     // No player → procgen + camera are already in place; skip the
@@ -721,7 +736,11 @@ export function TileView() {
           vx /= mag; vy /= mag;
           cur.x += vx * player.speed * dt;
           cur.y += vy * player.speed * dt;
-          cur.dir = dirFromVelocity(vx, vy);
+          const moving = dirFromVelocity(vx, vy);
+          cur.dir = moving;
+          // `facing` only updates while moving, so an idle character keeps
+          // looking the way it last walked (matches platformer convention).
+          if (moving !== 'idle') cur.facing = moving;
         } else {
           cur.dir = 'idle';
         }
@@ -791,9 +810,15 @@ export function TileView() {
     if (!genPreviewEnabled) {
       useTile.getState().setPlayLayer(null);
       useTile.getState().setPlayObjects([]);
+      requestRender.current();
       return;
     }
     buildPlayOverlay();
+    // The canvas only repaints on demand in edit mode. Without this kick
+    // the freshly-built playLayer would sit in the store unseen until the
+    // user moused over the canvas (which schedules a render through the
+    // hover handler).
+    requestRender.current();
   }, [
     isPlaying,
     genPreviewEnabled,
@@ -1284,16 +1309,48 @@ export function TileView() {
           const px = playing && cur ? cur.x : c.x;
           const py = playing && cur ? cur.y : c.y;
           const dir: Dir8 = playing && cur ? cur.dir : 'idle';
-          const cellIdx = DIR_CELL_INDEX[dir];
-          const col = cellIdx % c.cols;
-          const row = Math.floor(cellIdx / c.cols);
-          // Source rect: one cell of the sheet. Destination rect: world
-          // size centered on the character's position.
-          ctx!.drawImage(
-            sheetImg,
-            col * c.frameW, row * c.frameH, c.frameW, c.frameH,
-            px - c.width / 2, py - c.height / 2, c.width, c.height,
-          );
+
+          // Try to find a tagged action animation for this character's
+          // current state. Player only — non-player characters always
+          // fall back to the static 3×3 cell since they have no walk
+          // input. `facing` is the last non-idle direction (defaults to
+          // 's'), so the idle pose still has a sensible heading.
+          let used = false;
+          if (playing && cur && c.id === playerId) {
+            const actionId: CharacterActionId = dir === 'idle' ? 'idle' : 'run';
+            const anim = findCharacterAnimation(c, cur.facing, actionId);
+            if (anim) {
+              const animReady = imgReadyRef.current.has(anim.src);
+              const animImg = ensureImage(anim.src);
+              if (animReady) {
+                const total = Math.max(1, anim.cols * anim.rows);
+                const fps = Math.max(1, c.fps || 8);
+                const tNow = performance.now();
+                const frame = Math.floor((tNow * fps) / 1000) % total;
+                const aCol = frame % anim.cols;
+                const aRow = Math.floor(frame / anim.cols);
+                ctx!.drawImage(
+                  animImg,
+                  aCol * anim.frameW, aRow * anim.frameH, anim.frameW, anim.frameH,
+                  px - c.width / 2, py - c.height / 2, c.width, c.height,
+                );
+                used = true;
+              }
+            }
+          }
+
+          if (!used) {
+            const cellIdx = DIR_CELL_INDEX[dir];
+            const col = cellIdx % c.cols;
+            const row = Math.floor(cellIdx / c.cols);
+            // Source rect: one cell of the sheet. Destination rect: world
+            // size centered on the character's position.
+            ctx!.drawImage(
+              sheetImg,
+              col * c.frameW, row * c.frameH, c.frameW, c.frameH,
+              px - c.width / 2, py - c.height / 2, c.width, c.height,
+            );
+          }
           // Selection ring — only in edit mode (play mode hides chrome
           // so the player sees their game). Players selected via the
           // panel get a green ring; the active "player" gets a blue one.

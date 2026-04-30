@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { PanelSearchInput, PanelSelect } from '@/components/ui';
-import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass, type TileCharacter, type TileGroup } from '@/store/tile-store';
+import { useTile, type Tileset, type Tile, type ObjectAsset, type TileCharacter, type TileGroup } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
 import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
@@ -1802,13 +1802,6 @@ function ObjectsSection() {
   const selectedAssetId = useTile((s) => s.selectedAssetId);
   const setSelectedAssetId = useTile((s) => s.setSelectedAssetId);
   const setTool = useTile((s) => s.setTool);
-  // ── Class taxonomy hooks ────────────────────────────────────────
-  const objectClasses = useTile((s) => s.objectClasses);
-  const assetClassIds = useTile((s) => s.assetClassIds);
-  const addObjectClass = useTile((s) => s.addObjectClass);
-  const renameObjectClass = useTile((s) => s.renameObjectClass);
-  const removeObjectClass = useTile((s) => s.removeObjectClass);
-  const setAssetClass = useTile((s) => s.setAssetClass);
   // Auto-open the right Properties tab on asset click so the asset's image
   // preview + slice / styles controls show without a manual tab switch.
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
@@ -1832,15 +1825,6 @@ function ObjectsSection() {
    *  thumbnails. Mirrors the View dropdown in the 3D Freeform Models
    *  view so the muscle memory carries over. */
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  /** Per-class-folder open/closed state. Defaults to OPEN (entry absent
-   *  → open) so users see what they just created without an extra click. */
-  const [collapsedClasses, setCollapsedClasses] = useState<Record<string, boolean>>({});
-  /** When the user clicks "+ class", we create the class and set this to
-   *  its id so the inline rename input mounts focused. Cleared on commit. */
-  const [renamingClassId, setRenamingClassId] = useState<string | null>(null);
-  /** Class header that's currently being hovered as a drop target — used
-   *  for the highlight ring during asset drag-into-folder. */
-  const [dropTargetClassId, setDropTargetClassId] = useState<string | 'root' | null>(null);
   /** Keyboard-focused asset row. Up/Down moves it through the list; Enter
    *  selects (mirrors mouse click behaviour). Style-axis navigation lived
    *  on the inline-expand list which is now in the right panel, so the
@@ -1991,36 +1975,12 @@ function ObjectsSection() {
   const assetList = Object.values(objectAssets)
     .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
 
-  // ── Class taxonomy view-models ──────────────────────────────────
-  /** Children of one class (or root when classId === null), sorted by
-   *  the class's sibling sortIndex. */
-  function classChildrenOf(parentId: string | null): ObjectClass[] {
-    return Object.values(objectClasses)
-      .filter((c) => c.parentId === parentId)
-      .sort((a, b) => a.sortIndex - b.sortIndex);
-  }
   /** Lower-cased search query — empty string when the user has not typed
-   *  anything. Computed once per render and reused in `assetsInClass` so
-   *  every list (root + every class folder) honours the search filter. */
+   *  anything. Used to filter the flat asset list by name. */
   const q = search.trim().toLowerCase();
-  /** Assets that belong to a class (null = root / uncategorised), with the
-   *  current search query applied. */
-  function assetsInClass(classId: string | null): ObjectAsset[] {
-    return assetList.filter((a) => {
-      const cid = assetClassIds[a.id] ?? null;
-      if (cid !== classId) return false;
-      if (q && !a.name.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }
-  /** Total assets recursively under a class (for the count badge). */
-  function recursiveAssetCount(classId: string): number {
-    let total = assetsInClass(classId).length;
-    for (const child of classChildrenOf(classId)) {
-      total += recursiveAssetCount(child.id);
-    }
-    return total;
-  }
+  const visibleAssets = q
+    ? assetList.filter((a) => a.name.toLowerCase().includes(q))
+    : assetList;
 
   function scrollAssetIntoView(assetId: string) {
     // Defer to next frame so the focused state has rendered (focus ring
@@ -2178,13 +2138,6 @@ function ObjectsSection() {
                   const fromId = dragAssetIdRef.current;
                   dragAssetIdRef.current = null;
                   if (!fromId || fromId === asset.id) return;
-                  // Cross-class drop on a sibling card snaps the dragged
-                  // asset into the target's class first, then reorders so
-                  // it lands at that exact spot. Same-class is a pure
-                  // reorder.
-                  const fromClass = assetClassIds[fromId] ?? null;
-                  const toClass = assetClassIds[asset.id] ?? null;
-                  if (fromClass !== toClass) setAssetClass(fromId, toClass);
                   const order = assetList.map((a) => a.id);
                   const fromIdx = order.indexOf(fromId);
                   const toIdx = order.indexOf(asset.id);
@@ -2197,176 +2150,7 @@ function ObjectsSection() {
               />
             );
 
-            const renderClassFolder = (cls: ObjectClass, depth: number) => {
-              const open = !collapsedClasses[cls.id];
-              const childClasses = classChildrenOf(cls.id);
-              const childAssets = assetsInClass(cls.id);
-              const totalAssets = recursiveAssetCount(cls.id);
-              const isRenaming = renamingClassId === cls.id;
-              const isDropTarget = dropTargetClassId === cls.id;
-              return (
-                <div key={cls.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {/* Class folder header — chunky-pastel card. Drop a sprite
-                      on it to assign that asset to this class. */}
-                  <div
-                    onClick={() => setCollapsedClasses((m) => ({ ...m, [cls.id]: open }))}
-                    onDragOver={(e) => {
-                      if (!dragAssetIdRef.current) return;
-                      e.preventDefault();
-                      if (dropTargetClassId !== cls.id) setDropTargetClassId(cls.id);
-                    }}
-                    onDragLeave={() => {
-                      if (dropTargetClassId === cls.id) setDropTargetClassId(null);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDropTargetClassId(null);
-                      const fromId = dragAssetIdRef.current;
-                      dragAssetIdRef.current = null;
-                      if (!fromId) return;
-                      setAssetClass(fromId, cls.id);
-                      // Also expand the folder so the user sees where it landed.
-                      setCollapsedClasses((m) => ({ ...m, [cls.id]: false }));
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '6px 8px',
-                      background: isDropTarget ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-                      border: `1.5px solid ${isDropTarget ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                    }}
-                  >
-                    <span style={{ display: 'flex', color: 'var(--pb-ink-muted)' }}>
-                      {open ? <ChevDown size={12} strokeWidth={2.4} /> : <ChevronRight size={12} strokeWidth={2.4} />}
-                    </span>
-                    <span style={{ display: 'flex', color: 'var(--pb-ink)' }}>
-                      <Folder size={13} strokeWidth={2.4} />
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {isRenaming ? (
-                        <input
-                          autoFocus
-                          defaultValue={cls.name}
-                          onClick={(e) => e.stopPropagation()}
-                          onBlur={(e) => {
-                            const v = e.target.value.trim();
-                            if (v) renameObjectClass(cls.id, v);
-                            setRenamingClassId(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                            if (e.key === 'Escape') setRenamingClassId(null);
-                          }}
-                          style={{
-                            width: '100%',
-                            background: 'var(--pb-paper)',
-                            border: '1.5px solid var(--pb-line-2)',
-                            borderRadius: 5,
-                            padding: '2px 6px',
-                            fontSize: 12,
-                            fontWeight: 800,
-                            color: 'var(--pb-ink)',
-                          }}
-                        />
-                      ) : (
-                        <span
-                          onDoubleClick={(e) => { e.stopPropagation(); setRenamingClassId(cls.id); }}
-                          title="Click to expand · double-click to rename"
-                          style={{
-                            display: 'block',
-                            fontSize: 12,
-                            fontWeight: 800,
-                            color: 'var(--pb-ink)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {cls.name}
-                        </span>
-                      )}
-                    </div>
-                    <span
-                      title={`${totalAssets} asset${totalAssets === 1 ? '' : 's'} (recursive)`}
-                      style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-muted)', padding: '0 4px' }}
-                    >
-                      {totalAssets}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const newId = addObjectClass({ name: 'New class', parentId: cls.id });
-                        setRenamingClassId(newId);
-                        // Auto-expand parent so the new sub-class is visible.
-                        setCollapsedClasses((m) => ({ ...m, [cls.id]: false }));
-                      }}
-                      title="Add sub-class"
-                      style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', padding: 1 }}
-                    >
-                      <Plus size={12} strokeWidth={2.4} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setRenamingClassId(cls.id); }}
-                      title="Rename class"
-                      style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-ink-muted)', display: 'flex', padding: 1 }}
-                    >
-                      <Pencil size={11} strokeWidth={2.4} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!confirm(`Remove class "${cls.name}"? Sub-classes and assets move up one level (nothing is deleted).`)) return;
-                        removeObjectClass(cls.id);
-                      }}
-                      title="Delete class folder"
-                      style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--pb-coral-ink)', display: 'flex', padding: 1 }}
-                    >
-                      <Trash2 size={11} strokeWidth={2.4} />
-                    </button>
-                  </div>
-                  {open && (
-                    <div
-                      className={viewMode === 'grid' && childClasses.length === 0
-                        ? 'grid grid-cols-2 gap-1'
-                        : 'flex flex-col gap-px'}
-                      style={{ paddingLeft: 14 }}
-                    >
-                      {childClasses.map((c) => renderClassFolder(c, depth + 1))}
-                      {childAssets.map(renderAssetCard)}
-                      {childClasses.length === 0 && childAssets.length === 0 && (
-                        <div
-                          style={{
-                            padding: '6px 10px',
-                            fontSize: 10.5,
-                            color: 'var(--pb-ink-muted)',
-                            fontStyle: 'italic',
-                            border: '1.5px dashed var(--pb-line-2)',
-                            borderRadius: 6,
-                            background: 'rgba(0,0,0,0.02)',
-                            textAlign: 'center',
-                          }}
-                        >
-                          Empty — drop a sprite here, or add a sub-class.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            };
-
-            const topLevelClasses = classChildrenOf(null);
-            const rootAssets = assetsInClass(null);
-            const isCompletelyEmpty = assetList.length === 0 && topLevelClasses.length === 0;
-
-            if (isCompletelyEmpty) {
+            if (assetList.length === 0) {
               return (
                 <button
                   type="button"
@@ -2409,40 +2193,32 @@ function ObjectsSection() {
                     setFocused({ kind: 'asset', assetId: assetList[0].id });
                   }
                 }}
-                // Drop on the gap area (outside any class header / card) =
-                // move the dragged asset back to root (uncategorised).
-                onDragOver={(e) => {
-                  if (!dragAssetIdRef.current) return;
-                  e.preventDefault();
-                  if (dropTargetClassId !== 'root') setDropTargetClassId('root');
-                }}
-                onDragLeave={(e) => {
-                  // Only clear when leaving the container itself (not its children).
-                  if (e.currentTarget === e.target && dropTargetClassId === 'root') {
-                    setDropTargetClassId(null);
-                  }
-                }}
-                onDrop={(e) => {
-                  if (e.target !== e.currentTarget) return; // a child handled it
-                  e.preventDefault();
-                  setDropTargetClassId(null);
-                  const fromId = dragAssetIdRef.current;
-                  dragAssetIdRef.current = null;
-                  if (!fromId) return;
-                  setAssetClass(fromId, null);
-                }}
                 className={viewMode === 'grid'
                   ? 'grid grid-cols-2 gap-1'
                   : 'flex flex-col gap-px'}
                 style={{
                   outline: 'none',
-                  background: dropTargetClassId === 'root' ? 'rgba(0,0,0,0.03)' : undefined,
                   borderRadius: 6,
                   padding: 2,
                 }}
               >
-                {topLevelClasses.map((cls) => renderClassFolder(cls, 0))}
-                {rootAssets.map(renderAssetCard)}
+                {visibleAssets.map(renderAssetCard)}
+                {visibleAssets.length === 0 && (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      fontSize: 11,
+                      color: 'var(--pb-ink-muted)',
+                      fontStyle: 'italic',
+                      border: '1.5px dashed var(--pb-line-2)',
+                      borderRadius: 8,
+                      background: 'var(--pb-cream-2)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    No objects match your search.
+                  </div>
+                )}
               </div>
             );
           })()}

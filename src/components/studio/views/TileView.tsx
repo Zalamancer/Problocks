@@ -473,9 +473,11 @@ export function TileView() {
       for (const [id, state] of rt) updateChar(id, { x: state.x, y: state.y });
       rt.clear();
       playKeysRef.current.clear();
-      // Drop the ephemeral procgen layer — clearing the ref is enough
-      // since playLayer is excluded from persist and isn't in undo state.
+      // Drop the ephemeral procgen layer + scatter — both are excluded
+      // from persist and never enter the undo stack, so clearing them
+      // is enough to restore the editor to its pre-Play state.
       useTile.getState().setPlayLayer(null);
+      useTile.getState().setPlayObjects([]);
       // Restore the pre-play camera so the editor framing is exactly where
       // the user left it on Play. Only restore when we actually saved one
       // (the Play body bails early when there are zero characters).
@@ -520,7 +522,8 @@ export function TileView() {
       const RESERVE = tile.genReserveRadius;
       const RADIUS = Math.max(256, RESERVE + 192);
       const reserveShape = tile.genReserveShape;
-      const cells = generateRegion({
+      const outputMode: 'cells' | 'corners' = tile.genSmoothEdges ? 'corners' : 'cells';
+      const samples = generateRegion({
         x0: -RADIUS,
         y0: -RADIUS,
         x1: RADIUS,
@@ -530,6 +533,8 @@ export function TileView() {
         scale: tile.genScale,
         octaves: tile.genOctaves,
         roughness: tile.genRoughness,
+        warp: tile.genWarp,
+        output: outputMode,
         weights: tile.genTextureWeights,
         island: tile.genIslandEnabled
           ? { radius: tile.genIslandRadius }
@@ -541,16 +546,24 @@ export function TileView() {
           return Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
         },
       });
-      if (cells.length > 0) {
+      if (samples.length > 0) {
         // Build the synthetic play layer in-memory, then publish it in one
         // setState — never goes through `mutateCorners`, never lands in the
         // undo stack, never gets persisted.
         const corners: Record<string, string> = {};
-        for (const { cx, cy, texId } of cells) {
-          corners[`${cx},${cy}`] = texId;
-          corners[`${cx + 1},${cy}`] = texId;
-          corners[`${cx},${cy + 1}`] = texId;
-          corners[`${cx + 1},${cy + 1}`] = texId;
+        if (outputMode === 'corners') {
+          // One id per corner — wang autotiler resolves transitions.
+          for (const { cx, cy, texId } of samples) {
+            corners[`${cx},${cy}`] = texId;
+          }
+        } else {
+          // One id per cell, painted onto all 4 of that cell's corners.
+          for (const { cx, cy, texId } of samples) {
+            corners[`${cx},${cy}`] = texId;
+            corners[`${cx + 1},${cy}`] = texId;
+            corners[`${cx},${cy + 1}`] = texId;
+            corners[`${cx + 1},${cy + 1}`] = texId;
+          }
         }
         tile.setPlayLayer({
           id: '__play_overlay__',
@@ -561,6 +574,77 @@ export function TileView() {
           corners,
         });
       }
+    }
+
+    // ── Object scatter ──────────────────────────────────────────
+    // Per-cell Bernoulli trial driven by `genObjectDensity`; on a hit
+    // we weighted-pick from the assets the user has marked > 0 and
+    // place it at the cell centre with a small jitter. Skips cells
+    // inside the reserve so the spawn pad stays clean. Uses the same
+    // mulberry32-style RNG seeded from the world seed + cell coords so
+    // the same seed yields the same scatter.
+    const objectAssetEntries = Object.entries(tile.genObjectWeights)
+      .filter(([id, w]) => w > 0 && tile.objectAssets[id])
+      .map(([id, w]) => ({ id, weight: w, asset: tile.objectAssets[id] }));
+    if (
+      tile.genObjectDensity > 0
+      && objectAssetEntries.length > 0
+    ) {
+      const RESERVE = tile.genReserveRadius;
+      const RADIUS = Math.max(256, RESERVE + 192);
+      const reserveShape = tile.genReserveShape;
+      const totalW = objectAssetEntries.reduce((a, e) => a + e.weight, 0);
+      const ts = tile.tileSize;
+      const seed = tile.genSeed;
+      // Tiny inline 32-bit hash for the scatter — keep it in TileView so
+      // we don't grow world-gen with object placement responsibilities.
+      const rngAt = (cx: number, cy: number, salt: number) => {
+        let h = (seed ^ salt) >>> 0;
+        h = Math.imul(h ^ (cx >>> 0), 0x9E3779B1) >>> 0;
+        h = Math.imul(h ^ (cy >>> 0), 0x85EBCA77) >>> 0;
+        h ^= h >>> 16;
+        return (h >>> 0) / 4294967296;
+      };
+      const scattered: typeof tile.playObjects = [];
+      let scatterSeq = 0;
+      for (let cy = -RADIUS; cy < RADIUS; cy++) {
+        for (let cx = -RADIUS; cx < RADIUS; cx++) {
+          const inReserve = reserveShape === 'circle'
+            ? cx * cx + cy * cy < RESERVE * RESERVE
+            : Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
+          if (inReserve) continue;
+          if (rngAt(cx, cy, 0xA1) >= tile.genObjectDensity) continue;
+          // Weighted asset pick.
+          let pick = rngAt(cx, cy, 0xB2) * totalW;
+          let chosen = objectAssetEntries[0];
+          for (const e of objectAssetEntries) {
+            if (pick < e.weight) { chosen = e; break; }
+            pick -= e.weight;
+          }
+          const style = chosen.asset.styles[0];
+          if (!style) continue;
+          // Jitter inside the cell (±25% of a tile) so a dense scatter
+          // doesn't form a visible grid pattern.
+          const jx = (rngAt(cx, cy, 0xC3) - 0.5) * ts * 0.5;
+          const jy = (rngAt(cx, cy, 0xD4) - 0.5) * ts * 0.5;
+          scattered.push({
+            id: `__scatter__${scatterSeq++}`,
+            layerId: '__play_overlay__',
+            x: (cx + 0.5) * ts + jx,
+            y: (cy + 0.5) * ts + jy,
+            assetId: chosen.id,
+            styleId: style.id,
+            width: style.width,
+            height: style.height,
+            rotation: 0,
+            flipX: false,
+            flipY: false,
+            hue: 0,
+            name: chosen.asset.name,
+          });
+        }
+      }
+      tile.setPlayObjects(scattered);
     }
 
     const rt = playRuntimeRef.current;
@@ -1003,8 +1087,17 @@ export function TileView() {
         }
       }
 
-      // Free objects, sorted bottom-to-top by y.
-      const visibleObjects = s.objects.filter((o) => {
+      // Free objects, sorted bottom-to-top by y. Includes the ephemeral
+      // play-mode scatter — playObjects use a synthetic layerId so the
+      // user-layer visibility check below short-circuits cleanly. The
+      // `?? []` guards against a hydrate sequence where an older
+      // persisted shape is read in before the default playObjects array
+      // is merged back; safer than crashing the render loop.
+      const playObjs = s.playObjects ?? [];
+      const objectPool = playObjs.length > 0
+        ? [...s.objects, ...playObjs]
+        : s.objects;
+      const visibleObjects = objectPool.filter((o) => {
         const layer = s.layers.find((l) => l.id === o.layerId);
         if (layer && !layer.visible) return false;
         return o.x + o.width / 2 >= cx0 * ts

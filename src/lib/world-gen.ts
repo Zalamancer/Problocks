@@ -113,6 +113,33 @@ function fractalNoise(
 }
 
 /**
+ * Domain-warp the (x, y) sample coords using two low-frequency noise
+ * fields. `strength` is in cells — at 0 there's no warp, at `scale`
+ * the coords swing about half a biome's worth in each axis, which is
+ * roughly the "lots of organic flow" amount. The two noise fields use
+ * different seed offsets so they don't lock-step (which would rotate
+ * the whole noise field rather than warp it).
+ */
+function warpCoords(
+  x: number,
+  y: number,
+  seed: number,
+  scale: number,
+  strength: number,
+): [number, number] {
+  if (strength <= 0) return [x, y];
+  const wScale = scale; // warp uses the same low-frequency scale as biomes.
+  const a = valueNoise(x / wScale, y / wScale, (seed ^ 0x53A2C1D7) >>> 0);
+  const b = valueNoise(x / wScale, y / wScale, (seed ^ 0xB87C1E29) >>> 0);
+  // Map noise [0,1) → [-1,1) so the warp is signed (offsets in both
+  // directions, not just positive shifts).
+  return [
+    x + (a * 2 - 1) * strength,
+    y + (b * 2 - 1) * strength,
+  ];
+}
+
+/**
  * Map a noise value to a texture id from the available palette.
  * When `weights` is provided, the noise range is split into bands
  * proportional to each entry's weight (so a 0.6 grass / 0.3 dirt /
@@ -216,6 +243,25 @@ export function generateRegion(args: {
    * strength (default 0.6). Beyond `radius` the noise is fully zeroed.
    */
   island?: { radius: number; inner?: number };
+  /** Domain-warp strength in cells. 0 = perfectly round blobs (the
+   *  default), `scale` ≈ moderately organic, `2*scale` = highly distorted.
+   *  Warp shifts the sample coordinates by two offset noise fields
+   *  before evaluating fractalNoise, which gives shorelines a flowing
+   *  hand-drawn look without changing the band thresholds. */
+  warp?: number;
+  /**
+   * Output mode. `cells` (default) writes one texture id per cell —
+   * the caller paints all 4 of that cell's corners with the same id,
+   * giving solid blocks of texture and crisp band edges. `corners`
+   * writes one id per corner and lets the wang autotiler resolve
+   * transitions naturally between adjacent corners with different
+   * ids — much smoother shorelines, but requires the user's tilesets
+   * to bridge every texture-pair their cells produce (otherwise some
+   * cells fall through `resolveCellTile` and don't render). Use
+   * `cells` when there's only one tileset chain, `corners` once
+   * tilesets cover all transitions.
+   */
+  output?: 'cells' | 'corners';
   skipCell?: (cx: number, cy: number) => boolean;
 }): Array<{ cx: number; cy: number; texId: string }> {
   const {
@@ -224,6 +270,8 @@ export function generateRegion(args: {
     octaves = 2,
     roughness = 0.5,
     weights, island, skipCell,
+    warp = 0,
+    output = 'cells',
   } = args;
   if (palette.length === 0) return [];
   const out: Array<{ cx: number; cy: number; texId: string }> = [];
@@ -235,10 +283,28 @@ export function generateRegion(args: {
     return k * k * (3 - 2 * k);
   };
   const innerFrac = Math.max(0, Math.min(0.95, island?.inner ?? 0.6));
-  for (let cy = y0; cy < y1; cy++) {
-    for (let cx = x0; cx < x1; cx++) {
-      if (skipCell && skipCell(cx, cy)) continue;
-      let n = fractalNoise(cx, cy, seed, scale, octaves, roughness);
+  // For corner mode, iterate one extra row/col on each axis so every
+  // cell whose right/bottom corner is inside the rectangle still has
+  // its corner sampled. The cell-mode loop bounds (x0..x1) describe
+  // cell indices; corner indices share the same numbering but the
+  // valid range goes one further.
+  const xMax = output === 'corners' ? x1 + 1 : x1;
+  const yMax = output === 'corners' ? y1 + 1 : y1;
+  for (let cy = y0; cy < yMax; cy++) {
+    for (let cx = x0; cx < xMax; cx++) {
+      if (output === 'cells' && skipCell && skipCell(cx, cy)) continue;
+      // Corners conceptually sit between cells, so a corner is "in the
+      // reserve" when ALL 4 of its surrounding cells are. Cheaper test:
+      // when `(cx, cy)` and `(cx-1, cy-1)` are both reserved.
+      if (output === 'corners' && skipCell) {
+        const aIn = skipCell(cx, cy);
+        const bIn = skipCell(cx - 1, cy);
+        const cIn = skipCell(cx, cy - 1);
+        const dIn = skipCell(cx - 1, cy - 1);
+        if (aIn && bIn && cIn && dIn) continue;
+      }
+      const [wx, wy] = warpCoords(cx, cy, seed, scale, warp);
+      let n = fractalNoise(wx, wy, seed, scale, octaves, roughness);
       if (island && island.radius > 0) {
         const d = Math.hypot(cx, cy) / island.radius;
         // 1 inside `inner`, fades smoothly to 0 at d == 1.

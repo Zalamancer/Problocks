@@ -218,6 +218,15 @@ function TileGenerationSection() {
   const setReserveRadius = useTile((s) => s.setGenReserveRadius);
   const reserveShape = useTile((s) => s.genReserveShape);
   const setReserveShape = useTile((s) => s.setGenReserveShape);
+  const warp = useTile((s) => s.genWarp);
+  const setWarp = useTile((s) => s.setGenWarp);
+  const smoothEdges = useTile((s) => s.genSmoothEdges);
+  const setSmoothEdges = useTile((s) => s.setGenSmoothEdges);
+  const objectDensity = useTile((s) => s.genObjectDensity);
+  const setObjectDensity = useTile((s) => s.setGenObjectDensity);
+  const objectWeights = useTile((s) => s.genObjectWeights);
+  const setObjectWeight = useTile((s) => s.setGenObjectWeight);
+  const objectAssets = useTile((s) => s.objectAssets);
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const weights = useTile((s) => s.genTextureWeights);
@@ -289,6 +298,19 @@ function TileGenerationSection() {
         onChange={setRoughness}
         min={0} max={0.95} step={0.05} precision={2}
       />
+      <PanelSlider
+        label="Domain warp"
+        value={warp}
+        onChange={setWarp}
+        min={0} max={64} step={1} precision={0}
+        suffix=" cells"
+      />
+      <PanelToggle
+        label="Smooth shorelines"
+        description="Per-corner sampling — needs full tileset chain"
+        checked={smoothEdges}
+        onChange={setSmoothEdges}
+      />
       <PanelToggle
         label="Island falloff"
         description="Fade to lowest band outside the radius"
@@ -338,7 +360,70 @@ function TileGenerationSection() {
           />
         ))
       )}
+      <ObjectScatterControls
+        density={objectDensity}
+        onDensityChange={setObjectDensity}
+        weights={objectWeights}
+        onWeightChange={setObjectWeight}
+        assets={objectAssets}
+      />
     </PanelSection>
+  );
+}
+
+/**
+ * Per-asset scatter controls — placed inside the Generation section so
+ * the user sees terrain + object distributions side-by-side. Density
+ * is a global multiplier; weights pick which assets get scattered.
+ */
+function ObjectScatterControls({
+  density,
+  onDensityChange,
+  weights,
+  onWeightChange,
+  assets,
+}: {
+  density: number;
+  onDensityChange: (v: number) => void;
+  weights: Record<string, number>;
+  onWeightChange: (id: string, w: number) => void;
+  assets: Record<string, { id: string; name: string; styles: { dataUrl?: string }[] }>;
+}) {
+  const list = Object.values(assets);
+  return (
+    <>
+      <div
+        className="mt-2 text-[10px] uppercase tracking-wider"
+        style={{ color: 'var(--pb-ink-muted)', padding: '8px 2px 0' }}
+      >
+        Object scatter
+      </div>
+      <PanelSlider
+        label="Density"
+        value={density}
+        onChange={onDensityChange}
+        min={0} max={0.2} step={0.005} precision={3}
+        suffix=" /cell"
+      />
+      {list.length === 0 ? (
+        <div
+          className="text-xs"
+          style={{ color: 'var(--pb-ink-muted)', padding: '4px 2px' }}
+        >
+          Upload object assets to scatter them on the map.
+        </div>
+      ) : (
+        list.map((a) => (
+          <TerrainWeightRow
+            key={a.id}
+            label={a.name}
+            swatch={a.styles[0]?.dataUrl}
+            value={weights[a.id] ?? 0}
+            onChange={(v) => onWeightChange(a.id, v)}
+          />
+        ))
+      )}
+    </>
   );
 }
 

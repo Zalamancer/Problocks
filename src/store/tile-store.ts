@@ -821,6 +821,36 @@ export interface TileStore {
    *  stays inside the island shape. */
   genReserveShape: 'square' | 'circle';
   setGenReserveShape: (v: 'square' | 'circle') => void;
+  /** Domain-warp strength in cells. 0 = circular blobs, scale ≈
+   *  organic flow, 2*scale = heavily distorted shorelines. */
+  genWarp: number;
+  setGenWarp: (v: number) => void;
+  /** When true, the procgen runs in corner mode — one texture id per
+   *  corner instead of one per cell. The wang autotiler then resolves
+   *  the transitions, giving much softer shorelines. Costs the user
+   *  some occasional "missing tile" cells when their tilesets don't
+   *  bridge every texture pair the noise produces. */
+  genSmoothEdges: boolean;
+  setGenSmoothEdges: (v: boolean) => void;
+  /** Global per-cell spawn probability (0 = none, 1 = an object on
+   *  every eligible cell). Combined with per-asset weights so the
+   *  user can have lots of grass + sparse trees + a single boulder
+   *  asset. */
+  genObjectDensity: number;
+  setGenObjectDensity: (v: number) => void;
+  /** Per-asset scatter weights. 0 = excluded. Defaults to 0 so newly-
+   *  uploaded assets don't spam the map by surprise; the user opts in
+   *  by raising the slider. */
+  genObjectWeights: Record<string, number>;
+  setGenObjectWeight: (assetId: string, weight: number) => void;
+  /**
+   * Ephemeral object scatter list — populated at Play start and
+   * cleared on Stop. Excluded from persist so reload never sees them.
+   * Renderer treats these like real `objects` (same layer-less render
+   * path during play).
+   */
+  playObjects: TileObject[];
+  setPlayObjects: (objs: TileObject[]) => void;
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
@@ -2059,6 +2089,18 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setGenReserveRadius: (v) => set({ genReserveRadius: Math.max(8, Math.min(256, Math.round(v))) }),
   genReserveShape: 'square',
   setGenReserveShape: (v) => set({ genReserveShape: v === 'circle' ? 'circle' : 'square' }),
+  genWarp: 0,
+  setGenWarp: (v) => set({ genWarp: Math.max(0, Math.min(64, v)) }),
+  genSmoothEdges: false,
+  setGenSmoothEdges: (v) => set({ genSmoothEdges: !!v }),
+  genObjectDensity: 0,
+  setGenObjectDensity: (v) => set({ genObjectDensity: Math.max(0, Math.min(1, v)) }),
+  genObjectWeights: {},
+  setGenObjectWeight: (assetId, weight) => set((s) => ({
+    genObjectWeights: { ...s.genObjectWeights, [assetId]: Math.max(0, Math.min(2, weight)) },
+  })),
+  playObjects: [],
+  setPlayObjects: (objs) => set({ playObjects: objs }),
 
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
@@ -2219,10 +2261,21 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     genIslandRadius: s.genIslandRadius,
     genReserveRadius: s.genReserveRadius,
     genReserveShape: s.genReserveShape,
+    genWarp: s.genWarp,
+    genSmoothEdges: s.genSmoothEdges,
+    genObjectDensity: s.genObjectDensity,
+    genObjectWeights: s.genObjectWeights,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {
     if (!state) return;
+    // Backfill ephemeral / new-feature defaults that pre-feature
+    // persisted shapes never wrote. Keeps the render loops from
+    // dereferencing undefined arrays / records.
+    if (!state.playObjects) state.playObjects = [];
+    if (state.playLayer === undefined) state.playLayer = null;
+    if (!state.genObjectWeights) state.genObjectWeights = {};
+    if (!state.genTextureWeights) state.genTextureWeights = {};
     if (!state.layers || state.layers.length === 0) {
       const layer = defaultLayer();
       state.layers = [layer];

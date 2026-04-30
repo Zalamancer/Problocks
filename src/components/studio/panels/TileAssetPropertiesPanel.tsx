@@ -2,12 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Scissors, Pencil, Trash2, Plus, X, Upload,
+  Scissors, Pencil, Trash2, Plus, X, Upload, SlidersHorizontal, Apple,
 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
+import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { useTile, type ObjectAsset, type ObjectStyle, type ObjectClass, type TileGroup } from '@/store/tile-store';
 import { fileToImage, imageToDataUrl, loadImage, sliceImage } from '@/lib/tile-slicer';
 import {
@@ -351,7 +352,14 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
         />
 
         {isTreeMember && (
-          <PropertiesTabsBar activeTab={activeTab} onChange={setActiveTab} />
+          <PanelIconTabs
+            tabs={[
+              { id: 'properties', label: 'Properties', icon: SlidersHorizontal },
+              { id: 'fruits', label: 'Fruits', icon: Apple },
+            ]}
+            activeTab={activeTab}
+            onChange={(id) => setActiveTab(id as typeof activeTab)}
+          />
         )}
 
         {activeTab === 'fruits' && isTreeMember ? (
@@ -1075,56 +1083,11 @@ function nextUniqueLabel(asset: ObjectAsset, base: string): string {
   return `${base} ${Date.now()}`;
 }
 
-/** Two-pill tab strip — Properties (default) / Fruits. Lives directly
- *  beneath the asset preview when the selected asset is in the Trees
- *  group. The Fruits tab is omitted from the bar entirely for non-trees
- *  (the conditional render upstream keeps the bar from mounting at all
- *  in that case), so this component never has to defensively hide it. */
-function PropertiesTabsBar({
-  activeTab, onChange,
-}: {
-  activeTab: 'properties' | 'fruits';
-  onChange: (tab: 'properties' | 'fruits') => void;
-}) {
-  return (
-    <div
-      className="flex items-center gap-1.5 px-3 pt-3 pb-1"
-      style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
-    >
-      {(['properties', 'fruits'] as const).map((t) => {
-        const active = activeTab === t;
-        return (
-          <button
-            key={t}
-            type="button"
-            onClick={() => onChange(t)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: 8,
-              fontSize: 11.5,
-              fontWeight: 800,
-              letterSpacing: 0.2,
-              textTransform: 'capitalize',
-              background: active ? 'var(--pb-cream-2)' : 'transparent',
-              border: `1.5px solid ${active ? 'var(--pb-ink)' : 'transparent'}`,
-              color: active ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
-              boxShadow: active ? '0 2px 0 var(--pb-ink)' : 'none',
-              cursor: 'pointer',
-              transition: 'background 120ms ease, border-color 120ms ease',
-            }}
-          >
-            {t}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Picker for the Fruits tab. Lists every other asset in the library
- *  with a 28×28 thumbnail + name; clicking toggles the row in/out of
- *  this tree's fruit list. The current asset is excluded so a tree
- *  can't be its own fruit. Empty library renders a guidance hint. */
+/** Picker for the Fruits tab. Lists every other asset in the library as
+ *  a full-row card matching the GroupDetailView style (88px thumbnail +
+ *  name + style/size meta). Clicking toggles the row in/out of this
+ *  tree's fruit list. The current asset is excluded so a tree can't be
+ *  its own fruit. Empty library renders a guidance hint. */
 function FruitsPicker({
   treeAsset, objectAssets, fruitIds, onToggle,
 }: {
@@ -1137,108 +1100,118 @@ function FruitsPicker({
     .filter((a) => a.id !== treeAsset.id)
     .sort((a, b) => a.name.localeCompare(b.name));
   const linked = new Set(fruitIds);
+  if (candidates.length === 0) {
+    return (
+      <div
+        style={{
+          padding: '12px',
+          fontSize: 11,
+          fontStyle: 'italic',
+          color: 'var(--pb-ink-muted)',
+          border: '1.5px dashed var(--pb-line-2)',
+          borderRadius: 8,
+          background: 'var(--pb-cream-2)',
+          textAlign: 'center',
+        }}
+      >
+        Upload more objects in the left panel to mark them as fruits.
+      </div>
+    );
+  }
   return (
-    <PanelSection title={`Fruits (${linked.size})`} collapsible defaultOpen>
-      {candidates.length === 0 ? (
+    <div className="flex flex-col gap-px">
+      {candidates.map((a) => (
+        <FruitRowCard
+          key={a.id}
+          asset={a}
+          picked={linked.has(a.id)}
+          onClick={() => onToggle(a.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Individual row in the Fruits picker. Shape mirrors AssetCard's list
+ *  mode (88px square thumb + name + meta) so the muscle memory carries
+ *  over from the left-panel asset list. Selected = butter wash with
+ *  ink border, matching how the group detail view highlights the
+ *  active asset. */
+function FruitRowCard({
+  asset, picked, onClick,
+}: {
+  asset: ObjectAsset;
+  picked: boolean;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const head = asset.styles[0];
+  const bg = picked
+    ? 'var(--pb-butter)'
+    : hovered
+      ? 'rgba(0,0,0,0.04)'
+      : 'transparent';
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: bg,
+        borderRadius: 6,
+        cursor: 'pointer',
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}
+    >
+      <div className="flex items-stretch gap-2" style={{ padding: 0, minHeight: 88 }}>
         <div
           style={{
-            padding: '12px',
-            fontSize: 11,
-            fontStyle: 'italic',
-            color: 'var(--pb-ink-muted)',
-            border: '1.5px dashed var(--pb-line-2)',
-            borderRadius: 8,
-            background: 'var(--pb-cream-2)',
-            textAlign: 'center',
+            width: 88,
+            height: 88,
+            flexShrink: 0,
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: picked ? 'transparent' : 'rgba(0,0,0,0.03)',
+            borderRadius: 4,
           }}
         >
-          Upload more objects in the left panel to mark them as fruits.
+          {head && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={head.dataUrl}
+              alt={asset.name}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                imageRendering: 'pixelated',
+              }}
+              draggable={false}
+            />
+          )}
         </div>
-      ) : (
-        <div className="flex flex-col" style={{ gap: 2 }}>
-          {candidates.map((a) => {
-            const head = a.styles[0];
-            const picked = linked.has(a.id);
-            return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => onToggle(a.id)}
-                className="flex items-center gap-2"
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: 8,
-                  background: picked ? 'var(--pb-butter)' : 'transparent',
-                  border: `1.5px solid ${picked ? 'var(--pb-ink)' : 'transparent'}`,
-                  color: 'var(--pb-ink)',
-                  cursor: 'pointer',
-                  width: '100%',
-                  textAlign: 'left',
-                  transition: 'background 120ms ease, border-color 120ms ease',
-                }}
-              >
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    flexShrink: 0,
-                    borderRadius: 6,
-                    background: '#fff',
-                    border: '1.5px solid var(--pb-line-2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {head && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={head.dataUrl}
-                      alt={a.name}
-                      draggable={false}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        imageRendering: 'pixelated',
-                      }}
-                    />
-                  )}
-                </div>
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {a.name}
-                </span>
-                <div
-                  style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 5,
-                    border: `1.5px solid ${picked ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-                    background: picked ? 'var(--pb-ink)' : 'var(--pb-paper)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {picked && <Plus size={10} strokeWidth={3.2} style={{ color: 'var(--pb-paper)', transform: 'rotate(45deg)' }} />}
-                </div>
-              </button>
-            );
-          })}
+        <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6, paddingRight: 6 }}>
+          <span
+            style={{
+              display: 'block',
+              fontSize: 13,
+              fontWeight: 800,
+              color: 'var(--pb-ink)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {asset.name}
+          </span>
+          <div style={{ fontSize: 10.5, color: 'var(--pb-ink-muted)', fontWeight: 600 }}>
+            {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {head?.width}×{head?.height}px
+          </div>
         </div>
-      )}
-    </PanelSection>
+      </div>
+    </div>
   );
 }

@@ -507,7 +507,7 @@ export function TileAssetsView({ view = 'assets' }: { view?: 'terrain' | 'assets
  * caller controls layout (side-by-side flex, stacked column, etc.) by
  * positioning the button — every row is free to place these wherever.
  */
-type CardActionVariant = 'edit' | 'delete';
+type CardActionVariant = 'edit' | 'delete' | 'remove';
 
 function CardActionButton({
   variant, title, onClick,
@@ -517,8 +517,8 @@ function CardActionButton({
   onClick: (e: React.MouseEvent) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const Icon = variant === 'edit' ? Pencil : Trash2;
-  const iconColor = variant === 'edit' ? 'var(--pb-ink)' : 'var(--pb-coral-ink)';
+  const Icon = variant === 'edit' ? Pencil : variant === 'remove' ? X : Trash2;
+  const iconColor = variant === 'delete' ? 'var(--pb-coral-ink)' : 'var(--pb-ink)';
   return (
     <button
       type="button"
@@ -3181,6 +3181,7 @@ function GroupDetailView({
                 onFocusAsset={() => { /* keyboard focus not wired in detail view yet */ }}
                 onSelect={() => handleSelectAsset(asset)}
                 onRemoveAsset={() => handleRemoveAsset(asset)}
+                onRemoveFromGroup={() => setTileGroupMember(group.id, asset.id, false)}
                 onRenameAsset={(name) => {
                   renameAsset(asset.id, name);
                   if (asset.styles.some((s) => s.cloudId)) {
@@ -3209,31 +3210,6 @@ function GroupDetailView({
                   reorderAssets(next);
                 }}
               />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setTileGroupMember(group.id, asset.id, false);
-                }}
-                title="Remove from group"
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  right: 28,
-                  width: 22,
-                  height: 22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 6,
-                  background: 'rgba(255,255,255,0.7)',
-                  border: '1px solid var(--pb-line-2)',
-                  color: 'var(--pb-ink-muted)',
-                  cursor: 'pointer',
-                  zIndex: 2,
-                }}
-              >
-                <X size={11} strokeWidth={2.6} />
-              </button>
             </div>
           ))
         )}
@@ -3672,6 +3648,7 @@ function AssetCard({
   onDragStart, onDragOverCard, onDropCard,
   isFocused = false,
   onFocusAsset,
+  onRemoveFromGroup,
 }: {
   asset: ObjectAsset;
   isSelected: boolean;
@@ -3684,6 +3661,10 @@ function AssetCard({
   onDropCard: (e: React.DragEvent) => void;
   isFocused?: boolean;
   onFocusAsset?: () => void;
+  /** When provided, renders an X button at the top of the action column
+   *  that's always visible (independent of hover/select). Used by the
+   *  GroupDetailView to let the user pop a member out of the group. */
+  onRemoveFromGroup?: () => void;
 }) {
   const brushStyle = useTile.getState().selectedStyleId
     ? asset.styles.find((s) => s.id === useTile.getState().selectedStyleId) ?? null
@@ -3724,6 +3705,13 @@ function AssetCard({
     flexShrink: 0,
   };
 
+  const removeFromGroupButton = onRemoveFromGroup ? (
+    <CardActionButton
+      variant="remove"
+      title="Remove from group"
+      onClick={() => onRemoveFromGroup()}
+    />
+  ) : null;
   const editButton = (
     <CardActionButton
       variant="edit"
@@ -3820,10 +3808,11 @@ function AssetCard({
             {asset.name}
           </div>
         )}
-        {showActions && !editingName && (
-          <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
-            {editButton}
-            {deleteButton}
+        {(showActions || removeFromGroupButton) && !editingName && (
+          <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {removeFromGroupButton}
+            {showActions && editButton}
+            {showActions && deleteButton}
           </div>
         )}
       </div>
@@ -3900,10 +3889,11 @@ function AssetCard({
             {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
           </div>
         </div>
-        {showActions && !editingName && (
+        {(showActions || removeFromGroupButton) && !editingName && (
           <CardActionsColumn>
-            {editButton}
-            {deleteButton}
+            {removeFromGroupButton}
+            {showActions && editButton}
+            {showActions && deleteButton}
           </CardActionsColumn>
         )}
       </div>

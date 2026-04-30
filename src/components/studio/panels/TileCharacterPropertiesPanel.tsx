@@ -2067,6 +2067,83 @@ interface AnimationGroup {
   byDir: Partial<Record<CharacterDir8, CharacterAnimation>>;
 }
 
+const SPEED_MULTIPLIERS: readonly number[] = [0.5, 1, 1.5, 2, 4];
+
+/**
+ * Compact pill row of fixed playback-speed multipliers shown next to the
+ * direction badge in the Animations library preview. The active pill is
+ * derived from the first per-direction `fps` override in the group: if
+ * any direction's stored fps matches `characterFps * m` for one of the
+ * presets, that preset is highlighted. When no direction is overridden
+ * (or the override doesn't match a preset), `1×` is shown as active so
+ * the user can always tell where they are. Picking a non-1 multiplier
+ * writes `round(characterFps * m)` to every covered direction; picking
+ * `1×` clears the override on every covered direction.
+ */
+function SpeedMultiplierPills({
+  characterFps, group, onPick,
+}: {
+  characterFps: number;
+  group: AnimationGroup;
+  onPick: (multiplier: number) => void;
+}) {
+  const baseFps = Math.max(1, characterFps);
+  const fpsValues = Object.values(group.byDir)
+    .map((a) => a?.fps)
+    .filter((v): v is number => typeof v === 'number');
+  const overrideFps = fpsValues[0];
+  const activeMultiplier = (() => {
+    if (overrideFps === undefined) return 1;
+    let best: { m: number; diff: number } | null = null;
+    for (const m of SPEED_MULTIPLIERS) {
+      const diff = Math.abs(overrideFps - baseFps * m);
+      if (!best || diff < best.diff) best = { m, diff };
+    }
+    return best && best.diff < 0.5 ? best.m : null;
+  })();
+  return (
+    <div
+      className="flex items-center gap-1"
+      style={{
+        padding: '2px 4px',
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 999,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {SPEED_MULTIPLIERS.map((m) => {
+        const isActive = m === activeMultiplier;
+        return (
+          <button
+            key={m}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPick(m);
+            }}
+            title={`Play at ${m}× character fps (${Math.round(baseFps * m)} fps)`}
+            style={{
+              padding: '2px 7px',
+              background: isActive ? 'var(--pb-butter-ink)' : 'transparent',
+              border: 0,
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: 0.2,
+              color: isActive ? 'var(--pb-paper)' : 'var(--pb-ink)',
+              cursor: 'pointer',
+              lineHeight: 1.1,
+            }}
+          >
+            {m}×
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Walk every per-direction list and collapse animations into groups
  * keyed by their canonical action id (or lowercased label for free-form
@@ -2298,22 +2375,46 @@ function AnimationsLibraryTab({
           </div>
         )}
         <div
+          className="flex items-center gap-1.5"
           style={{
             position: 'absolute',
             bottom: 8,
             right: 8,
-            padding: '3px 8px',
-            background: 'var(--pb-paper)',
-            border: '1.5px solid var(--pb-line-2)',
-            borderRadius: 999,
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: 0.4,
-            color: 'var(--pb-ink)',
           }}
-          title="Current direction (horizontal trackpad swipe to rotate)"
         >
-          {DIR_LABEL[orbitDir]}
+          {selectedGroup && (
+            <SpeedMultiplierPills
+              characterFps={character.fps}
+              group={selectedGroup}
+              onPick={(multiplier) => {
+                for (const dir of CHARACTER_DIRS) {
+                  const a = selectedGroup.byDir[dir];
+                  if (!a) continue;
+                  setCharacterAnimationFps(
+                    character.id,
+                    dir,
+                    a.id,
+                    multiplier === 1 ? undefined : Math.round(character.fps * multiplier),
+                  );
+                }
+              }}
+            />
+          )}
+          <div
+            style={{
+              padding: '3px 8px',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: 0.4,
+              color: 'var(--pb-ink)',
+            }}
+            title="Current direction (horizontal trackpad swipe to rotate)"
+          >
+            {DIR_LABEL[orbitDir]}
+          </div>
         </div>
         <button
           type="button"
@@ -2365,153 +2466,69 @@ function AnimationsLibraryTab({
                 const isCurrent = group.key === selectedKey;
                 const south = group.byDir.s ?? Object.values(group.byDir)[0];
                 const dirsCovered = Object.keys(group.byDir).length;
-                // Group speed = first non-undefined per-anim fps in the
-                // group, falling back to the character's global fps when
-                // every direction inherits.
-                const groupAnimFps = Object.values(group.byDir)
-                  .map((a) => a?.fps)
-                  .find((v): v is number => typeof v === 'number');
-                const groupOverridden = groupAnimFps !== undefined;
-                const groupEffectiveFps = groupAnimFps ?? character.fps;
                 return (
                   <div
                     key={group.key}
                     onClick={() => setSelectedKey(group.key)}
+                    className="flex items-center gap-2"
                     style={{
                       background: isCurrent ? 'var(--pb-butter)' : 'transparent',
                       borderRadius: 6,
                       cursor: 'pointer',
                       overflow: 'hidden',
+                      padding: '4px 6px',
                     }}
                   >
-                    <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
-                      <div
-                        style={{
-                          width: 56,
-                          height: 56,
-                          flexShrink: 0,
-                          background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
-                          borderRadius: 4,
-                          overflow: 'hidden',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {south ? (
-                          <CellThumb
-                            src={south.src}
-                            cols={south.cols}
-                            rows={south.rows}
-                            cell={0}
-                            size={'100%'}
-                            bare
-                          />
-                        ) : null}
-                      </div>
-                      <span
-                        title={group.label}
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: 'var(--pb-ink)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {group.label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          letterSpacing: 0.4,
-                          color: dirsCovered === 8 ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {dirsCovered}/8
-                      </span>
-                    </div>
-                    {isCurrent && (
-                      <div
-                        className="flex items-center gap-2"
-                        style={{ padding: '0 8px 8px 70px' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <span
-                          style={{
-                            fontSize: 9,
-                            fontWeight: 800,
-                            color: 'var(--pb-butter-ink)',
-                            letterSpacing: 0.4,
-                            flexShrink: 0,
-                          }}
-                        >
-                          SPEED
-                        </span>
-                        <input
-                          type="range"
-                          min={1}
-                          max={60}
-                          step={1}
-                          value={groupEffectiveFps}
-                          onChange={(e) => {
-                            const next = Number(e.target.value);
-                            for (const dir of CHARACTER_DIRS) {
-                              const a = group.byDir[dir];
-                              if (a) setCharacterAnimationFps(character.id, dir, a.id, next);
-                            }
-                          }}
-                          style={{ flex: 1, minWidth: 0, accentColor: 'var(--pb-butter-ink)' }}
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        flexShrink: 0,
+                        background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {south ? (
+                        <CellThumb
+                          src={south.src}
+                          cols={south.cols}
+                          rows={south.rows}
+                          cell={0}
+                          size={'100%'}
+                          bare
                         />
-                        <span
-                          title={
-                            groupOverridden
-                              ? 'Per-animation override (applies to all 8 directions)'
-                              : `Inherits character fps (${character.fps})`
-                          }
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: groupOverridden ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
-                            minWidth: 38,
-                            textAlign: 'right',
-                          }}
-                        >
-                          {groupEffectiveFps} fps
-                        </span>
-                        {groupOverridden && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              for (const dir of CHARACTER_DIRS) {
-                                const a = group.byDir[dir];
-                                if (a) setCharacterAnimationFps(character.id, dir, a.id, undefined);
-                              }
-                            }}
-                            title="Reset to character fps"
-                            style={{
-                              background: 'transparent',
-                              border: 0,
-                              padding: 2,
-                              cursor: 'pointer',
-                              fontSize: 10,
-                              fontWeight: 800,
-                              color: 'var(--pb-butter-ink)',
-                              textTransform: 'uppercase',
-                              letterSpacing: 0.4,
-                            }}
-                          >
-                            Reset
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      ) : null}
+                    </div>
+                    <span
+                      title={group.label}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: 'var(--pb-ink)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {group.label}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        letterSpacing: 0.4,
+                        color: dirsCovered === 8 ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {dirsCovered}/8
+                    </span>
                   </div>
                 );
               })}

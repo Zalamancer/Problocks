@@ -317,3 +317,101 @@ export function generateRegion(args: {
   }
   return out;
 }
+
+/**
+ * Trace `count` meandering paths across the rectangle and return one
+ * `{ cx, cy, texId }` entry per cell the path covers — caller stamps
+ * those onto its corner record so the chosen texture overwrites
+ * whatever the procgen pass put there.
+ *
+ * Each path picks a deterministic source on the periphery (angle from
+ * a seeded RNG) and a destination roughly opposite. The walker steps
+ * one cell at a time, biased toward the destination but with a
+ * per-step angular wobble so the line meanders rather than going
+ * straight. After `maxSteps` (or once the destination is reached) the
+ * path ends. The same brush radius is stamped at every step so paths
+ * have a consistent thickness; the inscribed-circle clamp avoids the
+ * jagged staircase a square stamp would produce.
+ *
+ * No fancy hydrology — paths don't follow gradients or branch. That's
+ * fine for "rivers across an island" or "footpaths between biomes";
+ * not enough for realistic drainage networks. Adding a noise-driven
+ * stop condition would make these biome-aware later.
+ */
+export function generateRivers(args: {
+  x0: number;
+  y0: number;
+  x1: number; // exclusive
+  y1: number; // exclusive
+  seed: number;
+  /** How many independent paths to trace. */
+  count: number;
+  /** Brush radius in cells. 0 = single-cell line; 1 = 3-cell-wide
+   *  brushed line; 2 = 5-cell band. */
+  width: number;
+  /** Texture id painted onto every covered cell. */
+  texId: string;
+  /** Cells to leave alone (typically the spawn reserve). */
+  skipCell?: (cx: number, cy: number) => boolean;
+}): Array<{ cx: number; cy: number; texId: string }> {
+  const { x0, y0, x1, y1, seed, count, width, texId, skipCell } = args;
+  if (count <= 0) return [];
+  const out: Array<{ cx: number; cy: number; texId: string }> = [];
+  // Periphery radius — paths anchor near the edge of the smaller
+  // dimension so a wide-but-short rectangle still produces visible
+  // rivers along its short axis.
+  const halfW = (x1 - x0) / 2;
+  const halfH = (y1 - y0) / 2;
+  const radius = Math.min(halfW, halfH);
+  const stamps = new Set<string>();
+  const stamp = (cx: number, cy: number) => {
+    if (cx < x0 || cx >= x1 || cy < y0 || cy >= y1) return;
+    if (skipCell && skipCell(cx, cy)) return;
+    const key = `${cx},${cy}`;
+    if (stamps.has(key)) return;
+    stamps.add(key);
+    out.push({ cx, cy, texId });
+  };
+
+  for (let i = 0; i < count; i++) {
+    // Per-river RNG — independent stream so changing `count` doesn't
+    // shuffle existing rivers, only adds/removes from the tail.
+    const rng = mulberry32((seed ^ ((i + 1) * 0x9E3779B1)) >>> 0);
+    const a1 = rng() * Math.PI * 2;
+    // Destination ≈ opposite side of the world, plus a wide jitter so
+    // pairs don't all read as one straight line through origin.
+    const a2 = a1 + Math.PI + (rng() - 0.5) * 1.6;
+    const r = radius * 0.92;
+    let cx = Math.round(Math.cos(a1) * r);
+    let cy = Math.round(Math.sin(a1) * r);
+    const dx = Math.round(Math.cos(a2) * r);
+    const dy = Math.round(Math.sin(a2) * r);
+    // Step budget: walking the diameter at one cell per step plus a
+    // safety margin for the meander curving the path.
+    const maxSteps = Math.round(radius * 4);
+    for (let step = 0; step < maxSteps; step++) {
+      // Round brush — stamp every cell in the offset square that's
+      // also inside the inscribed circle of radius `width`.
+      const w2 = width * width + width;
+      for (let oy = -width; oy <= width; oy++) {
+        for (let ox = -width; ox <= width; ox++) {
+          if (ox * ox + oy * oy > w2) continue;
+          stamp(cx + ox, cy + oy);
+        }
+      }
+      const ddx = dx - cx;
+      const ddy = dy - cy;
+      const dist = Math.hypot(ddx, ddy);
+      if (dist < 1.5) break;
+      // Base direction toward the destination + a per-step angular
+      // wobble. ±0.7 rad gives a noticeably curved line without
+      // reversing course.
+      const baseAngle = Math.atan2(ddy, ddx);
+      const wobble = (rng() - 0.5) * 1.4;
+      const angle = baseAngle + wobble;
+      cx = Math.round(cx + Math.cos(angle));
+      cy = Math.round(cy + Math.sin(angle));
+    }
+  }
+  return out;
+}

@@ -851,6 +851,22 @@ export interface TileStore {
    */
   playObjects: TileObject[];
   setPlayObjects: (objs: TileObject[]) => void;
+  /** When true, Play start traces meandering paths across the world
+   *  using `generateRivers` and stamps them onto the play overlay. */
+  genRiverEnabled: boolean;
+  setGenRiverEnabled: (v: boolean) => void;
+  /** How many independent rivers to trace. */
+  genRiverCount: number;
+  setGenRiverCount: (v: number) => void;
+  /** River brush radius in cells. 0 = single-cell line; 3 = wide. */
+  genRiverWidth: number;
+  setGenRiverWidth: (v: number) => void;
+  /** Texture id painted along each river. Null = no river even when
+   *  enabled (defensive — Play just skips). User picks from the
+   *  existing terrain textures so rivers reuse a wang chain that's
+   *  already proven to render. */
+  genRiverTextureId: string | null;
+  setGenRiverTextureId: (id: string | null) => void;
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
@@ -2101,6 +2117,14 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   })),
   playObjects: [],
   setPlayObjects: (objs) => set({ playObjects: objs }),
+  genRiverEnabled: false,
+  setGenRiverEnabled: (v) => set({ genRiverEnabled: !!v }),
+  genRiverCount: 2,
+  setGenRiverCount: (v) => set({ genRiverCount: Math.max(0, Math.min(8, Math.round(v))) }),
+  genRiverWidth: 1,
+  setGenRiverWidth: (v) => set({ genRiverWidth: Math.max(0, Math.min(4, Math.round(v))) }),
+  genRiverTextureId: null,
+  setGenRiverTextureId: (id) => set({ genRiverTextureId: id }),
 
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
@@ -2265,6 +2289,10 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     genSmoothEdges: s.genSmoothEdges,
     genObjectDensity: s.genObjectDensity,
     genObjectWeights: s.genObjectWeights,
+    genRiverEnabled: s.genRiverEnabled,
+    genRiverCount: s.genRiverCount,
+    genRiverWidth: s.genRiverWidth,
+    genRiverTextureId: s.genRiverTextureId,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {

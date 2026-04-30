@@ -227,6 +227,14 @@ function TileGenerationSection() {
   const objectWeights = useTile((s) => s.genObjectWeights);
   const setObjectWeight = useTile((s) => s.setGenObjectWeight);
   const objectAssets = useTile((s) => s.objectAssets);
+  const riverEnabled = useTile((s) => s.genRiverEnabled);
+  const setRiverEnabled = useTile((s) => s.setGenRiverEnabled);
+  const riverCount = useTile((s) => s.genRiverCount);
+  const setRiverCount = useTile((s) => s.setGenRiverCount);
+  const riverWidth = useTile((s) => s.genRiverWidth);
+  const setRiverWidth = useTile((s) => s.setGenRiverWidth);
+  const riverTextureId = useTile((s) => s.genRiverTextureId);
+  const setRiverTextureId = useTile((s) => s.setGenRiverTextureId);
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const weights = useTile((s) => s.genTextureWeights);
@@ -367,6 +375,44 @@ function TileGenerationSection() {
         onWeightChange={setObjectWeight}
         assets={objectAssets}
       />
+      <div
+        className="mt-2 text-[10px] uppercase tracking-wider"
+        style={{ color: 'var(--pb-ink-muted)', padding: '8px 2px 0' }}
+      >
+        Rivers / Paths
+      </div>
+      <PanelToggle
+        label="Generate rivers"
+        description="Meandering paths between random periphery points"
+        checked={riverEnabled}
+        onChange={setRiverEnabled}
+      />
+      {riverEnabled && (
+        <>
+          <PanelSelect
+            label="Texture"
+            value={riverTextureId ?? ''}
+            onChange={(v) => setRiverTextureId(v || null)}
+            options={[
+              { value: '', label: '— pick a terrain —' },
+              ...rows.map((r) => ({ value: r.textureId, label: r.label })),
+            ]}
+          />
+          <PanelSlider
+            label="Count"
+            value={riverCount}
+            onChange={setRiverCount}
+            min={0} max={8} step={1} precision={0}
+          />
+          <PanelSlider
+            label="Width"
+            value={riverWidth}
+            onChange={setRiverWidth}
+            min={0} max={4} step={1} precision={0}
+            suffix=" cells"
+          />
+        </>
+      )}
     </PanelSection>
   );
 }

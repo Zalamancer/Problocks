@@ -19,7 +19,7 @@ import { useSceneStore } from '@/store/scene-store';
 import { useRoom } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
 import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
-import { generateRegion } from '@/lib/world-gen';
+import { generateRegion, generateRivers } from '@/lib/world-gen';
 import {
   useTileRealtime,
   buildPaintEvent,
@@ -559,6 +559,39 @@ export function TileView() {
         } else {
           // One id per cell, painted onto all 4 of that cell's corners.
           for (const { cx, cy, texId } of samples) {
+            corners[`${cx},${cy}`] = texId;
+            corners[`${cx + 1},${cy}`] = texId;
+            corners[`${cx},${cy + 1}`] = texId;
+            corners[`${cx + 1},${cy + 1}`] = texId;
+          }
+        }
+        // Rivers / paths — overwrite the procgen output along each path.
+        // We always stamp all 4 corners of each river cell (cell-mode
+        // semantics) regardless of the procgen output mode, so rivers
+        // always render as solid bands instead of half-corners that
+        // can't bridge in `corners` mode.
+        if (
+          tile.genRiverEnabled
+          && tile.genRiverTextureId
+          && tile.genRiverCount > 0
+        ) {
+          const riverCells = generateRivers({
+            x0: -RADIUS,
+            y0: -RADIUS,
+            x1: RADIUS,
+            y1: RADIUS,
+            seed: tile.genSeed,
+            count: tile.genRiverCount,
+            width: tile.genRiverWidth,
+            texId: tile.genRiverTextureId,
+            skipCell: (cx, cy) => {
+              if (reserveShape === 'circle') {
+                return cx * cx + cy * cy < RESERVE * RESERVE;
+              }
+              return Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
+            },
+          });
+          for (const { cx, cy, texId } of riverCells) {
             corners[`${cx},${cy}`] = texId;
             corners[`${cx + 1},${cy}`] = texId;
             corners[`${cx},${cy + 1}`] = texId;

@@ -3708,7 +3708,9 @@ function AssetCard({
 
   const [editingName, setEditingName] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const showActions = hovered || isSelected || editingName;
+  // Hover-only — selected rows do NOT keep the action column pinned. Keeps
+  // the right edge clean unless the user is actually pointing at a row.
+  const showActions = hovered || editingName;
 
   function commitName(value: string) {
     setEditingName(false);

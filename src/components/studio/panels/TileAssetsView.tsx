@@ -1825,6 +1825,19 @@ function ObjectsSection({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
+  /** Inline upload panel state. The Upload button toggles `uploadOpen`,
+   *  which expands a drag-and-drop area below the toolbar. After the user
+   *  drops/picks an image, that area swaps to rows/cols inputs so the
+   *  sheet can be split into multiple grid objects in one go. */
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [dragHover, setDragHover] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{
+    img: HTMLImageElement;
+    dataUrl: string;
+    name: string;
+  } | null>(null);
+  const [splitRows, setSplitRows] = useState(1);
+  const [splitCols, setSplitCols] = useState(1);
   /** Toolbar search query (filters the asset list by case-insensitive
    *  substring match on asset.name). Empty string = show everything. */
   const [search, setSearch] = useState('');
@@ -1953,7 +1966,116 @@ function ObjectsSection({
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
     if (files.length === 0) return;
-    await uploadFiles(files);
+    // Single image → drop into the inline upload panel so the user can
+    // choose rows/cols. Multiple files → fall back to the original
+    // per-file upload (no slicing).
+    if (files.length === 1 && uploadOpen) {
+      await stagePendingImage(files[0]);
+    } else {
+      await uploadFiles(files);
+    }
+  }
+
+  /** Read the dropped/picked file into an HTMLImageElement and stage it
+   *  for the rows/cols split UI. Resets the row/col inputs to 1×1 so a
+   *  single-tile drop is a no-op slice. */
+  async function stagePendingImage(file: File) {
+    setError(null);
+    try {
+      const img = await fileToImage(file);
+      const dataUrl = imageToDataUrl(img);
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      setPendingImage({ img, dataUrl, name: baseName });
+      setSplitRows(1);
+      setSplitCols(1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /** Slice the staged image into rows×cols pieces and upload each as its
+   *  own asset. Pieces are named `<baseName>_r<row>_c<col>` so they sort
+   *  predictably in the asset list. 1×1 = single asset (no suffix). */
+  async function splitAndUpload() {
+    if (!pendingImage) return;
+    const rows = Math.max(1, Math.floor(splitRows));
+    const cols = Math.max(1, Math.floor(splitCols));
+    setUploading(true);
+    setError(null);
+    try {
+      const { img, name: baseName } = pendingImage;
+      if (rows === 1 && cols === 1) {
+        const dataUrl = imageToDataUrl(img);
+        const { assetId, styleId } = addObjectAsset({
+          name: baseName,
+          label: '',
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+        saveTileObject({
+          name: baseName,
+          dataUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          groupId: assetId,
+          label: '',
+          sortIndex: 0,
+        }).then((cloud) => {
+          setStyleCloudId(assetId, styleId, cloud.id);
+          setCloudStatus('synced');
+        }).catch((err) => {
+          console.warn('[object-cloud] save asset failed; kept local-only', err);
+          setCloudStatus('offline');
+        });
+      } else {
+        const sliced = sliceImage(img, { rows, cols });
+        const { tileWidth, tileHeight, tiles } = sliced;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const idx = r * cols + c;
+            const dataUrl = tiles[idx];
+            const pieceName = `${baseName}_r${r + 1}_c${c + 1}`;
+            const { assetId, styleId } = addObjectAsset({
+              name: pieceName,
+              label: '',
+              dataUrl,
+              width: tileWidth,
+              height: tileHeight,
+            });
+            saveTileObject({
+              name: pieceName,
+              dataUrl,
+              width: tileWidth,
+              height: tileHeight,
+              groupId: assetId,
+              label: '',
+              sortIndex: 0,
+            }).then((cloud) => {
+              setStyleCloudId(assetId, styleId, cloud.id);
+              setCloudStatus('synced');
+            }).catch((err) => {
+              console.warn('[object-cloud] save sliced asset failed; kept local-only', err);
+              setCloudStatus('offline');
+            });
+          }
+        }
+      }
+      setPendingImage(null);
+      setUploadOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragHover(false);
+    const files = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    await stagePendingImage(files[0]);
   }
 
   function handleSelectAsset(asset: ObjectAsset) {
@@ -2105,21 +2227,26 @@ function ObjectsSection({
             <SlidersHorizontal size={15} strokeWidth={2.2} />
           </button>
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              const next = !uploadOpen;
+              setUploadOpen(next);
+              if (!next) setPendingImage(null);
+            }}
             disabled={uploading}
             className="shrink-0 flex items-center justify-center"
             style={{
               width: 34,
               height: 34,
               borderRadius: 10,
-              background: 'var(--pb-paper)',
-              border: '1.5px solid var(--pb-line-2)',
-              color: 'var(--pb-ink-soft)',
+              background: uploadOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              border: `1.5px solid ${uploadOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              boxShadow: uploadOpen ? '0 2px 0 var(--pb-ink)' : 'none',
+              color: uploadOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
               cursor: uploading ? 'not-allowed' : 'pointer',
               opacity: uploading ? 0.55 : 1,
               transition: 'background 120ms ease, border-color 120ms ease',
             }}
-            title={uploading ? 'Uploading…' : 'Upload sprite'}
+            title={uploading ? 'Uploading…' : uploadOpen ? 'Close upload' : 'Upload sprite'}
           >
             <Upload size={15} strokeWidth={2.2} />
           </button>
@@ -2135,6 +2262,175 @@ function ObjectsSection({
                 { value: 'grid', label: 'Grid' },
               ]}
             />
+          </div>
+        )}
+        {uploadOpen && !pendingImage && (
+          <div
+            onDragOver={(e) => { e.preventDefault(); if (!dragHover) setDragHover(true); }}
+            onDragEnter={(e) => { e.preventDefault(); setDragHover(true); }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setDragHover(false);
+            }}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: '18px 12px',
+              borderRadius: 10,
+              border: `2px dashed ${dragHover ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+              background: dragHover ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
+              color: 'var(--pb-ink-soft)',
+              fontSize: 11.5,
+              fontWeight: 700,
+              textAlign: 'center',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+          >
+            <Upload size={18} strokeWidth={2.2} />
+            <div>Drop image here</div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--pb-ink-soft)', opacity: 0.75 }}>
+              or click to browse
+            </div>
+          </div>
+        )}
+        {uploadOpen && pendingImage && (
+          <div
+            style={{
+              padding: 10,
+              borderRadius: 10,
+              border: '1.5px solid var(--pb-line-2)',
+              background: 'var(--pb-paper)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 8,
+                  border: '1.5px solid var(--pb-line-2)',
+                  background: '#fff',
+                  backgroundImage: `url(${pendingImage.dataUrl})`,
+                  backgroundSize: 'contain',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'center',
+                  imageRendering: 'pixelated',
+                  flexShrink: 0,
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    color: 'var(--pb-ink)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {pendingImage.name}
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--pb-ink-soft)' }}>
+                  {pendingImage.img.naturalWidth} × {pendingImage.img.naturalHeight}px
+                </div>
+              </div>
+              <button
+                onClick={() => setPendingImage(null)}
+                title="Pick another image"
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 7,
+                  background: 'var(--pb-paper)',
+                  border: '1.5px solid var(--pb-line-2)',
+                  color: 'var(--pb-ink-soft)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={12} strokeWidth={2.4} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  Rows
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={splitRows}
+                  onChange={(e) => setSplitRows(Math.max(1, Math.min(64, parseInt(e.target.value || '1', 10) || 1)))}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    borderRadius: 8,
+                    border: '1.5px solid var(--pb-line-2)',
+                    background: '#fff',
+                    color: 'var(--pb-ink)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                />
+              </label>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  Columns
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={splitCols}
+                  onChange={(e) => setSplitCols(Math.max(1, Math.min(64, parseInt(e.target.value || '1', 10) || 1)))}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    borderRadius: 8,
+                    border: '1.5px solid var(--pb-line-2)',
+                    background: '#fff',
+                    color: 'var(--pb-ink)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                />
+              </label>
+            </div>
+            <button
+              onClick={splitAndUpload}
+              disabled={uploading}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 9,
+                background: 'var(--pb-ink)',
+                color: 'var(--pb-paper)',
+                border: '1.5px solid var(--pb-ink)',
+                boxShadow: '0 2px 0 var(--pb-ink)',
+                fontSize: 11.5,
+                fontWeight: 800,
+                letterSpacing: 0.2,
+                cursor: uploading ? 'not-allowed' : 'pointer',
+                opacity: uploading ? 0.55 : 1,
+              }}
+            >
+              {uploading
+                ? 'Slicing…'
+                : splitRows * splitCols === 1
+                ? 'Add 1 object'
+                : `Split into ${splitRows * splitCols} objects (${splitRows}×${splitCols})`}
+            </button>
           </div>
         )}
       </div>

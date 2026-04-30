@@ -2113,6 +2113,7 @@ function AnimationsLibraryTab({
   genLocks: GenLocks;
 }) {
   const addToast = useToastStore((s) => s.addToast);
+  const setCharacterAnimationFps = useTile((s) => s.setCharacterAnimationFps);
   const { bulkPending, pendingKeys, registerJobs } = genLocks;
   const groups = useMemo(() => groupAnimations(character), [character]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -2364,6 +2365,14 @@ function AnimationsLibraryTab({
                 const isCurrent = group.key === selectedKey;
                 const south = group.byDir.s ?? Object.values(group.byDir)[0];
                 const dirsCovered = Object.keys(group.byDir).length;
+                // Group speed = first non-undefined per-anim fps in the
+                // group, falling back to the character's global fps when
+                // every direction inherits.
+                const groupAnimFps = Object.values(group.byDir)
+                  .map((a) => a?.fps)
+                  .find((v): v is number => typeof v === 'number');
+                const groupOverridden = groupAnimFps !== undefined;
+                const groupEffectiveFps = groupAnimFps ?? character.fps;
                 return (
                   <div
                     key={group.key}
@@ -2427,6 +2436,82 @@ function AnimationsLibraryTab({
                         {dirsCovered}/8
                       </span>
                     </div>
+                    {isCurrent && (
+                      <div
+                        className="flex items-center gap-2"
+                        style={{ padding: '0 8px 8px 70px' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            color: 'var(--pb-butter-ink)',
+                            letterSpacing: 0.4,
+                            flexShrink: 0,
+                          }}
+                        >
+                          SPEED
+                        </span>
+                        <input
+                          type="range"
+                          min={1}
+                          max={60}
+                          step={1}
+                          value={groupEffectiveFps}
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            for (const dir of CHARACTER_DIRS) {
+                              const a = group.byDir[dir];
+                              if (a) setCharacterAnimationFps(character.id, dir, a.id, next);
+                            }
+                          }}
+                          style={{ flex: 1, minWidth: 0, accentColor: 'var(--pb-butter-ink)' }}
+                        />
+                        <span
+                          title={
+                            groupOverridden
+                              ? 'Per-animation override (applies to all 8 directions)'
+                              : `Inherits character fps (${character.fps})`
+                          }
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: groupOverridden ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+                            minWidth: 38,
+                            textAlign: 'right',
+                          }}
+                        >
+                          {groupEffectiveFps} fps
+                        </span>
+                        {groupOverridden && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              for (const dir of CHARACTER_DIRS) {
+                                const a = group.byDir[dir];
+                                if (a) setCharacterAnimationFps(character.id, dir, a.id, undefined);
+                              }
+                            }}
+                            title="Reset to character fps"
+                            style={{
+                              background: 'transparent',
+                              border: 0,
+                              padding: 2,
+                              cursor: 'pointer',
+                              fontSize: 10,
+                              fontWeight: 800,
+                              color: 'var(--pb-butter-ink)',
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.4,
+                            }}
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -27,6 +27,7 @@ import { GeneratedFilesPanel } from './panels/GeneratedFilesPanel';
 import { Freeform3DPropertiesPanel } from './panels/Freeform3DPropertiesPanel';
 import { Freeform2DPropertiesPanel } from './panels/Freeform2DPropertiesPanel';
 import { TileObjectPropertiesPanel } from './panels/TileObjectPropertiesPanel';
+import { TileGroupPropertiesPanel } from './panels/TileGroupPropertiesPanel';
 import { TileAssetPropertiesPanel } from './panels/TileAssetPropertiesPanel';
 import { TileCharacterPropertiesPanel } from './panels/TileCharacterPropertiesPanel';
 import { TileTexturePropertiesPanel } from './panels/TileTexturePropertiesPanel';
@@ -151,6 +152,9 @@ export function StudioLayout() {
   // so the Properties tab can swap to TileTexturePropertiesPanel (label,
   // base, water, sheet ownership).
   const tileSelectedTextureId = useTile((s) => s.selectedTextureId);
+  // Re-render when the user opens / closes a tile group from the Groups
+  // sub-tab so the Properties tab can swap to TileGroupPropertiesPanel.
+  const tileSelectedGroupId = useTile((s) => s.selectedTileGroupId);
   // Subscribe so the Code tab re-renders when the agent edits the
   // scene script via setScript ACTION.
   const freeform3dScript = useFreeform3D((s) => s.scene.script);
@@ -666,6 +670,14 @@ export function StudioLayout() {
               // asset card is, show its image + slice (rows/cols) controls.
               if (gameSystem === '2d' && tileSelectedAssetId) {
                 return <TileAssetPropertiesPanel headless />;
+              }
+              // 2D Tile — group properties (size / random / flip / color)
+              // for the Groups sub-tab. Sits below all per-asset / per-
+              // character / per-object branches so picking one of those
+              // wins; the group setter clears those selections anyway, so
+              // ordering here is mostly defensive.
+              if (gameSystem === '2d' && tileSelectedGroupId) {
+                return <TileGroupPropertiesPanel headless />;
               }
               if (openFileName) {
                 const activeGame = activeGameId ? games.find((g) => g.id === activeGameId) : null;

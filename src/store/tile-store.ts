@@ -297,6 +297,22 @@ export interface TileGroup {
    *  start with cloudId undefined; the post-save setter assigns it so
    *  subsequent renames/membership-changes can PATCH the same row. */
   cloudId?: string;
+  /** Stamp size multiplier (1.0 = native). Used when placing members
+   *  via the group as a single brush. */
+  sizeBase?: number;
+  /** When `randomSize` is true the per-stamp scale is sampled uniformly
+   *  in [sizeMin, sizeMax]. Defaults: 0.8 / 1.2. */
+  sizeMin?: number;
+  sizeMax?: number;
+  randomSize?: boolean;
+  /** Per-stamp random horizontal/vertical flip. */
+  randomFlipX?: boolean;
+  randomFlipY?: boolean;
+  /** Color tint applied at stamp time. Hue 0–360°, saturation/brightness
+   *  multipliers (1 = identity). */
+  hue?: number;
+  saturation?: number;
+  brightness?: number;
 }
 
 export interface TileCamera {
@@ -609,6 +625,15 @@ export interface TileStore {
    *  Returns the new id so the caller can put it into rename mode. */
   addTileGroup: (input?: { name?: string }) => string;
   renameTileGroup: (id: string, name: string) => void;
+  /** Patch the stamp/randomization settings on a group. */
+  updateTileGroup: (id: string, patch: Partial<Pick<TileGroup,
+    'sizeBase' | 'sizeMin' | 'sizeMax' | 'randomSize' |
+    'randomFlipX' | 'randomFlipY' |
+    'hue' | 'saturation' | 'brightness'>>) => void;
+  /** Currently-selected tile group (drives the right-panel
+   *  TileGroupPropertiesPanel). Null when nothing is selected. */
+  selectedTileGroupId: string | null;
+  setSelectedTileGroupId: (id: string | null) => void;
   /** Delete a group. Member asset ids are NOT touched — groups are a
    *  bundling overlay, not the home of the assets themselves. */
   removeTileGroup: (id: string) => void;
@@ -1845,6 +1870,22 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     if (!trimmed || trimmed === g.name) return {};
     return { tileGroups: { ...s.tileGroups, [id]: { ...g, name: trimmed } } };
   }),
+  updateTileGroup: (id, patch) => set((s) => {
+    const g = s.tileGroups[id];
+    if (!g) return {};
+    return { tileGroups: { ...s.tileGroups, [id]: { ...g, ...patch } } };
+  }),
+  selectedTileGroupId: null,
+  setSelectedTileGroupId: (id) => set((s) => ({
+    selectedTileGroupId: id,
+    // Selecting a group is a "world-config" focus — clear sibling
+    // selections so the right-panel branch swaps cleanly to the group
+    // properties view.
+    selectedAssetId: id ? null : s.selectedAssetId,
+    selectedCharacterId: id ? null : s.selectedCharacterId,
+    selectedTextureId: id ? null : s.selectedTextureId,
+    selectedObjectId: id ? null : s.selectedObjectId,
+  })),
   removeTileGroup: (id) => set((s) => {
     if (!s.tileGroups[id]) return {};
     const next = { ...s.tileGroups };
@@ -2291,6 +2332,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       selectedStyleId: fallback,
       selectedCharacterId: id ? null : s.selectedCharacterId,
       selectedTextureId: id ? null : s.selectedTextureId,
+      selectedTileGroupId: id ? null : s.selectedTileGroupId,
     };
   }),
   selectedStyleId: null,
@@ -2301,6 +2343,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     selectedAssetId: id ? null : s.selectedAssetId,
     selectedCharacterId: id ? null : s.selectedCharacterId,
     selectedObjectId: id ? null : s.selectedObjectId,
+    selectedTileGroupId: id ? null : s.selectedTileGroupId,
   })),
 
   fencePosts: {},

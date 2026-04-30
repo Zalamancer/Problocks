@@ -6,7 +6,7 @@ import {
   Upload, Trash2, Eye, EyeOff, ChevronUp, ChevronDown, Plus, Sparkles,
   Box, ChevronLeft, ChevronRight, ChevronDown as ChevDown, Check, Cloud, Link2,
   Pencil, X, Layers, Globe2, Folder, FolderPlus,
-  Users, SlidersHorizontal,
+  Users, SlidersHorizontal, Settings,
 } from 'lucide-react';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { PanelSearchInput, PanelSelect, PanelActionButton } from '@/components/ui';
@@ -2773,6 +2773,8 @@ function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => 
   const addTileGroup = useTile((s) => s.addTileGroup);
   const renameTileGroup = useTile((s) => s.renameTileGroup);
   const removeTileGroup = useTile((s) => s.removeTileGroup);
+  const setSelectedTileGroupId = useTile((s) => s.setSelectedTileGroupId);
+  const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -2879,6 +2881,10 @@ function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => 
                 if (t.closest('button, input')) return;
                 if (editing) return;
                 setOpenGroupId(g.id);
+                // Auto-open this group's properties in the right panel
+                // so the settings surface is one click away.
+                setSelectedTileGroupId(g.id);
+                setRightPanelGroup('properties');
               }}
               style={{
                 background: hovered && !editing ? 'rgba(0,0,0,0.04)' : 'transparent',
@@ -3057,10 +3063,26 @@ function GroupDetailView({
   const setSelectedAssetId = useTile((s) => s.setSelectedAssetId);
   const setTool = useTile((s) => s.setTool);
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
+  const setSelectedTileGroupId = useTile((s) => s.setSelectedTileGroupId);
 
   const [search, setSearch] = useState('');
   const [renamingHeader, setRenamingHeader] = useState(false);
   const dragAssetIdRef = useRef<string | null>(null);
+
+  // Mount: select this group as the right-panel target (idempotent if the
+  // caller already selected it). Unmount: clear so leaving the detail view
+  // returns the right panel to its previous context.
+  useEffect(() => {
+    setSelectedTileGroupId(group.id);
+    return () => {
+      // Only clear if still pointing at this group — guards against a
+      // sibling selection (an asset clicked inside the detail) being
+      // wiped on unmount.
+      if (useTile.getState().selectedTileGroupId === group.id) {
+        setSelectedTileGroupId(null);
+      }
+    };
+  }, [group.id, setSelectedTileGroupId]);
 
   const assetList = Object.values(objectAssets)
     .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
@@ -3162,6 +3184,26 @@ function GroupDetailView({
                 : `${members.length} ${members.length === 1 ? 'object' : 'objects'}`}
             </div>
           </div>
+          <button
+            onClick={() => {
+              setSelectedTileGroupId(group.id);
+              setRightPanelGroup('properties');
+            }}
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+            title="Group settings"
+          >
+            <Settings size={15} strokeWidth={2.2} />
+          </button>
           <button
             onClick={() => onStartAdding(group.id)}
             className="shrink-0 flex items-center justify-center"

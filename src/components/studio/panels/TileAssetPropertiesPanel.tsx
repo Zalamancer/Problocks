@@ -367,8 +367,10 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
             a fresh sheet at any time without a second upload affordance
             in the Styles section. While a sprite sheet is staged but no
             styles exist yet, the preview slot stays hidden so the grid
-            editor in UploadGridSection owns the visual. */}
-        {baseStyle?.dataUrl ? (
+            editor in UploadGridSection owns the visual. The Fruits tab
+            owns its own upload+slice surface, so we suppress the tree
+            preview entirely while showFruitsView is on. */}
+        {showFruitsView ? null : baseStyle?.dataUrl ? (
           <ImagePreviewWithEdit
             dataUrl={baseStyle.dataUrl}
             onEdit={() => setSliceOpen(true)}
@@ -379,14 +381,12 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
         )}
 
         {showFruitsView ? (
-          <div className="px-4 py-4 flex flex-col gap-4">
-            <FruitsPicker
-              treeAsset={asset}
-              objectAssets={objectAssets}
-              fruitIds={assetFruitIds[asset.id] ?? []}
-              onToggle={(fruitId) => toggleAssetFruit(asset.id, fruitId)}
-            />
-          </div>
+          <FruitsPicker
+            treeAsset={asset}
+            objectAssets={objectAssets}
+            fruitIds={assetFruitIds[asset.id] ?? []}
+            onToggle={(fruitId) => toggleAssetFruit(asset.id, fruitId)}
+          />
         ) : (
           <div className="px-4 py-4 flex flex-col gap-4">
             <PanelSection title="Class" collapsible defaultOpen>
@@ -1391,6 +1391,8 @@ function FruitsPicker({
   onToggle: (assetId: string) => void;
 }) {
   const setAssetFruits = useTile((s) => s.setAssetFruits);
+  const addObjectAsset = useTile((s) => s.addObjectAsset);
+  const setStyleCloudId = useTile((s) => s.setStyleCloudId);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [addMode, setAddMode] = useState(false);
@@ -1493,6 +1495,40 @@ function FruitsPicker({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Upload+slice surface — replaces what used to be the tree's
+          preview at the top of the panel. Drop a sprite sheet, choose
+          rows/cols, click cells, then import: each selected cell becomes
+          its own ObjectAsset and gets linked into this tree's fruit list. */}
+      <FruitUploadSlice
+        onImportCells={async (cells) => {
+          const newIds: string[] = [];
+          for (const cell of cells) {
+            const { assetId, styleId } = addObjectAsset({
+              name: cell.name,
+              label: '',
+              dataUrl: cell.dataUrl,
+              width: cell.width,
+              height: cell.height,
+            });
+            newIds.push(assetId);
+            saveTileObject({
+              name: cell.name,
+              dataUrl: cell.dataUrl,
+              width: cell.width,
+              height: cell.height,
+              groupId: assetId,
+              label: '',
+              sortIndex: 0,
+            })
+              .then((cloud) => setStyleCloudId(assetId, styleId, cloud.id))
+              .catch((err) => console.warn('[fruits-upload] save asset failed', err));
+          }
+          if (newIds.length > 0) {
+            setAssetFruits(treeAsset.id, [...fruitIds, ...newIds]);
+          }
+        }}
+      />
+
       {/* Toolbar: search toggle + + + delete */}
       <div
         className="flex items-center gap-1.5 px-3 py-2 shrink-0"
@@ -1647,6 +1683,263 @@ function FruitRowCard({
           }}
         ><Trash2 size={12} strokeWidth={2.4} /></button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Upload-and-slice surface that lives at the top of the Fruits tab.
+ * Empty state is a 1:1 dashed dropzone (mirrors PreviewDropzone). Once
+ * a sheet is staged it switches to the same rows×cols grid editor used
+ * elsewhere — clickable cells, drag-paint, select-all/none, rows+cols
+ * sliders, and an "Import N cells" button. The parent decides what an
+ * imported cell becomes (here: a new ObjectAsset linked as a fruit).
+ */
+function FruitUploadSlice({
+  onImportCells,
+}: {
+  onImportCells: (
+    cells: { dataUrl: string; width: number; height: number; name: string }[],
+  ) => Promise<void> | void;
+}) {
+  const [pendingImage, setPendingImage] = useState<{
+    img: HTMLImageElement;
+    dataUrl: string;
+    name: string;
+  } | null>(null);
+  const [rows, setRows] = useState(4);
+  const [cols, setCols] = useState(4);
+  const [selectedCells, setSelectedCells] = useState<Set<number>>(new Set());
+  const [importing, setImporting] = useState(false);
+  const [dragSelecting, setDragSelecting] = useState<boolean | null>(null);
+  const [dragHover, setDragHover] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Reset selection whenever a new sheet replaces the staged image so
+  // clicks from a previous grid don't carry over.
+  useEffect(() => { setSelectedCells(new Set()); }, [pendingImage]);
+
+  async function stageFile(file: File) {
+    if (!file.type.startsWith('image/')) return;
+    const img = await fileToImage(file);
+    const dataUrl = imageToDataUrl(img);
+    setPendingImage({ img, dataUrl, name: file.name.replace(/\.[^.]+$/, '') });
+  }
+
+  function toggleCell(idx: number, forceTo?: boolean) {
+    setSelectedCells((prev) => {
+      const next = new Set(prev);
+      const on = forceTo !== undefined ? forceTo : !next.has(idx);
+      if (on) next.add(idx); else next.delete(idx);
+      return next;
+    });
+  }
+  function handleCellPointerDown(idx: number) {
+    const nextOn = !selectedCells.has(idx);
+    setDragSelecting(nextOn);
+    toggleCell(idx, nextOn);
+  }
+  function handleCellPointerEnter(idx: number) {
+    if (dragSelecting === null) return;
+    toggleCell(idx, dragSelecting);
+  }
+  function handlePointerUp() { setDragSelecting(null); }
+
+  async function handleImport() {
+    if (!pendingImage || selectedCells.size === 0) return;
+    const sliced = sliceImage(pendingImage.img, { rows, cols });
+    const cells = Array.from(selectedCells)
+      .sort((a, b) => a - b)
+      .map((idx) => {
+        const r = Math.floor(idx / cols);
+        const c = idx % cols;
+        return {
+          dataUrl: sliced.tiles[idx],
+          width: sliced.tileWidth,
+          height: sliced.tileHeight,
+          name: `${pendingImage.name}_${r + 1}_${c + 1}`,
+        };
+      });
+    setImporting(true);
+    try {
+      await onImportCells(cells);
+    } finally {
+      setImporting(false);
+      setPendingImage(null);
+      setSelectedCells(new Set());
+    }
+  }
+
+  if (!pendingImage) {
+    return (
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragHover(true); }}
+        onDragLeave={() => setDragHover(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragHover(false);
+          const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+          if (file) await stageFile(file);
+        }}
+        onClick={() => inputRef.current?.click()}
+        style={{
+          width: '100%',
+          aspectRatio: '1 / 1',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          border: `1.5px dashed ${dragHover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+          borderBottomWidth: 1.5,
+          background: dragHover ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+          cursor: 'pointer',
+          transition: 'background 120ms ease, border-color 120ms ease',
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) await stageFile(file);
+          }}
+        />
+        <ImagePlus size={22} strokeWidth={2} style={{ color: 'var(--pb-ink-soft)' }} />
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--pb-ink-soft)', textAlign: 'center' }}>
+          Drop a fruit sprite sheet here<br />
+          <span style={{ fontWeight: 600, color: 'var(--pb-ink-muted)' }}>or click to browse</span>
+        </span>
+      </div>
+    );
+  }
+
+  const totalCells = rows * cols;
+
+  return (
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: 0, flexShrink: 0 }}
+      onPointerUp={handlePointerUp}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '1 / 1',
+          flexShrink: 0,
+          background: 'rgba(0,0,0,0.06)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+          overflow: 'hidden',
+          userSelect: 'none',
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={pendingImage.dataUrl}
+          alt=""
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'contain', imageRendering: 'pixelated',
+            pointerEvents: 'none',
+          }}
+          draggable={false}
+        />
+        <div
+          style={{
+            position: 'absolute', inset: 0,
+            display: 'grid',
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateRows: `repeat(${rows}, 1fr)`,
+          }}
+        >
+          {Array.from({ length: totalCells }, (_, idx) => {
+            const selected = selectedCells.has(idx);
+            return (
+              <div
+                key={idx}
+                onPointerDown={(e) => { e.preventDefault(); handleCellPointerDown(idx); }}
+                onPointerEnter={() => handleCellPointerEnter(idx)}
+                style={{
+                  border: '0.5px solid rgba(0,0,0,0.18)',
+                  background: selected ? 'rgba(237,204,75,0.55)' : 'transparent',
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                  transition: 'background 60ms ease',
+                }}
+              />
+            );
+          })}
+        </div>
+        <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>
+          <button
+            type="button"
+            onClick={() => setSelectedCells(new Set(Array.from({ length: totalCells }, (_, i) => i)))}
+            title="Select all"
+            style={{
+              padding: '3px 7px', fontSize: 10, fontWeight: 800,
+              background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6, cursor: 'pointer', color: 'var(--pb-ink)',
+              boxShadow: '0 1px 0 var(--pb-line-2)',
+            }}
+          >All</button>
+          <button
+            type="button"
+            onClick={() => setSelectedCells(new Set())}
+            title="Deselect all"
+            style={{
+              padding: '3px 7px', fontSize: 10, fontWeight: 800,
+              background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6, cursor: 'pointer', color: 'var(--pb-ink)',
+              boxShadow: '0 1px 0 var(--pb-line-2)',
+            }}
+          >None</button>
+          <button
+            type="button"
+            onClick={() => { setPendingImage(null); setSelectedCells(new Set()); }}
+            title="Remove image"
+            style={{
+              width: 26, height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--pb-paper)', border: '1.5px solid var(--pb-line-2)',
+              borderRadius: 6, cursor: 'pointer', color: 'var(--pb-ink)',
+              boxShadow: '0 1px 0 var(--pb-line-2)',
+            }}
+          ><X size={12} strokeWidth={2.4} /></button>
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '1.5px solid var(--pb-line-2)' }}>
+        <PanelSlider
+          label="Rows"
+          value={rows}
+          onChange={(v) => { setRows(Math.max(1, Math.round(v))); setSelectedCells(new Set()); }}
+          min={1} max={32} step={1}
+        />
+        <PanelSlider
+          label="Columns"
+          value={cols}
+          onChange={(v) => { setCols(Math.max(1, Math.round(v))); setSelectedCells(new Set()); }}
+          min={1} max={32} step={1}
+        />
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--pb-ink-muted)', textAlign: 'center' }}>
+          {selectedCells.size} of {totalCells} cells selected
+        </div>
+        <PanelActionButton
+          variant="primary"
+          icon={Upload}
+          fullWidth
+          loading={importing}
+          disabled={selectedCells.size === 0 || importing}
+          onClick={handleImport}
+        >
+          {importing ? 'Importing…' : `Import ${selectedCells.size} as fruit${selectedCells.size === 1 ? '' : 's'}`}
+        </PanelActionButton>
+      </div>
     </div>
   );
 }

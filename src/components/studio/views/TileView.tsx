@@ -488,18 +488,20 @@ export function TileView() {
       requestRender.current();
       return;
     }
-    // Start transition — seed runtime state from current store positions.
-    const characters = Object.values(useTile.getState().tileCharacters);
-    if (characters.length === 0) return;
-
-    // Spawn the player at world origin (centre of the 10×10 tile pad). The
-    // FIRST character (by addedAt) is "the player" — same convention the
-    // tick loop below uses for input routing. Snapping the store position
-    // makes the runtime seed below pick up (0, 0) too.
-    const ordered = [...characters].sort((a, b) => a.addedAt - b.addedAt);
-    const playerId = ordered[0].id;
+    // Start transition. Procgen runs FIRST and unconditionally — the
+    // user can hit Play with no characters yet (e.g. just to preview the
+    // generated map) and still see something. Character-specific runtime
+    // setup (snap to origin + key listeners + tick loop) is gated below
+    // and short-circuited when no characters exist.
     const tile = useTile.getState();
-    tile.updateTileCharacter(playerId, { x: 0, y: 0 });
+    const characters = Object.values(tile.tileCharacters);
+    const ordered = [...characters].sort((a, b) => a.addedAt - b.addedAt);
+    const playerId = ordered[0]?.id ?? null;
+
+    // Spawn the player at world origin (centre of the 10×10 tile pad)
+    // when one exists. With no character we still snap the camera to
+    // origin so the procgen output is centred.
+    if (playerId) tile.updateTileCharacter(playerId, { x: 0, y: 0 });
     // Snapshot the editor camera so we can restore exact framing on Stop,
     // then snap to the spawn at the configured play zoom.
     preCameraRef.current = { x: tile.camera.x, y: tile.camera.y, zoom: tile.camera.zoom };
@@ -684,6 +686,14 @@ export function TileView() {
     rt.clear();
     for (const c of Object.values(useTile.getState().tileCharacters)) {
       rt.set(c.id, { x: c.x, y: c.y, dir: 'idle' });
+    }
+
+    // No player → procgen + camera are already in place; skip the
+    // input + tick wiring entirely so the user can preview the
+    // generated map without a character set up yet.
+    if (!playerId) {
+      requestRender.current();
+      return;
     }
 
     function isTypingTarget(t: EventTarget | null): boolean {

@@ -2973,9 +2973,9 @@ function CharacterCard({
     <div {...commonHandlers} style={containerStyle}>
       <div
         className="flex items-stretch gap-2"
-        style={{ padding: 0, minHeight: 56 }}
+        style={{ padding: 0, minHeight: 76 }}
       >
-        <CellThumb size={56} />
+        <CellThumb size={76} />
         <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6 }}>
           {editingName ? (
             <input
@@ -3201,11 +3201,11 @@ function AssetCard({
     <div {...commonHandlers} style={containerStyle}>
       <div
         className="flex items-stretch gap-2"
-        style={{ padding: 0, minHeight: 56 }}
+        style={{ padding: 0, minHeight: 76 }}
       >
         <div
           style={{
-            width: 56, height: 56,
+            width: 76, height: 76,
             flexShrink: 0,
             overflow: 'hidden',
             display: 'flex',

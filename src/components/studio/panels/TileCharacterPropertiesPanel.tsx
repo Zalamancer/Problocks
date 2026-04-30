@@ -1,12 +1,14 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { Trash2, Upload, User, Film, Pencil } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Trash2, Upload, User, Film, Pencil, Sparkles } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
+import { PanelInput } from '@/components/ui/panel-controls/PanelInput';
 import { fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
+import { useToastStore } from '@/store/toast-store';
 import {
   useTile,
   CHARACTER_DIRS,

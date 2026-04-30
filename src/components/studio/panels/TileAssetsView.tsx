@@ -2485,6 +2485,7 @@ function AssetsSubTabs() {
           newTitle="New group"
           uploadTitle="Upload group preset"
           emptyLabel="No groups yet — coming soon."
+          onCreate={() => { /* group model not wired up yet */ }}
         />
       )}
       {tab === 'characters' && <CharactersSection />}
@@ -2504,11 +2505,13 @@ function EmptySubTabPlaceholder({
   newTitle,
   uploadTitle,
   emptyLabel,
+  onCreate,
 }: {
   searchPlaceholder: string;
   newTitle: string;
   uploadTitle: string;
   emptyLabel: string;
+  onCreate?: () => void;
 }) {
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -2542,7 +2545,7 @@ function EmptySubTabPlaceholder({
             <SlidersHorizontal size={15} strokeWidth={2.2} />
           </button>
           <button
-            disabled
+            onClick={onCreate}
             className="shrink-0 flex items-center justify-center"
             style={{
               width: 34,
@@ -2551,8 +2554,8 @@ function EmptySubTabPlaceholder({
               background: 'var(--pb-paper)',
               border: '1.5px solid var(--pb-line-2)',
               color: 'var(--pb-ink-soft)',
-              cursor: 'not-allowed',
-              opacity: 0.55,
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
             }}
             title={newTitle}
           >

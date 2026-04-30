@@ -16,7 +16,8 @@ import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheet
 import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
 import { analyzePalette, bucketLabel, type ColorBucket } from '@/lib/tile-palette';
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
-import { saveTileObject, listTileObjects, deleteTileObjectGroup, updateTileObject, type CloudObject } from '@/lib/object-cloud';
+import { saveTileObject, listTileObjects, updateTileObject, type CloudObject } from '@/lib/object-cloud';
+import { scheduleAssetCloudDelete } from '@/lib/tile-asset-trash';
 import { useStudio } from '@/store/studio-store';
 
 /**
@@ -1836,8 +1837,8 @@ function ObjectsSection({
     dataUrl: string;
     name: string;
   } | null>(null);
-  const [splitRows, setSplitRows] = useState(4);
-  const [splitCols, setSplitCols] = useState(4);
+  const [splitRows, setSplitRows] = useState(2);
+  const [splitCols, setSplitCols] = useState(2);
   /** Toolbar search query (filters the asset list by case-insensitive
    *  substring match on asset.name). Empty string = show everything. */
   const [search, setSearch] = useState('');
@@ -1986,8 +1987,8 @@ function ObjectsSection({
       const dataUrl = imageToDataUrl(img);
       const baseName = file.name.replace(/\.[^.]+$/, '');
       setPendingImage({ img, dataUrl, name: baseName });
-      setSplitRows(4);
-      setSplitCols(4);
+      setSplitRows(2);
+      setSplitCols(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -2090,16 +2091,11 @@ function ObjectsSection({
   }
 
   function handleRemoveAsset(asset: ObjectAsset) {
-    if (!confirm(`Delete asset "${asset.name}" and all ${asset.styles.length} style(s)? Placed objects using it will also be removed.`)) return;
-    const hasAnyCloudStyle = asset.styles.some((s) => s.cloudId);
+    // No confirm — Cmd+Z brings the asset back. Cloud-side delete is
+    // deferred via the trash bin so a quick undo never even hits the API,
+    // and a late undo re-saves the styles.
+    scheduleAssetCloudDelete(asset);
     removeObjectAsset(asset.id);
-    if (hasAnyCloudStyle) {
-      // asset.id is also the server-side group_id (we stamp it on save),
-      // so a single group delete cleans up every style row at once.
-      deleteTileObjectGroup(asset.id).catch((err) => {
-        console.warn('[object-cloud] delete group failed', err);
-      });
-    }
   }
 
   // Display order honours the user's drag-reorder (sortIndex). addedAt is
@@ -3027,14 +3023,10 @@ function GroupDetailView({
   }
 
   function handleRemoveAsset(asset: ObjectAsset) {
-    if (!confirm(`Delete asset "${asset.name}" and all ${asset.styles.length} style(s)? Placed objects using it will also be removed.`)) return;
-    const hasAnyCloudStyle = asset.styles.some((s) => s.cloudId);
+    // No confirm — Cmd+Z restores the asset. Cloud delete is deferred via
+    // the trash bin so an undo within ~8s never hits the API.
+    scheduleAssetCloudDelete(asset);
     removeObjectAsset(asset.id);
-    if (hasAnyCloudStyle) {
-      deleteTileObjectGroup(asset.id).catch((err) => {
-        console.warn('[object-cloud] delete group failed', err);
-      });
-    }
   }
 
   return (

@@ -988,6 +988,11 @@ export interface TileSnapshot {
   objects: TileObject[];
   fencePosts: Record<string, true>;
   fenceEdges: Record<string, true>;
+  /** Sprite library — captured so deleting an asset is undoable. */
+  objectAssets: Record<string, ObjectAsset>;
+  /** Asset → class membership map; mirrors objectAssets so undo of an
+   *  asset-delete also restores its class folder. */
+  assetClassIds: Record<string, string>;
 }
 
 /**
@@ -1089,7 +1094,13 @@ const UNDO_LIMIT = 25;
  * `mutateCellTransforms` for paint-stroke speed, so a shallow layer
  * clone is NOT enough — we have to clone those two maps explicitly.
  */
-function takeSnapshot(s: Pick<TileStore, 'layers' | 'objects' | 'fencePosts' | 'fenceEdges'>): TileSnapshot {
+function takeSnapshot(s: Pick<TileStore, 'layers' | 'objects' | 'fencePosts' | 'fenceEdges' | 'objectAssets' | 'assetClassIds'>): TileSnapshot {
+  // objectAssets: shallow per-asset clone is enough — styles[] dataUrls
+  // are immutable strings so no need to deep-clone the array contents.
+  const assetSnap: Record<string, ObjectAsset> = {};
+  for (const [id, a] of Object.entries(s.objectAssets)) {
+    assetSnap[id] = { ...a, styles: a.styles.map((st) => ({ ...st })) };
+  }
   return {
     layers: s.layers.map((l) => ({
       ...l,
@@ -1099,6 +1110,8 @@ function takeSnapshot(s: Pick<TileStore, 'layers' | 'objects' | 'fencePosts' | '
     objects: s.objects.map((o) => ({ ...o })),
     fencePosts: { ...s.fencePosts },
     fenceEdges: { ...s.fenceEdges },
+    objectAssets: assetSnap,
+    assetClassIds: { ...s.assetClassIds },
   };
 }
 
@@ -1503,6 +1516,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const nextAssetClassIds = { ...s.assetClassIds };
     delete nextAssetClassIds[assetId];
     return {
+      ...recordUndoStep(s),
       objectAssets: next,
       // Drop placed objects referencing any style of this asset — they'd
       // otherwise render as empty rectangles forever.
@@ -2320,6 +2334,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       objects: prev.objects,
       fencePosts: prev.fencePosts,
       fenceEdges: prev.fenceEdges,
+      objectAssets: prev.objectAssets,
+      assetClassIds: prev.assetClassIds,
       _undoPast: past,
       _undoFuture: future,
       _undoOpen: false,
@@ -2330,6 +2346,18 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       selectedFencePostKey: s.selectedFencePostKey && prev.fencePosts[s.selectedFencePostKey]
         ? s.selectedFencePostKey
         : null,
+      // Brush-side selection might have been pointing at the asset we just
+      // restored; if it no longer exists in the prev snapshot, clear it.
+      selectedAssetId: s.selectedAssetId && prev.objectAssets[s.selectedAssetId]
+        ? s.selectedAssetId
+        : null,
+      selectedStyleId: (() => {
+        if (!s.selectedStyleId) return s.selectedStyleId;
+        for (const a of Object.values(prev.objectAssets)) {
+          if (a.styles.some((st) => st.id === s.selectedStyleId)) return s.selectedStyleId;
+        }
+        return null;
+      })(),
       // Active layer might have been a layer that didn't exist yet
       // pre-snapshot; snap back to a layer that does exist.
       activeLayerId: prev.layers.some((l) => l.id === s.activeLayerId)
@@ -2350,6 +2378,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       objects: next.objects,
       fencePosts: next.fencePosts,
       fenceEdges: next.fenceEdges,
+      objectAssets: next.objectAssets,
+      assetClassIds: next.assetClassIds,
       _undoPast: past,
       _undoFuture: future,
       _undoOpen: false,
@@ -2359,6 +2389,16 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       selectedFencePostKey: s.selectedFencePostKey && next.fencePosts[s.selectedFencePostKey]
         ? s.selectedFencePostKey
         : null,
+      selectedAssetId: s.selectedAssetId && next.objectAssets[s.selectedAssetId]
+        ? s.selectedAssetId
+        : null,
+      selectedStyleId: (() => {
+        if (!s.selectedStyleId) return s.selectedStyleId;
+        for (const a of Object.values(next.objectAssets)) {
+          if (a.styles.some((st) => st.id === s.selectedStyleId)) return s.selectedStyleId;
+        }
+        return null;
+      })(),
       activeLayerId: next.layers.some((l) => l.id === s.activeLayerId)
         ? s.activeLayerId
         : next.layers[0]?.id ?? s.activeLayerId,

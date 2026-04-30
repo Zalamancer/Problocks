@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import {
   MousePointer2, Paintbrush, Eraser, PaintBucket, Pipette, Trash2, Maximize2,
-  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw, Waves, Fence,
+  Grid3X3, Sparkles, Box, FlipHorizontal2, FlipVertical2, RotateCw, Fence,
   PenTool, Image as ImageIcon,
 } from 'lucide-react';
 import {
@@ -23,7 +23,7 @@ import { useStudio } from '@/store/studio-store';
 import { useSceneStore } from '@/store/scene-store';
 import { useRoom } from '@/store/room-store';
 import { resolveCellTile, pickAdjustedBrushTexture, canPlaceCorners } from '@/lib/wang-tiles';
-import { recolorTile, hasActiveAdjustments, maskTileByBuckets } from '@/lib/tile-palette';
+import { recolorTile, hasActiveAdjustments } from '@/lib/tile-palette';
 import { generateRegion, generateRivers } from '@/lib/world-gen';
 import {
   useTileRealtime,
@@ -134,6 +134,56 @@ function dirFromVelocity(vx: number, vy: number): Dir8 {
   // Sector mapping (clockwise from +x = E):
   //   0 = E, 1 = SE, 2 = S, 3 = SW, 4 = W, 5 = NW, 6 = N, 7 = NE
   return (['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'] as const)[sector];
+}
+
+/**
+ * True when the character at world (worldX, worldY) is standing on a
+ * water cell. Water is detected from each tileset's `upperLabel` /
+ * `lowerLabel` — any label containing "water" (case-insensitive) marks
+ * its texture id as water. No manual marking is required: the user
+ * just labels their water sheets "water" (which is also the auto-derived
+ * label for sheets named e.g. "grass-water").
+ *
+ * Threshold is 2/4 corners so a transition tile (sand → water) only
+ * counts as "in water" once you're past its halfway mark, matching
+ * platformer / RPG intuition. Pure water (4/4) and most river bodies
+ * (2-3/4) trigger swim; coastal sand (0-1/4) does not.
+ */
+function isCharacterInWater(worldX: number, worldY: number): boolean {
+  const tile = useTile.getState();
+  // All these reads are defensive — Zustand persist may hand back a
+  // partially-hydrated state on first paint where the slice fields are
+  // undefined. Treating them as empty just means "no water this tick"
+  // until the store is fully restored.
+  const tilesets = tile.tilesets ?? [];
+  if (tilesets.length === 0) return false;
+  const waterIds = new Set<string>();
+  for (const ts of tilesets) {
+    const upper = (ts.upperLabel ?? '').toLowerCase();
+    const lower = (ts.lowerLabel ?? '').toLowerCase();
+    if (ts.upperTextureId && upper.includes('water')) waterIds.add(ts.upperTextureId);
+    if (ts.lowerTextureId && lower.includes('water')) waterIds.add(ts.lowerTextureId);
+  }
+  if (waterIds.size === 0) return false;
+  const cellSize = tile.tileSize ?? 32;
+  const cx = Math.floor(worldX / cellSize);
+  const cy = Math.floor(worldY / cellSize);
+  const baseLayers = tile.layers ?? [];
+  const layers = tile.playLayer ? [...baseLayers, tile.playLayer] : baseLayers;
+  for (const layer of layers) {
+    if (!layer || !layer.corners) continue;
+    let waterCount = 0;
+    const a = layer.corners[`${cx},${cy}`];
+    const b = layer.corners[`${cx + 1},${cy}`];
+    const c = layer.corners[`${cx},${cy + 1}`];
+    const d = layer.corners[`${cx + 1},${cy + 1}`];
+    if (a && waterIds.has(a)) waterCount++;
+    if (b && waterIds.has(b)) waterCount++;
+    if (c && waterIds.has(c)) waterCount++;
+    if (d && waterIds.has(d)) waterCount++;
+    if (waterCount >= 2) return true;
+  }
+  return false;
 }
 
 function appendSegment(p: Path2D, prev: TilePenAnchor, cur: TilePenAnchor) {
@@ -369,21 +419,6 @@ export function TileView() {
    *  this base tile in this tileset right now?" without re-hashing. */
   const tileRecolorRef = useRef<Map<string, string>>(new Map());
   /**
-   * Per-tile blue-mask dataUrl cache. Built once per tile that lives in
-   * a tileset whose upper or lower texture is in `wavyTextureIds`. The
-   * mask keeps pixels classified as blue or cyan (water palette) and
-   * makes every other pixel transparent, so the wave-effect renderer
-   * can clip its hue shift to water-coloured pixels only and leave
-   * connected dirt / grass / sand alone in transition tiles.
-   */
-  const blueMaskCacheRef = useRef<Map<string, string>>(new Map());
-  /**
-   * Pooled offscreen canvas the wave effect draws into. Reused across
-   * frames; resized when the wavy bounding box grows. Allocating fresh
-   * canvases per frame would thrash the GPU on the Chromebook target.
-   */
-  const waveOffscreenRef = useRef<HTMLCanvasElement | null>(null);
-  /**
    * Per-character runtime state for play mode. Keyed by character id.
    * Position drifts every frame on the player's character via the play
    * loop's RAF tick — writing each tick straight to the Zustand store
@@ -434,8 +469,6 @@ export function TileView() {
   const setBrushRandomFlipV = useTile((s) => s.setBrushRandomFlipV);
   const brushRandomRotate = useTile((s) => s.brushRandomRotate);
   const setBrushRandomRotate = useTile((s) => s.setBrushRandomRotate);
-  const wavyTextureIds = useTile((s) => s.wavyTextureIds);
-  const setWavyTexture = useTile((s) => s.setWavyTexture);
   const tilesetTints = useTile((s) => s.tilesetTints);
   const tilesets = useTile((s) => s.tilesets);
   const layers = useTile((s) => s.layers);
@@ -512,52 +545,6 @@ export function TileView() {
   useEffect(() => {
     if (selectedObjectId) setRightPanelGroup('properties');
   }, [selectedObjectId, setRightPanelGroup]);
-
-  // ── Blue-mask cache for the water effect ──────────────────────
-  // Build once per tile when a tileset becomes "wavy" (water effect on
-  // for either side). The mask keeps blue + cyan pixels and zeroes the
-  // alpha on everything else; the renderer composites the wave's hue
-  // shift through the mask so connected dirt/grass pixels in the same
-  // transition tile stay untouched.
-  useEffect(() => {
-    let cancelled = false;
-    if (wavyTextureIds.length === 0) return;
-    const wavySet = new Set(wavyTextureIds);
-    async function build() {
-      const state = useTile.getState();
-      const targets = state.tilesets.filter((ts) =>
-        wavySet.has(ts.upperTextureId) || wavySet.has(ts.lowerTextureId),
-      );
-      for (const ts of targets) {
-        for (const tileId of ts.tileIds) {
-          if (blueMaskCacheRef.current.has(tileId)) continue;
-          const tile = state.tiles[tileId];
-          if (!tile) continue;
-          try {
-            const masked = await maskTileByBuckets(tile.dataUrl, ['blue', 'cyan']);
-            if (cancelled) return;
-            blueMaskCacheRef.current.set(tileId, masked);
-            // Pre-warm the image cache so the first wave frame doesn't
-            // miss while the masked PNG is still decoding.
-            if (!imgCacheRef.current.has(masked)) {
-              const img = new Image();
-              img.onload = () => {
-                imgReadyRef.current.add(masked);
-                requestRender.current();
-              };
-              img.src = masked;
-              imgCacheRef.current.set(masked, img);
-            }
-          } catch (err) {
-            console.warn('[water-mask] failed', err);
-          }
-        }
-      }
-      if (!cancelled) requestRender.current();
-    }
-    void build();
-    return () => { cancelled = true; };
-  }, [wavyTextureIds, tiles]);
 
   // ── Per-tileset palette recolouring ─────────────────────────────
   // Each time `tilesetTints` (or the underlying tileset list) changes,
@@ -767,10 +754,12 @@ export function TileView() {
         } else {
           cur.dir = 'idle';
         }
-        // Action priority: a held action key always wins over move/idle so
-        // the player can attack/defend/cast while still walking. Order
-        // is intentional — attack is the most common verb so it gets the
-        // simplest binding (Space) and the highest priority.
+        // Action priority — held action keys always win over auto-state
+        // (so the player can attack/defend/cast while moving or
+        // swimming). Below the keys, `swim` auto-applies whenever the
+        // character is over water AND a swim animation is tagged for
+        // its facing direction. If swim is unavailable, we fall through
+        // to run/idle so movement still has visible feedback.
         if (keys.has(' ')) {
           cur.action = 'attack';
         } else if (keys.has('shift')) {
@@ -779,6 +768,11 @@ export function TileView() {
           cur.action = 'cast';
         } else if (keys.has('e')) {
           cur.action = 'jump';
+        } else if (
+          isCharacterInWater(cur.x, cur.y) &&
+          findCharacterAnimation(player, cur.facing, 'swim') !== null
+        ) {
+          cur.action = 'swim';
         } else {
           cur.action = mag > 0 ? 'run' : 'idle';
         }
@@ -1154,128 +1148,6 @@ export function TileView() {
       }
       ctx!.globalAlpha = 1;
 
-      // ── Water-effect: blue-pixels-only hue wave ─────────────────
-      // The wave shouldn't touch dirt / sand / grass pixels in the
-      // transition tiles where water meets land. To enforce that we
-      // route the whole effect through a pooled offscreen canvas:
-      //   1. For each wavy cell, blit the tile's PRE-COMPUTED blue mask
-      //      into the offscreen at the cell's world coords. The mask
-      //      is just the tile with non-blue/cyan pixels' alpha zeroed
-      //      out (see `maskTileByBuckets` + `blueMaskCacheRef`).
-      //   2. With the offscreen now containing only the blue tile
-      //      pixels, run the sine-modulated hue strips on it using
-      //      globalCompositeOperation='hue'. The hue channel is
-      //      replaced ONLY where the offscreen has opaque pixels — i.e.
-      //      only the water pixels.
-      //   3. Composite the offscreen back onto the main canvas with
-      //      'source-over'. Transparent (non-water) pixels in the
-      //      offscreen leave the main canvas untouched, so connected
-      //      dirt / grass stays exactly as it was.
-      if (s.wavyTextureIds.length > 0) {
-        const wavySet = new Set(s.wavyTextureIds);
-        function isWavyCell(cx: number, cy: number): boolean {
-          for (const layer of s.layers) {
-            if (!layer.visible) continue;
-            const c = layer.corners;
-            if (
-              wavySet.has(c[`${cx},${cy}`])
-              || wavySet.has(c[`${cx + 1},${cy}`])
-              || wavySet.has(c[`${cx},${cy + 1}`])
-              || wavySet.has(c[`${cx + 1},${cy + 1}`])
-            ) return true;
-          }
-          return false;
-        }
-        let any = false;
-        let minPX = Infinity, minPY = Infinity, maxPX = -Infinity, maxPY = -Infinity;
-        for (let cy = cy0; cy <= cy1; cy++) {
-          for (let cx = cx0; cx <= cx1; cx++) {
-            if (!isWavyCell(cx, cy)) continue;
-            const x = cx * ts;
-            const y = cy * ts;
-            any = true;
-            if (x < minPX) minPX = x;
-            if (y < minPY) minPY = y;
-            if (x + ts > maxPX) maxPX = x + ts;
-            if (y + ts > maxPY) maxPY = y + ts;
-          }
-        }
-        if (any) {
-          const offW = Math.max(1, Math.round((maxPX - minPX) * cam.zoom));
-          const offH = Math.max(1, Math.round((maxPY - minPY) * cam.zoom));
-          let off = waveOffscreenRef.current;
-          if (!off || off.width !== offW || off.height !== offH) {
-            off = document.createElement('canvas');
-            off.width = offW;
-            off.height = offH;
-            waveOffscreenRef.current = off;
-          }
-          const offCtx = off.getContext('2d');
-          if (offCtx) {
-            offCtx.clearRect(0, 0, offW, offH);
-            offCtx.imageSmoothingEnabled = false;
-            // Match main world transform but offset so (minPX, minPY)
-            // maps to (0, 0). Tile draws below use the same world
-            // coordinates as the main pass would.
-            offCtx.setTransform(cam.zoom, 0, 0, cam.zoom, -minPX * cam.zoom, -minPY * cam.zoom);
-            // Step 1: stamp every wavy cell's BLUE-MASK tile onto the
-            // offscreen. We re-resolve each cell to find the right tile
-            // — same logic as the main render loop above.
-            for (const layer of s.layers) {
-              if (!layer.visible) continue;
-              const corners = layer.corners;
-              for (let cy = cy0; cy <= cy1; cy++) {
-                for (let cx = cx0; cx <= cx1; cx++) {
-                  if (!isWavyCell(cx, cy)) continue;
-                  const nw = corners[`${cx},${cy}`];
-                  const ne = corners[`${cx + 1},${cy}`];
-                  const sw = corners[`${cx},${cy + 1}`];
-                  const se = corners[`${cx + 1},${cy + 1}`];
-                  if (!nw && !ne && !sw && !se) continue;
-                  const resolved = resolveCellTile(nw, ne, sw, se, s.tilesets);
-                  if (!resolved) continue;
-                  const tileId = resolved.tileset.tileIds[resolved.index];
-                  if (!tileId) continue;
-                  const maskedUrl = blueMaskCacheRef.current.get(tileId);
-                  if (!maskedUrl) continue;
-                  const mImg = imgCacheRef.current.get(maskedUrl);
-                  if (!mImg || !imgReadyRef.current.has(maskedUrl)) continue;
-                  offCtx.drawImage(mImg, cx * ts, cy * ts, ts, ts);
-                }
-              }
-            }
-            // Step 2: re-hue offscreen blue pixels via sine strips.
-            const time = performance.now() / 1000;
-            offCtx.globalCompositeOperation = 'hue';
-            const wavelength = Math.max(ts * 1.5, 16);
-            const speed = 1.4;
-            const HUE_CENTER = 215;
-            const HUE_RANGE = 12;
-            const stripPx = Math.max(1 / cam.zoom, 2 / cam.zoom);
-            for (let x = minPX; x < maxPX; x += stripPx) {
-              const phase = (x / wavelength) * Math.PI * 2 + time * speed;
-              const hue = HUE_CENTER + Math.sin(phase) * HUE_RANGE;
-              const sat = 80 + Math.sin(phase * 0.5) * 10;
-              offCtx.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
-              offCtx.fillRect(x, minPY, stripPx + 0.5 / cam.zoom, maxPY - minPY);
-            }
-            for (let y = minPY; y < maxPY; y += stripPx) {
-              const phase = (y / wavelength) * Math.PI * 2 - time * speed * 0.7;
-              const hue = HUE_CENTER + Math.sin(phase) * (HUE_RANGE * 0.7);
-              const sat = 75 + Math.sin(phase * 0.5) * 10;
-              offCtx.fillStyle = `hsl(${hue}, ${sat}%, 50%)`;
-              offCtx.fillRect(minPX, y, maxPX - minPX, stripPx + 0.5 / cam.zoom);
-            }
-            offCtx.globalCompositeOperation = 'source-over';
-            // Step 3: composite offscreen back onto main. Transparent
-            // (non-water) pixels in the offscreen leave the main canvas
-            // exactly as it was — connected dirt / grass survives.
-            offCtx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx!.drawImage(off, 0, 0, offW, offH, minPX, minPY, maxPX - minPX, maxPY - minPY);
-          }
-        }
-      }
-
       // Free objects, sorted bottom-to-top by y. Includes the ephemeral
       // play-mode scatter — playObjects use a synthetic layerId so the
       // user-layer visibility check below short-circuits cleanly. The
@@ -1423,7 +1295,7 @@ export function TileView() {
               const animImg = ensureImage(anim.src);
               if (animReady) {
                 const total = Math.max(1, anim.cols * anim.rows);
-                const fps = Math.max(1, c.fps || 8);
+                const fps = Math.max(1, anim.fps ?? c.fps ?? 8);
                 const tNow = performance.now();
                 const frame = Math.floor((tNow * fps) / 1000) % total;
                 const aCol = frame % anim.cols;
@@ -1686,12 +1558,11 @@ export function TileView() {
 
       ctx!.restore();
 
-      // Keep the loop going while the water effect is on so the waves
-      // animate continuously, OR while at least one animated tile was
-      // visible this frame so its frames cycle. No-op otherwise — the
-      // renderer falls back to event-driven rAF and the canvas burns
-      // zero CPU at idle.
-      if (s.wavyTextureIds.length > 0 || didAnimate) scheduleRender();
+      // Keep the loop going while at least one animated tile was visible
+      // this frame so its frames cycle. No-op otherwise — the renderer
+      // falls back to event-driven rAF and the canvas burns zero CPU at
+      // idle.
+      if (didAnimate) scheduleRender();
     }
 
     /**
@@ -2825,19 +2696,6 @@ export function TileView() {
           onClick={() => setBrushRandomRotate(!brushRandomRotate)}
         >
           <RotateCw size={14} strokeWidth={2.2} />
-        </ToolBtn>
-        <Separator />
-        <ToolBtn
-          active={!!useTile.getState().brushTextureId
-            && wavyTextureIds.includes(useTile.getState().brushTextureId!)}
-          title="Toggle water effect on the brush's current texture (animated waves + hue tint across the whole region)"
-          onClick={() => {
-            const id = useTile.getState().brushTextureId;
-            if (!id) return;
-            setWavyTexture(id, !wavyTextureIds.includes(id));
-          }}
-        >
-          <Waves size={14} strokeWidth={2.2} />
         </ToolBtn>
         <Separator />
         <ToolBtn active={showGrid} title="Toggle grid (G)" onClick={toggleGrid}>

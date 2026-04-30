@@ -15,6 +15,17 @@ import {
   type CharacterActionId,
 } from '@/lib/character-actions';
 import {
+  addPendingJobs,
+  composeFramesIntoSheet,
+  loadImage,
+  loadPendingJobs,
+  pollCharacterAnimationJob,
+  removePendingJob,
+  startCharacterAnimationJobs,
+  type PendingJob,
+  type PendingJobIntent,
+} from '@/lib/character-anim-jobs';
+import {
   useTile,
   CHARACTER_DIRS,
   type TileCharacter,
@@ -23,24 +34,219 @@ import {
 } from '@/store/tile-store';
 
 /**
- * Generation lock bundle threaded into every regen surface so they can
- * coexist without stepping on each other:
- *   • `bulkGenerating` — Generate-tab "Generate animation" is running
- *     (it fires all 8 directions at once, so per-row regens disable for
- *     the duration to avoid double-spending the API).
- *   • `inflightKeys`   — Set of `${dir}::${animationId}` strings, one
- *     entry per in-flight per-direction regen. Each button reads its
- *     own key so concurrent regens on different directions / rows show
- *     independent spinners.
- *   • `markInflight` / `clearInflight` — bracket each regen call with
- *     these so the set stays consistent across success and failure.
+ * Polling hook for in-flight PixelLab character-animation jobs.
+ *
+ * Reads pending jobs from localStorage on mount, polls each one in
+ * parallel, applies the result to the tile-store (create or replace
+ * an animation row), and removes finished entries from storage. New
+ * jobs registered via `addPendingJobs` show up on the next render.
+ *
+ * Returns the in-flight set so the panel can render a status banner
+ * and disable the bulk Generate button while a generation is mid-flight
+ * after a reload.
+ */
+function usePendingAnimJobs(characterId: string | null): {
+  pendingJobs: PendingJob[];
+  bulkPendingForCurrent: boolean;
+  /** Re-read storage — call after `addPendingJobs(...)` to pick up
+   *  the new entries immediately. */
+  refresh: () => void;
+} {
+  const addCharacterAnimation = useTile((s) => s.addCharacterAnimation);
+  const setCharacterAnimationSrc = useTile((s) => s.setCharacterAnimationSrc);
+  const addToast = useToastStore((s) => s.addToast);
+
+  const [pendingJobs, setPendingJobs] = useState<PendingJob[]>(() => loadPendingJobs());
+  // Re-read storage; called both on mount and whenever a flow has just
+  // pushed jobs in.
+  const refresh = useCallback(() => {
+    setPendingJobs(loadPendingJobs());
+  }, []);
+
+  // Attached / detached per jobId so React's strict-mode double-mount
+  // doesn't end up double-polling. Each entry is the AbortController
+  // for the polling loop of that job.
+  const controllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  // Keep refs to the latest store actions / callbacks so the polling
+  // closure can call them without re-running the effect on every
+  // render.
+  const addCharRef = useRef(addCharacterAnimation);
+  const setSrcRef = useRef(setCharacterAnimationSrc);
+  const toastRef = useRef(addToast);
+  const refreshRef = useRef(refresh);
+  useEffect(() => { addCharRef.current = addCharacterAnimation; }, [addCharacterAnimation]);
+  useEffect(() => { setSrcRef.current = setCharacterAnimationSrc; }, [setCharacterAnimationSrc]);
+  useEffect(() => { toastRef.current = addToast; }, [addToast]);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+
+  useEffect(() => {
+    const controllers = controllersRef.current;
+
+    // Spin up a polling loop for every pending job that doesn't already
+    // have one. Removed jobs (post-completion) get their controller
+    // aborted on the next pass.
+    for (const job of pendingJobs) {
+      if (controllers.has(job.jobId)) continue;
+      const ctrl = new AbortController();
+      controllers.set(job.jobId, ctrl);
+      void pollLoop(job, ctrl.signal);
+    }
+
+    // GC: drop controllers whose jobs are no longer pending (they
+    // either completed via this hook or were yanked by the user).
+    const liveIds = new Set(pendingJobs.map((j) => j.jobId));
+    for (const [id, ctrl] of controllers.entries()) {
+      if (!liveIds.has(id)) {
+        ctrl.abort();
+        controllers.delete(id);
+      }
+    }
+
+    return () => {
+      // Component unmount — abort everything. Storage keeps the jobs
+      // so the next mount picks them right back up.
+      for (const ctrl of controllers.values()) ctrl.abort();
+      controllers.clear();
+    };
+
+    async function pollLoop(job: PendingJob, signal: AbortSignal) {
+      const POLL_INTERVAL = 4000;
+      // Initial wait — animate-with-text-v2 is rarely under ~10s, no
+      // sense slamming the API right away.
+      try { await sleep(POLL_INTERVAL, signal); } catch { return; }
+
+      while (!signal.aborted) {
+        let resp;
+        try {
+          resp = await pollCharacterAnimationJob(job.jobId, signal);
+        } catch (err) {
+          if (signal.aborted) return;
+          // Transient network error — back off and retry rather than
+          // killing the job. PixelLab's jobs persist server-side.
+          await sleep(POLL_INTERVAL, signal).catch(() => {});
+          continue;
+        }
+        if (signal.aborted) return;
+        if (resp.status === 'pending') {
+          await sleep(POLL_INTERVAL, signal).catch(() => {});
+          continue;
+        }
+        if (resp.status === 'failed') {
+          toastRef.current('error', `Generation failed (${job.dir}): ${resp.error ?? 'unknown'}`);
+          removePendingJob(job.jobId);
+          refreshRef.current();
+          return;
+        }
+        if (resp.status === 'completed' && resp.frames && resp.frames.length > 0) {
+          try {
+            const sheet = await composeFramesIntoSheet(resp.frames);
+            applyJobResult(job, sheet);
+            const lbl = job.intent.label || job.intent.kind;
+            toastRef.current('success', `Saved "${lbl}" for ${job.dir}`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            toastRef.current('error', `Failed to save (${job.dir}): ${msg}`);
+          }
+          removePendingJob(job.jobId);
+          refreshRef.current();
+          return;
+        }
+        // Anything else — treat as transient and retry.
+        await sleep(POLL_INTERVAL, signal).catch(() => {});
+      }
+    }
+
+    function applyJobResult(
+      job: PendingJob,
+      sheet: { dataUrl: string; cols: number; rows: number; frameW: number; frameH: number },
+    ) {
+      if (job.intent.kind === 'create') {
+        addCharRef.current(job.characterId, job.dir, {
+          label: job.intent.label,
+          ...(job.intent.actionId ? { actionId: job.intent.actionId } : {}),
+          src: sheet.dataUrl,
+          cols: sheet.cols,
+          rows: sheet.rows,
+          frameW: sheet.frameW,
+          frameH: sheet.frameH,
+        });
+      } else {
+        setSrcRef.current(job.characterId, job.dir, job.intent.animationId, {
+          src: sheet.dataUrl,
+          cols: sheet.cols,
+          rows: sheet.rows,
+          frameW: sheet.frameW,
+          frameH: sheet.frameH,
+        });
+      }
+    }
+  }, [pendingJobs]);
+
+  // Cross-tab / cross-window sync: a sibling tab finishing a job will
+  // write to the same storage key, so we re-read here too. Without
+  // this, two tabs would each apply the result.
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === null || e.key === 'problocks:tile-anim-pending:v1') {
+        refreshRef.current();
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const bulkPendingForCurrent =
+    !!characterId &&
+    pendingJobs.filter(
+      (j) => j.characterId === characterId && j.intent.kind === 'create',
+    ).length > 1;
+
+  return { pendingJobs, bulkPendingForCurrent, refresh };
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      window.clearTimeout(handle);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Generation lock bundle threaded into every regen surface. With jobs
+ * persisted via `lib/character-anim-jobs`, all loading state derives
+ * from the pending-jobs list — the panel just exposes:
+ *
+ *   • `bulkPending` — at least one create-kind pending job exists for
+ *     the current character (driven by the bulk Generate flow). The
+ *     footer button shows "Generating…" while this is true; per-row
+ *     regens lock so they don't clobber a bulk in flight.
+ *   • `pendingKeys` — `${dir}::${animationId}` strings for in-flight
+ *     replace-kind jobs (per-row + library preview regens). Each
+ *     button checks its own key for the spinner state.
+ *   • `registerJobs` — bracket each start fetch with this so the
+ *     polling hook picks up new entries.
+ *   • `starting` / `setStarting` — local "the start fetch is in flight"
+ *     bridge. Lasts ~1s; covers the gap between user click and the
+ *     pending-jobs entry materializing.
  */
 type GenLocks = {
-  bulkGenerating: boolean;
-  setBulkGenerating: (v: boolean) => void;
-  inflightKeys: ReadonlySet<string>;
-  markInflight: (key: string) => void;
-  clearInflight: (key: string) => void;
+  bulkPending: boolean;
+  pendingKeys: ReadonlySet<string>;
+  registerJobs: (jobs: PendingJob[]) => void;
+  starting: boolean;
+  setStarting: (v: boolean) => void;
 };
 
 function makeRegenKey(dir: CharacterDir8, animationId: string): string {
@@ -81,37 +287,47 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
   // the tab swaps to the per-direction Animations editor (with a Back
   // button). `null` means we're showing the directions list view.
   const [drilldownDir, setDrilldownDir] = useState<CharacterDir8 | null>(null);
-  // Generation flow on the Generate tab — the footer button kicks off
-  // the run, the body of GenerateAnimationsTab does the actual work via
-  // a callback registered into this ref.
-  const [bulkGenerating, setBulkGenerating] = useState(false);
-  // Per-direction regens may run concurrently; each one registers its
-  // (dir, animationId) key here so its own button shows a spinner while
-  // sibling buttons stay live.
-  const [inflightKeys, setInflightKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const markInflight = useCallback((key: string) => {
-    setInflightKeys((s) => {
-      if (s.has(key)) return s;
-      const next = new Set(s);
-      next.add(key);
-      return next;
-    });
-  }, []);
-  const clearInflight = useCallback((key: string) => {
-    setInflightKeys((s) => {
-      if (!s.has(key)) return s;
-      const next = new Set(s);
-      next.delete(key);
-      return next;
-    });
-  }, []);
+  // Brief loading state spanning the start fetch (~1s). Pending state
+  // beyond that derives from the persisted jobs list below.
+  const [starting, setStarting] = useState(false);
+  // Resilient polling: pending PixelLab jobs survive page reloads via
+  // localStorage and resume here on mount.
+  const { pendingJobs, refresh: refreshPending } = usePendingAnimJobs(
+    selectedCharacterId,
+  );
+  const myPendingJobs = useMemo(
+    () => (selectedCharacterId
+      ? pendingJobs.filter((j) => j.characterId === selectedCharacterId)
+      : []),
+    [pendingJobs, selectedCharacterId],
+  );
+  const myCreatePending = useMemo(
+    () => myPendingJobs.filter((j) => j.intent.kind === 'create'),
+    [myPendingJobs],
+  );
+  const myReplacePending = useMemo(
+    () => myPendingJobs.filter((j) => j.intent.kind === 'replace'),
+    [myPendingJobs],
+  );
+  const pendingKeys = useMemo<ReadonlySet<string>>(() => {
+    const set = new Set<string>();
+    for (const j of myReplacePending) {
+      if (j.intent.kind === 'replace') set.add(makeRegenKey(j.dir, j.intent.animationId));
+    }
+    return set;
+  }, [myReplacePending]);
+  const bulkPending = starting || myCreatePending.length > 0;
+  const registerJobs = useCallback((jobs: PendingJob[]) => {
+    addPendingJobs(jobs);
+    refreshPending();
+  }, [refreshPending]);
   const genLocks: GenLocks = useMemo(() => ({
-    bulkGenerating,
-    setBulkGenerating,
-    inflightKeys,
-    markInflight,
-    clearInflight,
-  }), [bulkGenerating, inflightKeys, markInflight, clearInflight]);
+    bulkPending,
+    pendingKeys,
+    registerJobs,
+    starting,
+    setStarting,
+  }), [bulkPending, pendingKeys, registerJobs, starting]);
   const generateTriggerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -137,6 +353,29 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
         activeTab={tab}
         onChange={(id) => setTab(id as typeof tab)}
       />
+
+      {myPendingJobs.length > 0 && (
+        <div
+          role="status"
+          style={{
+            padding: '6px 12px',
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            background: 'var(--pb-butter)',
+            borderBottom: '1.5px solid var(--pb-butter-ink)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <Loader2 size={12} strokeWidth={2.4} className="animate-spin" />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Generating {myPendingJobs.length} direction{myPendingJobs.length === 1 ? '' : 's'}…
+            you can refresh or close this tab without losing work.
+          </span>
+        </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         {tab === 'character' && (
@@ -184,10 +423,10 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
             variant="primary"
             icon={Sparkles}
             fullWidth
-            loading={bulkGenerating}
+            loading={bulkPending}
             onClick={() => generateTriggerRef.current?.()}
           >
-            {bulkGenerating ? 'Generating…' : 'Generate animation'}
+            {bulkPending ? 'Generating…' : 'Generate animation'}
           </PanelActionButton>
         ) : (
           <PanelActionButton
@@ -416,8 +655,110 @@ function CharacterTab({
             step={1}
           />
         </PanelSection>
+
+        <PanelSection title="Controls" collapsible defaultOpen={false}>
+          <span
+            style={{
+              display: 'block',
+              marginBottom: 8,
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: 'var(--pb-ink-muted)',
+              lineHeight: 1.4,
+            }}
+          >
+            Active during Play. Each action picks the matching tagged
+            animation (idle / run / attack / defend / cast / jump) for
+            the direction the character is facing.
+          </span>
+          <div className="flex flex-col gap-1">
+            <ControlRow keys={['W', 'A', 'S', 'D']} altKeys={['↑', '←', '↓', '→']} action="Move" />
+            <ControlRow keys={['Space']} action="Attack" />
+            <ControlRow keys={['Shift']} action="Defend" />
+            <ControlRow keys={['Q']} action="Cast" />
+            <ControlRow keys={['E']} action="Jump" />
+          </div>
+        </PanelSection>
       </div>
     </>
+  );
+}
+
+/**
+ * Single row of the Controls list — a row of key-cap pills on the left,
+ * action label on the right. `altKeys` shows a second cluster
+ * (e.g. arrow keys) separated by a slash so movement reads as
+ * "WASD / Arrows".
+ */
+function ControlRow({
+  keys, altKeys, action,
+}: {
+  keys: string[];
+  altKeys?: string[];
+  action: string;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{
+        padding: '4px 6px',
+        background: 'var(--pb-cream-2)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 7,
+      }}
+    >
+      <div className="flex items-center gap-1 flex-wrap" style={{ minWidth: 0, flexShrink: 0 }}>
+        {keys.map((k) => (
+          <KeyCap key={k} label={k} />
+        ))}
+        {altKeys && altKeys.length > 0 && (
+          <>
+            <span style={{ fontSize: 10, color: 'var(--pb-ink-muted)', fontWeight: 800 }}>/</span>
+            {altKeys.map((k) => (
+              <KeyCap key={`alt-${k}`} label={k} />
+            ))}
+          </>
+        )}
+      </div>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          textAlign: 'right',
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: 'var(--pb-ink)',
+        }}
+      >
+        {action}
+      </span>
+    </div>
+  );
+}
+
+function KeyCap({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: label.length > 1 ? undefined : 18,
+        padding: label.length > 1 ? '1px 6px' : '1px 4px',
+        height: 18,
+        background: 'var(--pb-paper)',
+        border: '1.5px solid var(--pb-line-2)',
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 800,
+        letterSpacing: 0.2,
+        color: 'var(--pb-ink)',
+        boxShadow: '0 1.5px 0 var(--pb-line-2)',
+        fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+      }}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -441,12 +782,12 @@ function DirectionAnimationsView({
 }) {
   const activeDir = dir;
   const addToast = useToastStore((s) => s.addToast);
-  const { bulkGenerating, inflightKeys, markInflight, clearInflight } = genLocks;
+  const { bulkPending, pendingKeys, registerJobs } = genLocks;
 
   async function regenerateRow(animationId: string) {
     const key = makeRegenKey(activeDir, animationId);
-    if (inflightKeys.has(key)) return;
-    if (bulkGenerating) return;
+    if (pendingKeys.has(key)) return;
+    if (bulkPending) return;
     const anim = (character.animations?.[activeDir] ?? []).find((a) => a.id === animationId);
     if (!anim) return;
     // Use the row's existing label as the action prompt — preset rows
@@ -457,49 +798,38 @@ function DirectionAnimationsView({
       setError('This row has no name yet — give it a name first.');
       return;
     }
-    markInflight(key);
     setError(null);
     try {
       const referenceDataUrl = await sliceOneDirectionCell(character, activeDir);
-      const resp = await fetch('/api/pixellab-character-animation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          references: { [activeDir]: referenceDataUrl },
-          action,
-          frameW: character.frameW,
-          frameH: character.frameH,
-        }),
+      const startResp = await startCharacterAnimationJobs({
+        references: { [activeDir]: referenceDataUrl },
+        action,
+        frameW: character.frameW,
+        frameH: character.frameH,
       });
-      const data = (await resp.json()) as {
-        ok: boolean;
-        error?: string;
-        results?: { dir: CharacterDir8; frames: string[] }[];
-        errors?: { dir: CharacterDir8; error: string }[];
+      if (!startResp.ok || !startResp.jobs?.length) {
+        const reason = startResp.errors?.find((e) => e.dir === activeDir)?.error;
+        throw new Error(reason || startResp.error || 'Start failed');
+      }
+      const intent: PendingJobIntent = {
+        kind: 'replace',
+        animationId,
+        label: action,
       };
-      if (!resp.ok || !data.ok) {
-        throw new Error(data.error || `Regenerate failed (HTTP ${resp.status})`);
-      }
-      const result = (data.results ?? []).find((r) => r.dir === activeDir);
-      if (!result || result.frames.length === 0) {
-        const reason = data.errors?.find((e) => e.dir === activeDir)?.error;
-        throw new Error(reason || `No frames returned for ${DIR_LABEL[activeDir]}`);
-      }
-      const sheet = await composeFramesIntoSheet(result.frames);
-      setCharacterAnimationSrc(character.id, activeDir, animationId, {
-        src: sheet.dataUrl,
-        cols: sheet.cols,
-        rows: sheet.rows,
-        frameW: sheet.frameW,
-        frameH: sheet.frameH,
-      });
-      addToast('success', `Regenerated "${action}" for ${DIR_LABEL[activeDir]}`);
+      const newPending: PendingJob[] = startResp.jobs.map((j) => ({
+        jobId: j.jobId,
+        characterId: character.id,
+        dir: j.dir,
+        frameW: character.frameW,
+        frameH: character.frameH,
+        intent,
+        startedAt: Date.now(),
+      }));
+      registerJobs(newPending);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       addToast('error', `Regenerate failed: ${msg}`);
-    } finally {
-      clearInflight(key);
     }
   }
   // Assembly-line UI: preview only shows the animation that was JUST
@@ -524,6 +854,7 @@ function DirectionAnimationsView({
   const removeCharacterAnimation = useTile((s) => s.removeCharacterAnimation);
   const renameCharacterAnimation = useTile((s) => s.renameCharacterAnimation);
   const setCharacterAnimationSrc = useTile((s) => s.setCharacterAnimationSrc);
+  const setCharacterAnimationFps = useTile((s) => s.setCharacterAnimationFps);
 
   const addInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
@@ -677,13 +1008,17 @@ function DirectionAnimationsView({
           animations={animations}
           direction={activeDir}
           excludeId={pendingNameId}
-          inflightKeys={inflightKeys}
-          bulkGenerating={bulkGenerating}
+          pendingKeys={pendingKeys}
+          bulkPending={bulkPending}
+          characterFps={character.fps}
           onRemove={(animId) => removeCharacterAnimation(character.id, activeDir, animId)}
           onRename={(animId, label) =>
             renameCharacterAnimation(character.id, activeDir, animId, label)
           }
           onRegenerate={regenerateRow}
+          onChangeFps={(animId, nextFps) =>
+            setCharacterAnimationFps(character.id, activeDir, animId, nextFps)
+          }
         />
       </div>
     </>
@@ -699,21 +1034,26 @@ function DirectionAnimationsView({
  * name as a click-to-rename input, and a delete button.
  */
 function SavedAnimationsList({
-  animations, direction, excludeId, inflightKeys, bulkGenerating,
-  onRemove, onRename, onRegenerate,
+  animations, direction, excludeId, pendingKeys, bulkPending, characterFps,
+  onRemove, onRename, onRegenerate, onChangeFps,
 }: {
   animations: CharacterAnimation[];
   direction: CharacterDir8;
   excludeId: string | null;
   /** Per-direction regens currently in flight; rows compute their own
    *  spinner state from this set + their (direction, id) pair. */
-  inflightKeys: ReadonlySet<string>;
+  pendingKeys: ReadonlySet<string>;
   /** Bulk Generate-tab job is running — locks all per-row regens until
    *  it finishes (otherwise we'd burn duplicate API calls). */
-  bulkGenerating: boolean;
+  bulkPending: boolean;
+  /** Character-wide fps shown as the placeholder/baseline when a row has
+   *  no override. */
+  characterFps: number;
   onRemove: (animationId: string) => void;
   onRename: (animationId: string, label: string) => void;
   onRegenerate: (animationId: string) => void;
+  /** Pass `undefined` to clear the per-row override (use character fps). */
+  onChangeFps: (animationId: string, fps: number | undefined) => void;
 }) {
   const visible = animations.filter((a) => a.id !== excludeId);
   if (visible.length === 0) return null;
@@ -723,18 +1063,20 @@ function SavedAnimationsList({
         SAVED ({visible.length})
       </span>
       {visible.map((anim) => {
-        const regenerating = inflightKeys.has(makeRegenKey(direction, anim.id));
+        const regenerating = pendingKeys.has(makeRegenKey(direction, anim.id));
         return (
           <SavedAnimationRow
             key={anim.id}
             animation={anim}
             regenerating={regenerating}
             // Other rows stay live while this one is regenerating —
-            // bulkGenerating is the only cross-row gate.
-            regenDisabled={bulkGenerating}
+            // a bulk Generate is the only cross-row gate.
+            regenDisabled={bulkPending}
+            characterFps={characterFps}
             onRemove={() => onRemove(anim.id)}
             onRename={(label) => onRename(anim.id, label)}
             onRegenerate={() => onRegenerate(anim.id)}
+            onChangeFps={(fps) => onChangeFps(anim.id, fps)}
           />
         );
       })}
@@ -743,8 +1085,8 @@ function SavedAnimationsList({
 }
 
 function SavedAnimationRow({
-  animation, regenerating, regenDisabled,
-  onRemove, onRename, onRegenerate,
+  animation, regenerating, regenDisabled, characterFps,
+  onRemove, onRename, onRegenerate, onChangeFps,
 }: {
   animation: CharacterAnimation;
   /** This row is the one currently being regenerated. */
@@ -753,12 +1095,19 @@ function SavedAnimationRow({
    *  locked. Sibling per-row regens do NOT set this — they only spin
    *  their own row. */
   regenDisabled: boolean;
+  /** Character-wide fps used as the baseline when this row has no
+   *  per-animation override. */
+  characterFps: number;
   onRemove: () => void;
   onRename: (label: string) => void;
   onRegenerate: () => void;
+  /** Pass `undefined` to clear the per-row override (revert to baseline). */
+  onChangeFps: (fps: number | undefined) => void;
 }) {
   const [draft, setDraft] = useState(animation.label);
   useEffect(() => { setDraft(animation.label); }, [animation.label]);
+  const overridden = animation.fps !== undefined;
+  const effectiveFps = animation.fps ?? characterFps;
 
   function commit() {
     const next = draft.trim();
@@ -771,7 +1120,7 @@ function SavedAnimationRow({
 
   return (
     <div
-      className="flex items-center gap-2"
+      className="flex flex-col gap-1.5"
       style={{
         background: 'var(--pb-cream-2)',
         border: '1.5px solid var(--pb-line-2)',
@@ -779,81 +1128,137 @@ function SavedAnimationRow({
         padding: '5px 6px',
       }}
     >
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          flexShrink: 0,
-          borderRadius: 5,
-          border: '1.5px solid var(--pb-line-2)',
-          background: 'rgba(0,0,0,0.05)',
-          backgroundImage: `url(${animation.src})`,
-          backgroundSize: `${animation.cols * 100}% ${animation.rows * 100}%`,
-          backgroundPosition: '0% 0%',
-          imageRendering: 'pixelated',
-        }}
-      />
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') {
-            setDraft(animation.label);
-            e.currentTarget.blur();
-          }
-        }}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: '4px 6px',
-          background: 'transparent',
-          border: 0,
-          fontSize: 12,
-          fontWeight: 700,
-          color: 'var(--pb-ink)',
-          outline: 'none',
-        }}
-      />
-      <button
-        type="button"
-        onClick={onRegenerate}
-        disabled={regenerating || regenDisabled}
-        title={regenerating ? 'Regenerating with AI…' : 'Regenerate this direction with AI'}
-        style={{
-          background: 'transparent',
-          border: 0,
-          padding: 4,
-          cursor: regenerating || regenDisabled ? 'not-allowed' : 'pointer',
-          color: regenerating ? 'var(--pb-butter-ink)' : 'var(--pb-ink)',
-          display: 'flex',
-          opacity: regenDisabled && !regenerating ? 0.4 : 1,
-        }}
-      >
-        {regenerating ? (
-          <Loader2 size={12} strokeWidth={2.4} className="animate-spin" />
-        ) : (
-          <Wand2 size={12} strokeWidth={2.4} />
+      <div className="flex items-center gap-2">
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            flexShrink: 0,
+            borderRadius: 5,
+            border: '1.5px solid var(--pb-line-2)',
+            background: 'rgba(0,0,0,0.05)',
+            backgroundImage: `url(${animation.src})`,
+            backgroundSize: `${animation.cols * 100}% ${animation.rows * 100}%`,
+            backgroundPosition: '0% 0%',
+            imageRendering: 'pixelated',
+          }}
+        />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') {
+              setDraft(animation.label);
+              e.currentTarget.blur();
+            }
+          }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: '4px 6px',
+            background: 'transparent',
+            border: 0,
+            fontSize: 12,
+            fontWeight: 700,
+            color: 'var(--pb-ink)',
+            outline: 'none',
+          }}
+        />
+        <button
+          type="button"
+          onClick={onRegenerate}
+          disabled={regenerating || regenDisabled}
+          title={regenerating ? 'Regenerating with AI…' : 'Regenerate this direction with AI'}
+          style={{
+            background: 'transparent',
+            border: 0,
+            padding: 4,
+            cursor: regenerating || regenDisabled ? 'not-allowed' : 'pointer',
+            color: regenerating ? 'var(--pb-butter-ink)' : 'var(--pb-ink)',
+            display: 'flex',
+            opacity: regenDisabled && !regenerating ? 0.4 : 1,
+          }}
+        >
+          {regenerating ? (
+            <Loader2 size={12} strokeWidth={2.4} className="animate-spin" />
+          ) : (
+            <Wand2 size={12} strokeWidth={2.4} />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={regenerating || regenDisabled}
+          title="Delete animation"
+          style={{
+            background: 'transparent',
+            border: 0,
+            padding: 4,
+            cursor: regenerating || regenDisabled ? 'not-allowed' : 'pointer',
+            color: 'var(--pb-coral-ink)',
+            display: 'flex',
+            opacity: regenerating || regenDisabled ? 0.4 : 1,
+          }}
+        >
+          <Trash2 size={12} strokeWidth={2.4} />
+        </button>
+      </div>
+      <div className="flex items-center gap-2" style={{ paddingLeft: 36 }}>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 800,
+            color: 'var(--pb-ink-muted)',
+            letterSpacing: 0.4,
+            flexShrink: 0,
+          }}
+        >
+          SPEED
+        </span>
+        <input
+          type="range"
+          min={1}
+          max={60}
+          step={1}
+          value={effectiveFps}
+          onChange={(e) => onChangeFps(Number(e.target.value))}
+          style={{ flex: 1, minWidth: 0, accentColor: 'var(--pb-ink)' }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: overridden ? 'var(--pb-ink)' : 'var(--pb-ink-muted)',
+            minWidth: 38,
+            textAlign: 'right',
+          }}
+          title={overridden ? 'Per-animation override' : `Inherits character fps (${characterFps})`}
+        >
+          {effectiveFps} fps
+        </span>
+        {overridden && (
+          <button
+            type="button"
+            onClick={() => onChangeFps(undefined)}
+            title="Reset to character fps"
+            style={{
+              background: 'transparent',
+              border: 0,
+              padding: 2,
+              cursor: 'pointer',
+              fontSize: 10,
+              fontWeight: 800,
+              color: 'var(--pb-ink-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: 0.4,
+            }}
+          >
+            Reset
+          </button>
         )}
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={regenerating || regenDisabled}
-        title="Delete animation"
-        style={{
-          background: 'transparent',
-          border: 0,
-          padding: 4,
-          cursor: regenerating || regenDisabled ? 'not-allowed' : 'pointer',
-          color: 'var(--pb-coral-ink)',
-          display: 'flex',
-          opacity: regenerating || regenDisabled ? 0.4 : 1,
-        }}
-      >
-        <Trash2 size={12} strokeWidth={2.4} />
-      </button>
+      </div>
     </div>
   );
 }
@@ -1707,9 +2112,8 @@ function AnimationsLibraryTab({
    *  in the panel. */
   genLocks: GenLocks;
 }) {
-  const setCharacterAnimationSrc = useTile((s) => s.setCharacterAnimationSrc);
   const addToast = useToastStore((s) => s.addToast);
-  const { bulkGenerating, inflightKeys, markInflight, clearInflight } = genLocks;
+  const { bulkPending, pendingKeys, registerJobs } = genLocks;
   const groups = useMemo(() => groupAnimations(character), [character]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // Reconcile selection across re-renders: keep the current pick when
@@ -1763,12 +2167,12 @@ function AnimationsLibraryTab({
   const previewAnim = selectedGroup?.byDir[orbitDir] ?? null;
 
   const previewRegenKey = previewAnim ? makeRegenKey(orbitDir, previewAnim.id) : null;
-  const previewRegenerating = previewRegenKey !== null && inflightKeys.has(previewRegenKey);
+  const previewRegenerating = previewRegenKey !== null && pendingKeys.has(previewRegenKey);
 
   async function regenerateCurrent() {
     if (!previewAnim || !selectedGroup || !previewRegenKey) return;
-    if (inflightKeys.has(previewRegenKey)) return;
-    if (bulkGenerating) return;
+    if (pendingKeys.has(previewRegenKey)) return;
+    if (bulkPending) return;
     const action = (previewAnim.label || selectedGroup.label || '').trim();
     if (!action) {
       addToast('error', 'This animation has no name to use as the prompt.');
@@ -1781,47 +2185,36 @@ function AnimationsLibraryTab({
     const targetDir = orbitDir;
     const targetAnimId = previewAnim.id;
     const targetCharId = character.id;
-    markInflight(previewRegenKey);
     try {
       const referenceDataUrl = await sliceOneDirectionCell(character, targetDir);
-      const resp = await fetch('/api/pixellab-character-animation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          references: { [targetDir]: referenceDataUrl },
-          action,
-          frameW: character.frameW,
-          frameH: character.frameH,
-        }),
+      const startResp = await startCharacterAnimationJobs({
+        references: { [targetDir]: referenceDataUrl },
+        action,
+        frameW: character.frameW,
+        frameH: character.frameH,
       });
-      const data = (await resp.json()) as {
-        ok: boolean;
-        error?: string;
-        results?: { dir: CharacterDir8; frames: string[] }[];
-        errors?: { dir: CharacterDir8; error: string }[];
+      if (!startResp.ok || !startResp.jobs?.length) {
+        const reason = startResp.errors?.find((e) => e.dir === targetDir)?.error;
+        throw new Error(reason || startResp.error || 'Start failed');
+      }
+      const intent: PendingJobIntent = {
+        kind: 'replace',
+        animationId: targetAnimId,
+        label: action,
       };
-      if (!resp.ok || !data.ok) {
-        throw new Error(data.error || `Regenerate failed (HTTP ${resp.status})`);
-      }
-      const result = (data.results ?? []).find((r) => r.dir === targetDir);
-      if (!result || result.frames.length === 0) {
-        const reason = data.errors?.find((e) => e.dir === targetDir)?.error;
-        throw new Error(reason || `No frames returned for ${DIR_LABEL[targetDir]}`);
-      }
-      const sheet = await composeFramesIntoSheet(result.frames);
-      setCharacterAnimationSrc(targetCharId, targetDir, targetAnimId, {
-        src: sheet.dataUrl,
-        cols: sheet.cols,
-        rows: sheet.rows,
-        frameW: sheet.frameW,
-        frameH: sheet.frameH,
-      });
-      addToast('success', `Regenerated "${action}" for ${DIR_LABEL[targetDir]}`);
+      const newPending: PendingJob[] = startResp.jobs.map((j) => ({
+        jobId: j.jobId,
+        characterId: targetCharId,
+        dir: j.dir,
+        frameW: character.frameW,
+        frameH: character.frameH,
+        intent,
+        startedAt: Date.now(),
+      }));
+      registerJobs(newPending);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       addToast('error', `Regenerate failed: ${msg}`);
-    } finally {
-      clearInflight(previewRegenKey);
     }
   }
 
@@ -1924,7 +2317,7 @@ function AnimationsLibraryTab({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); void regenerateCurrent(); }}
-          disabled={!previewAnim || bulkGenerating || previewRegenerating}
+          disabled={!previewAnim || bulkPending || previewRegenerating}
           title={
             !previewAnim
               ? 'Pick an animation that has this direction filled to regenerate it'
@@ -1941,12 +2334,12 @@ function AnimationsLibraryTab({
             background: 'var(--pb-paper)',
             border: '1.5px solid var(--pb-line-2)',
             borderRadius: 8,
-            cursor: !previewAnim || bulkGenerating || previewRegenerating ? 'not-allowed' : 'pointer',
+            cursor: !previewAnim || bulkPending || previewRegenerating ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: previewRegenerating ? 'var(--pb-butter-ink)' : 'var(--pb-ink)',
-            opacity: !previewAnim || bulkGenerating ? 0.55 : 1,
+            opacity: !previewAnim || bulkPending ? 0.55 : 1,
             boxShadow: '0 2px 0 var(--pb-line-2)',
           }}
         >
@@ -2073,7 +2466,7 @@ function GenerateAnimationsTab({
   genLocks: GenLocks;
   registerSubmit: (fn: () => void) => void;
 }) {
-  const { bulkGenerating, setBulkGenerating } = genLocks;
+  const { bulkPending, starting, setStarting, registerJobs } = genLocks;
   const [prompt, setPrompt] = useState('');
   // When the user clicks a preset chip, we lock onto that canonical
   // action id and the saved animations get tagged with it. Editing the
@@ -2082,46 +2475,33 @@ function GenerateAnimationsTab({
   const [selectedAction, setSelectedAction] = useState<CharacterActionId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
-  const addCharacterAnimation = useTile((s) => s.addCharacterAnimation);
   const addToast = useToastStore((s) => s.addToast);
 
-  // Slug-friendly action name derived from the prompt — used as the
-  // saved animation's label so users can find it in the per-direction
-  // SAVED list later.
+  // Fire-and-forget submit: kick off the 8 PixelLab jobs and exit.
+  // The polling hook in the panel watches localStorage and applies the
+  // results when each job finishes — including across page reloads.
   const submit = useCallback(async () => {
     const action = prompt.trim();
     if (!action) {
       setError('Pick a preset above or type a prompt (e.g. "running", "casting").');
       return;
     }
-    if (bulkGenerating) return;
+    if (bulkPending) return;
     setError(null);
     setProgress('Slicing 3×3 reference frames…');
-    setBulkGenerating(true);
+    setStarting(true);
     try {
       const references = await sliceCharacterCells(character);
-      setProgress('Calling PixelLab for 8 directions (this can take a minute)…');
-      const resp = await fetch('/api/pixellab-character-animation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          references,
-          action,
-          frameW: character.frameW,
-          frameH: character.frameH,
-        }),
+      setProgress('Starting PixelLab jobs for 8 directions…');
+      const startResp = await startCharacterAnimationJobs({
+        references,
+        action,
+        frameW: character.frameW,
+        frameH: character.frameH,
       });
-      const data = (await resp.json()) as {
-        ok: boolean;
-        error?: string;
-        results?: { dir: CharacterDir8; frames: string[] }[];
-        errors?: { dir: CharacterDir8; error: string }[];
-      };
-      if (!resp.ok || !data.ok) {
-        throw new Error(data.error || `Generation failed (HTTP ${resp.status})`);
+      if (!startResp.ok || !startResp.jobs?.length) {
+        throw new Error(startResp.error || 'Start failed (no jobs returned)');
       }
-      setProgress('Composing 4×4 sheets and saving…');
-      const results = data.results ?? [];
       // Saved animations carry the canonical actionId when the user
       // picked a preset; the label is the preset's display name so the
       // per-direction SAVED list still reads naturally. Free-form
@@ -2129,27 +2509,29 @@ function GenerateAnimationsTab({
       const savedLabel = selectedAction
         ? CHARACTER_ACTION_PRESETS.find((p) => p.id === selectedAction)?.label ?? action
         : action;
-      for (const { dir, frames } of results) {
-        if (frames.length === 0) continue;
-        const sheet = await composeFramesIntoSheet(frames);
-        addCharacterAnimation(character.id, dir, {
-          label: savedLabel,
-          ...(selectedAction ? { actionId: selectedAction } : {}),
-          src: sheet.dataUrl,
-          cols: sheet.cols,
-          rows: sheet.rows,
-          frameW: sheet.frameW,
-          frameH: sheet.frameH,
-        });
-      }
-      const errs = data.errors ?? [];
+      const intent: PendingJobIntent = {
+        kind: 'create',
+        label: savedLabel,
+        ...(selectedAction ? { actionId: selectedAction } : {}),
+      };
+      const newPending: PendingJob[] = startResp.jobs.map((j) => ({
+        jobId: j.jobId,
+        characterId: character.id,
+        dir: j.dir,
+        frameW: character.frameW,
+        frameH: character.frameH,
+        intent,
+        startedAt: Date.now(),
+      }));
+      registerJobs(newPending);
+      const errs = startResp.errors ?? [];
       if (errs.length > 0) {
         addToast(
           'warning',
-          `Generated ${results.length}/8 directions. Failed: ${errs.map((e) => e.dir).join(', ')}`,
+          `Started ${startResp.jobs.length}/8 directions. Failed to start: ${errs.map((e) => e.dir).join(', ')}`,
         );
       } else {
-        addToast('success', `Generated "${savedLabel}" across all 8 directions`);
+        addToast('info', `Generating "${savedLabel}" — safe to refresh.`);
       }
       setPrompt('');
       setSelectedAction(null);
@@ -2158,13 +2540,13 @@ function GenerateAnimationsTab({
       setError(msg);
       addToast('error', `Generation failed: ${msg}`);
     } finally {
-      setBulkGenerating(false);
+      setStarting(false);
       setProgress(null);
     }
-  }, [prompt, selectedAction, bulkGenerating, character, addCharacterAnimation, addToast, setBulkGenerating]);
+  }, [prompt, selectedAction, bulkPending, character, addToast, setStarting, registerJobs]);
 
   // Re-register on every render so the parent's ref always points at
-  // the latest closure (and therefore the latest `prompt`/`bulkGenerating`).
+  // the latest closure (and therefore the latest `prompt`/`bulkPending`).
   useEffect(() => {
     registerSubmit(submit);
   }, [submit, registerSubmit]);
@@ -2184,7 +2566,7 @@ function GenerateAnimationsTab({
   }
 
   function pickPreset(actionId: CharacterActionId) {
-    if (bulkGenerating) return;
+    if (bulkPending) return;
     const preset = CHARACTER_ACTION_PRESETS.find((p) => p.id === actionId);
     if (!preset) return;
     setSelectedAction(actionId);
@@ -2213,7 +2595,7 @@ function GenerateAnimationsTab({
                 key={preset.id}
                 type="button"
                 onClick={() => pickPreset(preset.id)}
-                disabled={bulkGenerating}
+                disabled={bulkPending}
                 title={`${preset.hint}${covered ? ' (already generated)' : ''}`}
                 style={{
                   position: 'relative',
@@ -2228,8 +2610,8 @@ function GenerateAnimationsTab({
                   fontWeight: 800,
                   letterSpacing: 0.2,
                   color: 'var(--pb-ink)',
-                  cursor: bulkGenerating ? 'not-allowed' : 'pointer',
-                  opacity: bulkGenerating ? 0.55 : 1,
+                  cursor: bulkPending ? 'not-allowed' : 'pointer',
+                  opacity: bulkPending ? 0.55 : 1,
                   boxShadow: active ? '0 2px 0 var(--pb-line-2)' : 'none',
                 }}
               >
@@ -2257,7 +2639,7 @@ function GenerateAnimationsTab({
           value={prompt}
           onChange={onPromptChange}
           placeholder="e.g. running, attacking, casting a spell"
-          disabled={bulkGenerating}
+          disabled={bulkPending}
         />
       </PanelSection>
 
@@ -2316,18 +2698,9 @@ function GenerateAnimationsTab({
 
 // ─────────────────────────────────────────────────────────────────────
 // Image helpers — slice the 3×3 character into per-direction reference
-// data URLs and re-pack the AI's frames into a single 4×4 sheet.
+// data URLs. (composeFramesIntoSheet + loadImage live in
+// `lib/character-anim-jobs.ts` so the polling hook can reuse them.)
 // ─────────────────────────────────────────────────────────────────────
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = (err) => reject(err instanceof Error ? err : new Error('Image load failed'));
-    img.src = src;
-  });
-}
 
 /**
  * Cut a single direction's reference cell out of the 3×3 sheet. Used by
@@ -2381,40 +2754,6 @@ async function sliceCharacterCells(
     out[dir] = canvas.toDataURL('image/png');
   }
   return out;
-}
-
-/**
- * Pack up to 16 PNG frames into a single 4×4 sheet at the frames'
- * native resolution. Falls back to padding the right/bottom with the
- * first frame if PixelLab returns fewer than 16 frames so the runtime
- * never blows up on a stray empty cell.
- */
-async function composeFramesIntoSheet(
-  frames: string[],
-): Promise<{ dataUrl: string; cols: number; rows: number; frameW: number; frameH: number }> {
-  if (frames.length === 0) throw new Error('No frames to compose');
-  const imgs = await Promise.all(frames.map(loadImage));
-  const fw = imgs[0].naturalWidth;
-  const fh = imgs[0].naturalHeight;
-  const cols = 4;
-  const rows = 4;
-  const total = cols * rows;
-  const canvas = document.createElement('canvas');
-  canvas.width = cols * fw;
-  canvas.height = rows * fh;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to get 2D canvas context');
-  ctx.imageSmoothingEnabled = false;
-  for (let i = 0; i < total; i++) {
-    const img = imgs[i] ?? imgs[imgs.length - 1];
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, col * fw, row * fh, fw, fh);
-  }
-  return {
-    dataUrl: canvas.toDataURL('image/png'),
-    cols, rows, frameW: fw, frameH: fh,
-  };
 }
 
 function countDirsWithAnimations(character: TileCharacter): number {

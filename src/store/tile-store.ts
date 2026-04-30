@@ -344,6 +344,9 @@ export interface CharacterAnimation {
   rows: number;
   frameW: number;
   frameH: number;
+  /** Per-animation playback speed override (frames per second). When
+   *  undefined, the runtime falls back to the character's `fps`. */
+  fps?: number;
   addedAt: number;
   sortIndex: number;
 }
@@ -459,6 +462,9 @@ export interface TileStore {
     tileId: string,
     animation: { frames: string[]; fps?: number } | null,
   ) => void;
+  /** Live-update the playback speed of an existing tile animation. No-op
+   *  when the tile has no animation attached. Clamped to 1–60 fps. */
+  setTileAnimationFps: (tileId: string, fps: number) => void;
 
   // ── Map state ───────────────────────────────────────────────────
   /** Pixel size of one grid cell in the editor (independent of tile native
@@ -665,6 +671,15 @@ export interface TileStore {
     direction: CharacterDir8,
     animationId: string,
     patch: { src: string; cols?: number; rows?: number; frameW?: number; frameH?: number },
+  ) => void;
+  /** Override one saved animation's playback speed. Pass `undefined` to
+   *  clear the override and fall back to the character's global fps.
+   *  Clamped to 1–60 fps when set. */
+  setCharacterAnimationFps: (
+    id: string,
+    direction: CharacterDir8,
+    animationId: string,
+    fps: number | undefined,
   ) => void;
   /** Drag-reorder action: pass the full ordered list of animation ids
    *  for that direction. Animations not in the list keep their existing
@@ -1310,6 +1325,19 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     };
   }),
 
+  setTileAnimationFps: (tileId, fps) => set((s) => {
+    const t = s.tiles[tileId];
+    if (!t || !t.animationFrames || t.animationFrames.length === 0) return {};
+    const clamped = Math.max(1, Math.min(60, Math.round(fps)));
+    if (t.animationFps === clamped) return {};
+    return {
+      tiles: {
+        ...s.tiles,
+        [tileId]: { ...t, animationFps: clamped },
+      },
+    };
+  }),
+
   tileSize: 32,
   setTileSize: (size) => set({ tileSize: Math.max(4, Math.min(256, Math.round(size))) }),
 
@@ -1903,6 +1931,34 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       frameW: patch.frameW ?? cur.frameW,
       frameH: patch.frameH ?? cur.frameH,
     };
+    return {
+      tileCharacters: {
+        ...s.tileCharacters,
+        [id]: {
+          ...c,
+          animations: { ...(c.animations ?? {}), [direction]: next },
+        },
+      },
+    };
+  }),
+  setCharacterAnimationFps: (id, direction, animationId, fps) => set((s) => {
+    const c = s.tileCharacters[id];
+    if (!c) return {};
+    const list = c.animations?.[direction] ?? [];
+    const idx = list.findIndex((a) => a.id === animationId);
+    if (idx < 0) return {};
+    const cur = list[idx];
+    const nextFps = fps === undefined
+      ? undefined
+      : Math.max(1, Math.min(60, Math.round(fps)));
+    if (cur.fps === nextFps) return {};
+    const next = list.slice();
+    if (nextFps === undefined) {
+      const { fps: _drop, ...rest } = cur;
+      next[idx] = rest as CharacterAnimation;
+    } else {
+      next[idx] = { ...cur, fps: nextFps };
+    }
     return {
       tileCharacters: {
         ...s.tileCharacters,

@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Brush, Globe2, Waves, Film, Trash2 } from 'lucide-react';
+import { Brush, Globe2, Film, Trash2 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
@@ -18,7 +18,6 @@ import { PURE_UPPER_INDEX, PURE_LOWER_INDEX } from '@/lib/wang-tiles';
  *   - identity (label edit on every owning sheet at once)
  *   - brush picker (set this texture as the active paint brush)
  *   - map-base toggle (single-select across all textures)
- *   - water-effect toggle (multi-select via wavyTextureIds)
  *   - "used in" list — every sheet that contributes this texture
  */
 export function TileTexturePropertiesPanel({
@@ -31,8 +30,6 @@ export function TileTexturePropertiesPanel({
   const setTool = useTile((s) => s.setTool);
   const baseTextureId = useTile((s) => s.baseTextureId);
   const setBaseTexture = useTile((s) => s.setBaseTexture);
-  const wavyTextureIds = useTile((s) => s.wavyTextureIds);
-  const setWavyTexture = useTile((s) => s.setWavyTexture);
   const setTilesetLabel = useTile((s) => s.setTilesetLabel);
 
   // Owners — every (tileset, side) pair that contributes the selected
@@ -102,7 +99,6 @@ export function TileTexturePropertiesPanel({
   if (!selectedTextureId || owners.length === 0) return null;
 
   const isBase = baseTextureId === selectedTextureId;
-  const isWavy = wavyTextureIds.includes(selectedTextureId);
 
   function commitLabel() {
     const next = labelDraft.trim();
@@ -210,14 +206,6 @@ export function TileTexturePropertiesPanel({
           />
         </PanelSection>
 
-        <PanelSection title="Water effect" collapsible defaultOpen>
-          <PanelToggle
-            label="Animate as water"
-            checked={isWavy}
-            onChange={(v) => setWavyTexture(selectedTextureId, v)}
-          />
-        </PanelSection>
-
         <TileAnimationSection owners={owners} />
 
         <PanelSection title={`Used in (${owners.length})`} collapsible defaultOpen>
@@ -319,13 +307,14 @@ function TileAnimationSection({
 }) {
   const tiles = useTile((s) => s.tiles);
   const setTileAnimation = useTile((s) => s.setTileAnimation);
+  const setTileAnimationFps = useTile((s) => s.setTileAnimationFps);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Sheet layout. Most sprite sheets are square-ish grids (4×4 = 16,
   // 5×5 = 25) — defaulting to 4×4 covers the common case. Users with
   // a single horizontal strip just set rows=1 and cols=N.
   const [cols, setCols] = useState(4);
   const [rows, setRows] = useState(4);
-  const [fps, setFps] = useState(8);
+  const [pendingFps, setPendingFps] = useState(8);
   const [busy, setBusy] = useState(false);
   const frameCount = cols * rows;
   // Which slot in the wang grid the upload targets. Defaults to the
@@ -385,7 +374,7 @@ function TileAnimationSection({
         ctx.drawImage(img, cx * fw, cy * fh, fw, fh, 0, 0, fw, fh);
         frames.push(canvas.toDataURL('image/png'));
       }
-      setTileAnimation(tile!.id, { frames, fps });
+      setTileAnimation(tile!.id, { frames, fps: pendingFps });
     } finally {
       setBusy(false);
     }
@@ -430,9 +419,15 @@ function TileAnimationSection({
       </div>
       <PanelSlider
         label="Frames per second"
-        value={fps}
-        onChange={(v) => setFps(v)}
-        min={1} max={30} step={1} precision={0}
+        value={animated ? (tile.animationFps ?? 8) : pendingFps}
+        onChange={(v) => {
+          if (animated) {
+            setTileAnimationFps(tile.id, v);
+          } else {
+            setPendingFps(v);
+          }
+        }}
+        min={1} max={60} step={1} precision={0}
         suffix=" fps"
       />
       <div className="flex flex-col gap-2">

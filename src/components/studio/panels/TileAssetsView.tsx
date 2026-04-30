@@ -2494,11 +2494,13 @@ function AssetsSubTabs() {
  */
 function GroupsSection() {
   const tileGroups = useTile((s) => s.tileGroups);
+  const objectAssets = useTile((s) => s.objectAssets);
   const addTileGroup = useTile((s) => s.addTileGroup);
   const renameTileGroup = useTile((s) => s.renameTileGroup);
   const removeTileGroup = useTile((s) => s.removeTileGroup);
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const sorted: TileGroup[] = Object.values(tileGroups).sort(
     (a, b) => a.sortIndex - b.sortIndex,
@@ -2543,10 +2545,11 @@ function GroupsSection() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 8px 14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px 4px 14px' }}>
         {visible.length === 0 && (
           <div
             style={{
+              margin: '0 4px',
               padding: '14px 12px',
               fontSize: 11,
               color: 'var(--pb-ink-muted)',
@@ -2562,107 +2565,158 @@ function GroupsSection() {
               : 'No groups match your search.'}
           </div>
         )}
-        {visible.map((g) => (
-          <div
-            key={g.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 10px',
-              borderRadius: 10,
-              background: 'var(--pb-paper)',
-              border: '1.5px solid var(--pb-line-2)',
-            }}
-          >
-            <Layers size={14} strokeWidth={2.4} style={{ color: 'var(--pb-ink-soft)' }} />
-            {renamingId === g.id ? (
-              <input
-                autoFocus
-                defaultValue={g.name}
-                onBlur={(e) => {
-                  renameTileGroup(g.id, e.currentTarget.value);
-                  setRenamingId(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                  if (e.key === 'Escape') setRenamingId(null);
-                }}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  color: 'var(--pb-ink)',
-                  padding: 0,
-                }}
-              />
-            ) : (
-              <span
-                onDoubleClick={() => setRenamingId(g.id)}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'var(--pb-ink)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  cursor: 'text',
-                }}
-                title="Double-click to rename"
-              >
-                {g.name}
-              </span>
-            )}
-            <span
+        {visible.map((g) => {
+          const hovered = hoveredId === g.id;
+          const editing = renamingId === g.id;
+          const showActions = hovered || editing;
+          const previewAssets = g.assetIds
+            .map((aid) => objectAssets[aid])
+            .filter((a): a is ObjectAsset => !!a)
+            .slice(0, 3);
+
+          return (
+            <div
+              key={g.id}
+              onMouseEnter={() => setHoveredId(g.id)}
+              onMouseLeave={() => setHoveredId(null)}
               style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: 'var(--pb-ink-muted)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {g.assetIds.length}
-            </span>
-            <button
-              onClick={() => setRenamingId(g.id)}
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 22,
-                height: 22,
+                background: hovered && !editing ? 'rgba(0,0,0,0.04)' : 'transparent',
                 borderRadius: 6,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--pb-ink-soft)',
                 cursor: 'pointer',
+                overflow: 'hidden',
+                position: 'relative',
+                flexShrink: 0,
               }}
-              title="Rename"
             >
-              <Pencil size={12} strokeWidth={2.4} />
-            </button>
-            <button
-              onClick={() => removeTileGroup(g.id)}
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 6,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--pb-coral-ink)',
-                cursor: 'pointer',
-              }}
-              title="Delete group"
-            >
-              <Trash2 size={12} strokeWidth={2.4} />
-            </button>
-          </div>
-        ))}
+              <div className="flex items-stretch gap-2" style={{ padding: 0, minHeight: 88 }}>
+                <div
+                  style={{
+                    width: 88,
+                    height: 88,
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.03)',
+                    borderRadius: 4,
+                    position: 'relative',
+                  }}
+                >
+                  {previewAssets.length === 0 ? (
+                    <Layers size={28} strokeWidth={2.2} style={{ color: 'var(--pb-ink-muted)' }} />
+                  ) : (
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: '100%',
+                        height: '100%',
+                      }}
+                    >
+                      {previewAssets.map((a, i) => {
+                        const head = a.styles[0];
+                        if (!head) return null;
+                        const offset = i * 6;
+                        const size = 60;
+                        return (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            key={a.id}
+                            src={head.dataUrl}
+                            alt={a.name}
+                            draggable={false}
+                            style={{
+                              position: 'absolute',
+                              left: 14 + offset - i * 4,
+                              top: 14 + offset,
+                              width: size,
+                              height: size,
+                              objectFit: 'contain',
+                              imageRendering: 'pixelated',
+                              filter: i === previewAssets.length - 1
+                                ? 'none'
+                                : 'drop-shadow(0 1px 0 rgba(0,0,0,0.18))',
+                              zIndex: i,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6, paddingRight: 6 }}>
+                  {editing ? (
+                    <input
+                      autoFocus
+                      defaultValue={g.name}
+                      onClick={(e) => e.stopPropagation()}
+                      onBlur={(e) => {
+                        renameTileGroup(g.id, e.currentTarget.value);
+                        setRenamingId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                        if (e.key === 'Escape') setRenamingId(null);
+                      }}
+                      style={{
+                        width: '100%',
+                        background: 'var(--pb-paper)',
+                        border: '1.5px solid var(--pb-line-2)',
+                        borderRadius: 5,
+                        padding: '3px 6px',
+                        fontSize: 12,
+                        fontWeight: 800,
+                        color: 'var(--pb-ink)',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      onDoubleClick={(e) => { e.stopPropagation(); setRenamingId(g.id); }}
+                      title={g.name}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                        color: 'var(--pb-ink)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {g.name}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      color: 'var(--pb-ink-muted)',
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    {g.assetIds.length === 0
+                      ? 'Empty group'
+                      : `${g.assetIds.length} ${g.assetIds.length === 1 ? 'object' : 'objects'}`}
+                  </div>
+                </div>
+              </div>
+              {showActions && !editing && (
+                <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
+                  <CardActionButton
+                    variant="edit"
+                    title="Rename group"
+                    onClick={() => setRenamingId(g.id)}
+                  />
+                  <CardActionButton
+                    variant="delete"
+                    title="Delete group"
+                    onClick={() => removeTileGroup(g.id)}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

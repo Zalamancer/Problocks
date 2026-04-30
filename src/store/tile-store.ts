@@ -589,6 +589,17 @@ export interface TileStore {
   /** Move an asset into a class (or to root with classId=null). */
   setAssetClass: (assetId: string, classId: string | null) => void;
 
+  // ── Per-asset linked items ──────────────────────────────────────
+  /** Map of assetId → list of asset ids linked as "fruits" of this asset.
+   *  Surfaced today only for Trees-group members in the right Properties
+   *  panel; the data structure is intentionally generic so future
+   *  link-types (children, accessories, etc.) can reuse the pattern. */
+  assetFruitIds: Record<string, string[]>;
+  /** Replace the full fruits list for an asset. Empty array clears it. */
+  setAssetFruits: (assetId: string, fruitIds: string[]) => void;
+  /** Toggle a single fruit id on/off for an asset (idempotent). */
+  toggleAssetFruit: (assetId: string, fruitAssetId: string) => void;
+
   // ── Object groups (Groups sub-tab in 2D Tile assets) ─────────────
   /** Reusable bundles of object assets (a "Forest clump", "House kit",
    *  etc.). Local-only state, persisted as a tiny index. Image bytes
@@ -1753,6 +1764,40 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     return { assetClassIds: next };
   }),
 
+  // ── Per-asset fruit links (Trees → Fruits picker in right panel) ──
+  assetFruitIds: {},
+  setAssetFruits: (assetId, fruitIds) => set((s) => {
+    if (!s.objectAssets[assetId]) return {};
+    // Deduplicate, drop self-references and ids that don't resolve to a
+    // current asset so stale links can't accumulate after a delete.
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const id of fruitIds) {
+      if (id === assetId) continue;
+      if (!s.objectAssets[id]) continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      cleaned.push(id);
+    }
+    const next = { ...s.assetFruitIds };
+    if (cleaned.length === 0) delete next[assetId];
+    else next[assetId] = cleaned;
+    return { assetFruitIds: next };
+  }),
+  toggleAssetFruit: (assetId, fruitAssetId) => set((s) => {
+    if (!s.objectAssets[assetId] || !s.objectAssets[fruitAssetId]) return {};
+    if (assetId === fruitAssetId) return {};
+    const current = s.assetFruitIds[assetId] ?? [];
+    const has = current.includes(fruitAssetId);
+    const next = has
+      ? current.filter((id) => id !== fruitAssetId)
+      : [...current, fruitAssetId];
+    const map = { ...s.assetFruitIds };
+    if (next.length === 0) delete map[assetId];
+    else map[assetId] = next;
+    return { assetFruitIds: map };
+  }),
+
   // ── Object groups ───────────────────────────────────────────────
   tileGroups: {},
   addTileGroup: ({ name } = {}) => {
@@ -2490,6 +2535,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // per class + assetId→classId map). No image bytes here.
     objectClasses: s.objectClasses,
     assetClassIds: s.assetClassIds,
+    // Per-asset fruit links — tiny adjacency map; no image bytes.
+    assetFruitIds: s.assetFruitIds,
     // Object groups: tiny local-only index (id/name/sortIndex + assetIds[]).
     // No image bytes — members reference objectAssets for thumbnails.
     tileGroups: s.tileGroups,
@@ -2606,6 +2653,18 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // (pre-v9) saves load with everything under "Uncategorised".
     if (!state.objectClasses) state.objectClasses = {};
     if (!state.assetClassIds) state.assetClassIds = {};
+    if (!state.assetFruitIds) state.assetFruitIds = {};
+    // Defensive: drop fruit ids that no longer resolve to a current asset
+    // so a removed asset doesn't keep a dead reference floating around.
+    for (const [aid, fruits] of Object.entries(state.assetFruitIds)) {
+      if (!state.objectAssets[aid]) {
+        delete state.assetFruitIds[aid];
+        continue;
+      }
+      const cleaned = fruits.filter((id) => id !== aid && !!state.objectAssets[id]);
+      if (cleaned.length === 0) delete state.assetFruitIds[aid];
+      else state.assetFruitIds[aid] = cleaned;
+    }
     // Defensive: drop any assetClassIds entry whose class no longer exists
     // (a class deleted in another tab, an import drift, etc.) so the
     // recursive renderer doesn't see a phantom class id.

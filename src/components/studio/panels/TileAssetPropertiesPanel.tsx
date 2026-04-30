@@ -8,7 +8,7 @@ import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
-import { useTile, type ObjectAsset, type ObjectStyle, type ObjectClass } from '@/store/tile-store';
+import { useTile, type ObjectAsset, type ObjectStyle, type ObjectClass, type TileGroup } from '@/store/tile-store';
 import { fileToImage, imageToDataUrl, loadImage, sliceImage } from '@/lib/tile-slicer';
 import {
   saveTileObject, deleteTileObject, updateTileObject,
@@ -166,10 +166,31 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
   const assetClassIds = useTile((s) => s.assetClassIds);
   const setAssetClass = useTile((s) => s.setAssetClass);
   const addObjectClass = useTile((s) => s.addObjectClass);
+  // Fruits tab — only meaningful when the selected asset is a member of
+  // a group named "Trees" (case-insensitive). The picker writes into
+  // assetFruitIds[asset.id] and reads all other assets as candidates.
+  const objectAssets = useTile((s) => s.objectAssets);
+  const tileGroups = useTile((s) => s.tileGroups);
+  const assetFruitIds = useTile((s) => s.assetFruitIds);
+  const toggleAssetFruit = useTile((s) => s.toggleAssetFruit);
 
   const [sliceOpen, setSliceOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'properties' | 'fruits'>('properties');
   const styleInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** True when the selected asset belongs to any group whose name is
+   *  exactly "trees" (case-insensitive). Drives whether the Fruits tab
+   *  shows up at all. */
+  const isTreeMember = !!(asset && Object.values(tileGroups as Record<string, TileGroup>).some(
+    (g) => g.name.trim().toLowerCase() === 'trees' && g.assetIds.includes(asset.id),
+  ));
+
+  // Reset the active tab when the user picks a non-tree asset so the
+  // panel doesn't try to render a tab that isn't there.
+  useEffect(() => {
+    if (!isTreeMember) setActiveTab('properties');
+  }, [isTreeMember, selectedAssetId]);
 
   // Reset the slice popup whenever the user picks a different asset so the
   // last asset's grid doesn't leak into the next preview.
@@ -329,52 +350,67 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
           onEdit={() => setSliceOpen(true)}
         />
 
-        <div className="px-4 py-4 flex flex-col gap-4">
-          <PanelSection title="Class" collapsible defaultOpen>
-            <ClassPickerRow
-              currentClassId={asset && assetClassIds[asset.id] ? assetClassIds[asset.id] : null}
-              objectClasses={objectClasses}
-              onChange={(classId) => {
-                if (asset) setAssetClass(asset.id, classId);
-              }}
-              onCreateClass={(name) => {
-                if (!asset) return;
-                const id = addObjectClass({ name, parentId: null });
-                setAssetClass(asset.id, id);
-              }}
+        {isTreeMember && (
+          <PropertiesTabsBar activeTab={activeTab} onChange={setActiveTab} />
+        )}
+
+        {activeTab === 'fruits' && isTreeMember ? (
+          <div className="px-4 py-4 flex flex-col gap-4">
+            <FruitsPicker
+              treeAsset={asset}
+              objectAssets={objectAssets}
+              fruitIds={assetFruitIds[asset.id] ?? []}
+              onToggle={(fruitId) => toggleAssetFruit(asset.id, fruitId)}
             />
-          </PanelSection>
-          <PanelSection title={`Styles (${asset.styles.length})`} collapsible defaultOpen>
-          <StylesList
-            asset={asset}
-            selectedStyleId={selectedStyleId}
-            onPickStyle={handlePickStyle}
-            onRemoveStyle={handleRemoveStyle}
-            onRenameStyle={handleRenameStyle}
-            onReorder={handleReorder}
-          />
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => styleInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 mt-2"
-            style={{
-              padding: '10px 12px',
-              background: 'var(--pb-paper)',
-              border: '1.5px dashed var(--pb-line-2)',
-              borderRadius: 8,
-              color: 'var(--pb-ink)',
-              fontSize: 12.5,
-              fontWeight: 800,
-              cursor: uploading ? 'not-allowed' : 'pointer',
-              opacity: uploading ? 0.6 : 1,
-            }}
-          >
-            {uploading ? <Upload size={13} strokeWidth={2.4} /> : <Plus size={13} strokeWidth={2.4} />}
-            {uploading ? 'Uploading…' : 'Add style'}
-          </button>
-          </PanelSection>
-        </div>
+          </div>
+        ) : (
+          <div className="px-4 py-4 flex flex-col gap-4">
+            <PanelSection title="Class" collapsible defaultOpen>
+              <ClassPickerRow
+                currentClassId={asset && assetClassIds[asset.id] ? assetClassIds[asset.id] : null}
+                objectClasses={objectClasses}
+                onChange={(classId) => {
+                  if (asset) setAssetClass(asset.id, classId);
+                }}
+                onCreateClass={(name) => {
+                  if (!asset) return;
+                  const id = addObjectClass({ name, parentId: null });
+                  setAssetClass(asset.id, id);
+                }}
+              />
+            </PanelSection>
+            <PanelSection title={`Styles (${asset.styles.length})`} collapsible defaultOpen>
+              <StylesList
+                asset={asset}
+                selectedStyleId={selectedStyleId}
+                onPickStyle={handlePickStyle}
+                onRemoveStyle={handleRemoveStyle}
+                onRenameStyle={handleRenameStyle}
+                onReorder={handleReorder}
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => styleInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 mt-2"
+                style={{
+                  padding: '10px 12px',
+                  background: 'var(--pb-paper)',
+                  border: '1.5px dashed var(--pb-line-2)',
+                  borderRadius: 8,
+                  color: 'var(--pb-ink)',
+                  fontSize: 12.5,
+                  fontWeight: 800,
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  opacity: uploading ? 0.6 : 1,
+                }}
+              >
+                {uploading ? <Upload size={13} strokeWidth={2.4} /> : <Plus size={13} strokeWidth={2.4} />}
+                {uploading ? 'Uploading…' : 'Add style'}
+              </button>
+            </PanelSection>
+          </div>
+        )}
       </div>
 
       {sliceOpen && baseStyle && (
@@ -1037,4 +1073,172 @@ function nextUniqueLabel(asset: ObjectAsset, base: string): string {
     if (!taken.has(candidate)) return candidate;
   }
   return `${base} ${Date.now()}`;
+}
+
+/** Two-pill tab strip — Properties (default) / Fruits. Lives directly
+ *  beneath the asset preview when the selected asset is in the Trees
+ *  group. The Fruits tab is omitted from the bar entirely for non-trees
+ *  (the conditional render upstream keeps the bar from mounting at all
+ *  in that case), so this component never has to defensively hide it. */
+function PropertiesTabsBar({
+  activeTab, onChange,
+}: {
+  activeTab: 'properties' | 'fruits';
+  onChange: (tab: 'properties' | 'fruits') => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-1.5 px-3 pt-3 pb-1"
+      style={{ borderBottom: '1.5px solid var(--pb-line-2)' }}
+    >
+      {(['properties', 'fruits'] as const).map((t) => {
+        const active = activeTab === t;
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onChange(t)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 8,
+              fontSize: 11.5,
+              fontWeight: 800,
+              letterSpacing: 0.2,
+              textTransform: 'capitalize',
+              background: active ? 'var(--pb-cream-2)' : 'transparent',
+              border: `1.5px solid ${active ? 'var(--pb-ink)' : 'transparent'}`,
+              color: active ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              boxShadow: active ? '0 2px 0 var(--pb-ink)' : 'none',
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease',
+            }}
+          >
+            {t}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Picker for the Fruits tab. Lists every other asset in the library
+ *  with a 28×28 thumbnail + name; clicking toggles the row in/out of
+ *  this tree's fruit list. The current asset is excluded so a tree
+ *  can't be its own fruit. Empty library renders a guidance hint. */
+function FruitsPicker({
+  treeAsset, objectAssets, fruitIds, onToggle,
+}: {
+  treeAsset: ObjectAsset;
+  objectAssets: Record<string, ObjectAsset>;
+  fruitIds: string[];
+  onToggle: (assetId: string) => void;
+}) {
+  const candidates = Object.values(objectAssets)
+    .filter((a) => a.id !== treeAsset.id)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const linked = new Set(fruitIds);
+  return (
+    <PanelSection title={`Fruits (${linked.size})`} collapsible defaultOpen>
+      {candidates.length === 0 ? (
+        <div
+          style={{
+            padding: '12px',
+            fontSize: 11,
+            fontStyle: 'italic',
+            color: 'var(--pb-ink-muted)',
+            border: '1.5px dashed var(--pb-line-2)',
+            borderRadius: 8,
+            background: 'var(--pb-cream-2)',
+            textAlign: 'center',
+          }}
+        >
+          Upload more objects in the left panel to mark them as fruits.
+        </div>
+      ) : (
+        <div className="flex flex-col" style={{ gap: 2 }}>
+          {candidates.map((a) => {
+            const head = a.styles[0];
+            const picked = linked.has(a.id);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onToggle(a.id)}
+                className="flex items-center gap-2"
+                style={{
+                  padding: '6px 8px',
+                  borderRadius: 8,
+                  background: picked ? 'var(--pb-butter)' : 'transparent',
+                  border: `1.5px solid ${picked ? 'var(--pb-ink)' : 'transparent'}`,
+                  color: 'var(--pb-ink)',
+                  cursor: 'pointer',
+                  width: '100%',
+                  textAlign: 'left',
+                  transition: 'background 120ms ease, border-color 120ms ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    flexShrink: 0,
+                    borderRadius: 6,
+                    background: '#fff',
+                    border: '1.5px solid var(--pb-line-2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {head && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={head.dataUrl}
+                      alt={a.name}
+                      draggable={false}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        imageRendering: 'pixelated',
+                      }}
+                    />
+                  )}
+                </div>
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {a.name}
+                </span>
+                <div
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 5,
+                    border: `1.5px solid ${picked ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
+                    background: picked ? 'var(--pb-ink)' : 'var(--pb-paper)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {picked && <Plus size={10} strokeWidth={3.2} style={{ color: 'var(--pb-paper)', transform: 'rotate(45deg)' }} />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </PanelSection>
+  );
 }

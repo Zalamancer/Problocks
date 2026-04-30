@@ -1,5 +1,5 @@
 'use client';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Wand2 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
@@ -21,6 +21,7 @@ export function TileGroupPropertiesPanel({ headless }: { headless?: boolean } = 
   const updateTileGroup = useTile((s) => s.updateTileGroup);
   const removeTileGroup = useTile((s) => s.removeTileGroup);
   const setSelectedTileGroupId = useTile((s) => s.setSelectedTileGroupId);
+  const applyGroupTransformToPlaced = useTile((s) => s.applyGroupTransformToPlaced);
 
   const Shell = headless
     ? (({ children }: { children: React.ReactNode }) => <>{children}</>)
@@ -47,6 +48,21 @@ export function TileGroupPropertiesPanel({ headless }: { headless?: boolean } = 
   const hue = group.hue ?? 0;
   const saturation = group.saturation ?? 1;
   const brightness = group.brightness ?? 1;
+  const liveApply = group.liveApplyTransform ?? false;
+
+  // Patch helper that also re-applies size+flip to placed instances when
+  // the live toggle is on. Color (hue/sat/brightness) is always live at
+  // render time so it skips the rebroadcast.
+  const transformKeys = new Set([
+    'sizeBase', 'sizeMin', 'sizeMax', 'randomSize', 'randomFlipX', 'randomFlipY',
+  ]);
+  const gid = group.id;
+  function patch(p: Parameters<typeof updateTileGroup>[1]) {
+    updateTileGroup(gid, p);
+    if (liveApply && Object.keys(p).some((k) => transformKeys.has(k))) {
+      applyGroupTransformToPlaced(gid);
+    }
+  }
 
   return (
     <Shell>
@@ -63,11 +79,26 @@ export function TileGroupPropertiesPanel({ headless }: { headless?: boolean } = 
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+        <PanelSection title="Apply" collapsible defaultOpen>
+          <PanelToggle
+            label="Live update placed items"
+            checked={liveApply}
+            onChange={(b) => updateTileGroup(group.id, { liveApplyTransform: b })}
+          />
+          <PanelActionButton
+            icon={Wand2}
+            fullWidth
+            onClick={() => applyGroupTransformToPlaced(group.id)}
+          >
+            Apply size + flip now
+          </PanelActionButton>
+        </PanelSection>
+
         <PanelSection title="Size" collapsible defaultOpen>
           <PanelSlider
             label="Base"
             value={sizeBase}
-            onChange={(v) => updateTileGroup(group.id, { sizeBase: v })}
+            onChange={(v) => patch({ sizeBase: v })}
             min={0.1}
             max={4}
             step={0.05}
@@ -77,14 +108,14 @@ export function TileGroupPropertiesPanel({ headless }: { headless?: boolean } = 
           <PanelToggle
             label="Random size"
             checked={randomSize}
-            onChange={(b) => updateTileGroup(group.id, { randomSize: b })}
+            onChange={(b) => patch({ randomSize: b })}
           />
           {randomSize && (
             <>
               <PanelSlider
                 label="Min"
                 value={sizeMin}
-                onChange={(v) => updateTileGroup(group.id, {
+                onChange={(v) => patch({
                   sizeMin: v,
                   sizeMax: Math.max(v, sizeMax),
                 })}
@@ -97,7 +128,7 @@ export function TileGroupPropertiesPanel({ headless }: { headless?: boolean } = 
               <PanelSlider
                 label="Max"
                 value={sizeMax}
-                onChange={(v) => updateTileGroup(group.id, {
+                onChange={(v) => patch({
                   sizeMax: v,
                   sizeMin: Math.min(v, sizeMin),
                 })}
@@ -115,12 +146,12 @@ export function TileGroupPropertiesPanel({ headless }: { headless?: boolean } = 
           <PanelToggle
             label="Random flip horizontal"
             checked={randomFlipX}
-            onChange={(b) => updateTileGroup(group.id, { randomFlipX: b })}
+            onChange={(b) => patch({ randomFlipX: b })}
           />
           <PanelToggle
             label="Random flip vertical"
             checked={randomFlipY}
-            onChange={(b) => updateTileGroup(group.id, { randomFlipY: b })}
+            onChange={(b) => patch({ randomFlipY: b })}
           />
         </PanelSection>
 

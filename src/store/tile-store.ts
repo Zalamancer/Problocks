@@ -308,6 +308,10 @@ export interface TileGroup {
   /** Per-stamp random horizontal/vertical flip. */
   randomFlipX?: boolean;
   randomFlipY?: boolean;
+  /** When true, changing size / flip on the group is propagated to every
+   *  already-placed object in the world. Color values are always live
+   *  (applied at render time) and ignore this flag. */
+  liveApplyTransform?: boolean;
   /** Color tint applied at stamp time. Hue 0–360°, saturation/brightness
    *  multipliers (1 = identity). */
   hue?: number;
@@ -628,8 +632,14 @@ export interface TileStore {
   /** Patch the stamp/randomization settings on a group. */
   updateTileGroup: (id: string, patch: Partial<Pick<TileGroup,
     'sizeBase' | 'sizeMin' | 'sizeMax' | 'randomSize' |
-    'randomFlipX' | 'randomFlipY' |
+    'randomFlipX' | 'randomFlipY' | 'liveApplyTransform' |
     'hue' | 'saturation' | 'brightness'>>) => void;
+  /** Re-apply the group's current size + flip settings to every placed
+   *  object whose asset is a member. Each object is rescaled relative to
+   *  its asset's native footprint (width = native cells * tileSize *
+   *  factor); randomSize re-rolls per object. Used by the "Apply now"
+   *  button and by the live-update toggle on slider changes. */
+  applyGroupTransformToPlaced: (groupId: string) => void;
   /** Currently-selected tile group (drives the right-panel
    *  TileGroupPropertiesPanel). Null when nothing is selected. */
   selectedTileGroupId: string | null;
@@ -1874,6 +1884,32 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     const g = s.tileGroups[id];
     if (!g) return {};
     return { tileGroups: { ...s.tileGroups, [id]: { ...g, ...patch } } };
+  }),
+  applyGroupTransformToPlaced: (groupId) => set((s) => {
+    const g = s.tileGroups[groupId];
+    if (!g) return {};
+    const memberSet = new Set(g.assetIds);
+    const ts = s.tileSize;
+    const base = g.sizeBase ?? 1;
+    const sMin = g.sizeMin ?? 0.8;
+    const sMax = g.sizeMax ?? 1.2;
+    const useRand = g.randomSize ?? false;
+    const objects = s.objects.map((o) => {
+      if (!memberSet.has(o.assetId)) return o;
+      const asset = s.objectAssets[o.assetId];
+      const style = asset?.styles.find((st) => st.id === o.styleId) ?? asset?.styles[0];
+      const nativeW = style?.width ?? o.width;
+      const nativeH = style?.height ?? o.height;
+      const cellsW = Math.max(1, Math.round(nativeW / ts));
+      const cellsH = Math.max(1, Math.round(nativeH / ts));
+      const factor = base * (useRand ? sMin + Math.random() * (sMax - sMin) : 1);
+      const newW = Math.max(1, cellsW * ts * factor);
+      const newH = Math.max(1, cellsH * ts * factor);
+      const newFlipX = g.randomFlipX ? Math.random() < 0.5 : o.flipX;
+      const newFlipY = g.randomFlipY ? Math.random() < 0.5 : o.flipY;
+      return { ...o, width: newW, height: newH, flipX: newFlipX, flipY: newFlipY };
+    });
+    return { objects };
   }),
   selectedTileGroupId: null,
   setSelectedTileGroupId: (id) => set((s) => ({

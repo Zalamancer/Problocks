@@ -528,19 +528,47 @@ function CardActionButton({
       style={{
         background: hovered ? 'var(--pb-cream-2)' : 'rgba(255,255,255,0.85)',
         border: `1px solid ${hovered ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-        borderRadius: 6,
+        borderRadius: 0,
         cursor: 'pointer',
         color: iconColor,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 4,
+        padding: 0,
         margin: 0,
-        width: 26,
-        height: 26,
+        flex: 1,
+        width: 28,
+        minWidth: 28,
         transition: 'background-color 120ms, border-color 120ms',
       }}
     >
       <Icon size={12} strokeWidth={2.4} />
     </button>
+  );
+}
+
+/**
+ * Right-edge stacked-column wrapper for two CardActionButtons. Used by
+ * AssetCard and CharacterCard alike so every row's action affordance
+ * looks the same: a 28px-wide column on the far right that fills the
+ * row's full vertical space, no gap between the two stacked buttons.
+ *
+ * The parent row must use `items-stretch` (not `items-center`) so this
+ * column can match the row's height; otherwise it collapses to its
+ * intrinsic content height.
+ */
+function CardActionsColumn({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0,
+        flexShrink: 0,
+        marginLeft: 'auto',
+        alignSelf: 'stretch',
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -2943,9 +2971,12 @@ function CharacterCard({
 
   return (
     <div {...commonHandlers} style={containerStyle}>
-      <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+      <div
+        className="flex items-stretch gap-2"
+        style={{ padding: 0, minHeight: 56 }}
+      >
         <CellThumb size={56} />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6 }}>
           {editingName ? (
             <input
               autoFocus
@@ -2987,10 +3018,10 @@ function CharacterCard({
           </div>
         </div>
         {showActions && !editingName && (
-          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <CardActionsColumn>
             {editButton}
             {deleteButton}
-          </div>
+          </CardActionsColumn>
         )}
       </div>
     </div>
@@ -3168,7 +3199,10 @@ function AssetCard({
   // list mode
   return (
     <div {...commonHandlers} style={containerStyle}>
-      <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+      <div
+        className="flex items-stretch gap-2"
+        style={{ padding: 0, minHeight: 56 }}
+      >
         <div
           style={{
             width: 56, height: 56,
@@ -3191,7 +3225,7 @@ function AssetCard({
             />
           )}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col justify-center" style={{ paddingLeft: 6 }}>
           {editingName ? (
             <input
               autoFocus
@@ -3233,10 +3267,10 @@ function AssetCard({
           </div>
         </div>
         {showActions && !editingName && (
-          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <CardActionsColumn>
             {editButton}
             {deleteButton}
-          </div>
+          </CardActionsColumn>
         )}
       </div>
     </div>

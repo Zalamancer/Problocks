@@ -1,8 +1,9 @@
 'use client';
-import { useMemo, useState, useEffect } from 'react';
-import { Brush, Globe2, Waves } from 'lucide-react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { Brush, Globe2, Waves, Film, Trash2 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelToggle } from '@/components/ui/panel-controls/PanelToggle';
+import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { useTile, type Tileset } from '@/store/tile-store';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX } from '@/lib/wang-tiles';
@@ -204,6 +205,8 @@ export function TileTexturePropertiesPanel({
           />
         </PanelSection>
 
+        <TileAnimationSection owners={owners} />
+
         <PanelSection title={`Used in (${owners.length})`} collapsible defaultOpen>
           <div className="flex flex-col gap-1.5">
             {owners.map(({ tileset, side }) => (
@@ -230,6 +233,141 @@ export function TileTexturePropertiesPanel({
         </PanelActionButton>
       </footer>
     </Shell>
+  );
+}
+
+/**
+ * Tile-level animation controls. Animates the PURE corner tile for the
+ * texture (`PURE_UPPER_INDEX` / `PURE_LOWER_INDEX` of each owning sheet
+ * — that's the slot the renderer reaches for whenever a cell's 4
+ * corners are all this texture, e.g. open water in the middle of a
+ * lake). User uploads a single horizontal animation strip; the slicer
+ * splits it into `frameCount` equal-width frames at runtime and stores
+ * them on the tile via `setTileAnimation`.
+ *
+ * Multi-owner caveat: when several tilesets contribute the texture,
+ * the animation is applied to the FIRST owner only — that's the same
+ * tile the panel header preview shows, so what you see is what you
+ * get. Animating each owner independently can come later if users
+ * need per-sheet variation.
+ */
+function TileAnimationSection({
+  owners,
+}: {
+  owners: { tileset: Tileset; side: 'u' | 'l' }[];
+}) {
+  const tiles = useTile((s) => s.tiles);
+  const setTileAnimation = useTile((s) => s.setTileAnimation);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [frameCount, setFrameCount] = useState(16);
+  const [fps, setFps] = useState(8);
+  const [busy, setBusy] = useState(false);
+
+  if (owners.length === 0) return null;
+  const first = owners[0];
+  const pureIndex = first.side === 'u' ? PURE_UPPER_INDEX : PURE_LOWER_INDEX;
+  const tileId = first.tileset.tileIds[pureIndex];
+  const tile = tileId ? tiles[tileId] : undefined;
+  if (!tile) return null;
+  const animated = !!tile.animationFrames && tile.animationFrames.length > 0;
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result ?? ''));
+        r.onerror = () => reject(r.error ?? new Error('read failed'));
+        r.readAsDataURL(file);
+      });
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error('image load failed'));
+        im.src = dataUrl;
+      });
+      // Slice the strip horizontally. Frame width is the source width
+      // divided by frameCount (rounded down so we never read past the
+      // edge); frame height is the full source height. This matches
+      // the most common sprite-sheet convention (one row, N columns).
+      const N = Math.max(2, Math.min(64, Math.floor(frameCount)));
+      const fw = Math.floor(img.width / N);
+      const fh = img.height;
+      if (fw < 1 || fh < 1) {
+        setBusy(false);
+        return;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = fw;
+      canvas.height = fh;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { setBusy(false); return; }
+      ctx.imageSmoothingEnabled = false;
+      const frames: string[] = [];
+      for (let i = 0; i < N; i++) {
+        ctx.clearRect(0, 0, fw, fh);
+        ctx.drawImage(img, i * fw, 0, fw, fh, 0, 0, fw, fh);
+        frames.push(canvas.toDataURL('image/png'));
+      }
+      setTileAnimation(tile!.id, { frames, fps });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PanelSection title="Animation" collapsible defaultOpen={animated}>
+      <PanelSlider
+        label="Frame count"
+        value={frameCount}
+        onChange={(v) => setFrameCount(v)}
+        min={2} max={32} step={1} precision={0}
+      />
+      <PanelSlider
+        label="Frames per second"
+        value={fps}
+        onChange={(v) => setFps(v)}
+        min={1} max={30} step={1} precision={0}
+        suffix=" fps"
+      />
+      <div className="flex flex-col gap-2">
+        <PanelActionButton
+          icon={Film}
+          fullWidth
+          variant={animated ? 'secondary' : 'primary'}
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+        >
+          {busy ? 'Slicing…' : animated ? 'Replace animation' : 'Upload animation'}
+        </PanelActionButton>
+        {animated && (
+          <PanelActionButton
+            icon={Trash2}
+            fullWidth
+            variant="destructive"
+            onClick={() => setTileAnimation(tile.id, null)}
+          >
+            Remove animation
+          </PanelActionButton>
+        )}
+      </div>
+      <div
+        style={{ fontSize: 10, color: 'var(--pb-ink-muted)', padding: '4px 2px' }}
+      >
+        Sheet should be a horizontal strip — each frame {tile.width}×{tile.height}px.
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+          e.target.value = '';
+        }}
+      />
+    </PanelSection>
   );
 }
 

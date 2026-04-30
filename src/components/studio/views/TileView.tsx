@@ -879,6 +879,31 @@ export function TileView() {
       const H = canvas!.height;
       ctx!.fillStyle = '#fafaf7';
       ctx!.fillRect(0, 0, W, H);
+      // Animation clock (ms) — single timestamp for the whole render
+      // pass so every visible frame of every animated tile stays
+      // perfectly in sync. Mirrors the `didAnimate` flag at the bottom
+      // of `render` that decides whether to keep the RAF loop alive.
+      const animNow = performance.now();
+      let didAnimate = false;
+      // Resolve a tile's current dataUrl, accounting for animation
+      // frames first (they bypass variants and recolour for now —
+      // recolour-on-frame is a future feature). Falls back to the
+      // variant resolver when no animation is present so existing
+      // tilesets render unchanged.
+      const resolveAnimated = (
+        tile: { animationFrames?: string[]; animationFps?: number; dataUrl: string },
+        tilesetForResolve: Parameters<typeof tileDataUrlFor>[0],
+        index: number,
+      ): string => {
+        const frames = tile.animationFrames;
+        if (frames && frames.length > 0) {
+          const fps = tile.animationFps ?? 8;
+          const idx = Math.floor((animNow * fps) / 1000) % frames.length;
+          didAnimate = true;
+          return frames[idx];
+        }
+        return tileDataUrlFor(tilesetForResolve, index, tile.dataUrl);
+      };
 
       ctx!.save();
       ctx!.translate(W / 2, H / 2);
@@ -906,7 +931,14 @@ export function TileView() {
       // when already loaded. Variants register their alt-sheet data URLs
       // here too — switching the active variant on a tileset becomes a
       // cheap cache-hit swap on the next frame.
-      for (const t of Object.values(s.tiles)) ensureImage(t.dataUrl);
+      for (const t of Object.values(s.tiles)) {
+        ensureImage(t.dataUrl);
+        // Pre-warm every animation frame so the first time a frame
+        // becomes the current one it doesn't cold-cache miss.
+        if (t.animationFrames) {
+          for (const f of t.animationFrames) ensureImage(f);
+        }
+      }
       for (const ts of s.tilesets) {
         if (!ts.variants) continue;
         for (const v of ts.variants) {
@@ -1041,11 +1073,14 @@ export function TileView() {
             if (!tileId) continue;
             const tile = s.tiles[tileId];
             if (!tile) continue;
-            // Per-bucket palette recolour produces a cached dataUrl per
-            // tile when any tileset tint is active; prefer it over the
-            // raw tile / variant data URL.
-            const baseDataUrl = tileDataUrlFor(resolved.tileset, resolved.index, tile.dataUrl);
-            const recoloredDataUrl = recolorMap.get(tileId);
+            // Animated tile slot wins over the variant resolver — frame
+            // 0 already reflects whichever variant the tile carried at
+            // upload, so cycling animation frames keeps the look
+            // consistent. Per-bucket recolour still applies on top
+            // when no animation is set (recolour-of-frames is a future
+            // feature; for now an animated tile renders un-tinted).
+            const baseDataUrl = resolveAnimated(tile, resolved.tileset, resolved.index);
+            const recoloredDataUrl = tile.animationFrames ? undefined : recolorMap.get(tileId);
             const dataUrl = recoloredDataUrl ?? baseDataUrl;
             const img = imgCacheRef.current.get(dataUrl);
             if (!img || !imgReadyRef.current.has(dataUrl)) {
@@ -1605,9 +1640,11 @@ export function TileView() {
       ctx!.restore();
 
       // Keep the loop going while the water effect is on so the waves
-      // animate continuously. No-op when the user has no wavy textures
-      // (the renderer falls back to event-driven rAF).
-      if (s.wavyTextureIds.length > 0) scheduleRender();
+      // animate continuously, OR while at least one animated tile was
+      // visible this frame so its frames cycle. No-op otherwise — the
+      // renderer falls back to event-driven rAF and the canvas burns
+      // zero CPU at idle.
+      if (s.wavyTextureIds.length > 0 || didAnimate) scheduleRender();
     }
 
     /**

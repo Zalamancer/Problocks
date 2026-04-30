@@ -1,6 +1,6 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Trash2, Upload, User, Film, Pencil, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Trash2, Upload, User, Film, Pencil, Sparkles, Wand2, Loader2, RotateCw } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
@@ -21,6 +21,31 @@ import {
   type CharacterDir8,
   type CharacterAnimation,
 } from '@/store/tile-store';
+
+/**
+ * Generation lock bundle threaded into every regen surface so they can
+ * coexist without stepping on each other:
+ *   • `bulkGenerating` — Generate-tab "Generate animation" is running
+ *     (it fires all 8 directions at once, so per-row regens disable for
+ *     the duration to avoid double-spending the API).
+ *   • `inflightKeys`   — Set of `${dir}::${animationId}` strings, one
+ *     entry per in-flight per-direction regen. Each button reads its
+ *     own key so concurrent regens on different directions / rows show
+ *     independent spinners.
+ *   • `markInflight` / `clearInflight` — bracket each regen call with
+ *     these so the set stays consistent across success and failure.
+ */
+type GenLocks = {
+  bulkGenerating: boolean;
+  setBulkGenerating: (v: boolean) => void;
+  inflightKeys: ReadonlySet<string>;
+  markInflight: (key: string) => void;
+  clearInflight: (key: string) => void;
+};
+
+function makeRegenKey(dir: CharacterDir8, animationId: string): string {
+  return `${dir}::${animationId}`;
+}
 
 /**
  * Right-panel Properties view for a selected playable character.
@@ -51,15 +76,42 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
   const updateTileCharacter = useTile((s) => s.updateTileCharacter);
   const replaceCharacterSheet = useTile((s) => s.replaceCharacterSheet);
 
-  const [tab, setTab] = useState<'character' | 'animations'>('character');
+  const [tab, setTab] = useState<'character' | 'animations' | 'generate'>('character');
   // Drill-down: when the user clicks a direction on the Character tab,
   // the tab swaps to the per-direction Animations editor (with a Back
   // button). `null` means we're showing the directions list view.
   const [drilldownDir, setDrilldownDir] = useState<CharacterDir8 | null>(null);
-  // Generation flow on the Animations tab — the footer button kicks off
+  // Generation flow on the Generate tab — the footer button kicks off
   // the run, the body of GenerateAnimationsTab does the actual work via
   // a callback registered into this ref.
-  const [generating, setGenerating] = useState(false);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  // Per-direction regens may run concurrently; each one registers its
+  // (dir, animationId) key here so its own button shows a spinner while
+  // sibling buttons stay live.
+  const [inflightKeys, setInflightKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const markInflight = useCallback((key: string) => {
+    setInflightKeys((s) => {
+      if (s.has(key)) return s;
+      const next = new Set(s);
+      next.add(key);
+      return next;
+    });
+  }, []);
+  const clearInflight = useCallback((key: string) => {
+    setInflightKeys((s) => {
+      if (!s.has(key)) return s;
+      const next = new Set(s);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+  const genLocks: GenLocks = useMemo(() => ({
+    bulkGenerating,
+    setBulkGenerating,
+    inflightKeys,
+    markInflight,
+    clearInflight,
+  }), [bulkGenerating, inflightKeys, markInflight, clearInflight]);
   const generateTriggerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -78,20 +130,22 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
     <>
       <PanelIconTabs
         tabs={[
-          { id: 'character', label: 'Character', icon: User },
+          { id: 'character',  label: 'Character',  icon: User },
           { id: 'animations', label: 'Animations', icon: Film },
+          { id: 'generate',   label: 'Generate',   icon: Sparkles },
         ]}
         activeTab={tab}
         onChange={(id) => setTab(id as typeof tab)}
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        {tab === 'character' ? (
+        {tab === 'character' && (
           drilldownDir ? (
             <DirectionAnimationsView
               character={character}
               dir={drilldownDir}
               onBack={() => setDrilldownDir(null)}
+              genLocks={genLocks}
             />
           ) : (
             <CharacterTab
@@ -101,11 +155,17 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
               onReplaceSheet={(input) => replaceCharacterSheet(character.id, input)}
             />
           )
-        ) : (
+        )}
+        {tab === 'animations' && (
+          <AnimationsLibraryTab
+            character={character}
+            genLocks={genLocks}
+          />
+        )}
+        {tab === 'generate' && (
           <GenerateAnimationsTab
             character={character}
-            generating={generating}
-            setGenerating={setGenerating}
+            genLocks={genLocks}
             registerSubmit={(fn) => { generateTriggerRef.current = fn; }}
           />
         )}
@@ -119,7 +179,17 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
           background: 'var(--pb-paper)',
         }}
       >
-        {tab === 'character' ? (
+        {tab === 'generate' ? (
+          <PanelActionButton
+            variant="primary"
+            icon={Sparkles}
+            fullWidth
+            loading={bulkGenerating}
+            onClick={() => generateTriggerRef.current?.()}
+          >
+            {bulkGenerating ? 'Generating…' : 'Generate animation'}
+          </PanelActionButton>
+        ) : (
           <PanelActionButton
             variant="destructive"
             icon={Trash2}
@@ -127,16 +197,6 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
             onClick={() => removeTileCharacter(character.id)}
           >
             Delete character
-          </PanelActionButton>
-        ) : (
-          <PanelActionButton
-            variant="primary"
-            icon={Sparkles}
-            fullWidth
-            loading={generating}
-            onClick={() => generateTriggerRef.current?.()}
-          >
-            {generating ? 'Generating…' : 'Generate animation'}
           </PanelActionButton>
         )}
       </footer>
@@ -369,13 +429,79 @@ function CharacterTab({
 // ─────────────────────────────────────────────────────────────────────
 
 function DirectionAnimationsView({
-  character, dir, onBack,
+  character, dir, onBack, genLocks,
 }: {
   character: TileCharacter;
   dir: CharacterDir8;
   onBack: () => void;
+  /** See the GenLocks type at the top of this file. The shared bundle
+   *  lets concurrent per-direction regens coexist while still gating on
+   *  the bulk Generate-tab job. */
+  genLocks: GenLocks;
 }) {
   const activeDir = dir;
+  const addToast = useToastStore((s) => s.addToast);
+  const { bulkGenerating, inflightKeys, markInflight, clearInflight } = genLocks;
+
+  async function regenerateRow(animationId: string) {
+    const key = makeRegenKey(activeDir, animationId);
+    if (inflightKeys.has(key)) return;
+    if (bulkGenerating) return;
+    const anim = (character.animations?.[activeDir] ?? []).find((a) => a.id === animationId);
+    if (!anim) return;
+    // Use the row's existing label as the action prompt — preset rows
+    // saved as the preset's display name (e.g. "Run") still produce the
+    // right output because PixelLab doesn't care about case.
+    const action = (anim.label || '').trim();
+    if (!action) {
+      setError('This row has no name yet — give it a name first.');
+      return;
+    }
+    markInflight(key);
+    setError(null);
+    try {
+      const referenceDataUrl = await sliceOneDirectionCell(character, activeDir);
+      const resp = await fetch('/api/pixellab-character-animation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          references: { [activeDir]: referenceDataUrl },
+          action,
+          frameW: character.frameW,
+          frameH: character.frameH,
+        }),
+      });
+      const data = (await resp.json()) as {
+        ok: boolean;
+        error?: string;
+        results?: { dir: CharacterDir8; frames: string[] }[];
+        errors?: { dir: CharacterDir8; error: string }[];
+      };
+      if (!resp.ok || !data.ok) {
+        throw new Error(data.error || `Regenerate failed (HTTP ${resp.status})`);
+      }
+      const result = (data.results ?? []).find((r) => r.dir === activeDir);
+      if (!result || result.frames.length === 0) {
+        const reason = data.errors?.find((e) => e.dir === activeDir)?.error;
+        throw new Error(reason || `No frames returned for ${DIR_LABEL[activeDir]}`);
+      }
+      const sheet = await composeFramesIntoSheet(result.frames);
+      setCharacterAnimationSrc(character.id, activeDir, animationId, {
+        src: sheet.dataUrl,
+        cols: sheet.cols,
+        rows: sheet.rows,
+        frameW: sheet.frameW,
+        frameH: sheet.frameH,
+      });
+      addToast('success', `Regenerated "${action}" for ${DIR_LABEL[activeDir]}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      addToast('error', `Regenerate failed: ${msg}`);
+    } finally {
+      clearInflight(key);
+    }
+  }
   // Assembly-line UI: preview only shows the animation that was JUST
   // uploaded and is awaiting a name. Once the user commits the name (or
   // dismisses the field) the slot clears and the preview reverts to its
@@ -549,11 +675,15 @@ function DirectionAnimationsView({
 
         <SavedAnimationsList
           animations={animations}
+          direction={activeDir}
           excludeId={pendingNameId}
+          inflightKeys={inflightKeys}
+          bulkGenerating={bulkGenerating}
           onRemove={(animId) => removeCharacterAnimation(character.id, activeDir, animId)}
           onRename={(animId, label) =>
             renameCharacterAnimation(character.id, activeDir, animId, label)
           }
+          onRegenerate={regenerateRow}
         />
       </div>
     </>
@@ -569,12 +699,21 @@ function DirectionAnimationsView({
  * name as a click-to-rename input, and a delete button.
  */
 function SavedAnimationsList({
-  animations, excludeId, onRemove, onRename,
+  animations, direction, excludeId, inflightKeys, bulkGenerating,
+  onRemove, onRename, onRegenerate,
 }: {
   animations: CharacterAnimation[];
+  direction: CharacterDir8;
   excludeId: string | null;
+  /** Per-direction regens currently in flight; rows compute their own
+   *  spinner state from this set + their (direction, id) pair. */
+  inflightKeys: ReadonlySet<string>;
+  /** Bulk Generate-tab job is running — locks all per-row regens until
+   *  it finishes (otherwise we'd burn duplicate API calls). */
+  bulkGenerating: boolean;
   onRemove: (animationId: string) => void;
   onRename: (animationId: string, label: string) => void;
+  onRegenerate: (animationId: string) => void;
 }) {
   const visible = animations.filter((a) => a.id !== excludeId);
   if (visible.length === 0) return null;
@@ -583,24 +722,40 @@ function SavedAnimationsList({
       <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--pb-ink-muted)', letterSpacing: 0.4 }}>
         SAVED ({visible.length})
       </span>
-      {visible.map((anim) => (
-        <SavedAnimationRow
-          key={anim.id}
-          animation={anim}
-          onRemove={() => onRemove(anim.id)}
-          onRename={(label) => onRename(anim.id, label)}
-        />
-      ))}
+      {visible.map((anim) => {
+        const regenerating = inflightKeys.has(makeRegenKey(direction, anim.id));
+        return (
+          <SavedAnimationRow
+            key={anim.id}
+            animation={anim}
+            regenerating={regenerating}
+            // Other rows stay live while this one is regenerating —
+            // bulkGenerating is the only cross-row gate.
+            regenDisabled={bulkGenerating}
+            onRemove={() => onRemove(anim.id)}
+            onRename={(label) => onRename(anim.id, label)}
+            onRegenerate={() => onRegenerate(anim.id)}
+          />
+        );
+      })}
     </div>
   );
 }
 
 function SavedAnimationRow({
-  animation, onRemove, onRename,
+  animation, regenerating, regenDisabled,
+  onRemove, onRename, onRegenerate,
 }: {
   animation: CharacterAnimation;
+  /** This row is the one currently being regenerated. */
+  regenerating: boolean;
+  /** Bulk Generate is running, so every row's regen is temporarily
+   *  locked. Sibling per-row regens do NOT set this — they only spin
+   *  their own row. */
+  regenDisabled: boolean;
   onRemove: () => void;
   onRename: (label: string) => void;
+  onRegenerate: () => void;
 }) {
   const [draft, setDraft] = useState(animation.label);
   useEffect(() => { setDraft(animation.label); }, [animation.label]);
@@ -663,15 +818,38 @@ function SavedAnimationRow({
       />
       <button
         type="button"
+        onClick={onRegenerate}
+        disabled={regenerating || regenDisabled}
+        title={regenerating ? 'Regenerating with AI…' : 'Regenerate this direction with AI'}
+        style={{
+          background: 'transparent',
+          border: 0,
+          padding: 4,
+          cursor: regenerating || regenDisabled ? 'not-allowed' : 'pointer',
+          color: regenerating ? 'var(--pb-butter-ink)' : 'var(--pb-ink)',
+          display: 'flex',
+          opacity: regenDisabled && !regenerating ? 0.4 : 1,
+        }}
+      >
+        {regenerating ? (
+          <Loader2 size={12} strokeWidth={2.4} className="animate-spin" />
+        ) : (
+          <Wand2 size={12} strokeWidth={2.4} />
+        )}
+      </button>
+      <button
+        type="button"
         onClick={onRemove}
+        disabled={regenerating || regenDisabled}
         title="Delete animation"
         style={{
           background: 'transparent',
           border: 0,
           padding: 4,
-          cursor: 'pointer',
+          cursor: regenerating || regenDisabled ? 'not-allowed' : 'pointer',
           color: 'var(--pb-coral-ink)',
           display: 'flex',
+          opacity: regenerating || regenDisabled ? 0.4 : 1,
         }}
       >
         <Trash2 size={12} strokeWidth={2.4} />
@@ -1467,7 +1645,421 @@ function BackHeader({ label, onBack }: { label: string; onBack: () => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Animations tab — single prompt → PixelLab AI generates an action
+// Animations library tab — mirrors the Character tab's chrome (preview
+// on top, scrolling list below) but the preview plays the SELECTED
+// animation in the current orbit direction (defaults to south),
+// horizontal trackpad scroll snaps the orbit through the 8 directions.
+// ─────────────────────────────────────────────────────────────────────
+
+interface AnimationGroup {
+  /** Stable key for selection state — `actionId` when present (so the
+   *  preset id lives across renames), otherwise the lowercased label. */
+  key: string;
+  /** Display label, taken from the south-direction entry when present
+   *  (so renaming the south row also updates the library row). */
+  label: string;
+  actionId?: string;
+  byDir: Partial<Record<CharacterDir8, CharacterAnimation>>;
+}
+
+/**
+ * Walk every per-direction list and collapse animations into groups
+ * keyed by their canonical action id (or lowercased label for free-form
+ * uploads). Each group stores up to one animation per direction; if the
+ * user happened to save two "run" rows on the same direction, the
+ * earliest one wins so the library view stays predictable.
+ */
+function groupAnimations(character: TileCharacter): AnimationGroup[] {
+  const map = new Map<string, AnimationGroup>();
+  for (const dir of CHARACTER_DIRS) {
+    const list = character.animations?.[dir] ?? [];
+    for (const anim of list) {
+      const key =
+        (typeof anim.actionId === 'string' && anim.actionId.length > 0
+          ? anim.actionId
+          : (anim.label || '').trim().toLowerCase()) || `__id_${anim.id}`;
+      let group = map.get(key);
+      if (!group) {
+        group = {
+          key,
+          label: anim.label || key,
+          actionId: typeof anim.actionId === 'string' ? anim.actionId : undefined,
+          byDir: {},
+        };
+        map.set(key, group);
+      }
+      // First write wins per direction so a re-upload doesn't shuffle
+      // the library row mid-render.
+      if (!group.byDir[dir]) group.byDir[dir] = anim;
+      // Prefer a south-row label so renames there propagate naturally.
+      if (dir === 's' && anim.label) group.label = anim.label;
+    }
+  }
+  return Array.from(map.values());
+}
+
+function AnimationsLibraryTab({
+  character, genLocks,
+}: {
+  character: TileCharacter;
+  /** See the GenLocks type — drives the preview regen's spinner per
+   *  (direction, animationId), independent of sibling regens elsewhere
+   *  in the panel. */
+  genLocks: GenLocks;
+}) {
+  const setCharacterAnimationSrc = useTile((s) => s.setCharacterAnimationSrc);
+  const addToast = useToastStore((s) => s.addToast);
+  const { bulkGenerating, inflightKeys, markInflight, clearInflight } = genLocks;
+  const groups = useMemo(() => groupAnimations(character), [character]);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Reconcile selection across re-renders: keep the current pick when
+  // it still exists, otherwise default to the first group (or null).
+  useEffect(() => {
+    if (groups.length === 0) {
+      if (selectedKey !== null) setSelectedKey(null);
+      return;
+    }
+    if (!selectedKey || !groups.some((g) => g.key === selectedKey)) {
+      setSelectedKey(groups[0].key);
+    }
+  }, [groups, selectedKey]);
+
+  const selectedGroup = selectedKey ? groups.find((g) => g.key === selectedKey) ?? null : null;
+
+  // South-first. The orbit only changes by horizontal trackpad swipe.
+  const [orbitDir, setOrbitDir] = useState<CharacterDir8>('s');
+  useEffect(() => {
+    setOrbitDir('s');
+  }, [selectedKey]);
+
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const accumDxRef = useRef(0);
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const STEP = 40; // px of horizontal scroll per direction tick
+    function onWheel(e: WheelEvent) {
+      // Trackpad horizontal swipe is the dominant axis when the user
+      // wants to orbit. Treat a vertical wheel as a no-op so the panel
+      // can keep scrolling normally with two-finger up/down.
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      accumDxRef.current += e.deltaX;
+      while (Math.abs(accumDxRef.current) >= STEP) {
+        const sign = accumDxRef.current > 0 ? 1 : -1;
+        accumDxRef.current -= sign * STEP;
+        setOrbitDir((prev) => {
+          const i = CHARACTER_DIRS.indexOf(prev);
+          if (i < 0) return prev;
+          return CHARACTER_DIRS[(i + sign + CHARACTER_DIRS.length) % CHARACTER_DIRS.length];
+        });
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Frame autoplay across the selected animation's 4×4 grid.
+  const previewAnim = selectedGroup?.byDir[orbitDir] ?? null;
+
+  const previewRegenKey = previewAnim ? makeRegenKey(orbitDir, previewAnim.id) : null;
+  const previewRegenerating = previewRegenKey !== null && inflightKeys.has(previewRegenKey);
+
+  async function regenerateCurrent() {
+    if (!previewAnim || !selectedGroup || !previewRegenKey) return;
+    if (inflightKeys.has(previewRegenKey)) return;
+    if (bulkGenerating) return;
+    const action = (previewAnim.label || selectedGroup.label || '').trim();
+    if (!action) {
+      addToast('error', 'This animation has no name to use as the prompt.');
+      return;
+    }
+    // Snapshot the (direction, animation, character) the regen was
+    // started against so the user is free to swipe to a new direction
+    // or pick a new row mid-flight without the result landing on the
+    // wrong cell when it eventually returns.
+    const targetDir = orbitDir;
+    const targetAnimId = previewAnim.id;
+    const targetCharId = character.id;
+    markInflight(previewRegenKey);
+    try {
+      const referenceDataUrl = await sliceOneDirectionCell(character, targetDir);
+      const resp = await fetch('/api/pixellab-character-animation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          references: { [targetDir]: referenceDataUrl },
+          action,
+          frameW: character.frameW,
+          frameH: character.frameH,
+        }),
+      });
+      const data = (await resp.json()) as {
+        ok: boolean;
+        error?: string;
+        results?: { dir: CharacterDir8; frames: string[] }[];
+        errors?: { dir: CharacterDir8; error: string }[];
+      };
+      if (!resp.ok || !data.ok) {
+        throw new Error(data.error || `Regenerate failed (HTTP ${resp.status})`);
+      }
+      const result = (data.results ?? []).find((r) => r.dir === targetDir);
+      if (!result || result.frames.length === 0) {
+        const reason = data.errors?.find((e) => e.dir === targetDir)?.error;
+        throw new Error(reason || `No frames returned for ${DIR_LABEL[targetDir]}`);
+      }
+      const sheet = await composeFramesIntoSheet(result.frames);
+      setCharacterAnimationSrc(targetCharId, targetDir, targetAnimId, {
+        src: sheet.dataUrl,
+        cols: sheet.cols,
+        rows: sheet.rows,
+        frameW: sheet.frameW,
+        frameH: sheet.frameH,
+      });
+      addToast('success', `Regenerated "${action}" for ${DIR_LABEL[targetDir]}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addToast('error', `Regenerate failed: ${msg}`);
+    } finally {
+      clearInflight(previewRegenKey);
+    }
+  }
+
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    setFrame(0);
+  }, [selectedKey, orbitDir]);
+  useEffect(() => {
+    if (!previewAnim) return;
+    const total = Math.max(1, previewAnim.cols * previewAnim.rows);
+    if (total <= 1) return;
+    const fps = Math.max(1, character.fps || 8);
+    const handle = window.setInterval(() => {
+      setFrame((f) => (f + 1) % total);
+    }, 1000 / fps);
+    return () => window.clearInterval(handle);
+  }, [previewAnim, character.fps]);
+
+  return (
+    <>
+      <div
+        ref={previewRef}
+        title="Two-finger horizontal swipe to orbit through directions"
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '1 / 1',
+          flexShrink: 0,
+          background: 'rgba(0,0,0,0.06)',
+          borderBottom: '1.5px solid var(--pb-line-2)',
+          overflow: 'hidden',
+          padding: 12,
+          cursor: previewAnim ? 'grab' : 'default',
+          touchAction: 'none',
+        }}
+      >
+        {previewAnim ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CellThumb
+              src={previewAnim.src}
+              cols={previewAnim.cols}
+              rows={previewAnim.rows}
+              cell={frame}
+              size={'100%'}
+              bare
+            />
+          </div>
+        ) : (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              color: 'var(--pb-ink-muted)',
+              textAlign: 'center',
+              padding: '0 24px',
+            }}
+          >
+            <Film size={20} strokeWidth={2.4} />
+            <span style={{ fontSize: 12, fontWeight: 800 }}>
+              {selectedGroup ? `No "${selectedGroup.label}" sheet for ${DIR_LABEL[orbitDir]}` : 'No animations yet'}
+            </span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.4 }}>
+              {selectedGroup
+                ? 'Swipe horizontally on the preview to find a covered direction.'
+                : 'Generate one from the Generate tab.'}
+            </span>
+          </div>
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 8,
+            right: 8,
+            padding: '3px 8px',
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 999,
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: 0.4,
+            color: 'var(--pb-ink)',
+          }}
+          title="Current direction (horizontal trackpad swipe to rotate)"
+        >
+          {DIR_LABEL[orbitDir]}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); void regenerateCurrent(); }}
+          disabled={!previewAnim || bulkGenerating || previewRegenerating}
+          title={
+            !previewAnim
+              ? 'Pick an animation that has this direction filled to regenerate it'
+              : previewRegenerating
+                ? 'Regenerating with AI…'
+                : `Regenerate "${selectedGroup?.label ?? ''}" for ${DIR_LABEL[orbitDir]}`
+          }
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 32,
+            height: 32,
+            background: 'var(--pb-paper)',
+            border: '1.5px solid var(--pb-line-2)',
+            borderRadius: 8,
+            cursor: !previewAnim || bulkGenerating || previewRegenerating ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: previewRegenerating ? 'var(--pb-butter-ink)' : 'var(--pb-ink)',
+            opacity: !previewAnim || bulkGenerating ? 0.55 : 1,
+            boxShadow: '0 2px 0 var(--pb-line-2)',
+          }}
+        >
+          {previewRegenerating ? (
+            <Loader2 size={14} strokeWidth={2.4} className="animate-spin" />
+          ) : (
+            <RotateCw size={14} strokeWidth={2.4} />
+          )}
+        </button>
+      </div>
+
+      <div className="px-4 py-4 flex flex-col gap-4">
+        <PanelSection title={`Animations (${groups.length})`} collapsible defaultOpen>
+          {groups.length === 0 ? (
+            <p style={{ fontSize: 11, color: 'var(--pb-ink-muted)', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>
+              No animations yet. Generate one from the Generate tab, or upload
+              per-direction sheets from a direction inside the Character tab.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-px">
+              {groups.map((group) => {
+                const isCurrent = group.key === selectedKey;
+                const south = group.byDir.s ?? Object.values(group.byDir)[0];
+                const dirsCovered = Object.keys(group.byDir).length;
+                return (
+                  <div
+                    key={group.key}
+                    onClick={() => setSelectedKey(group.key)}
+                    style={{
+                      background: isCurrent ? 'var(--pb-butter)' : 'transparent',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div className="flex items-center gap-2" style={{ padding: '4px 6px' }}>
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          flexShrink: 0,
+                          background: isCurrent ? 'transparent' : 'rgba(0,0,0,0.03)',
+                          borderRadius: 4,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {south ? (
+                          <CellThumb
+                            src={south.src}
+                            cols={south.cols}
+                            rows={south.rows}
+                            cell={0}
+                            size={'100%'}
+                            bare
+                          />
+                        ) : null}
+                      </div>
+                      <span
+                        title={group.label}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: 'var(--pb-ink)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {group.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          letterSpacing: 0.4,
+                          color: dirsCovered === 8 ? 'var(--pb-butter-ink)' : 'var(--pb-ink-muted)',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {dirsCovered}/8
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <span
+            style={{
+              display: 'block',
+              marginTop: 10,
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: 'var(--pb-ink-muted)',
+              lineHeight: 1.4,
+            }}
+          >
+            Tip: pick a row to play it in the preview. Horizontal two-finger
+            swipe on the preview rotates through the 8 directions.
+          </span>
+        </PanelSection>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Generate tab — single prompt → PixelLab AI generates an action
 // animation across all 8 directions, saved as one CharacterAnimation
 // per direction. The actual click handler for the sticky-footer button
 // lives in this component (registered with the parent via a ref) so
@@ -1475,13 +2067,13 @@ function BackHeader({ label, onBack }: { label: string; onBack: () => void }) {
 // ─────────────────────────────────────────────────────────────────────
 
 function GenerateAnimationsTab({
-  character, generating, setGenerating, registerSubmit,
+  character, genLocks, registerSubmit,
 }: {
   character: TileCharacter;
-  generating: boolean;
-  setGenerating: (v: boolean) => void;
+  genLocks: GenLocks;
   registerSubmit: (fn: () => void) => void;
 }) {
+  const { bulkGenerating, setBulkGenerating } = genLocks;
   const [prompt, setPrompt] = useState('');
   // When the user clicks a preset chip, we lock onto that canonical
   // action id and the saved animations get tagged with it. Editing the
@@ -1502,10 +2094,10 @@ function GenerateAnimationsTab({
       setError('Pick a preset above or type a prompt (e.g. "running", "casting").');
       return;
     }
-    if (generating) return;
+    if (bulkGenerating) return;
     setError(null);
     setProgress('Slicing 3×3 reference frames…');
-    setGenerating(true);
+    setBulkGenerating(true);
     try {
       const references = await sliceCharacterCells(character);
       setProgress('Calling PixelLab for 8 directions (this can take a minute)…');
@@ -1566,13 +2158,13 @@ function GenerateAnimationsTab({
       setError(msg);
       addToast('error', `Generation failed: ${msg}`);
     } finally {
-      setGenerating(false);
+      setBulkGenerating(false);
       setProgress(null);
     }
-  }, [prompt, selectedAction, generating, character, addCharacterAnimation, addToast, setGenerating]);
+  }, [prompt, selectedAction, bulkGenerating, character, addCharacterAnimation, addToast, setBulkGenerating]);
 
   // Re-register on every render so the parent's ref always points at
-  // the latest closure (and therefore the latest `prompt`/`generating`).
+  // the latest closure (and therefore the latest `prompt`/`bulkGenerating`).
   useEffect(() => {
     registerSubmit(submit);
   }, [submit, registerSubmit]);
@@ -1592,7 +2184,7 @@ function GenerateAnimationsTab({
   }
 
   function pickPreset(actionId: CharacterActionId) {
-    if (generating) return;
+    if (bulkGenerating) return;
     const preset = CHARACTER_ACTION_PRESETS.find((p) => p.id === actionId);
     if (!preset) return;
     setSelectedAction(actionId);
@@ -1621,7 +2213,7 @@ function GenerateAnimationsTab({
                 key={preset.id}
                 type="button"
                 onClick={() => pickPreset(preset.id)}
-                disabled={generating}
+                disabled={bulkGenerating}
                 title={`${preset.hint}${covered ? ' (already generated)' : ''}`}
                 style={{
                   position: 'relative',
@@ -1636,8 +2228,8 @@ function GenerateAnimationsTab({
                   fontWeight: 800,
                   letterSpacing: 0.2,
                   color: 'var(--pb-ink)',
-                  cursor: generating ? 'not-allowed' : 'pointer',
-                  opacity: generating ? 0.55 : 1,
+                  cursor: bulkGenerating ? 'not-allowed' : 'pointer',
+                  opacity: bulkGenerating ? 0.55 : 1,
                   boxShadow: active ? '0 2px 0 var(--pb-line-2)' : 'none',
                 }}
               >
@@ -1665,7 +2257,7 @@ function GenerateAnimationsTab({
           value={prompt}
           onChange={onPromptChange}
           placeholder="e.g. running, attacking, casting a spell"
-          disabled={generating}
+          disabled={bulkGenerating}
         />
       </PanelSection>
 
@@ -1735,6 +2327,31 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = (err) => reject(err instanceof Error ? err : new Error('Image load failed'));
     img.src = src;
   });
+}
+
+/**
+ * Cut a single direction's reference cell out of the 3×3 sheet. Used by
+ * the per-row regen flow inside `DirectionAnimationsView` so the API
+ * only does one direction's worth of work.
+ */
+async function sliceOneDirectionCell(
+  character: TileCharacter,
+  dir: CharacterDir8,
+): Promise<string> {
+  const img = await loadImage(character.src);
+  const cellW = Math.floor(img.naturalWidth / character.cols);
+  const cellH = Math.floor(img.naturalHeight / character.rows);
+  const cellIdx = DIR_CELL[dir];
+  const col = cellIdx % character.cols;
+  const row = Math.floor(cellIdx / character.cols);
+  const canvas = document.createElement('canvas');
+  canvas.width = cellW;
+  canvas.height = cellH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D canvas context');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, col * cellW, row * cellH, cellW, cellH, 0, 0, cellW, cellH);
+  return canvas.toDataURL('image/png');
 }
 
 /**

@@ -80,11 +80,20 @@ export interface Tile {
   tilesetId: string;
   /** Index within the tileset (0..cols*rows-1, left-to-right, top-to-bottom). */
   index: number;
-  /** PNG data URL — the actual sprite. */
+  /** PNG data URL — the actual sprite. Frame 0 of `animationFrames` when
+   *  the tile is animated; the renderer reads `dataUrl` directly when no
+   *  animation is set. */
   dataUrl: string;
   /** Pixel size of the sliced tile. */
   width: number;
   height: number;
+  /** Optional animation frames (data URLs). When present the renderer
+   *  cycles through them at `animationFps` instead of drawing `dataUrl`.
+   *  Frame 0 should match `dataUrl` so non-animation render paths
+   *  (thumbnails, preview swatches) still show a consistent face. */
+  animationFrames?: string[];
+  /** Frames per second for the cycle. Defaults to 8 if omitted. */
+  animationFps?: number;
 }
 
 export interface Tileset {
@@ -426,6 +435,19 @@ export interface TileStore {
   removeTilesetVariant: (tilesetId: string, variantId: string) => void;
   /** Pick which sheet renders for this terrain. 0 = base. */
   setActiveTilesetVariant: (tilesetId: string, index: number) => void;
+
+  /**
+   * Attach (or clear) an animation on a single tile slot. Frames is an
+   * array of PNG data URLs sized to the tile's native dimensions; frame
+   * 0 is also written to `dataUrl` so the static thumbnail keeps
+   * showing the same face. Pass `null` to remove the animation. The
+   * renderer cycles frames at `fps` (default 8) using
+   * `performance.now()` so every cell using this tile stays in sync.
+   */
+  setTileAnimation: (
+    tileId: string,
+    animation: { frames: string[]; fps?: number } | null,
+  ) => void;
 
   // ── Map state ───────────────────────────────────────────────────
   /** Pixel size of one grid cell in the editor (independent of tile native
@@ -1251,6 +1273,29 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       return { ...t, activeVariantIndex: clamped };
     }),
   })),
+
+  setTileAnimation: (tileId, animation) => set((s) => {
+    const t = s.tiles[tileId];
+    if (!t) return {};
+    if (!animation) {
+      // Detach — strip animation fields, leave dataUrl as-is so the
+      // static face the user originally uploaded survives.
+      const { animationFrames: _f, animationFps: _p, ...rest } = t;
+      return { tiles: { ...s.tiles, [tileId]: rest as Tile } };
+    }
+    const frames = animation.frames.length > 0 ? animation.frames : [t.dataUrl];
+    return {
+      tiles: {
+        ...s.tiles,
+        [tileId]: {
+          ...t,
+          dataUrl: frames[0],
+          animationFrames: frames,
+          animationFps: Math.max(1, Math.min(60, animation.fps ?? 8)),
+        },
+      },
+    };
+  }),
 
   tileSize: 32,
   setTileSize: (size) => set({ tileSize: Math.max(4, Math.min(256, Math.round(size))) }),

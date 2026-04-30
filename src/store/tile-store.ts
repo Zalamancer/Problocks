@@ -2477,11 +2477,16 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
 
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
-    layers: s.layers.map((l) => ({ ...l, corners: {} })),
+    layers: s.layers.map((l) => ({ ...l, corners: {}, cellTransforms: {} })),
     objects: [],
+    selectedObjectId: null,
     fencePosts: {},
     fenceEdges: {},
     selectedFencePostKey: null,
+    // Drop placed characters too — they're part of the map's visible state.
+    // The character library entries themselves stay in the asset panel
+    // (tileCharacters keeps the source sheets for re-placement).
+    selectedCharacterId: null,
   })),
 
   // ── Undo / Redo ─────────────────────────────────────────────────

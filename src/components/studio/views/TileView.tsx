@@ -2767,7 +2767,13 @@ export function TileView() {
         </ToolBtn>
         <Separator />
         <ToolBtn destructive title="Clear map" onClick={() => {
-          if (confirm('Clear all painted cells and objects?')) clearMap();
+          if (!confirm('Clear all painted cells and objects?')) return;
+          clearMap();
+          // The render loop draws from stateRef + scheduleRender; layer /
+          // object subscriptions do not auto-redraw the canvas, so without
+          // this nudge a Clear visually no-ops until the user moves the
+          // mouse over the canvas.
+          requestRender.current();
         }}>
           <Trash2 size={14} strokeWidth={2.2} />
         </ToolBtn>

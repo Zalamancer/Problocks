@@ -546,6 +546,17 @@ export function TileView() {
     if (selectedObjectId) setRightPanelGroup('properties');
   }, [selectedObjectId, setRightPanelGroup]);
 
+  // The canvas only repaints on demand. Tool / selection changes flip
+  // visibility of overlays (placement ghost, selection bounding box,
+  // selected-style preview) but don't on their own move the mouse — so
+  // without this kick the last frame would freeze on screen until the
+  // user wiggles the cursor.
+  const selectedAssetIdForPaint = useTile((s) => s.selectedAssetId);
+  const selectedStyleIdForPaint = useTile((s) => s.selectedStyleId);
+  useEffect(() => {
+    requestRender.current();
+  }, [tool, selectedObjectId, selectedAssetIdForPaint, selectedStyleIdForPaint]);
+
   // ── Per-tileset palette recolouring ─────────────────────────────
   // Each time `tilesetTints` (or the underlying tileset list) changes,
   // recompute a recoloured PNG dataUrl for every tile in the affected

@@ -2758,12 +2758,12 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       }
     }
     // Object groups: pre-groups saves had no map; default to empty so the
-    // Groups sub-tab mounts without errors. Members referencing assets that
-    // vanished get pruned so the list view doesn't render dead thumbs.
+    // Groups sub-tab mounts without errors. NOTE: we intentionally do NOT
+    // prune assetIds here — objectAssets is excluded from persist and is
+    // always empty at rehydration time, so pruning would wipe all members.
+    // Dead-thumb pruning happens lazily in the cloud hydration effect once
+    // assets have been fetched from Supabase.
     if (!state.tileGroups) state.tileGroups = {};
-    for (const g of Object.values(state.tileGroups)) {
-      g.assetIds = (g.assetIds ?? []).filter((aid) => !!state.objectAssets[aid]);
-    }
     // v10: playable characters. Pre-v10 saves had no characters map;
     // default to empty so the panel mounts without errors.
     if (!state.tileCharacters) state.tileCharacters = {};

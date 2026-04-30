@@ -262,11 +262,17 @@ function TileAnimationSection({
   const [frameCount, setFrameCount] = useState(16);
   const [fps, setFps] = useState(8);
   const [busy, setBusy] = useState(false);
+  // Which slot in the wang grid the upload targets. Defaults to the
+  // texture's pure corner tile (centre-of-biome slot) but the user can
+  // click any of the 16 tiles to retarget — handy when only the
+  // edge/transition slot needs an animation (e.g. shoreline foam).
+  const [selectedTileIdx, setSelectedTileIdx] = useState<number | null>(null);
 
   if (owners.length === 0) return null;
   const first = owners[0];
   const pureIndex = first.side === 'u' ? PURE_UPPER_INDEX : PURE_LOWER_INDEX;
-  const tileId = first.tileset.tileIds[pureIndex];
+  const targetIdx = selectedTileIdx ?? pureIndex;
+  const tileId = first.tileset.tileIds[targetIdx];
   const tile = tileId ? tiles[tileId] : undefined;
   if (!tile) return null;
   const animated = !!tile.animationFrames && tile.animationFrames.length > 0;
@@ -317,6 +323,20 @@ function TileAnimationSection({
 
   return (
     <PanelSection title="Animation" collapsible defaultOpen={animated}>
+      <WangTileGrid
+        tileset={first.tileset}
+        selectedIndex={targetIdx}
+        animatedSet={new Set(
+          first.tileset.tileIds
+            .map((id, i) => ({ id, i }))
+            .filter(({ id }) => {
+              const t = tiles[id];
+              return !!(t?.animationFrames && t.animationFrames.length > 0);
+            })
+            .map(({ i }) => i),
+        )}
+        onSelect={setSelectedTileIdx}
+      />
       <PanelSlider
         label="Frame count"
         value={frameCount}
@@ -368,6 +388,115 @@ function TileAnimationSection({
         }}
       />
     </PanelSection>
+  );
+}
+
+/**
+ * 4×4 wang grid — replays the visualisation that used to live inside the
+ * old TerrainCard before the left-panel Terrain tab was flattened to one
+ * swatch per texture. Variant-aware (substitutes the active sheet's
+ * sliced URLs when present), highlights the currently-selected slot, and
+ * tags any tile that already carries an animation so the user can see at
+ * a glance which slots are animated.
+ */
+function WangTileGrid({
+  tileset,
+  selectedIndex,
+  animatedSet,
+  onSelect,
+}: {
+  tileset: Tileset;
+  selectedIndex: number;
+  animatedSet: Set<number>;
+  onSelect: (idx: number) => void;
+}) {
+  const tiles = useTile((s) => s.tiles);
+  const activeIdx = tileset.activeVariantIndex ?? 0;
+  const variantUrls = activeIdx > 0
+    ? tileset.variants?.[activeIdx - 1]?.tileDataUrls
+    : undefined;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: 'var(--pb-ink-muted)',
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
+        }}
+      >
+        Wang grid · click a tile to target it
+      </div>
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: `repeat(${tileset.cols}, 1fr)`,
+          gap: 2,
+          padding: 4,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 6,
+        }}
+      >
+        {tileset.tileIds.map((id, i) => {
+          const url = variantUrls?.[i] ?? tiles[id]?.dataUrl;
+          const isSelected = i === selectedIndex;
+          const isAnimated = animatedSet.has(i);
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelect(i)}
+              title={`Tile #${i}${isAnimated ? ' · animated' : ''}`}
+              style={{
+                position: 'relative',
+                aspectRatio: '1 / 1',
+                background: 'rgba(0,0,0,0.05)',
+                border: isSelected
+                  ? '2px solid var(--pb-accent, #1d1a14)'
+                  : '1.5px solid transparent',
+                borderRadius: 4,
+                overflow: 'hidden',
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            >
+              {url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={url}
+                  alt=""
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    imageRendering: 'pixelated',
+                    pointerEvents: 'none',
+                  }}
+                  draggable={false}
+                />
+              ) : null}
+              {isAnimated && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 1,
+                    right: 1,
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: '#22c55e',
+                    boxShadow: '0 0 0 1.5px var(--pb-paper)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

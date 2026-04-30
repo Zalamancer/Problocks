@@ -1,13 +1,6 @@
 import { create } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 
-// Wang sheet quadrant indices — kept in sync with `lib/wang-tiles.ts`
-// (PURE_UPPER_INDEX = 12, PURE_LOWER_INDEX = 6). Inlined here so the
-// store doesn't need to import the lib (which doesn't depend on the
-// store either, but the symmetry is nice and keeps the wavy-sibling
-// expansion fast — no extra module hops on the paint hot path).
-const PURE_UPPER_IDX = 12;
-const PURE_LOWER_IDX = 6;
 
 /**
  * 2D Tile-based editor state — Wang/dual-grid auto-tiling.
@@ -281,6 +274,24 @@ export interface ObjectClass {
   /** null = top-level folder. */
   parentId: string | null;
   /** Sort order among siblings sharing the same parentId. */
+  sortIndex: number;
+}
+
+/**
+ * A user-authored bundle of object assets that can be reused as a single
+ * placement (e.g. "Forest clump", "House kit"). Membership lives on the
+ * group itself as `assetIds[]` so an asset can belong to multiple groups
+ * without a join table. Group reusable-placement behaviour is layered on
+ * later — for now the model just tracks identity + membership so the
+ * Groups sub-tab has something real to render and the New-group button
+ * has somewhere to write.
+ */
+export interface TileGroup {
+  id: string;
+  name: string;
+  /** ObjectAsset ids that belong to this group. Stable across renames. */
+  assetIds: string[];
+  /** Sort order among groups (lowest first). */
   sortIndex: number;
 }
 
@@ -568,6 +579,21 @@ export interface TileStore {
   /** Move an asset into a class (or to root with classId=null). */
   setAssetClass: (assetId: string, classId: string | null) => void;
 
+  // ── Object groups (Groups sub-tab in 2D Tile assets) ─────────────
+  /** Reusable bundles of object assets (a "Forest clump", "House kit",
+   *  etc.). Local-only state, persisted as a tiny index. Image bytes
+   *  live with the member assets, not here. */
+  tileGroups: Record<string, TileGroup>;
+  /** Create a new empty group with the given name (defaults to "New group").
+   *  Returns the new id so the caller can put it into rename mode. */
+  addTileGroup: (input?: { name?: string }) => string;
+  renameTileGroup: (id: string, name: string) => void;
+  /** Delete a group. Member asset ids are NOT touched — groups are a
+   *  bundling overlay, not the home of the assets themselves. */
+  removeTileGroup: (id: string) => void;
+  /** Toggle an asset's membership in a group. Idempotent on either side. */
+  setTileGroupMember: (groupId: string, assetId: string, member: boolean) => void;
+
   // ── Playable characters (Characters sub-tab in 2D Tile assets) ──
   /** Map of character id → record. Stored alongside object assets so the
    *  panel can render thumbnails without round-tripping the cloud. The
@@ -706,19 +732,6 @@ export interface TileStore {
    *  — turn off if the corner pattern matters more than the variety. */
   brushRandomRotate: boolean;
   setBrushRandomRotate: (v: boolean) => void;
-  /**
-   * Texture ids that should render with the animated "water effect"
-   * overlay — sine-wave shimmer + hue tint clipped to the region as a
-   * whole (not per tile). Stored as a flat list of raw ids, but
-   * `setWavyTexture` expands sibling sets via getSiblingTextures so two
-   * label-linked "water" textures both get the effect from a single
-   * toggle.
-   */
-  wavyTextureIds: string[];
-  /** Toggle the water-effect on a texture id. When `on` is true, this
-   *  id and all its siblings (sprite-byte or label) are added to the
-   *  list; when false, the id and all its siblings are removed. */
-  setWavyTexture: (textureId: string, on: boolean) => void;
   /**
    * Optional base-layer texture id. When set, the renderer fills the
    * entire visible viewport with this texture's pure tile and treats
@@ -1686,6 +1699,54 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     return { assetClassIds: next };
   }),
 
+  // ── Object groups ───────────────────────────────────────────────
+  tileGroups: {},
+  addTileGroup: ({ name } = {}) => {
+    const id = cryptoId();
+    set((s) => {
+      const maxIdx = Object.values(s.tileGroups).reduce(
+        (m, g) => Math.max(m, g.sortIndex), -1,
+      );
+      return {
+        tileGroups: {
+          ...s.tileGroups,
+          [id]: {
+            id,
+            name: (name ?? '').trim() || 'New group',
+            assetIds: [],
+            sortIndex: maxIdx + 1,
+          },
+        },
+      };
+    });
+    return id;
+  },
+  renameTileGroup: (id, name) => set((s) => {
+    const g = s.tileGroups[id];
+    if (!g) return {};
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === g.name) return {};
+    return { tileGroups: { ...s.tileGroups, [id]: { ...g, name: trimmed } } };
+  }),
+  removeTileGroup: (id) => set((s) => {
+    if (!s.tileGroups[id]) return {};
+    const next = { ...s.tileGroups };
+    delete next[id];
+    return { tileGroups: next };
+  }),
+  setTileGroupMember: (groupId, assetId, member) => set((s) => {
+    const g = s.tileGroups[groupId];
+    if (!g) return {};
+    if (member && !s.objectAssets[assetId]) return {};
+    const has = g.assetIds.includes(assetId);
+    if (member && has) return {};
+    if (!member && !has) return {};
+    const assetIds = member
+      ? [...g.assetIds, assetId]
+      : g.assetIds.filter((aid) => aid !== assetId);
+    return { tileGroups: { ...s.tileGroups, [groupId]: { ...g, assetIds } } };
+  }),
+
   // ── Playable characters ─────────────────────────────────────────
   tileCharacters: {},
   selectedCharacterId: null,
@@ -2023,52 +2084,6 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setBrushRandomFlipV: (v) => set({ brushRandomFlipV: v }),
   brushRandomRotate: false,
   setBrushRandomRotate: (v) => set({ brushRandomRotate: v }),
-  wavyTextureIds: [],
-  setWavyTexture: (textureId, on) => set((s) => {
-    // Sibling expansion so toggling on one "water" id picks up every
-    // other id labelled / pixel-matched as water in one shot.
-    // Inlined to avoid a circular dep with @/lib/wang-tiles.
-    const sprite = (() => {
-      for (const ts of s.tilesets) {
-        const isUpper = ts.upperTextureId === textureId;
-        const isLower = ts.lowerTextureId === textureId;
-        if (!isUpper && !isLower) continue;
-        const idx = isUpper
-          ? PURE_UPPER_IDX
-          : PURE_LOWER_IDX;
-        const tileId = ts.tileIds[idx];
-        return s.tiles[tileId]?.dataUrl ?? null;
-      }
-      return null;
-    })();
-    function labelOf(id: string): string | null {
-      for (const ts of s.tilesets) {
-        if (ts.upperTextureId === id) return ts.upperLabel?.trim().toLowerCase() || null;
-        if (ts.lowerTextureId === id) return ts.lowerLabel?.trim().toLowerCase() || null;
-      }
-      return null;
-    }
-    const baseLabel = labelOf(textureId);
-    const family = new Set<string>([textureId]);
-    for (const ts of s.tilesets) {
-      if (sprite) {
-        const u = s.tiles[ts.tileIds[PURE_UPPER_IDX]]?.dataUrl;
-        const l = s.tiles[ts.tileIds[PURE_LOWER_IDX]]?.dataUrl;
-        if (u === sprite) family.add(ts.upperTextureId);
-        if (l === sprite) family.add(ts.lowerTextureId);
-      }
-      if (baseLabel) {
-        const ul = ts.upperLabel?.trim().toLowerCase() || null;
-        const ll = ts.lowerLabel?.trim().toLowerCase() || null;
-        if (ul && ul === baseLabel) family.add(ts.upperTextureId);
-        if (ll && ll === baseLabel) family.add(ts.lowerTextureId);
-      }
-    }
-    const current = new Set(s.wavyTextureIds);
-    if (on) for (const id of family) current.add(id);
-    else for (const id of family) current.delete(id);
-    return { wavyTextureIds: Array.from(current) };
-  }),
   baseTextureId: null,
   setBaseTexture: (id) => set({ baseTextureId: id }),
   tilesetTints: {},
@@ -2340,7 +2355,6 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     brushRandomFlipH: s.brushRandomFlipH,
     brushRandomFlipV: s.brushRandomFlipV,
     brushRandomRotate: s.brushRandomRotate,
-    wavyTextureIds: s.wavyTextureIds,
     baseTextureId: s.baseTextureId,
     tilesetTints: s.tilesetTints,
     showGrid: s.showGrid,
@@ -2350,6 +2364,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     // per class + assetId→classId map). No image bytes here.
     objectClasses: s.objectClasses,
     assetClassIds: s.assetClassIds,
+    // Object groups: tiny local-only index (id/name/sortIndex + assetIds[]).
+    // No image bytes — members reference objectAssets for thumbnails.
+    tileGroups: s.tileGroups,
     // Playable characters — sheet src DOES persist (sheets are typically
     // <200 KB so even a few characters stay well under the 5–10 MB
     // localStorage cap). Letting an offline reload keep the player
@@ -2476,6 +2493,13 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       if (c.parentId !== null && !state.objectClasses[c.parentId]) {
         c.parentId = null;
       }
+    }
+    // Object groups: pre-groups saves had no map; default to empty so the
+    // Groups sub-tab mounts without errors. Members referencing assets that
+    // vanished get pruned so the list view doesn't render dead thumbs.
+    if (!state.tileGroups) state.tileGroups = {};
+    for (const g of Object.values(state.tileGroups)) {
+      g.assetIds = (g.assetIds ?? []).filter((aid) => !!state.objectAssets[aid]);
     }
     // v10: playable characters. Pre-v10 saves had no characters map;
     // default to empty so the panel mounts without errors.

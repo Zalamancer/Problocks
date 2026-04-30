@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
 import { PanelSearchInput, PanelSelect } from '@/components/ui';
-import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass, type TileCharacter } from '@/store/tile-store';
+import { useTile, type Tileset, type Tile, type ObjectAsset, type ObjectClass, type TileCharacter, type TileGroup } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
 import { tileSimilarityCached, TILE_SIMILARITY_THRESHOLD } from '@/lib/tile-similarity';
@@ -2479,42 +2479,35 @@ function AssetsSubTabs() {
         onChange={(id) => setTab(id as AssetsSubTabId)}
       />
       {tab === 'objects' && <ObjectsSection />}
-      {tab === 'groups' && (
-        <EmptySubTabPlaceholder
-          searchPlaceholder="Search groups..."
-          newTitle="New group"
-          uploadTitle="Upload group preset"
-          emptyLabel="No groups yet — coming soon."
-          onCreate={() => { /* group model not wired up yet */ }}
-        />
-      )}
+      {tab === 'groups' && <GroupsSection />}
       {tab === 'characters' && <CharactersSection />}
     </div>
   );
 }
 
 /**
- * Visual-only toolbar + empty-state card for tabs whose data model isn't
- * wired up yet. Renders the same search/filter/new/upload row used by the
- * Objects tab so the three sub-tabs feel consistent, but every control is
- * a no-op. Real handlers land here when the Groups + Characters models
- * are added.
+ * Groups sub-tab — reusable bundles of object assets. Minimal vertical
+ * slice: create / rename / delete groups, list them as chunky-pastel cards
+ * that mirror the Objects sub-tab. Membership editing + drop-onto-canvas
+ * lands in a follow-up; the data model already carries `assetIds[]` so
+ * those features can be layered without another migration.
  */
-function EmptySubTabPlaceholder({
-  searchPlaceholder,
-  newTitle,
-  uploadTitle,
-  emptyLabel,
-  onCreate,
-}: {
-  searchPlaceholder: string;
-  newTitle: string;
-  uploadTitle: string;
-  emptyLabel: string;
-  onCreate?: () => void;
-}) {
+function GroupsSection() {
+  const tileGroups = useTile((s) => s.tileGroups);
+  const addTileGroup = useTile((s) => s.addTileGroup);
+  const renameTileGroup = useTile((s) => s.renameTileGroup);
+  const removeTileGroup = useTile((s) => s.removeTileGroup);
   const [search, setSearch] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+
+  const sorted: TileGroup[] = Object.values(tileGroups).sort(
+    (a, b) => a.sortIndex - b.sortIndex,
+  );
+  const q = search.trim().toLowerCase();
+  const visible = q
+    ? sorted.filter((g) => g.name.toLowerCase().includes(q))
+    : sorted;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="shrink-0 px-3 py-2 flex flex-col gap-2 [&>div]:!mb-0">
@@ -2523,29 +2516,15 @@ function EmptySubTabPlaceholder({
             <PanelSearchInput
               value={search}
               onChange={setSearch}
-              placeholder={searchPlaceholder}
+              placeholder="Search groups..."
             />
           </div>
           <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            className="relative shrink-0 flex items-center justify-center"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              background: filtersOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
-              border: `1.5px solid ${filtersOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-              boxShadow: filtersOpen ? '0 2px 0 var(--pb-ink)' : 'none',
-              color: filtersOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
-              cursor: 'pointer',
-              transition: 'background 120ms ease, border-color 120ms ease',
+            onClick={() => {
+              const id = addTileGroup();
+              setRenamingId(id);
+              setSearch('');
             }}
-            title="Filters"
-          >
-            <SlidersHorizontal size={15} strokeWidth={2.2} />
-          </button>
-          <button
-            onClick={onCreate}
             className="shrink-0 flex items-center justify-center"
             style={{
               width: 34,
@@ -2557,44 +2536,133 @@ function EmptySubTabPlaceholder({
               cursor: 'pointer',
               transition: 'background 120ms ease, border-color 120ms ease',
             }}
-            title={newTitle}
+            title="New group"
           >
             <FolderPlus size={15} strokeWidth={2.2} />
           </button>
-          <button
-            disabled
-            className="shrink-0 flex items-center justify-center"
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 8px 14px' }}>
+        {visible.length === 0 && (
+          <div
             style={{
-              width: 34,
-              height: 34,
+              padding: '14px 12px',
+              fontSize: 11,
+              color: 'var(--pb-ink-muted)',
+              fontStyle: 'italic',
+              border: '1.5px dashed var(--pb-line-2)',
+              borderRadius: 8,
+              background: 'var(--pb-cream-2)',
+              textAlign: 'center',
+            }}
+          >
+            {sorted.length === 0
+              ? 'No groups yet — click + to create one.'
+              : 'No groups match your search.'}
+          </div>
+        )}
+        {visible.map((g) => (
+          <div
+            key={g.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 10px',
               borderRadius: 10,
               background: 'var(--pb-paper)',
               border: '1.5px solid var(--pb-line-2)',
-              color: 'var(--pb-ink-soft)',
-              cursor: 'not-allowed',
-              opacity: 0.55,
             }}
-            title={uploadTitle}
           >
-            <Upload size={15} strokeWidth={2.2} />
-          </button>
-        </div>
-      </div>
-      <div style={{ padding: '4px 14px 14px' }}>
-        <div
-          style={{
-            padding: '14px 12px',
-            fontSize: 11,
-            color: 'var(--pb-ink-muted)',
-            fontStyle: 'italic',
-            border: '1.5px dashed var(--pb-line-2)',
-            borderRadius: 8,
-            background: 'var(--pb-cream-2)',
-            textAlign: 'center',
-          }}
-        >
-          {emptyLabel}
-        </div>
+            <Layers size={14} strokeWidth={2.4} style={{ color: 'var(--pb-ink-soft)' }} />
+            {renamingId === g.id ? (
+              <input
+                autoFocus
+                defaultValue={g.name}
+                onBlur={(e) => {
+                  renameTileGroup(g.id, e.currentTarget.value);
+                  setRenamingId(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setRenamingId(null);
+                }}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: 'var(--pb-ink)',
+                  padding: 0,
+                }}
+              />
+            ) : (
+              <span
+                onDoubleClick={() => setRenamingId(g.id)}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--pb-ink)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  cursor: 'text',
+                }}
+                title="Double-click to rename"
+              >
+                {g.name}
+              </span>
+            )}
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: 'var(--pb-ink-muted)',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {g.assetIds.length}
+            </span>
+            <button
+              onClick={() => setRenamingId(g.id)}
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--pb-ink-soft)',
+                cursor: 'pointer',
+              }}
+              title="Rename"
+            >
+              <Pencil size={12} strokeWidth={2.4} />
+            </button>
+            <button
+              onClick={() => removeTileGroup(g.id)}
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--pb-coral-ink)',
+                cursor: 'pointer',
+              }}
+              title="Delete group"
+            >
+              <Trash2 size={12} strokeWidth={2.4} />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

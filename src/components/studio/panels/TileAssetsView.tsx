@@ -2452,12 +2452,10 @@ function ObjectsSection() {
                   setAssetClass(fromId, null);
                 }}
                 className={viewMode === 'grid'
-                  ? 'grid grid-cols-2 gap-1 overflow-y-auto'
-                  : 'flex flex-col gap-px overflow-y-auto'}
+                  ? 'grid grid-cols-2 gap-1'
+                  : 'flex flex-col gap-px'}
                 style={{
                   outline: 'none',
-                  maxHeight: 480,
-                  scrollbarGutter: 'stable',
                   background: dropTargetClassId === 'root' ? 'rgba(0,0,0,0.03)' : undefined,
                   borderRadius: 6,
                   padding: 2,

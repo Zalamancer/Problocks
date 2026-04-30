@@ -879,6 +879,24 @@ export interface TileStore {
   playCameraZoom: number;
   setPlayCameraZoom: (v: number) => void;
 
+  // ── World vibrancy (CSS filter on the canvas) ──────────────────
+  /** Multiplicative saturation applied to the rendered tile canvas via a
+   *  CSS `filter`. 1 = native palette colors, >1 punches greens / oranges
+   *  toward the Stardew look, <1 desaturates. Stays purely on the viewport
+   *  so it never bakes into exported pixels or per-asset tints. */
+  worldSaturation: number;
+  setWorldSaturation: (v: number) => void;
+  /** Multiplicative contrast applied to the rendered tile canvas. 1 = no
+   *  change. Stacks with `worldSaturation` / `worldBrightness`. */
+  worldContrast: number;
+  setWorldContrast: (v: number) => void;
+  /** Multiplicative brightness applied to the rendered tile canvas. 1 = no
+   *  change. Stacks with `worldSaturation` / `worldContrast`. */
+  worldBrightness: number;
+  setWorldBrightness: (v: number) => void;
+  /** Restore all three world-vibrancy controls to 1× (no filter). */
+  resetWorldVibrancy: () => void;
+
   // ── Procedural map generation (Play-mode worldgen) ─────────────
   /** 32-bit seed driving the deterministic noise. Same seed + palette =
    *  same map across reloads / sessions / players. */
@@ -2325,6 +2343,15 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   playCameraZoom: 1.5,
   setPlayCameraZoom: (v) => set({ playCameraZoom: Math.max(0.1, Math.min(8, v)) }),
 
+  worldSaturation: 1,
+  setWorldSaturation: (v) => set({ worldSaturation: Math.max(0, Math.min(3, v)) }),
+  worldContrast: 1,
+  setWorldContrast: (v) => set({ worldContrast: Math.max(0, Math.min(3, v)) }),
+  worldBrightness: 1,
+  setWorldBrightness: (v) => set({ worldBrightness: Math.max(0, Math.min(3, v)) }),
+  resetWorldVibrancy: () =>
+    set({ worldSaturation: 1, worldContrast: 1, worldBrightness: 1 }),
+
   genSeed: 0xC0FFEE,
   setGenSeed: (seed) => set({ genSeed: (Math.floor(seed) >>> 0) }),
   rerollGenSeed: () => set({ genSeed: ((Math.random() * 0x100000000) >>> 0) }),
@@ -2549,6 +2576,9 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     playCameraFollow: s.playCameraFollow,
     playCameraSmoothing: s.playCameraSmoothing,
     playCameraZoom: s.playCameraZoom,
+    worldSaturation: s.worldSaturation,
+    worldContrast: s.worldContrast,
+    worldBrightness: s.worldBrightness,
     genSeed: s.genSeed,
     genScale: s.genScale,
     genTextureWeights: s.genTextureWeights,
@@ -2578,6 +2608,11 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     if (state.playLayer === undefined) state.playLayer = null;
     if (!state.genObjectWeights) state.genObjectWeights = {};
     if (!state.genTextureWeights) state.genTextureWeights = {};
+    // World vibrancy (added 2026-04-30) — pre-feature shapes never wrote
+    // these, so backfill 1.0× so the renderer's CSS filter stays a no-op.
+    if (typeof state.worldSaturation !== 'number') state.worldSaturation = 1;
+    if (typeof state.worldContrast !== 'number') state.worldContrast = 1;
+    if (typeof state.worldBrightness !== 'number') state.worldBrightness = 1;
     if (!state.layers || state.layers.length === 0) {
       const layer = defaultLayer();
       state.layers = [layer];

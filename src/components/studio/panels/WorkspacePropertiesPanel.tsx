@@ -46,6 +46,7 @@ export function WorkspacePropertiesPanel({ headless }: { headless?: boolean } = 
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         <TileCameraSection />
+        <TileWorldVibrancySection />
         <TileGenerationSection />
         <PanelSection title="Preset" collapsible defaultOpen>
           <PanelSelect
@@ -189,6 +190,60 @@ function TileCameraSection() {
         onChange={setZoom}
         min={0.5} max={4} step={0.1} precision={1} suffix="×"
       />
+    </PanelSection>
+  );
+}
+
+/**
+ * World-wide colour vibrancy controls for the 2D Tile workspace. Applies
+ * a CSS `filter: saturate() contrast() brightness()` directly on the
+ * tile canvas so the user can punch the entire scene toward a Stardew /
+ * Pokemon-bright palette without re-tinting per-tileset buckets. Only
+ * renders for the 2D Tile system — other workspaces have their own
+ * lighting / atmosphere stack above.
+ */
+function TileWorldVibrancySection() {
+  const gameSystem = useStudio((s) => s.gameSystem);
+  const saturation = useTile((s) => s.worldSaturation);
+  const setSaturation = useTile((s) => s.setWorldSaturation);
+  const contrast = useTile((s) => s.worldContrast);
+  const setContrast = useTile((s) => s.setWorldContrast);
+  const brightness = useTile((s) => s.worldBrightness);
+  const setBrightness = useTile((s) => s.setWorldBrightness);
+  const reset = useTile((s) => s.resetWorldVibrancy);
+
+  if (gameSystem !== '2d') return null;
+
+  return (
+    <PanelSection title="World vibrancy" collapsible defaultOpen>
+      <PanelSlider
+        label="Saturation"
+        value={saturation}
+        onChange={setSaturation}
+        min={0} max={2.5} step={0.05} precision={2}
+        suffix="×"
+      />
+      <PanelSlider
+        label="Contrast"
+        value={contrast}
+        onChange={setContrast}
+        min={0.5} max={2} step={0.05} precision={2}
+        suffix="×"
+      />
+      <PanelSlider
+        label="Brightness"
+        value={brightness}
+        onChange={setBrightness}
+        min={0.5} max={2} step={0.05} precision={2}
+        suffix="×"
+      />
+      <PanelActionButton
+        icon={RotateCcw}
+        variant="secondary"
+        onClick={reset}
+      >
+        Reset vibrancy
+      </PanelActionButton>
     </PanelSection>
   );
 }

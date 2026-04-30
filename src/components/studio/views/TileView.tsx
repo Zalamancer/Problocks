@@ -478,6 +478,11 @@ export function TileView() {
   const resetCamera = useTile((s) => s.resetCamera);
   const clearMap = useTile((s) => s.clearMap);
   const camera = useTile((s) => s.camera);
+  // World vibrancy — viewport-only CSS filter so the user can boost
+  // saturation / contrast / brightness without re-baking pixels.
+  const worldSaturation = useTile((s) => s.worldSaturation);
+  const worldContrast = useTile((s) => s.worldContrast);
+  const worldBrightness = useTile((s) => s.worldBrightness);
   const setRightPanelGroup = useStudio((s) => s.setRightPanelGroup);
   // Global Play / Stop state — top bar in TopMenuBar flips this. When the
   // user enters play mode, characters become controllable: WASD/arrows
@@ -2729,7 +2734,20 @@ export function TileView() {
       <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
         <canvas
           ref={canvasRef}
-          style={{ width: '100%', height: '100%', display: 'block', imageRendering: 'pixelated' }}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+            imageRendering: 'pixelated',
+            // Skip the filter string entirely when every channel is the
+            // identity 1× — leaves the GPU compositor on its fast path
+            // for the default look (no perf cost when unused).
+            filter:
+              worldSaturation === 1 && worldContrast === 1 && worldBrightness === 1
+                ? undefined
+                : `saturate(${worldSaturation}) contrast(${worldContrast}) brightness(${worldBrightness})`,
+            transition: 'filter 0.15s ease-out',
+          }}
         />
 
       {Object.keys(tiles).length === 0 && (

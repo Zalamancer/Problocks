@@ -47,15 +47,19 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
   const replaceCharacterSheet = useTile((s) => s.replaceCharacterSheet);
 
   const [tab, setTab] = useState<'character' | 'animations'>('character');
-  // The direction the user has clicked from the rotation list. The
-  // preview keeps cycling regardless — this only marks "what's selected
-  // for animation editing" (green dot in Character tab, current
-  // direction shown in Animations tab).
-  const [selectedDir, setSelectedDir] = useState<CharacterDir8 | null>(null);
+  // Drill-down: when the user clicks a direction on the Character tab,
+  // the tab swaps to the per-direction Animations editor (with a Back
+  // button). `null` means we're showing the directions list view.
+  const [drilldownDir, setDrilldownDir] = useState<CharacterDir8 | null>(null);
+  // Generation flow on the Animations tab — the footer button kicks off
+  // the run, the body of GenerateAnimationsTab does the actual work via
+  // a callback registered into this ref.
+  const [generating, setGenerating] = useState(false);
+  const generateTriggerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setTab('character');
-    setSelectedDir(null);
+    setDrilldownDir(null);
   }, [character?.id]);
 
   if (!selectedCharacterId || !character) return null;
@@ -63,8 +67,8 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
   // Inline shell — defining a Shell component variable inside the body
   // creates a NEW component identity on every render, which causes React
   // to unmount/remount the entire subtree (and wipe local state like
-  // `pendingNameId` on the Animations tab). Compose it as plain JSX so
-  // the children stay mounted across re-renders.
+  // `pendingNameId` on the per-direction view). Compose it as plain JSX
+  // so the children stay mounted across re-renders.
   const body = (
     <>
       <PanelIconTabs
@@ -78,21 +82,26 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         {tab === 'character' ? (
-          <CharacterTab
-            character={character}
-            selectedDir={selectedDir}
-            onPickDir={(dir) => {
-              setSelectedDir(dir);
-              setTab('animations');
-            }}
-            onUpdateCharacter={(patch) => updateTileCharacter(character.id, patch)}
-            onReplaceSheet={(input) => replaceCharacterSheet(character.id, input)}
-          />
+          drilldownDir ? (
+            <DirectionAnimationsView
+              character={character}
+              dir={drilldownDir}
+              onBack={() => setDrilldownDir(null)}
+            />
+          ) : (
+            <CharacterTab
+              character={character}
+              onPickDir={(dir) => setDrilldownDir(dir)}
+              onUpdateCharacter={(patch) => updateTileCharacter(character.id, patch)}
+              onReplaceSheet={(input) => replaceCharacterSheet(character.id, input)}
+            />
+          )
         ) : (
-          <AnimationsTab
+          <GenerateAnimationsTab
             character={character}
-            initialDir={selectedDir}
-            onChangeDir={setSelectedDir}
+            generating={generating}
+            setGenerating={setGenerating}
+            registerSubmit={(fn) => { generateTriggerRef.current = fn; }}
           />
         )}
       </div>
@@ -105,14 +114,26 @@ export function TileCharacterPropertiesPanel({ headless }: { headless?: boolean 
           background: 'var(--pb-paper)',
         }}
       >
-        <PanelActionButton
-          variant="destructive"
-          icon={Trash2}
-          fullWidth
-          onClick={() => removeTileCharacter(character.id)}
-        >
-          Delete character
-        </PanelActionButton>
+        {tab === 'character' ? (
+          <PanelActionButton
+            variant="destructive"
+            icon={Trash2}
+            fullWidth
+            onClick={() => removeTileCharacter(character.id)}
+          >
+            Delete character
+          </PanelActionButton>
+        ) : (
+          <PanelActionButton
+            variant="primary"
+            icon={Sparkles}
+            fullWidth
+            loading={generating}
+            onClick={() => generateTriggerRef.current?.()}
+          >
+            {generating ? 'Generating…' : 'Generate animation'}
+          </PanelActionButton>
+        )}
       </footer>
     </>
   );
@@ -159,10 +180,10 @@ const DIR_CELL: Record<CharacterDir8, number> = {
 // ─────────────────────────────────────────────────────────────────────
 
 function CharacterTab({
-  character, selectedDir, onPickDir, onUpdateCharacter, onReplaceSheet,
+  character, onPickDir, onUpdateCharacter, onReplaceSheet,
 }: {
   character: TileCharacter;
-  selectedDir: CharacterDir8 | null;
+  /** Drill into a direction's per-direction animations view. */
   onPickDir: (dir: CharacterDir8) => void;
   onUpdateCharacter: (patch: Partial<TileCharacter>) => void;
   onReplaceSheet: (input: { src: string; cols: number; rows: number; frameW: number; frameH: number }) => void;
@@ -305,7 +326,7 @@ function CharacterTab({
         <PanelSection title="Rotation" collapsible defaultOpen>
           <DirectionList
             character={character}
-            activeDir={selectedDir}
+            activeDir={null}
             onPick={onPickDir}
             markStyle="dot"
           />
@@ -336,27 +357,20 @@ function CharacterTab({
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Animations tab — list of 4×4 action sheets for one direction
+// Direction animations view — rendered inside the Character tab when
+// the user drills into a single direction. The 4×4 action sheet upload
+// flow used to live in its own "Animations" tab; it's now reachable
+// from a Back button at the top.
 // ─────────────────────────────────────────────────────────────────────
 
-function AnimationsTab({
-  character, initialDir, onChangeDir,
+function DirectionAnimationsView({
+  character, dir, onBack,
 }: {
   character: TileCharacter;
-  initialDir: CharacterDir8 | null;
-  onChangeDir: (dir: CharacterDir8) => void;
+  dir: CharacterDir8;
+  onBack: () => void;
 }) {
-  const [activeDir, setActiveDir] = useState<CharacterDir8>(initialDir ?? 'n');
-  useEffect(() => {
-    if (initialDir) setActiveDir(initialDir);
-  }, [initialDir]);
-  // Surface activeDir back to the parent on first mount so the rotation
-  // dot in CharacterTab stays in sync — the picker UI used to do this on
-  // every change but was removed; this keeps the contract intact.
-  useEffect(() => {
-    onChangeDir(activeDir);
-  }, [activeDir, onChangeDir]);
-
+  const activeDir = dir;
   // Assembly-line UI: preview only shows the animation that was JUST
   // uploaded and is awaiting a name. Once the user commits the name (or
   // dismisses the field) the slot clears and the preview reverts to its
@@ -365,8 +379,9 @@ function AnimationsTab({
   // re-surfaces them.
   const animations = character.animations?.[activeDir] ?? [];
   const [pendingNameId, setPendingNameId] = useState<string | null>(null);
-  // Direction switch wipes the pending slot — the new direction's tile
-  // should start empty regardless of the previous one's in-flight state.
+  // Direction switch (different drilldown) wipes the pending slot — the
+  // new direction's tile should start empty regardless of the previous
+  // one's in-flight state.
   useEffect(() => {
     setPendingNameId(null);
   }, [activeDir]);
@@ -470,6 +485,8 @@ function AnimationsTab({
           if (file) void ingestReplaceAnimation(file);
         }}
       />
+
+      <BackHeader label={`${DIR_LABEL[activeDir]} animations`} onBack={onBack} />
 
       <AnimationPreview
         animation={animation}
@@ -1391,4 +1408,336 @@ function CellThumb({
       }}
     />
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Back-button header for the per-direction drilldown view.
+// ─────────────────────────────────────────────────────────────────────
+
+function BackHeader({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <div
+      className="flex items-center gap-2 shrink-0"
+      style={{
+        padding: '8px 12px',
+        borderBottom: '1.5px solid var(--pb-line-2)',
+        background: 'var(--pb-paper)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={onBack}
+        title="Back to directions"
+        style={{
+          width: 28,
+          height: 28,
+          background: 'var(--pb-cream-2)',
+          border: '1.5px solid var(--pb-line-2)',
+          borderRadius: 7,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--pb-ink)',
+          flexShrink: 0,
+        }}
+      >
+        <ArrowLeft size={14} strokeWidth={2.4} />
+      </button>
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 800,
+          color: 'var(--pb-ink)',
+          letterSpacing: 0.2,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Animations tab — single prompt → PixelLab AI generates an action
+// animation across all 8 directions, saved as one CharacterAnimation
+// per direction. The actual click handler for the sticky-footer button
+// lives in this component (registered with the parent via a ref) so
+// the body keeps full control of the prompt + error state.
+// ─────────────────────────────────────────────────────────────────────
+
+function GenerateAnimationsTab({
+  character, generating, setGenerating, registerSubmit,
+}: {
+  character: TileCharacter;
+  generating: boolean;
+  setGenerating: (v: boolean) => void;
+  registerSubmit: (fn: () => void) => void;
+}) {
+  const [prompt, setPrompt] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const addCharacterAnimation = useTile((s) => s.addCharacterAnimation);
+  const addToast = useToastStore((s) => s.addToast);
+
+  // Slug-friendly action name derived from the prompt — used as the
+  // saved animation's label so users can find it in the per-direction
+  // SAVED list later.
+  const submit = useCallback(async () => {
+    const action = prompt.trim();
+    if (!action) {
+      setError('Enter a prompt first (e.g. "running", "attacking", "casting").');
+      return;
+    }
+    if (generating) return;
+    setError(null);
+    setProgress('Slicing 3×3 reference frames…');
+    setGenerating(true);
+    try {
+      const references = await sliceCharacterCells(character);
+      setProgress('Calling PixelLab for 8 directions (this can take a minute)…');
+      const resp = await fetch('/api/pixellab-character-animation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          references,
+          action,
+          frameW: character.frameW,
+          frameH: character.frameH,
+        }),
+      });
+      const data = (await resp.json()) as {
+        ok: boolean;
+        error?: string;
+        results?: { dir: CharacterDir8; frames: string[] }[];
+        errors?: { dir: CharacterDir8; error: string }[];
+      };
+      if (!resp.ok || !data.ok) {
+        throw new Error(data.error || `Generation failed (HTTP ${resp.status})`);
+      }
+      setProgress('Composing 4×4 sheets and saving…');
+      const results = data.results ?? [];
+      for (const { dir, frames } of results) {
+        if (frames.length === 0) continue;
+        const sheet = await composeFramesIntoSheet(frames);
+        addCharacterAnimation(character.id, dir, {
+          label: action,
+          src: sheet.dataUrl,
+          cols: sheet.cols,
+          rows: sheet.rows,
+          frameW: sheet.frameW,
+          frameH: sheet.frameH,
+        });
+      }
+      const errs = data.errors ?? [];
+      if (errs.length > 0) {
+        addToast(
+          'warning',
+          `Generated ${results.length}/8 directions. Failed: ${errs.map((e) => e.dir).join(', ')}`,
+        );
+      } else {
+        addToast('success', `Generated "${action}" across all 8 directions`);
+      }
+      setPrompt('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      addToast('error', `Generation failed: ${msg}`);
+    } finally {
+      setGenerating(false);
+      setProgress(null);
+    }
+  }, [prompt, generating, character, addCharacterAnimation, addToast, setGenerating]);
+
+  // Re-register on every render so the parent's ref always points at
+  // the latest closure (and therefore the latest `prompt`/`generating`).
+  useEffect(() => {
+    registerSubmit(submit);
+  }, [submit, registerSubmit]);
+
+  // Roll across the 8 reference cells so the user can confirm their
+  // character's poses look right before kicking off a paid generation.
+  const totalSavedAnimations = (Object.values(character.animations ?? {}) as CharacterAnimation[][])
+    .reduce((sum, list) => sum + (list?.length ?? 0), 0);
+
+  return (
+    <div className="px-4 py-4 flex flex-col gap-4">
+      <p
+        style={{
+          margin: 0,
+          fontSize: 12,
+          fontWeight: 600,
+          lineHeight: 1.5,
+          color: 'var(--pb-ink-muted)',
+        }}
+      >
+        Write one prompt and PixelLab AI will generate the action across all 8
+        directions. Each direction's pose from the 3×3 sheet is fed into the
+        model with your prompt; the result is saved as a 4×4 animation per
+        direction.
+      </p>
+
+      <PanelSection title="Prompt" collapsible defaultOpen>
+        <PanelInput
+          label="Action"
+          value={prompt}
+          onChange={setPrompt}
+          placeholder="e.g. running, attacking, casting a spell"
+          disabled={generating}
+        />
+        <span
+          style={{
+            display: 'block',
+            marginTop: 6,
+            fontSize: 10.5,
+            fontWeight: 600,
+            color: 'var(--pb-ink-muted)',
+            lineHeight: 1.4,
+          }}
+        >
+          Tip: short verb phrases work best. The animation will be saved under
+          this name on every direction.
+        </span>
+      </PanelSection>
+
+      {progress && !error && (
+        <p
+          role="status"
+          style={{
+            margin: 0,
+            padding: '8px 10px',
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1.4,
+            color: 'var(--pb-ink)',
+            background: 'var(--pb-butter)',
+            border: '1.5px solid var(--pb-butter-ink)',
+            borderRadius: 8,
+          }}
+        >
+          {progress}
+        </p>
+      )}
+
+      {error && (
+        <p
+          role="alert"
+          style={{
+            margin: 0,
+            padding: '6px 8px',
+            fontSize: 11,
+            fontWeight: 600,
+            lineHeight: 1.35,
+            color: 'var(--pb-coral-ink)',
+            background: 'var(--pb-coral)',
+            border: '1.5px solid var(--pb-coral-ink)',
+            borderRadius: 8,
+            wordBreak: 'break-word',
+          }}
+        >
+          {error}
+        </p>
+      )}
+
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 800,
+          letterSpacing: 0.4,
+          color: 'var(--pb-ink-muted)',
+        }}
+      >
+        SAVED ANIMATIONS: {totalSavedAnimations} across {countDirsWithAnimations(character)}/8 directions
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Image helpers — slice the 3×3 character into per-direction reference
+// data URLs and re-pack the AI's frames into a single 4×4 sheet.
+// ─────────────────────────────────────────────────────────────────────
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = (err) => reject(err instanceof Error ? err : new Error('Image load failed'));
+    img.src = src;
+  });
+}
+
+/**
+ * Cut the character's 3×3 sheet into 8 per-direction reference data
+ * URLs (cell 8 — the discarded slot — is skipped). Output keys are the
+ * canonical CharacterDir8 strings; values are PNG data URLs sized at
+ * the source frame dimensions.
+ */
+async function sliceCharacterCells(
+  character: TileCharacter,
+): Promise<Partial<Record<CharacterDir8, string>>> {
+  const img = await loadImage(character.src);
+  const cellW = Math.floor(img.naturalWidth / character.cols);
+  const cellH = Math.floor(img.naturalHeight / character.rows);
+  const out: Partial<Record<CharacterDir8, string>> = {};
+  for (const dir of CHARACTER_DIRS) {
+    const cellIdx = DIR_CELL[dir];
+    const col = cellIdx % character.cols;
+    const row = Math.floor(cellIdx / character.cols);
+    const canvas = document.createElement('canvas');
+    canvas.width = cellW;
+    canvas.height = cellH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get 2D canvas context');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, col * cellW, row * cellH, cellW, cellH, 0, 0, cellW, cellH);
+    out[dir] = canvas.toDataURL('image/png');
+  }
+  return out;
+}
+
+/**
+ * Pack up to 16 PNG frames into a single 4×4 sheet at the frames'
+ * native resolution. Falls back to padding the right/bottom with the
+ * first frame if PixelLab returns fewer than 16 frames so the runtime
+ * never blows up on a stray empty cell.
+ */
+async function composeFramesIntoSheet(
+  frames: string[],
+): Promise<{ dataUrl: string; cols: number; rows: number; frameW: number; frameH: number }> {
+  if (frames.length === 0) throw new Error('No frames to compose');
+  const imgs = await Promise.all(frames.map(loadImage));
+  const fw = imgs[0].naturalWidth;
+  const fh = imgs[0].naturalHeight;
+  const cols = 4;
+  const rows = 4;
+  const total = cols * rows;
+  const canvas = document.createElement('canvas');
+  canvas.width = cols * fw;
+  canvas.height = rows * fh;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get 2D canvas context');
+  ctx.imageSmoothingEnabled = false;
+  for (let i = 0; i < total; i++) {
+    const img = imgs[i] ?? imgs[imgs.length - 1];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, col * fw, row * fh, fw, fh);
+  }
+  return {
+    dataUrl: canvas.toDataURL('image/png'),
+    cols, rows, frameW: fw, frameH: fh,
+  };
+}
+
+function countDirsWithAnimations(character: TileCharacter): number {
+  let n = 0;
+  for (const dir of CHARACTER_DIRS) {
+    if ((character.animations?.[dir]?.length ?? 0) > 0) n++;
+  }
+  return n;
 }

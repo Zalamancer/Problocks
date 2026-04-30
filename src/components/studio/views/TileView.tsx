@@ -916,9 +916,12 @@ export function TileView() {
       // tileset for the boundary cells contains both textures. When a base
       // texture is active, absent corners are treated as baseTexId so paint
       // borders blend into the base via wang bridges instead of a hard edge.
-      // Order: ephemeral procgen play layer first (drawn beneath user paint),
-      // then user layers in their normal stacking order.
-      const layerSeq = s.playLayer ? [s.playLayer, ...s.layers] : s.layers;
+      // Order: user layers first (in their stacking order), then the
+      // ephemeral procgen play layer last so it always paints over
+      // anything the user might have painted outside the spawn reserve.
+      // Otherwise pre-existing edit-mode paint would mask the freshly-
+      // generated world the moment Play kicks in.
+      const layerSeq = s.playLayer ? [...s.layers, s.playLayer] : s.layers;
       for (const layer of layerSeq) {
         if (!layer.visible) continue;
         ctx!.globalAlpha = layer.opacity;

@@ -1174,6 +1174,24 @@ export function TileView() {
       const objectPool = playObjs.length > 0
         ? [...s.objects, ...playObjs]
         : s.objects;
+      // Build assetId → group tint map once per frame so the render loop
+      // can apply hue/sat/brightness from the asset's group without an
+      // O(groups) scan per object. First match wins (asset typically
+      // belongs to one group; deterministic by sortIndex).
+      const groupTintByAssetId = new Map<string, { hue: number; saturation: number; brightness: number }>();
+      const sortedGroups = Object.values(s.tileGroups).sort((a, b) => a.sortIndex - b.sortIndex);
+      for (const g of sortedGroups) {
+        const hasTint = (g.hue ?? 0) !== 0 || (g.saturation ?? 1) !== 1 || (g.brightness ?? 1) !== 1;
+        if (!hasTint) continue;
+        for (const aid of g.assetIds) {
+          if (groupTintByAssetId.has(aid)) continue;
+          groupTintByAssetId.set(aid, {
+            hue: g.hue ?? 0,
+            saturation: g.saturation ?? 1,
+            brightness: g.brightness ?? 1,
+          });
+        }
+      }
       const visibleObjects = objectPool.filter((o) => {
         const layer = s.layers.find((l) => l.id === o.layerId);
         if (layer && !layer.visible) return false;
@@ -1199,7 +1217,17 @@ export function TileView() {
         // ctx.filter is reset to 'none' on save/restore, so no manual undo
         // needed once we leave this block. hue 0 = no filter (skip the
         // string assignment to save a few ops per frame).
-        if (obj.hue) ctx!.filter = `hue-rotate(${obj.hue}deg)`;
+        const tint = groupTintByAssetId.get(obj.assetId);
+        const totalHue = (obj.hue || 0) + (tint?.hue ?? 0);
+        const sat = tint?.saturation ?? 1;
+        const bri = tint?.brightness ?? 1;
+        if (totalHue || sat !== 1 || bri !== 1) {
+          const parts: string[] = [];
+          if (totalHue) parts.push(`hue-rotate(${totalHue}deg)`);
+          if (sat !== 1) parts.push(`saturate(${sat})`);
+          if (bri !== 1) parts.push(`brightness(${bri})`);
+          ctx!.filter = parts.join(' ');
+        }
         ctx!.drawImage(img, -obj.width / 2, -obj.height / 2, obj.width, obj.height);
         ctx!.restore();
 
@@ -2020,8 +2048,25 @@ export function TileView() {
         // uses, so the placed object lands exactly where the preview showed.
         const ts = s.tileSize;
         const { cellsW, cellsH, cellTLX, cellTLY } = objectFootprint(found.style.width, found.style.height, ts, cell.cx, cell.cy);
-        const placedW = cellsW * ts;
-        const placedH = cellsH * ts;
+        let placedW = cellsW * ts;
+        let placedH = cellsH * ts;
+        // Apply group stamp randomization (size + flip) when the asset is a
+        // member of a group with those toggles on. First-matching group
+        // wins, mirroring the render-time tint lookup.
+        let stampFlipX = false;
+        let stampFlipY = false;
+        for (const g of Object.values(s.tileGroups).sort((a, b) => a.sortIndex - b.sortIndex)) {
+          if (!g.assetIds.includes(s.selectedAssetId)) continue;
+          const base = g.sizeBase ?? 1;
+          const sMin = g.sizeMin ?? 0.8;
+          const sMax = g.sizeMax ?? 1.2;
+          const factor = base * (g.randomSize ? sMin + Math.random() * (sMax - sMin) : 1);
+          placedW = Math.max(1, placedW * factor);
+          placedH = Math.max(1, placedH * factor);
+          if (g.randomFlipX) stampFlipX = Math.random() < 0.5;
+          if (g.randomFlipY) stampFlipY = Math.random() < 0.5;
+          break;
+        }
         const id = s.addObject({
           layerId: s.activeLayerId,
           x: cellTLX * ts + placedW / 2,
@@ -2031,7 +2076,7 @@ export function TileView() {
           width: placedW,
           height: placedH,
           rotation: 0,
-          flipX: false, flipY: false,
+          flipX: stampFlipX, flipY: stampFlipY,
           hue: 0,
           name: found.asset.name || `Object ${s.objects.length + 1}`,
         });

@@ -10,6 +10,8 @@ import { WorkspacePropertiesPanel } from './panels/WorkspacePropertiesPanel';
 
 const BASE_RIGHT_SECTIONS: readonly SectionDef[] = [
   { id: 'properties', icon: SlidersHorizontal, label: 'Properties' },
+] as const;
+const WORLD_SECTIONS: readonly SectionDef[] = [
   { id: 'workspace',  icon: Sun,               label: 'Workspace' },
   { id: 'chat',       icon: MessageSquare,     label: 'Chat' },
   { id: 'parts',      icon: Sparkles,          label: 'Part Studio' },
@@ -38,22 +40,36 @@ export function RightPanel({ propertiesContent }: RightPanelProps) {
   // pill-cycle short and contextual; non-tree assets never see it.
   const selectedAssetId = useTile((s) => s.selectedAssetId);
   const tileGroups = useTile((s) => s.tileGroups);
+  const tileTool = useTile((s) => s.tool);
+  const tileSelectedObjectId = useTile((s) => s.selectedObjectId);
   const showFruits = !!(selectedAssetId && Object.values(tileGroups as Record<string, TileGroup>).some(
     (g) => g.name.trim().toLowerCase() === 'trees' && g.assetIds.includes(selectedAssetId),
   ));
 
-  // Order: Properties → Fruits (if shown) → Workspace → Chat → Part Studio.
-  // Slotting Fruits next to Properties keeps the cycle intuitive — they're
-  // both "current asset" tabs.
-  const sections: SectionDef[] = showFruits
-    ? [BASE_RIGHT_SECTIONS[0], FRUITS_SECTION, ...BASE_RIGHT_SECTIONS.slice(1)]
-    : [...BASE_RIGHT_SECTIONS];
+  // World sections (Workspace, Chat, Part Studio) only appear when the cursor
+  // (select) tool is active and no object is selected — i.e. the world itself
+  // is the focus.
+  const showWorldSections = tileTool === 'select' && tileSelectedObjectId === null;
+
+  // Order: Properties → Fruits (if shown) → [Workspace → Chat → Part Studio if world selected]
+  const sections: SectionDef[] = [
+    BASE_RIGHT_SECTIONS[0],
+    ...(showFruits ? [FRUITS_SECTION] : []),
+    ...(showWorldSections ? [...WORLD_SECTIONS] : []),
+  ];
 
   // If the user navigates away from a tree-member while parked on Fruits,
   // bounce back to Properties so the panel doesn't render an empty state.
   useEffect(() => {
     if (!showFruits && group === 'fruits') setGroup('properties');
   }, [showFruits, group, setGroup]);
+
+  // If world sections disappear while user is on one, bounce back to Properties.
+  useEffect(() => {
+    if (!showWorldSections && (group === 'workspace' || group === 'chat' || group === 'parts')) {
+      setGroup('properties');
+    }
+  }, [showWorldSections, group, setGroup]);
 
   const activeIndex = sections.findIndex((s) => s.id === group);
 

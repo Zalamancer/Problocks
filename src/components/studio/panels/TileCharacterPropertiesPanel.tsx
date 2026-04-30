@@ -10,6 +10,11 @@ import { PanelInput } from '@/components/ui/panel-controls/PanelInput';
 import { fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { useToastStore } from '@/store/toast-store';
 import {
+  CHARACTER_ACTION_PRESETS,
+  isCharacterActionId,
+  type CharacterActionId,
+} from '@/lib/character-actions';
+import {
   useTile,
   CHARACTER_DIRS,
   type TileCharacter,
@@ -1478,6 +1483,11 @@ function GenerateAnimationsTab({
   registerSubmit: (fn: () => void) => void;
 }) {
   const [prompt, setPrompt] = useState('');
+  // When the user clicks a preset chip, we lock onto that canonical
+  // action id and the saved animations get tagged with it. Editing the
+  // prompt away from the preset's default text drops the lock so the
+  // animation is treated as a free-form custom action instead.
+  const [selectedAction, setSelectedAction] = useState<CharacterActionId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const addCharacterAnimation = useTile((s) => s.addCharacterAnimation);
@@ -1489,7 +1499,7 @@ function GenerateAnimationsTab({
   const submit = useCallback(async () => {
     const action = prompt.trim();
     if (!action) {
-      setError('Enter a prompt first (e.g. "running", "attacking", "casting").');
+      setError('Pick a preset above or type a prompt (e.g. "running", "casting").');
       return;
     }
     if (generating) return;
@@ -1520,11 +1530,19 @@ function GenerateAnimationsTab({
       }
       setProgress('Composing 4×4 sheets and saving…');
       const results = data.results ?? [];
+      // Saved animations carry the canonical actionId when the user
+      // picked a preset; the label is the preset's display name so the
+      // per-direction SAVED list still reads naturally. Free-form
+      // prompts skip the actionId and use the prompt text as the label.
+      const savedLabel = selectedAction
+        ? CHARACTER_ACTION_PRESETS.find((p) => p.id === selectedAction)?.label ?? action
+        : action;
       for (const { dir, frames } of results) {
         if (frames.length === 0) continue;
         const sheet = await composeFramesIntoSheet(frames);
         addCharacterAnimation(character.id, dir, {
-          label: action,
+          label: savedLabel,
+          ...(selectedAction ? { actionId: selectedAction } : {}),
           src: sheet.dataUrl,
           cols: sheet.cols,
           rows: sheet.rows,
@@ -1539,9 +1557,10 @@ function GenerateAnimationsTab({
           `Generated ${results.length}/8 directions. Failed: ${errs.map((e) => e.dir).join(', ')}`,
         );
       } else {
-        addToast('success', `Generated "${action}" across all 8 directions`);
+        addToast('success', `Generated "${savedLabel}" across all 8 directions`);
       }
       setPrompt('');
+      setSelectedAction(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -1550,7 +1569,7 @@ function GenerateAnimationsTab({
       setGenerating(false);
       setProgress(null);
     }
-  }, [prompt, generating, character, addCharacterAnimation, addToast, setGenerating]);
+  }, [prompt, selectedAction, generating, character, addCharacterAnimation, addToast, setGenerating]);
 
   // Re-register on every render so the parent's ref always points at
   // the latest closure (and therefore the latest `prompt`/`generating`).
@@ -1563,44 +1582,91 @@ function GenerateAnimationsTab({
   const totalSavedAnimations = (Object.values(character.animations ?? {}) as CharacterAnimation[][])
     .reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
+  // Which canonical actions does the character already have saved on at
+  // least one direction? Powers the green dot on each preset chip.
+  const coveredActions = new Set<CharacterActionId>();
+  for (const list of Object.values(character.animations ?? {}) as CharacterAnimation[][]) {
+    for (const anim of list ?? []) {
+      if (isCharacterActionId(anim.actionId)) coveredActions.add(anim.actionId);
+    }
+  }
+
+  function pickPreset(actionId: CharacterActionId) {
+    if (generating) return;
+    const preset = CHARACTER_ACTION_PRESETS.find((p) => p.id === actionId);
+    if (!preset) return;
+    setSelectedAction(actionId);
+    setPrompt(preset.prompt);
+    setError(null);
+  }
+
+  function onPromptChange(next: string) {
+    setPrompt(next);
+    if (!selectedAction) return;
+    const preset = CHARACTER_ACTION_PRESETS.find((p) => p.id === selectedAction);
+    // Drop the action lock as soon as the prompt diverges from the
+    // preset's default text — the user is now writing a custom action.
+    if (preset && next.trim() !== preset.prompt) setSelectedAction(null);
+  }
+
   return (
     <div className="px-4 py-4 flex flex-col gap-4">
-      <p
-        style={{
-          margin: 0,
-          fontSize: 12,
-          fontWeight: 600,
-          lineHeight: 1.5,
-          color: 'var(--pb-ink-muted)',
-        }}
-      >
-        Write one prompt and PixelLab AI will generate the action across all 8
-        directions. Each direction's pose from the 3×3 sheet is fed into the
-        model with your prompt; the result is saved as a 4×4 animation per
-        direction.
-      </p>
+      <PanelSection title="Action presets" collapsible defaultOpen>
+        <div className="flex flex-wrap gap-1.5">
+          {CHARACTER_ACTION_PRESETS.map((preset) => {
+            const active = selectedAction === preset.id;
+            const covered = coveredActions.has(preset.id);
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => pickPreset(preset.id)}
+                disabled={generating}
+                title={`${preset.hint}${covered ? ' (already generated)' : ''}`}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '5px 10px',
+                  background: active ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+                  border: '1.5px solid var(--pb-line-2)',
+                  borderRadius: 8,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: 0.2,
+                  color: 'var(--pb-ink)',
+                  cursor: generating ? 'not-allowed' : 'pointer',
+                  opacity: generating ? 0.55 : 1,
+                  boxShadow: active ? '0 2px 0 var(--pb-line-2)' : 'none',
+                }}
+              >
+                {preset.label}
+                {covered && (
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 999,
+                      background: '#22c55e',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </PanelSection>
 
       <PanelSection title="Prompt" collapsible defaultOpen>
         <PanelInput
           label="Action"
           value={prompt}
-          onChange={setPrompt}
+          onChange={onPromptChange}
           placeholder="e.g. running, attacking, casting a spell"
           disabled={generating}
         />
-        <span
-          style={{
-            display: 'block',
-            marginTop: 6,
-            fontSize: 10.5,
-            fontWeight: 600,
-            color: 'var(--pb-ink-muted)',
-            lineHeight: 1.4,
-          }}
-        >
-          Tip: short verb phrases work best. The animation will be saved under
-          this name on every direction.
-        </span>
       </PanelSection>
 
       {progress && !error && (

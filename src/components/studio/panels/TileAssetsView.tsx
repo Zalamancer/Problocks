@@ -3843,11 +3843,11 @@ function AssetCard({
             {asset.name}
           </div>
         )}
-        {(showActions || removeFromGroupButton) && !editingName && (
+        {showActions && !editingName && (
           <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
             {removeFromGroupButton}
-            {showActions && editButton}
-            {showActions && deleteButton}
+            {editButton}
+            {deleteButton}
           </div>
         )}
       </div>
@@ -3924,11 +3924,11 @@ function AssetCard({
             {asset.styles.length} style{asset.styles.length === 1 ? '' : 's'} · {headerStyle?.width}×{headerStyle?.height}px
           </div>
         </div>
-        {(showActions || removeFromGroupButton) && !editingName && (
+        {showActions && !editingName && (
           <CardActionsColumn>
             {removeFromGroupButton}
-            {showActions && editButton}
-            {showActions && deleteButton}
+            {editButton}
+            {deleteButton}
           </CardActionsColumn>
         )}
       </div>

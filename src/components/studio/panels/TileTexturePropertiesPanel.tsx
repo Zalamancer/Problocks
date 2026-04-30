@@ -50,6 +50,8 @@ export function TileTexturePropertiesPanel({
 
   // Pure-tile preview — pick the first owner's pure-corner slice. Variant
   // aware so the preview matches whatever the user is currently painting.
+  // Returns the tile reference too so the header thumbnail can animate
+  // when the tile carries animationFrames.
   const preview = useMemo(() => {
     const first = owners[0];
     if (!first) return null;
@@ -59,8 +61,11 @@ export function TileTexturePropertiesPanel({
     const variantUrls = activeIdx > 0
       ? tileset.variants?.[activeIdx - 1]?.tileDataUrls
       : undefined;
-    const url = variantUrls?.[pureIndex] ?? tiles[tileset.tileIds[pureIndex]]?.dataUrl;
-    return url ?? null;
+    const tileId = tileset.tileIds[pureIndex];
+    const tile = tileId ? tiles[tileId] : undefined;
+    const url = variantUrls?.[pureIndex] ?? tile?.dataUrl;
+    if (!url) return null;
+    return { url, tile };
   }, [owners, tiles]);
 
   // Initial label — derive from the first owner's per-side label so the
@@ -131,13 +136,21 @@ export function TileTexturePropertiesPanel({
           }}
         >
           {preview && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={preview}
-              alt={labelDraft || 'texture'}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-              draggable={false}
-            />
+            preview.tile?.animationFrames && preview.tile.animationFrames.length > 1 ? (
+              <AnimatedTileThumb
+                tile={preview.tile}
+                alt={labelDraft || 'texture'}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+              />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={preview.url}
+                alt={labelDraft || 'texture'}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+                draggable={false}
+              />
+            )
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -233,6 +246,54 @@ export function TileTexturePropertiesPanel({
         </PanelActionButton>
       </footer>
     </Shell>
+  );
+}
+
+/**
+ * `<img>`-equivalent that cycles a tile's animationFrames at its
+ * configured fps using a single shared RAF. Falls back to the static
+ * dataUrl when no animation is set, so it's safe to use everywhere a
+ * plain tile thumbnail appears (panel header preview, wang grid cells,
+ * …) without paying RAF cost on tiles that don't animate.
+ */
+function AnimatedTileThumb({
+  tile,
+  alt,
+  style,
+}: {
+  tile: { dataUrl: string; animationFrames?: string[]; animationFps?: number } | null | undefined;
+  alt?: string;
+  style?: React.CSSProperties;
+}) {
+  const [idx, setIdx] = useState(0);
+  const frames = tile?.animationFrames;
+  const fps = tile?.animationFps ?? 8;
+  useEffect(() => {
+    if (!frames || frames.length <= 1) {
+      setIdx(0);
+      return;
+    }
+    const start = performance.now();
+    let raf = 0;
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const next = Math.floor((elapsed * fps) / 1000) % frames.length;
+      setIdx(next);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [frames, fps]);
+  if (!tile) return null;
+  const src = frames?.[idx] ?? tile.dataUrl;
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={src}
+      alt={alt ?? ''}
+      style={style}
+      draggable={false}
+    />
   );
 }
 
@@ -440,7 +501,9 @@ function WangTileGrid({
         }}
       >
         {tileset.tileIds.map((id, i) => {
-          const url = variantUrls?.[i] ?? tiles[id]?.dataUrl;
+          const tile = tiles[id];
+          const variantUrl = variantUrls?.[i];
+          const url = variantUrl ?? tile?.dataUrl;
           const isSelected = i === selectedIndex;
           const isAnimated = animatedSet.has(i);
           return (
@@ -462,7 +525,24 @@ function WangTileGrid({
                 cursor: 'pointer',
               }}
             >
-              {url ? (
+              {/* Variant URL wins for the static base path (the active
+                  alternate sheet). When the user has attached an
+                  animation directly to the base tile we still cycle
+                  frames — variant + animation interaction is a future
+                  feature; for now animation overrides any active
+                  variant URL. */}
+              {tile?.animationFrames && tile.animationFrames.length > 1 ? (
+                <AnimatedTileThumb
+                  tile={tile}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    imageRendering: 'pixelated',
+                    pointerEvents: 'none',
+                  }}
+                />
+              ) : url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={url}

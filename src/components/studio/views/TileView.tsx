@@ -389,14 +389,20 @@ export function TileView() {
    * loop's RAF tick — writing each tick straight to the Zustand store
    * would burn re-renders across the whole panel tree, so we keep live
    * state in this ref and only flush back to the store when play stops.
-   * `dir` is the current Dir8 (includes 'idle' when stationary). `facing`
-   * remembers the last non-idle direction so an idle character keeps
-   * looking the way it last walked, and the animation lookup always has
-   * a directional CharacterDir8 even at rest.
+   *
+   *   - `dir`     — current Dir8, includes 'idle' when stationary.
+   *   - `facing`  — last non-idle direction; animation lookups always
+   *                 use a directional CharacterDir8 even at rest.
+   *   - `action`  — canonical action id for the current frame, derived
+   *                 each tick from held action keys + movement. Drives
+   *                 which animation row the renderer looks up
+   *                 (`run` while moving, `attack` when Space is held,
+   *                 `defend` for Shift, `cast` for Q, `jump` for E,
+   *                 `idle` otherwise).
    */
-  const playRuntimeRef = useRef<Map<string, { x: number; y: number; dir: Dir8; facing: CharacterDir8 }>>(new Map());
+  const playRuntimeRef = useRef<Map<string, { x: number; y: number; dir: Dir8; facing: CharacterDir8; action: CharacterActionId }>>(new Map());
   /** Pressed keys during play mode. Lower-cased Key value for case-insensitive
-   *  matching against {w,a,s,d, arrowleft, ...}. */
+   *  matching against the play key allowlist {w,a,s,d, arrows, space, shift, q, e}. */
   const playKeysRef = useRef<Set<string>>(new Set());
   /** Pre-play camera snapshot — set on Play start, cleared on Stop. The
    *  Stop transition restores this so leaving play mode drops the user
@@ -684,8 +690,9 @@ export function TileView() {
     for (const c of Object.values(useTile.getState().tileCharacters)) {
       // `facing` defaults to 's' (face the camera) — the canonical
       // resting pose. The tick loop overwrites it as soon as the player
-      // moves; non-player characters keep this default.
-      rt.set(c.id, { x: c.x, y: c.y, dir: 'idle', facing: 's' });
+      // moves; non-player characters keep this default. `action`
+      // starts as 'idle' and the tick recomputes it from held keys.
+      rt.set(c.id, { x: c.x, y: c.y, dir: 'idle', facing: 's', action: 'idle' });
     }
 
     // No player → procgen + camera are already in place; skip the
@@ -701,19 +708,30 @@ export function TileView() {
       if (!el) return false;
       return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable;
     }
+    // Play-mode key allowlist. Lower-cased `e.key` strings.
+    //   Movement: WASD + arrows
+    //   Action keys: space=attack, shift=defend, q=cast, e=jump
+    // The action keys map onto the canonical CharacterActionId set so
+    // the play loop can simply pick the matching animation row from
+    // `findCharacterAnimation` without any per-key special-casing.
+    const PLAY_KEYS = new Set([
+      'arrowleft', 'arrowright', 'arrowup', 'arrowdown',
+      'w', 'a', 's', 'd',
+      ' ', 'shift', 'q', 'e',
+    ]);
     function onKeyDown(e: KeyboardEvent) {
       // Ignore keys when typing into a panel input — otherwise WASD would
       // walk the player while the user names their character.
       if (isTypingTarget(e.target)) return;
       const k = e.key.toLowerCase();
-      if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'w', 'a', 's', 'd'].includes(k)) {
+      if (PLAY_KEYS.has(k)) {
         e.preventDefault();
         playKeysRef.current.add(k);
       }
     }
     function onKeyUp(e: KeyboardEvent) {
       const k = e.key.toLowerCase();
-      playKeysRef.current.delete(k);
+      if (PLAY_KEYS.has(k)) playKeysRef.current.delete(k);
     }
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -748,6 +766,21 @@ export function TileView() {
           if (moving !== 'idle') cur.facing = moving;
         } else {
           cur.dir = 'idle';
+        }
+        // Action priority: a held action key always wins over move/idle so
+        // the player can attack/defend/cast while still walking. Order
+        // is intentional — attack is the most common verb so it gets the
+        // simplest binding (Space) and the highest priority.
+        if (keys.has(' ')) {
+          cur.action = 'attack';
+        } else if (keys.has('shift')) {
+          cur.action = 'defend';
+        } else if (keys.has('q')) {
+          cur.action = 'cast';
+        } else if (keys.has('e')) {
+          cur.action = 'jump';
+        } else {
+          cur.action = mag > 0 ? 'run' : 'idle';
         }
         // Camera follow — frame-rate-independent exponential smoothing.
         // alpha at 60 fps = playCameraSmoothing; the pow keeps the same
@@ -969,8 +1002,15 @@ export function TileView() {
           const baseTileId = baseResolved.tileset.tileIds[baseResolved.index];
           const baseTile = baseTileId ? s.tiles[baseTileId] : undefined;
           if (baseTile) {
-            const baseDataUrl = tileDataUrlFor(baseResolved.tileset, baseResolved.index, baseTile.dataUrl);
-            const baseRecolored = recolorMap.get(baseTileId);
+            // Animated base tile — frame URL wins over recolour (recolour
+            // of frames is a future feature). The pattern path can't
+            // animate (one image locked into the pattern), so for
+            // animated bases we re-create the pattern with the current
+            // frame each render. didAnimate is set inside resolveAnimated
+            // so the loop keeps repainting at 60Hz while a base
+            // animation is active.
+            const baseDataUrl = resolveAnimated(baseTile, baseResolved.tileset, baseResolved.index);
+            const baseRecolored = baseTile.animationFrames ? undefined : recolorMap.get(baseTileId);
             const baseUrl = baseRecolored ?? baseDataUrl;
             const baseImg = imgCacheRef.current.get(baseUrl);
             if (baseImg && imgReadyRef.current.has(baseUrl)) {
@@ -1366,10 +1406,12 @@ export function TileView() {
           // current state. Player only — non-player characters always
           // fall back to the static 3×3 cell since they have no walk
           // input. `facing` is the last non-idle direction (defaults to
-          // 's'), so the idle pose still has a sensible heading.
+          // 's'), so the idle pose still has a sensible heading. The
+          // `action` was already chosen by the tick loop based on held
+          // keys + movement, so the renderer just plays it.
           let used = false;
           if (playing && cur && c.id === playerId) {
-            const actionId: CharacterActionId = dir === 'idle' ? 'idle' : 'run';
+            const actionId: CharacterActionId = cur.action;
             const anim = findCharacterAnimation(c, cur.facing, actionId);
             if (anim) {
               const animReady = imgReadyRef.current.has(anim.src);

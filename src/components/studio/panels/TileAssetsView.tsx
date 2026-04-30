@@ -9,7 +9,7 @@ import {
   Users, SlidersHorizontal,
 } from 'lucide-react';
 import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
-import { PanelSearchInput, PanelSelect } from '@/components/ui';
+import { PanelSearchInput, PanelSelect, PanelActionButton } from '@/components/ui';
 import { useTile, type Tileset, type Tile, type ObjectAsset, type TileCharacter, type TileGroup } from '@/store/tile-store';
 import { sliceFile, loadImage, sliceImage, fileToImage, imageToDataUrl } from '@/lib/tile-slicer';
 import { PURE_UPPER_INDEX, PURE_LOWER_INDEX, TILE_INDEX_TO_QUADRANTS, parseSheetName } from '@/lib/wang-tiles';
@@ -1791,7 +1791,18 @@ export function LayerList() {
  * Hydration on mount: list flat rows from Supabase, group by `groupId`,
  * skip groups already present locally, and rebuild missing assets.
  */
-function ObjectsSection() {
+function ObjectsSection({
+  selectionMode,
+}: {
+  selectionMode: {
+    groupId: string;
+    groupName: string;
+    selectedIds: Set<string>;
+    toggle: (assetId: string) => void;
+    done: () => void;
+    cancel: () => void;
+  } | null;
+}) {
   const objectAssets = useTile((s) => s.objectAssets);
   const addObjectAsset = useTile((s) => s.addObjectAsset);
   const addStyleToAsset = useTile((s) => s.addStyleToAsset);
@@ -2036,6 +2047,32 @@ function ObjectsSection() {
         className="hidden"
       />
 
+      {selectionMode && (
+        <div
+          className="shrink-0"
+          style={{
+            margin: '8px 8px 0',
+            padding: '10px 12px',
+            background: 'var(--pb-butter)',
+            border: '1.5px solid var(--pb-butter-ink)',
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <Layers size={14} strokeWidth={2.6} style={{ color: 'var(--pb-ink)' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--pb-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Adding to “{selectionMode.groupName}”
+            </div>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--pb-ink-soft)' }}>
+              Tap objects to select · {selectionMode.selectedIds.size} chosen
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search / filter / new-class / upload toolbar — mirrors the
           search+filter+action pattern from Freeform3DAssetsView (3D
           Freeform). Replaces the previous grape-icon chunky-pastel
@@ -2110,45 +2147,79 @@ function ObjectsSection() {
         )}
 
           {(() => {
-            const renderAssetCard = (asset: ObjectAsset) => (
-              <AssetCard
-                key={asset.id}
-                asset={asset}
-                viewMode={viewMode}
-                isSelected={asset.id === selectedAssetId}
-                isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
-                onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
-                onSelect={() => { setFocused({ kind: 'asset', assetId: asset.id }); handleSelectAsset(asset); }}
-                onRemoveAsset={() => handleRemoveAsset(asset)}
-                onRenameAsset={(name) => {
-                  renameAsset(asset.id, name);
-                  if (asset.styles.some((s) => s.cloudId)) {
-                    updateTileObject({ groupId: asset.id, name }).catch((err) => {
-                      console.warn('[object-cloud] asset rename failed', err);
-                    });
-                  }
-                }}
-                onDragStart={() => { dragAssetIdRef.current = asset.id; }}
-                onDragOverCard={(e) => {
-                  if (!dragAssetIdRef.current || dragAssetIdRef.current === asset.id) return;
-                  e.preventDefault();
-                }}
-                onDropCard={(e) => {
-                  e.preventDefault();
-                  const fromId = dragAssetIdRef.current;
-                  dragAssetIdRef.current = null;
-                  if (!fromId || fromId === asset.id) return;
-                  const order = assetList.map((a) => a.id);
-                  const fromIdx = order.indexOf(fromId);
-                  const toIdx = order.indexOf(asset.id);
-                  if (fromIdx < 0 || toIdx < 0) return;
-                  const next = order.slice();
-                  next.splice(fromIdx, 1);
-                  next.splice(toIdx, 0, fromId);
-                  reorderAssets(next);
-                }}
-              />
-            );
+            const renderAssetCard = (asset: ObjectAsset) => {
+              const picked = selectionMode?.selectedIds.has(asset.id) ?? false;
+              return (
+                <div key={asset.id} style={{ position: 'relative' }}>
+                  <AssetCard
+                    asset={asset}
+                    viewMode={viewMode}
+                    isSelected={selectionMode ? picked : asset.id === selectedAssetId}
+                    isFocused={focused?.kind === 'asset' && focused.assetId === asset.id}
+                    onFocusAsset={() => setFocused({ kind: 'asset', assetId: asset.id })}
+                    onSelect={() => {
+                      if (selectionMode) {
+                        selectionMode.toggle(asset.id);
+                        return;
+                      }
+                      setFocused({ kind: 'asset', assetId: asset.id });
+                      handleSelectAsset(asset);
+                    }}
+                    onRemoveAsset={() => handleRemoveAsset(asset)}
+                    onRenameAsset={(name) => {
+                      renameAsset(asset.id, name);
+                      if (asset.styles.some((s) => s.cloudId)) {
+                        updateTileObject({ groupId: asset.id, name }).catch((err) => {
+                          console.warn('[object-cloud] asset rename failed', err);
+                        });
+                      }
+                    }}
+                    onDragStart={() => { dragAssetIdRef.current = asset.id; }}
+                    onDragOverCard={(e) => {
+                      if (!dragAssetIdRef.current || dragAssetIdRef.current === asset.id) return;
+                      e.preventDefault();
+                    }}
+                    onDropCard={(e) => {
+                      e.preventDefault();
+                      const fromId = dragAssetIdRef.current;
+                      dragAssetIdRef.current = null;
+                      if (!fromId || fromId === asset.id) return;
+                      const order = assetList.map((a) => a.id);
+                      const fromIdx = order.indexOf(fromId);
+                      const toIdx = order.indexOf(asset.id);
+                      if (fromIdx < 0 || toIdx < 0) return;
+                      const next = order.slice();
+                      next.splice(fromIdx, 1);
+                      next.splice(toIdx, 0, fromId);
+                      reorderAssets(next);
+                    }}
+                  />
+                  {selectionMode && (
+                    <div
+                      aria-hidden
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        background: picked ? 'var(--pb-butter)' : 'rgba(255,255,255,0.85)',
+                        border: `1.5px solid ${picked ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: picked ? 'var(--pb-ink)' : 'transparent',
+                        pointerEvents: 'none',
+                        zIndex: 2,
+                      }}
+                    >
+                      <Check size={12} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+              );
+            };
 
             if (assetList.length === 0) {
               return (
@@ -2227,6 +2298,37 @@ function ObjectsSection() {
           <CloudStatusPill status={cloudStatus} />
         )}
       </div>
+
+      {selectionMode && (
+        <div
+          className="shrink-0"
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            display: 'flex',
+            gap: 8,
+            padding: '10px 12px',
+            background: 'var(--pb-paper)',
+            borderTop: '1.5px solid var(--pb-line-2)',
+          }}
+        >
+          <PanelActionButton
+            variant="secondary"
+            fullWidth
+            onClick={selectionMode.cancel}
+          >
+            Cancel
+          </PanelActionButton>
+          <PanelActionButton
+            variant="primary"
+            fullWidth
+            disabled={selectionMode.selectedIds.size === 0}
+            onClick={selectionMode.done}
+          >
+            Done · {selectionMode.selectedIds.size}
+          </PanelActionButton>
+        </div>
+      )}
     </div>
   );
 }
@@ -2247,15 +2349,67 @@ const ASSETS_SUBTABS: { id: AssetsSubTabId; label: string; icon: typeof Box }[] 
 
 function AssetsSubTabs() {
   const [tab, setTab] = useState<AssetsSubTabId>('objects');
+  /** When set, the Objects sub-tab enters multi-select "add to group"
+   *  mode: clicking a card toggles its inclusion in `selectedToAdd` and
+   *  a sticky Done footer commits the picks via setTileGroupMember.
+   *  Owned here (not in either sub-tab) so the flow can survive the
+   *  forced tab switch from Groups → Objects. */
+  const [addingToGroupId, setAddingToGroupId] = useState<string | null>(null);
+  const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(() => new Set());
+
+  function startAdding(groupId: string) {
+    setAddingToGroupId(groupId);
+    setSelectedToAdd(new Set());
+    setTab('objects');
+  }
+
+  function cancelAdding() {
+    setAddingToGroupId(null);
+    setSelectedToAdd(new Set());
+  }
+
+  function commitAdding() {
+    if (!addingToGroupId) return;
+    const setMember = useTile.getState().setTileGroupMember;
+    for (const aid of selectedToAdd) setMember(addingToGroupId, aid, true);
+    setAddingToGroupId(null);
+    setSelectedToAdd(new Set());
+    setTab('groups');
+  }
+
+  function toggleSelected(assetId: string) {
+    setSelectedToAdd((prev) => {
+      const next = new Set(prev);
+      if (next.has(assetId)) next.delete(assetId);
+      else next.add(assetId);
+      return next;
+    });
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <PanelIconTabs
-        tabs={ASSETS_SUBTABS}
-        activeTab={tab}
-        onChange={(id) => setTab(id as AssetsSubTabId)}
-      />
-      {tab === 'objects' && <ObjectsSection />}
-      {tab === 'groups' && <GroupsSection />}
+      {/* While picking, lock the tab bar to Objects so the user can't
+          accidentally drift away mid-flow without a Done/Cancel. */}
+      {!addingToGroupId && (
+        <PanelIconTabs
+          tabs={ASSETS_SUBTABS}
+          activeTab={tab}
+          onChange={(id) => setTab(id as AssetsSubTabId)}
+        />
+      )}
+      {tab === 'objects' && (
+        <ObjectsSection
+          selectionMode={addingToGroupId ? {
+            groupId: addingToGroupId,
+            groupName: useTile.getState().tileGroups[addingToGroupId]?.name ?? 'group',
+            selectedIds: selectedToAdd,
+            toggle: toggleSelected,
+            done: commitAdding,
+            cancel: cancelAdding,
+          } : null}
+        />
+      )}
+      {tab === 'groups' && <GroupsSection onStartAdding={startAdding} />}
       {tab === 'characters' && <CharactersSection />}
     </div>
   );
@@ -2268,7 +2422,7 @@ function AssetsSubTabs() {
  * lands in a follow-up; the data model already carries `assetIds[]` so
  * those features can be layered without another migration.
  */
-function GroupsSection() {
+function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => void }) {
   const tileGroups = useTile((s) => s.tileGroups);
   const objectAssets = useTile((s) => s.objectAssets);
   const addTileGroup = useTile((s) => s.addTileGroup);
@@ -2289,7 +2443,13 @@ function GroupsSection() {
 
   const openGroup = openGroupId ? tileGroups[openGroupId] : null;
   if (openGroup) {
-    return <GroupDetailView group={openGroup} onBack={() => setOpenGroupId(null)} />;
+    return (
+      <GroupDetailView
+        group={openGroup}
+        onBack={() => setOpenGroupId(null)}
+        onStartAdding={onStartAdding}
+      />
+    );
   }
 
   return (
@@ -2518,7 +2678,15 @@ function GroupsSection() {
  * can tap to include / exclude. Membership writes go through
  * `setTileGroupMember`, so toggling is idempotent on either side.
  */
-function GroupDetailView({ group, onBack }: { group: TileGroup; onBack: () => void }) {
+function GroupDetailView({
+  group,
+  onBack,
+  onStartAdding,
+}: {
+  group: TileGroup;
+  onBack: () => void;
+  onStartAdding: (groupId: string) => void;
+}) {
   const objectAssets = useTile((s) => s.objectAssets);
   const renameTileGroup = useTile((s) => s.renameTileGroup);
   const removeTileGroup = useTile((s) => s.removeTileGroup);
@@ -2533,12 +2701,10 @@ function GroupDetailView({ group, onBack }: { group: TileGroup; onBack: () => vo
 
   const [search, setSearch] = useState('');
   const [renamingHeader, setRenamingHeader] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const dragAssetIdRef = useRef<string | null>(null);
 
   const assetList = Object.values(objectAssets)
     .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
-  const memberSet = new Set(group.assetIds);
   const members = group.assetIds
     .map((aid) => objectAssets[aid])
     .filter((a): a is ObjectAsset => !!a);
@@ -2546,10 +2712,6 @@ function GroupDetailView({ group, onBack }: { group: TileGroup; onBack: () => vo
   const visibleMembers = q
     ? members.filter((a) => a.name.toLowerCase().includes(q))
     : members;
-  const candidates = assetList.filter((a) => !memberSet.has(a.id));
-  const visibleCandidates = q
-    ? candidates.filter((a) => a.name.toLowerCase().includes(q))
-    : candidates;
 
   function handleSelectAsset(asset: ObjectAsset) {
     useTile.getState().selectObject(null);
@@ -2644,20 +2806,19 @@ function GroupDetailView({ group, onBack }: { group: TileGroup; onBack: () => vo
             </div>
           </div>
           <button
-            onClick={() => setPickerOpen((o) => !o)}
+            onClick={() => onStartAdding(group.id)}
             className="shrink-0 flex items-center justify-center"
             style={{
               width: 34,
               height: 34,
               borderRadius: 10,
-              background: pickerOpen ? 'var(--pb-cream-2)' : 'var(--pb-paper)',
-              border: `1.5px solid ${pickerOpen ? 'var(--pb-ink)' : 'var(--pb-line-2)'}`,
-              boxShadow: pickerOpen ? '0 2px 0 var(--pb-ink)' : 'none',
-              color: pickerOpen ? 'var(--pb-ink)' : 'var(--pb-ink-soft)',
+              background: 'var(--pb-paper)',
+              border: '1.5px solid var(--pb-line-2)',
+              color: 'var(--pb-ink-soft)',
               cursor: 'pointer',
               transition: 'background 120ms ease, border-color 120ms ease',
             }}
-            title={pickerOpen ? 'Close picker' : 'Add objects to group'}
+            title="Add objects from the Objects tab"
           >
             <Plus size={15} strokeWidth={2.4} />
           </button>
@@ -2687,89 +2848,13 @@ function GroupDetailView({ group, onBack }: { group: TileGroup; onBack: () => vo
           <PanelSearchInput
             value={search}
             onChange={setSearch}
-            placeholder={pickerOpen ? 'Search objects to add...' : 'Search in group...'}
+            placeholder="Search in group..."
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-px" style={{ outline: 'none', borderRadius: 6, padding: 2 }}>
-        {pickerOpen ? (
-          visibleCandidates.length === 0 ? (
-            <div
-              style={{
-                margin: '4px',
-                padding: '10px 12px',
-                fontSize: 11,
-                color: 'var(--pb-ink-muted)',
-                fontStyle: 'italic',
-                border: '1.5px dashed var(--pb-line-2)',
-                borderRadius: 8,
-                background: 'var(--pb-cream-2)',
-                textAlign: 'center',
-              }}
-            >
-              {candidates.length === 0
-                ? 'Every object is already in this group.'
-                : 'No matching objects.'}
-            </div>
-          ) : (
-            visibleCandidates.map((asset) => (
-              <div
-                key={asset.id}
-                onClick={() => setTileGroupMember(group.id, asset.id, true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    flexShrink: 0,
-                    background: 'rgba(0,0,0,0.03)',
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {asset.styles[0] && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={asset.styles[0].dataUrl}
-                      alt={asset.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
-                      draggable={false}
-                    />
-                  )}
-                </div>
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: 'var(--pb-ink)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {asset.name}
-                </span>
-                <Plus size={14} strokeWidth={2.4} style={{ color: 'var(--pb-ink-muted)' }} />
-              </div>
-            ))
-          )
-        ) : visibleMembers.length === 0 ? (
+        {visibleMembers.length === 0 ? (
           <div
             style={{
               margin: '4px',

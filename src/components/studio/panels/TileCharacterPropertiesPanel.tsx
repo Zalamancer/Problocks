@@ -1370,7 +1370,7 @@ function AnimationPreview({
     if (!animation) return;
     const total = animation.cols * animation.rows;
     if (total <= 1) return;
-    const interval = 1000 / Math.max(1, fps ?? 8);
+    const interval = 1000 / Math.max(1, animation.fps ?? fps ?? 8);
     const handle = window.setInterval(() => {
       setFrame((f) => (f + 1) % total);
     }, interval);
@@ -2304,7 +2304,7 @@ function AnimationsLibraryTab({
     if (!previewAnim) return;
     const total = Math.max(1, previewAnim.cols * previewAnim.rows);
     if (total <= 1) return;
-    const fps = Math.max(1, character.fps || 8);
+    const fps = Math.max(1, previewAnim.fps ?? character.fps ?? 8);
     const handle = window.setInterval(() => {
       setFrame((f) => (f + 1) % total);
     }, 1000 / fps);

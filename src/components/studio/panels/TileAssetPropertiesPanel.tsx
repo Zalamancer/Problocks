@@ -2,13 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Scissors, Pencil, Trash2, Plus, X, Upload, SlidersHorizontal, Apple,
+  Scissors, Pencil, Trash2, Plus, X, Upload,
 } from 'lucide-react';
 import { PanelSection } from '@/components/ui/panel-controls/PanelSection';
 import { PanelSlider } from '@/components/ui/panel-controls/PanelSlider';
 import { PanelActionButton } from '@/components/ui/panel-controls/PanelActionButton';
 import { PanelSelect } from '@/components/ui/panel-controls/PanelSelect';
-import { PanelIconTabs } from '@/components/ui/panel-controls/PanelIconTabs';
+import { useStudio } from '@/store/studio-store';
 import { useTile, type ObjectAsset, type ObjectStyle, type ObjectClass, type TileGroup } from '@/store/tile-store';
 import { fileToImage, imageToDataUrl, loadImage, sliceImage } from '@/lib/tile-slicer';
 import {
@@ -167,31 +167,29 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
   const assetClassIds = useTile((s) => s.assetClassIds);
   const setAssetClass = useTile((s) => s.setAssetClass);
   const addObjectClass = useTile((s) => s.addObjectClass);
-  // Fruits tab — only meaningful when the selected asset is a member of
+  // Fruits view — only meaningful when the selected asset is a member of
   // a group named "Trees" (case-insensitive). The picker writes into
   // assetFruitIds[asset.id] and reads all other assets as candidates.
+  // Tab state lives on the right-panel dropdown header (RightPanel.tsx),
+  // not inside this panel — we just react to the active group.
   const objectAssets = useTile((s) => s.objectAssets);
   const tileGroups = useTile((s) => s.tileGroups);
   const assetFruitIds = useTile((s) => s.assetFruitIds);
   const toggleAssetFruit = useTile((s) => s.toggleAssetFruit);
+  const rightPanelGroup = useStudio((s) => s.rightPanelActiveGroup);
 
   const [sliceOpen, setSliceOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'properties' | 'fruits'>('properties');
   const styleInputRef = useRef<HTMLInputElement | null>(null);
 
   /** True when the selected asset belongs to any group whose name is
-   *  exactly "trees" (case-insensitive). Drives whether the Fruits tab
-   *  shows up at all. */
+   *  exactly "trees" (case-insensitive). Mirrored in RightPanel.tsx —
+   *  RightPanel uses it to surface the Fruits dropdown entry; we use it
+   *  here to actually render the picker. */
   const isTreeMember = !!(asset && Object.values(tileGroups as Record<string, TileGroup>).some(
     (g) => g.name.trim().toLowerCase() === 'trees' && g.assetIds.includes(asset.id),
   ));
-
-  // Reset the active tab when the user picks a non-tree asset so the
-  // panel doesn't try to render a tab that isn't there.
-  useEffect(() => {
-    if (!isTreeMember) setActiveTab('properties');
-  }, [isTreeMember, selectedAssetId]);
+  const showFruitsView = rightPanelGroup === 'fruits' && isTreeMember;
 
   // Reset the slice popup whenever the user picks a different asset so the
   // last asset's grid doesn't leak into the next preview.
@@ -351,18 +349,7 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
           onEdit={() => setSliceOpen(true)}
         />
 
-        {isTreeMember && (
-          <PanelIconTabs
-            tabs={[
-              { id: 'properties', label: 'Properties', icon: SlidersHorizontal },
-              { id: 'fruits', label: 'Fruits', icon: Apple },
-            ]}
-            activeTab={activeTab}
-            onChange={(id) => setActiveTab(id as typeof activeTab)}
-          />
-        )}
-
-        {activeTab === 'fruits' && isTreeMember ? (
+        {showFruitsView ? (
           <div className="px-4 py-4 flex flex-col gap-4">
             <FruitsPicker
               treeAsset={asset}

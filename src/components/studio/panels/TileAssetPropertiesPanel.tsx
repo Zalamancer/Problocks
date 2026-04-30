@@ -181,6 +181,23 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
   const [sliceOpen, setSliceOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const styleInputRef = useRef<HTMLInputElement | null>(null);
+  // Pending sprite-sheet image, lifted out of UploadGridSection so the
+  // preview slot at the top of the panel can stage files itself when the
+  // asset has no styles yet (or to replace the current sheet for an asset
+  // that already has styles). UploadGridSection only renders its grid
+  // editor while this is non-null; the dropzone now lives in the preview.
+  const [pendingImage, setPendingImage] = useState<{
+    img: HTMLImageElement;
+    dataUrl: string;
+    name: string;
+  } | null>(null);
+
+  const stageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const img = await fileToImage(file);
+    const dataUrl = imageToDataUrl(img);
+    setPendingImage({ img, dataUrl, name: file.name.replace(/\.[^.]+$/, '') });
+  }, []);
 
   /** True when the selected asset belongs to any group whose name is
    *  exactly "trees" (case-insensitive). Mirrored in RightPanel.tsx —
@@ -195,6 +212,7 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
   // last asset's grid doesn't leak into the next preview.
   useEffect(() => {
     setSliceOpen(false);
+    setPendingImage(null);
   }, [selectedAssetId]);
 
   // Arrow-key navigation across the asset's styles. Up/Left = previous,
@@ -344,10 +362,21 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        <ImagePreviewWithEdit
-          dataUrl={baseStyle?.dataUrl ?? ''}
-          onEdit={() => setSliceOpen(true)}
-        />
+        {/* Preview slot: image when the asset has styles, dropzone when
+            empty. Drop / click works in both states so the user can add
+            a fresh sheet at any time without a second upload affordance
+            in the Styles section. While a sprite sheet is staged but no
+            styles exist yet, the preview slot stays hidden so the grid
+            editor in UploadGridSection owns the visual. */}
+        {baseStyle?.dataUrl ? (
+          <ImagePreviewWithEdit
+            dataUrl={baseStyle.dataUrl}
+            onEdit={() => setSliceOpen(true)}
+            onStageFile={stageFile}
+          />
+        ) : pendingImage ? null : (
+          <PreviewDropzone onStageFile={stageFile} />
+        )}
 
         {showFruitsView ? (
           <div className="px-4 py-4 flex flex-col gap-4">
@@ -385,6 +414,8 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
               />
               <UploadGridSection
                 asset={asset}
+                pendingImage={pendingImage}
+                setPendingImage={setPendingImage}
                 onImport={async (cells) => {
                   if (!asset) return;
                   setUploading(true);
@@ -420,38 +451,43 @@ export function TileAssetPropertiesPanel({ headless }: { headless?: boolean } = 
 }
 
 /**
- * Drop zone → grid preview → per-cell selection → import as styles.
- * Replaces the old static preview header with an interactive import flow.
- * Default grid is 8×8. The user can click individual cells to toggle
- * selection; "Import selected" adds only the ticked cells as new styles.
+ * Grid preview → per-cell selection → import as styles. The dropzone that
+ * used to live here was lifted to the parent so a single upload affordance
+ * (the preview slot) covers the empty + has-image cases. This component now
+ * only mounts the slicing grid while the parent has staged a sheet.
+ *
+ * Default grid is 8×8. The user can click / drag-paint individual cells to
+ * toggle selection; "Import selected" adds only the ticked cells as new
+ * styles on the asset.
  */
 function UploadGridSection({
   asset,
+  pendingImage,
+  setPendingImage,
   onImport,
 }: {
   asset: ObjectAsset;
-  onImport: (cells: { dataUrl: string; width: number; height: number; label: string }[]) => Promise<void>;
-}) {
-  const [pendingImage, setPendingImage] = useState<{
+  pendingImage: {
     img: HTMLImageElement;
     dataUrl: string;
     name: string;
-  } | null>(null);
+  } | null;
+  setPendingImage: (
+    v: { img: HTMLImageElement; dataUrl: string; name: string } | null,
+  ) => void;
+  onImport: (cells: { dataUrl: string; width: number; height: number; label: string }[]) => Promise<void>;
+}) {
   const [rows, setRows] = useState(8);
   const [cols, setCols] = useState(8);
   const [selectedCells, setSelectedCells] = useState<Set<number>>(new Set());
-  const [dragHover, setDragHover] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dragSelecting, setDragSelecting] = useState<boolean | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const stageFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    const img = await fileToImage(file);
-    const dataUrl = imageToDataUrl(img);
-    setPendingImage({ img, dataUrl, name: file.name.replace(/\.[^.]+$/, '') });
+  // Clear cell selection whenever a new sheet is staged so picks from a
+  // previous sheet don't carry over into a fresh grid.
+  useEffect(() => {
     setSelectedCells(new Set());
-  }, []);
+  }, [pendingImage]);
 
   function toggleCell(idx: number, forceTo?: boolean) {
     setSelectedCells((prev) => {
@@ -497,53 +533,9 @@ function UploadGridSection({
 
   const totalCells = rows * cols;
 
-  if (!pendingImage) {
-    return (
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragHover(true); }}
-        onDragLeave={() => setDragHover(false)}
-        onDrop={async (e) => {
-          e.preventDefault();
-          setDragHover(false);
-          const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
-          if (file) await stageFile(file);
-        }}
-        onClick={() => fileInputRef.current?.click()}
-        style={{
-          margin: 12,
-          padding: '18px 12px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          border: `1.5px dashed ${dragHover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
-          borderRadius: 10,
-          background: dragHover ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
-          cursor: 'pointer',
-          transition: 'background 120ms ease, border-color 120ms ease',
-          flexShrink: 0,
-        }}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) await stageFile(file);
-          }}
-        />
-        <ImagePlus size={22} strokeWidth={2} style={{ color: 'var(--pb-ink-soft)' }} />
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--pb-ink-soft)', textAlign: 'center' }}>
-          Drop a sprite sheet here<br />
-          <span style={{ fontWeight: 600, color: 'var(--pb-ink-muted)' }}>or click to browse</span>
-        </span>
-      </div>
-    );
-  }
+  // Without a staged sheet, this section disappears entirely — the
+  // upload dropzone has moved up to the preview slot in the parent.
+  if (!pendingImage) return null;
 
   return (
     <div
@@ -674,52 +666,106 @@ function UploadGridSection({
 }
 
 /**
+ * Square dropzone that owns the preview slot when an asset has no styles
+ * (or zero pending sheet) yet. Drop a file or click to pick one — both
+ * paths route into the parent's `stageFile`, which puts the sheet into
+ * UploadGridSection's grid editor below. Replaces the prior "No image"
+ * placeholder + the duplicate dropzone that used to live inside the
+ * Styles PanelSection.
+ */
+function PreviewDropzone({ onStageFile }: { onStageFile: (file: File) => void | Promise<void> }) {
+  const [dragHover, setDragHover] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragHover(true); }}
+      onDragLeave={() => setDragHover(false)}
+      onDrop={async (e) => {
+        e.preventDefault();
+        setDragHover(false);
+        const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+        if (file) await onStageFile(file);
+      }}
+      onClick={() => inputRef.current?.click()}
+      style={{
+        width: '100%',
+        aspectRatio: '1 / 1',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        // Inline 1:1 dashed dropzone — sits inside the panel's existing
+        // border, so we paint just the dashed outline without an extra
+        // outer chrome. Bottom border matches the image-preview state so
+        // the section seam below stays consistent.
+        border: `1.5px dashed ${dragHover ? 'var(--pb-butter-ink)' : 'var(--pb-line-2)'}`,
+        borderBottomWidth: 1.5,
+        background: dragHover ? 'var(--pb-butter)' : 'var(--pb-cream-2)',
+        cursor: 'pointer',
+        transition: 'background 120ms ease, border-color 120ms ease',
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) await onStageFile(file);
+        }}
+      />
+      <ImagePlus size={22} strokeWidth={2} style={{ color: 'var(--pb-ink-soft)' }} />
+      <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--pb-ink-soft)', textAlign: 'center' }}>
+        Drop a sprite sheet here<br />
+        <span style={{ fontWeight: 600, color: 'var(--pb-ink-muted)' }}>or click to browse</span>
+      </span>
+    </div>
+  );
+}
+
+/**
  * Edge-to-edge header image — fills the right panel's full width with a
  * 1:1 square tile, no internal section chrome (no PanelSection title, no
  * caption, no border / padding). Image letterboxes via objectFit:contain
  * + pixelated so 16×16 sprites scale up crisply and large sheets scale
  * down to fit. The bottom border separates the preview from the Styles
- * section that follows.
+ * section that follows. Drag/drop on the preview stages a fresh sprite
+ * sheet so the user can add more variants without a second upload UI.
  */
 function ImagePreviewWithEdit({
-  dataUrl, onEdit,
+  dataUrl, onEdit, onStageFile,
 }: {
   dataUrl: string;
   onEdit: () => void;
+  onStageFile?: (file: File) => void | Promise<void>;
 }) {
-  if (!dataUrl) {
-    return (
-      <div
-        style={{
-          width: '100%',
-          aspectRatio: '1 / 1',
-          flexShrink: 0,
-          background: 'var(--pb-cream-2)',
-          borderBottom: '1.5px solid var(--pb-line-2)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 11,
-          fontWeight: 700,
-          color: 'var(--pb-ink-muted)',
-        }}
-      >
-        No image
-      </div>
-    );
-  }
-
+  const [dragHover, setDragHover] = useState(false);
   return (
     <div
+      onDragOver={onStageFile ? (e) => { e.preventDefault(); setDragHover(true); } : undefined}
+      onDragLeave={onStageFile ? () => setDragHover(false) : undefined}
+      onDrop={onStageFile ? async (e) => {
+        e.preventDefault();
+        setDragHover(false);
+        const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+        if (file) await onStageFile(file);
+      } : undefined}
       style={{
         position: 'relative',
         width: '100%',
         aspectRatio: '1 / 1',
         flexShrink: 0,
-        background: 'rgba(0,0,0,0.06)',
+        background: dragHover ? 'var(--pb-butter)' : 'rgba(0,0,0,0.06)',
         borderBottom: '1.5px solid var(--pb-line-2)',
         overflow: 'hidden',
         padding: 12,
+        outline: dragHover ? '1.5px dashed var(--pb-butter-ink)' : 'none',
+        outlineOffset: -8,
+        transition: 'background 120ms ease',
       }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -734,6 +780,7 @@ function ImagePreviewWithEdit({
           height: 'calc(100% - 24px)',
           objectFit: 'contain',
           imageRendering: 'pixelated',
+          pointerEvents: 'none',
         }}
         draggable={false}
       />

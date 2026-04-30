@@ -1836,8 +1836,8 @@ function ObjectsSection({
     dataUrl: string;
     name: string;
   } | null>(null);
-  const [splitRows, setSplitRows] = useState(1);
-  const [splitCols, setSplitCols] = useState(1);
+  const [splitRows, setSplitRows] = useState(4);
+  const [splitCols, setSplitCols] = useState(4);
   /** Toolbar search query (filters the asset list by case-insensitive
    *  substring match on asset.name). Empty string = show everything. */
   const [search, setSearch] = useState('');
@@ -1986,8 +1986,8 @@ function ObjectsSection({
       const dataUrl = imageToDataUrl(img);
       const baseName = file.name.replace(/\.[^.]+$/, '');
       setPendingImage({ img, dataUrl, name: baseName });
-      setSplitRows(1);
-      setSplitCols(1);
+      setSplitRows(4);
+      setSplitCols(4);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -2363,8 +2363,8 @@ function ObjectsSection({
               </button>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.2 }}>
                   Rows
                 </span>
                 <input
@@ -2373,8 +2373,10 @@ function ObjectsSection({
                   max={64}
                   value={splitRows}
                   onChange={(e) => setSplitRows(Math.max(1, Math.min(64, parseInt(e.target.value || '1', 10) || 1)))}
+                  className="pb-no-spin"
                   style={{
-                    width: '100%',
+                    flex: 1,
+                    minWidth: 0,
                     padding: '6px 8px',
                     borderRadius: 8,
                     border: '1.5px solid var(--pb-line-2)',
@@ -2382,11 +2384,14 @@ function ObjectsSection({
                     color: 'var(--pb-ink)',
                     fontSize: 12,
                     fontWeight: 700,
+                    textAlign: 'center',
+                    appearance: 'textfield',
+                    MozAppearance: 'textfield',
                   }}
                 />
               </label>
-              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--pb-ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--pb-ink)', letterSpacing: 0.2 }}>
                   Columns
                 </span>
                 <input
@@ -2395,8 +2400,10 @@ function ObjectsSection({
                   max={64}
                   value={splitCols}
                   onChange={(e) => setSplitCols(Math.max(1, Math.min(64, parseInt(e.target.value || '1', 10) || 1)))}
+                  className="pb-no-spin"
                   style={{
-                    width: '100%',
+                    flex: 1,
+                    minWidth: 0,
                     padding: '6px 8px',
                     borderRadius: 8,
                     border: '1.5px solid var(--pb-line-2)',
@@ -2404,6 +2411,9 @@ function ObjectsSection({
                     color: 'var(--pb-ink)',
                     fontSize: 12,
                     fontWeight: 700,
+                    textAlign: 'center',
+                    appearance: 'textfield',
+                    MozAppearance: 'textfield',
                   }}
                 />
               </label>

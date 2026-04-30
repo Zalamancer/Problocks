@@ -164,6 +164,154 @@ function appendSegment(p: Path2D, prev: TilePenAnchor, cur: TilePenAnchor) {
  *   - G           → toggle grid
  *   - Delete      → remove selected object
  */
+/**
+ * Build the synthetic procgen overlay (playLayer + playObjects) from the
+ * current tile-store gen-* fields. Pure side-effecting function: reads
+ * current state via getState(), writes the overlay via setPlayLayer /
+ * setPlayObjects. Called from both the Play start path and the live
+ * preview effect so the two stay byte-for-byte identical.
+ *
+ * Returns true when an overlay was published (palette had at least one
+ * texture id), false when nothing changed — caller can use that to
+ * decide whether to clear an existing overlay.
+ */
+function buildPlayOverlay(): boolean {
+  const tile = useTile.getState();
+  const palette: string[] = [];
+  for (const ts of tile.tilesets) {
+    if (ts.upperTextureId) palette.push(ts.upperTextureId);
+    if (ts.lowerTextureId) palette.push(ts.lowerTextureId);
+  }
+  if (palette.length === 0) return false;
+  const RESERVE = tile.genReserveRadius;
+  const RADIUS = Math.max(256, RESERVE + 192);
+  const reserveShape = tile.genReserveShape;
+  const outputMode: 'cells' | 'corners' = tile.genSmoothEdges ? 'corners' : 'cells';
+  const inReserve = (cx: number, cy: number) =>
+    reserveShape === 'circle'
+      ? cx * cx + cy * cy < RESERVE * RESERVE
+      : Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
+
+  const samples = generateRegion({
+    x0: -RADIUS,
+    y0: -RADIUS,
+    x1: RADIUS,
+    y1: RADIUS,
+    seed: tile.genSeed,
+    palette,
+    scale: tile.genScale,
+    octaves: tile.genOctaves,
+    roughness: tile.genRoughness,
+    warp: tile.genWarp,
+    output: outputMode,
+    weights: tile.genTextureWeights,
+    island: tile.genIslandEnabled
+      ? { radius: tile.genIslandRadius }
+      : undefined,
+    skipCell: inReserve,
+  });
+  if (samples.length > 0) {
+    const corners: Record<string, string> = {};
+    if (outputMode === 'corners') {
+      for (const { cx, cy, texId } of samples) {
+        corners[`${cx},${cy}`] = texId;
+      }
+    } else {
+      for (const { cx, cy, texId } of samples) {
+        corners[`${cx},${cy}`] = texId;
+        corners[`${cx + 1},${cy}`] = texId;
+        corners[`${cx},${cy + 1}`] = texId;
+        corners[`${cx + 1},${cy + 1}`] = texId;
+      }
+    }
+    if (
+      tile.genRiverEnabled
+      && tile.genRiverTextureId
+      && tile.genRiverCount > 0
+    ) {
+      const riverCells = generateRivers({
+        x0: -RADIUS,
+        y0: -RADIUS,
+        x1: RADIUS,
+        y1: RADIUS,
+        seed: tile.genSeed,
+        count: tile.genRiverCount,
+        width: tile.genRiverWidth,
+        texId: tile.genRiverTextureId,
+        skipCell: inReserve,
+      });
+      for (const { cx, cy, texId } of riverCells) {
+        corners[`${cx},${cy}`] = texId;
+        corners[`${cx + 1},${cy}`] = texId;
+        corners[`${cx},${cy + 1}`] = texId;
+        corners[`${cx + 1},${cy + 1}`] = texId;
+      }
+    }
+    tile.setPlayLayer({
+      id: '__play_overlay__',
+      name: 'Play Overlay',
+      visible: true,
+      opacity: 1,
+      tilesetId: null,
+      corners,
+    });
+  }
+
+  // ── Object scatter ───────────────────────────────────────────
+  const objectAssetEntries = Object.entries(tile.genObjectWeights)
+    .filter(([id, w]) => w > 0 && tile.objectAssets[id])
+    .map(([id, w]) => ({ id, weight: w, asset: tile.objectAssets[id] }));
+  if (tile.genObjectDensity > 0 && objectAssetEntries.length > 0) {
+    const totalW = objectAssetEntries.reduce((a, e) => a + e.weight, 0);
+    const ts = tile.tileSize;
+    const seed = tile.genSeed;
+    const rngAt = (cx: number, cy: number, salt: number) => {
+      let h = (seed ^ salt) >>> 0;
+      h = Math.imul(h ^ (cx >>> 0), 0x9E3779B1) >>> 0;
+      h = Math.imul(h ^ (cy >>> 0), 0x85EBCA77) >>> 0;
+      h ^= h >>> 16;
+      return (h >>> 0) / 4294967296;
+    };
+    const scattered: typeof tile.playObjects = [];
+    let scatterSeq = 0;
+    for (let cy = -RADIUS; cy < RADIUS; cy++) {
+      for (let cx = -RADIUS; cx < RADIUS; cx++) {
+        if (inReserve(cx, cy)) continue;
+        if (rngAt(cx, cy, 0xA1) >= tile.genObjectDensity) continue;
+        let pick = rngAt(cx, cy, 0xB2) * totalW;
+        let chosen = objectAssetEntries[0];
+        for (const e of objectAssetEntries) {
+          if (pick < e.weight) { chosen = e; break; }
+          pick -= e.weight;
+        }
+        const style = chosen.asset.styles[0];
+        if (!style) continue;
+        const jx = (rngAt(cx, cy, 0xC3) - 0.5) * ts * 0.5;
+        const jy = (rngAt(cx, cy, 0xD4) - 0.5) * ts * 0.5;
+        scattered.push({
+          id: `__scatter__${scatterSeq++}`,
+          layerId: '__play_overlay__',
+          x: (cx + 0.5) * ts + jx,
+          y: (cy + 0.5) * ts + jy,
+          assetId: chosen.id,
+          styleId: style.id,
+          width: style.width,
+          height: style.height,
+          rotation: 0,
+          flipX: false,
+          flipY: false,
+          hue: 0,
+          name: chosen.asset.name,
+        });
+      }
+    }
+    tile.setPlayObjects(scattered);
+  } else {
+    tile.setPlayObjects([]);
+  }
+  return true;
+}
+
 export function TileView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -507,180 +655,12 @@ export function TileView() {
     preCameraRef.current = { x: tile.camera.x, y: tile.camera.y, zoom: tile.camera.zoom };
     tile.setCamera({ x: 0, y: 0, zoom: tile.playCameraZoom });
 
-    // Procedurally generate the world around the spawn. Reserve a 128×128
-    // cell square at origin (cells [-64..63]) so whatever the user has
-    // hand-painted around the spawn pad survives play. The generated band
-    // extends out to ±256 cells which more than covers the visible area
-    // at any sane zoom; everything beyond stays unpainted.
-    const palette: string[] = [];
-    for (const ts of tile.tilesets) {
-      if (ts.upperTextureId) palette.push(ts.upperTextureId);
-      if (ts.lowerTextureId) palette.push(ts.lowerTextureId);
-    }
-    if (palette.length > 0) {
-      // Pull the half-extent from the user's reserve setting; the
-      // generated band always extends at least far enough past it to
-      // cover any sane viewport.
-      const RESERVE = tile.genReserveRadius;
-      const RADIUS = Math.max(256, RESERVE + 192);
-      const reserveShape = tile.genReserveShape;
-      const outputMode: 'cells' | 'corners' = tile.genSmoothEdges ? 'corners' : 'cells';
-      const samples = generateRegion({
-        x0: -RADIUS,
-        y0: -RADIUS,
-        x1: RADIUS,
-        y1: RADIUS,
-        seed: tile.genSeed,
-        palette,
-        scale: tile.genScale,
-        octaves: tile.genOctaves,
-        roughness: tile.genRoughness,
-        warp: tile.genWarp,
-        output: outputMode,
-        weights: tile.genTextureWeights,
-        island: tile.genIslandEnabled
-          ? { radius: tile.genIslandRadius }
-          : undefined,
-        skipCell: (cx, cy) => {
-          if (reserveShape === 'circle') {
-            return cx * cx + cy * cy < RESERVE * RESERVE;
-          }
-          return Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
-        },
-      });
-      if (samples.length > 0) {
-        // Build the synthetic play layer in-memory, then publish it in one
-        // setState — never goes through `mutateCorners`, never lands in the
-        // undo stack, never gets persisted.
-        const corners: Record<string, string> = {};
-        if (outputMode === 'corners') {
-          // One id per corner — wang autotiler resolves transitions.
-          for (const { cx, cy, texId } of samples) {
-            corners[`${cx},${cy}`] = texId;
-          }
-        } else {
-          // One id per cell, painted onto all 4 of that cell's corners.
-          for (const { cx, cy, texId } of samples) {
-            corners[`${cx},${cy}`] = texId;
-            corners[`${cx + 1},${cy}`] = texId;
-            corners[`${cx},${cy + 1}`] = texId;
-            corners[`${cx + 1},${cy + 1}`] = texId;
-          }
-        }
-        // Rivers / paths — overwrite the procgen output along each path.
-        // We always stamp all 4 corners of each river cell (cell-mode
-        // semantics) regardless of the procgen output mode, so rivers
-        // always render as solid bands instead of half-corners that
-        // can't bridge in `corners` mode.
-        if (
-          tile.genRiverEnabled
-          && tile.genRiverTextureId
-          && tile.genRiverCount > 0
-        ) {
-          const riverCells = generateRivers({
-            x0: -RADIUS,
-            y0: -RADIUS,
-            x1: RADIUS,
-            y1: RADIUS,
-            seed: tile.genSeed,
-            count: tile.genRiverCount,
-            width: tile.genRiverWidth,
-            texId: tile.genRiverTextureId,
-            skipCell: (cx, cy) => {
-              if (reserveShape === 'circle') {
-                return cx * cx + cy * cy < RESERVE * RESERVE;
-              }
-              return Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
-            },
-          });
-          for (const { cx, cy, texId } of riverCells) {
-            corners[`${cx},${cy}`] = texId;
-            corners[`${cx + 1},${cy}`] = texId;
-            corners[`${cx},${cy + 1}`] = texId;
-            corners[`${cx + 1},${cy + 1}`] = texId;
-          }
-        }
-        tile.setPlayLayer({
-          id: '__play_overlay__',
-          name: 'Play Overlay',
-          visible: true,
-          opacity: 1,
-          tilesetId: null,
-          corners,
-        });
-      }
-    }
-
-    // ── Object scatter ──────────────────────────────────────────
-    // Per-cell Bernoulli trial driven by `genObjectDensity`; on a hit
-    // we weighted-pick from the assets the user has marked > 0 and
-    // place it at the cell centre with a small jitter. Skips cells
-    // inside the reserve so the spawn pad stays clean. Uses the same
-    // mulberry32-style RNG seeded from the world seed + cell coords so
-    // the same seed yields the same scatter.
-    const objectAssetEntries = Object.entries(tile.genObjectWeights)
-      .filter(([id, w]) => w > 0 && tile.objectAssets[id])
-      .map(([id, w]) => ({ id, weight: w, asset: tile.objectAssets[id] }));
-    if (
-      tile.genObjectDensity > 0
-      && objectAssetEntries.length > 0
-    ) {
-      const RESERVE = tile.genReserveRadius;
-      const RADIUS = Math.max(256, RESERVE + 192);
-      const reserveShape = tile.genReserveShape;
-      const totalW = objectAssetEntries.reduce((a, e) => a + e.weight, 0);
-      const ts = tile.tileSize;
-      const seed = tile.genSeed;
-      // Tiny inline 32-bit hash for the scatter — keep it in TileView so
-      // we don't grow world-gen with object placement responsibilities.
-      const rngAt = (cx: number, cy: number, salt: number) => {
-        let h = (seed ^ salt) >>> 0;
-        h = Math.imul(h ^ (cx >>> 0), 0x9E3779B1) >>> 0;
-        h = Math.imul(h ^ (cy >>> 0), 0x85EBCA77) >>> 0;
-        h ^= h >>> 16;
-        return (h >>> 0) / 4294967296;
-      };
-      const scattered: typeof tile.playObjects = [];
-      let scatterSeq = 0;
-      for (let cy = -RADIUS; cy < RADIUS; cy++) {
-        for (let cx = -RADIUS; cx < RADIUS; cx++) {
-          const inReserve = reserveShape === 'circle'
-            ? cx * cx + cy * cy < RESERVE * RESERVE
-            : Math.abs(cx) < RESERVE && Math.abs(cy) < RESERVE;
-          if (inReserve) continue;
-          if (rngAt(cx, cy, 0xA1) >= tile.genObjectDensity) continue;
-          // Weighted asset pick.
-          let pick = rngAt(cx, cy, 0xB2) * totalW;
-          let chosen = objectAssetEntries[0];
-          for (const e of objectAssetEntries) {
-            if (pick < e.weight) { chosen = e; break; }
-            pick -= e.weight;
-          }
-          const style = chosen.asset.styles[0];
-          if (!style) continue;
-          // Jitter inside the cell (±25% of a tile) so a dense scatter
-          // doesn't form a visible grid pattern.
-          const jx = (rngAt(cx, cy, 0xC3) - 0.5) * ts * 0.5;
-          const jy = (rngAt(cx, cy, 0xD4) - 0.5) * ts * 0.5;
-          scattered.push({
-            id: `__scatter__${scatterSeq++}`,
-            layerId: '__play_overlay__',
-            x: (cx + 0.5) * ts + jx,
-            y: (cy + 0.5) * ts + jy,
-            assetId: chosen.id,
-            styleId: style.id,
-            width: style.width,
-            height: style.height,
-            rotation: 0,
-            flipX: false,
-            flipY: false,
-            hue: 0,
-            name: chosen.asset.name,
-          });
-        }
-      }
-      tile.setPlayObjects(scattered);
-    }
+    // Procedurally generate the world. Same overlay the live preview
+    // uses — see `buildPlayOverlay` for the full noise → corners +
+    // scatter + rivers pipeline. Reserves a `genReserveRadius` cell
+    // zone at origin so the spawn pad and any user paint inside it
+    // survive play.
+    buildPlayOverlay();
 
     const rt = playRuntimeRef.current;
     rt.clear();
@@ -779,6 +759,52 @@ export function TileView() {
     if (!isPlaying) return;
     useTile.getState().setCamera({ zoom: playCameraZoom });
   }, [playCameraZoom, isPlaying]);
+
+  // ── Live procgen preview ────────────────────────────────────────
+  // Watches every gen-* field plus tilesets/objectAssets/preview toggle
+  // and rebuilds the overlay in edit mode whenever any of them changes.
+  // Skipped during play (the play loop owns the overlay) and skipped
+  // when the toggle is off (overlay is cleared instead). The dependency
+  // list is exhaustive on purpose — Zustand selectors here mean the
+  // effect doesn't re-run on unrelated store mutations.
+  const genPreviewEnabled = useTile((s) => s.genPreviewEnabled);
+  const genSeed = useTile((s) => s.genSeed);
+  const genScale = useTile((s) => s.genScale);
+  const genOctaves = useTile((s) => s.genOctaves);
+  const genRoughness = useTile((s) => s.genRoughness);
+  const genWarp = useTile((s) => s.genWarp);
+  const genSmoothEdges = useTile((s) => s.genSmoothEdges);
+  const genIslandEnabled = useTile((s) => s.genIslandEnabled);
+  const genIslandRadius = useTile((s) => s.genIslandRadius);
+  const genReserveRadius = useTile((s) => s.genReserveRadius);
+  const genReserveShape = useTile((s) => s.genReserveShape);
+  const genTextureWeights = useTile((s) => s.genTextureWeights);
+  const genObjectDensity = useTile((s) => s.genObjectDensity);
+  const genObjectWeights = useTile((s) => s.genObjectWeights);
+  const genRiverEnabled = useTile((s) => s.genRiverEnabled);
+  const genRiverCount = useTile((s) => s.genRiverCount);
+  const genRiverWidth = useTile((s) => s.genRiverWidth);
+  const genRiverTextureId = useTile((s) => s.genRiverTextureId);
+  const previewObjectAssets = useTile((s) => s.objectAssets);
+  useEffect(() => {
+    if (isPlaying) return; // play loop owns the overlay during play
+    if (!genPreviewEnabled) {
+      useTile.getState().setPlayLayer(null);
+      useTile.getState().setPlayObjects([]);
+      return;
+    }
+    buildPlayOverlay();
+  }, [
+    isPlaying,
+    genPreviewEnabled,
+    genSeed, genScale, genOctaves, genRoughness, genWarp, genSmoothEdges,
+    genIslandEnabled, genIslandRadius,
+    genReserveRadius, genReserveShape,
+    genTextureWeights,
+    genObjectDensity, genObjectWeights,
+    genRiverEnabled, genRiverCount, genRiverWidth, genRiverTextureId,
+    tilesets, previewObjectAssets,
+  ]);
 
   // ── Imperative canvas render loop ───────────────────────────────
   useEffect(() => {

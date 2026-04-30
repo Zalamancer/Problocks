@@ -867,6 +867,12 @@ export interface TileStore {
    *  already proven to render. */
   genRiverTextureId: string | null;
   setGenRiverTextureId: (id: string | null) => void;
+  /** When true, the procgen overlay is also rebuilt in edit mode so
+   *  the user can preview the generated world without having to press
+   *  Play. The play loop overrides this on Play start; on Stop the
+   *  preview re-applies if still enabled. */
+  genPreviewEnabled: boolean;
+  setGenPreviewEnabled: (v: boolean) => void;
 
   // ── Wholesale clear ─────────────────────────────────────────────
   clearMap: () => void;
@@ -2125,6 +2131,8 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
   setGenRiverWidth: (v) => set({ genRiverWidth: Math.max(0, Math.min(4, Math.round(v))) }),
   genRiverTextureId: null,
   setGenRiverTextureId: (id) => set({ genRiverTextureId: id }),
+  genPreviewEnabled: false,
+  setGenPreviewEnabled: (v) => set({ genPreviewEnabled: !!v }),
 
   clearMap: () => set((s) => ({
     ...recordUndoStep(s),
@@ -2293,6 +2301,7 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
     genRiverCount: s.genRiverCount,
     genRiverWidth: s.genRiverWidth,
     genRiverTextureId: s.genRiverTextureId,
+    genPreviewEnabled: s.genPreviewEnabled,
   }),
   // Heal an empty / corrupted persisted state.
   onRehydrateStorage: () => (state) => {

@@ -235,6 +235,8 @@ function TileGenerationSection() {
   const setRiverWidth = useTile((s) => s.setGenRiverWidth);
   const riverTextureId = useTile((s) => s.genRiverTextureId);
   const setRiverTextureId = useTile((s) => s.setGenRiverTextureId);
+  const previewEnabled = useTile((s) => s.genPreviewEnabled);
+  const setPreviewEnabled = useTile((s) => s.setGenPreviewEnabled);
   const tilesets = useTile((s) => s.tilesets);
   const tiles = useTile((s) => s.tiles);
   const weights = useTile((s) => s.genTextureWeights);
@@ -269,6 +271,12 @@ function TileGenerationSection() {
 
   return (
     <PanelSection title="Generation" collapsible defaultOpen>
+      <PanelToggle
+        label="Preview map"
+        description="Show the generated world in edit mode"
+        checked={previewEnabled}
+        onChange={setPreviewEnabled}
+      />
       <div className="flex items-end gap-2">
         <PanelInput
           label="Seed"

@@ -2853,6 +2853,10 @@ function CharacterCard({
     cursor: 'pointer',
     overflow: 'hidden',
     position: 'relative',
+    // Mirror AssetCard's flex-shrink: 0 — character rows live in the
+    // same scrollable column shape and would shrink the same way if
+    // a user ever uploaded enough characters to overflow.
+    flexShrink: 0,
   };
 
   const editButton = (
@@ -3088,6 +3092,13 @@ function AssetCard({
     cursor: 'pointer',
     overflow: 'hidden',
     position: 'relative',
+    // Without flexShrink: 0, AssetCard rows in the scrollable
+    // overflow-y:auto column collapse below their minHeight whenever
+    // the list overflows the parent's maxHeight: 480 — flex children
+    // shrink along the main axis (here, vertical) before scrolling
+    // kicks in. Pin the outer container so the inner minHeight: 88 is
+    // actually honoured.
+    flexShrink: 0,
   };
 
   const editButton = (

@@ -1805,6 +1805,7 @@ function ObjectsSection({
   } | null;
 }) {
   const objectAssets = useTile((s) => s.objectAssets);
+  const assetClassIds = useTile((s) => s.assetClassIds);
   const addObjectAsset = useTile((s) => s.addObjectAsset);
   const addStyleToAsset = useTile((s) => s.addStyleToAsset);
   const removeObjectAsset = useTile((s) => s.removeObjectAsset);
@@ -1850,6 +1851,10 @@ function ObjectsSection({
    *  thumbnails. Mirrors the View dropdown in the 3D Freeform Models
    *  view so the muscle memory carries over. */
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  /** Membership filter — restrict the visible asset list by class status. */
+  const [assetFilter, setAssetFilter] = useState<'all' | 'unclassified' | 'classified'>('all');
+  /** Sort order — `custom` keeps the user's drag-reorder (sortIndex). */
+  const [assetSort, setAssetSort] = useState<'custom' | 'recent' | 'earliest'>('custom');
   /** Keyboard-focused asset row. Up/Down moves it through the list; Enter
    *  selects (mirrors mouse click behaviour). Style-axis navigation lived
    *  on the inline-expand list which is now in the right panel, so the
@@ -2098,11 +2103,21 @@ function ObjectsSection({
     removeObjectAsset(asset.id);
   }
 
-  // Display order honours the user's drag-reorder (sortIndex). addedAt is
-  // a stable tie-breaker for the rare case two cards share an index — e.g.
-  // mid-reorder before the action commits.
+  // Display order — `custom` honours drag-reorder via sortIndex (default);
+  // `recent` puts the newest addedAt first; `earliest` reverses that.
+  // addedAt is a stable tie-breaker for the rare case two cards share an
+  // index (e.g. mid-reorder before the action commits).
   const assetList = Object.values(objectAssets)
-    .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt);
+    .filter((a) => {
+      if (assetFilter === 'all') return true;
+      const classified = !!assetClassIds[a.id];
+      return assetFilter === 'classified' ? classified : !classified;
+    })
+    .sort((a, b) => {
+      if (assetSort === 'recent') return b.addedAt - a.addedAt;
+      if (assetSort === 'earliest') return a.addedAt - b.addedAt;
+      return (a.sortIndex ?? 0) - (b.sortIndex ?? 0) || a.addedAt - b.addedAt;
+    });
 
   /** Lower-cased search query — empty string when the user has not typed
    *  anything. Used to filter the flat asset list by name. */
@@ -2256,6 +2271,26 @@ function ObjectsSection({
               options={[
                 { value: 'list', label: 'List' },
                 { value: 'grid', label: 'Grid' },
+              ]}
+            />
+            <PanelSelect
+              label="Filter"
+              value={assetFilter}
+              onChange={(v) => setAssetFilter(v as typeof assetFilter)}
+              options={[
+                { value: 'all', label: 'All objects' },
+                { value: 'unclassified', label: 'Unclassified' },
+                { value: 'classified', label: 'Classified' },
+              ]}
+            />
+            <PanelSelect
+              label="Sort"
+              value={assetSort}
+              onChange={(v) => setAssetSort(v as typeof assetSort)}
+              options={[
+                { value: 'custom', label: 'Custom (drag order)' },
+                { value: 'recent', label: 'Recent' },
+                { value: 'earliest', label: 'Earliest' },
               ]}
             />
           </div>

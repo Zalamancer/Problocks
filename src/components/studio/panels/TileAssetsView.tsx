@@ -2108,26 +2108,6 @@ function ObjectsSection() {
             <SlidersHorizontal size={15} strokeWidth={2.2} />
           </button>
           <button
-            onClick={() => {
-              const id = addObjectClass({ name: 'New class', parentId: null });
-              setRenamingClassId(id);
-            }}
-            className="shrink-0 flex items-center justify-center"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              background: 'var(--pb-paper)',
-              border: '1.5px solid var(--pb-line-2)',
-              color: 'var(--pb-ink-soft)',
-              cursor: 'pointer',
-              transition: 'background 120ms ease, border-color 120ms ease',
-            }}
-            title="New class folder (e.g. Trees, Buildings)"
-          >
-            <FolderPlus size={15} strokeWidth={2.2} />
-          </button>
-          <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
             className="shrink-0 flex items-center justify-center"

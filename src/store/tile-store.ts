@@ -178,6 +178,17 @@ export interface TileLayer {
    * keys off the cell's 4 corner texture ids.
    */
   cellTransforms?: Record<string, number>;
+  /**
+   * Optional cached painted bbox in cell coordinates. When set the
+   * renderer skips iterating every key in `corners` to compute it on
+   * each frame — at procgen densities (~250k corners) that walk costs
+   * 10-20 ms per frame and locks the canvas at single-digit fps.
+   * Layers that mutate corners (paint stroke, eraser, fill) MUST clear
+   * this field via `delete layer.bbox` so the next render recomputes.
+   * The procgen play layer sets it once at construction and never
+   * mutates corners after, so its bbox stays correct for free.
+   */
+  bbox?: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export interface TileObject {

@@ -259,6 +259,11 @@ function buildPlayOverlay(): boolean {
       opacity: 1,
       tilesetId: null,
       corners,
+      // Bbox is the known generation rectangle plus one corner index
+      // on the high side because corners at (RADIUS, RADIUS) are
+      // valid (not RADIUS - 1). Avoids the per-frame walk over every
+      // corner key — see the renderer's bbox cache path.
+      bbox: { minX: -RADIUS, minY: -RADIUS, maxX: RADIUS, maxY: RADIUS },
     });
   }
 
@@ -982,24 +987,36 @@ export function TileView() {
         // — at low zoom (10%) the viewport is ~600×340 = 200k cells and even
         // an early `continue` per cell costs ~8 ms/frame in plain object
         // lookups. With nothing to draw we can bail in O(1).
-        const cornerKeys = Object.keys(corners);
-        if (cornerKeys.length === 0) continue;
-        // Derive the painted bbox so we only iterate the cells that could
-        // possibly draw (intersected with the viewport). For dense maps the
-        // bbox covers the whole viewport anyway and this is a tiny tax;
-        // for sparse maps it shaves the iteration to just the painted
-        // region. We pad +1 cell because a corner at (cx, cy) influences
-        // the cells at (cx-1, cy-1) through (cx, cy).
-        let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity;
-        for (const k of cornerKeys) {
-          const i = k.indexOf(',');
-          if (i < 0) continue;
-          const x = +k.slice(0, i);
-          const y = +k.slice(i + 1);
-          if (x < bMinX) bMinX = x;
-          if (y < bMinY) bMinY = y;
-          if (x > bMaxX) bMaxX = x;
-          if (y > bMaxY) bMaxY = y;
+        let bMinX: number, bMinY: number, bMaxX: number, bMaxY: number;
+        if (layer.bbox) {
+          // Cached bbox path — used by the procgen play layer where a
+          // walk over ~250k corner strings every frame would otherwise
+          // dominate the frame budget. Layers that mutate corners must
+          // clear this field on edit so the next render recomputes.
+          bMinX = layer.bbox.minX;
+          bMinY = layer.bbox.minY;
+          bMaxX = layer.bbox.maxX;
+          bMaxY = layer.bbox.maxY;
+        } else {
+          const cornerKeys = Object.keys(corners);
+          if (cornerKeys.length === 0) continue;
+          // Derive the painted bbox so we only iterate the cells that could
+          // possibly draw (intersected with the viewport). For dense maps the
+          // bbox covers the whole viewport anyway and this is a tiny tax;
+          // for sparse maps it shaves the iteration to just the painted
+          // region. We pad +1 cell because a corner at (cx, cy) influences
+          // the cells at (cx-1, cy-1) through (cx, cy).
+          bMinX = Infinity; bMinY = Infinity; bMaxX = -Infinity; bMaxY = -Infinity;
+          for (const k of cornerKeys) {
+            const i = k.indexOf(',');
+            if (i < 0) continue;
+            const x = +k.slice(0, i);
+            const y = +k.slice(i + 1);
+            if (x < bMinX) bMinX = x;
+            if (y < bMinY) bMinY = y;
+            if (x > bMaxX) bMaxX = x;
+            if (y > bMaxY) bMaxY = y;
+          }
         }
         const lcx0 = Math.max(cx0, bMinX - 1);
         const lcy0 = Math.max(cy0, bMinY - 1);

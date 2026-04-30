@@ -18,6 +18,13 @@ import { analyzePalette, bucketLabel, type ColorBucket } from '@/lib/tile-palett
 import { saveTileSheet, listTileSheets, deleteTileSheet } from '@/lib/tile-cloud';
 import { saveTileObject, listTileObjects, updateTileObject, type CloudObject } from '@/lib/object-cloud';
 import { scheduleAssetCloudDelete } from '@/lib/tile-asset-trash';
+import {
+  hydrateTileGroupsFromCloud,
+  pushNewGroupToCloud,
+  pushGroupRenameToCloud,
+  pushGroupMembersToCloud,
+  pushGroupDeleteToCloud,
+} from '@/lib/tile-group-sync';
 import { useStudio } from '@/store/studio-store';
 
 /**
@@ -2709,6 +2716,7 @@ function AssetsSubTabs() {
     if (!addingToGroupId) return;
     const setMember = useTile.getState().setTileGroupMember;
     for (const aid of selectedToAdd) setMember(addingToGroupId, aid, true);
+    void pushGroupMembersToCloud(addingToGroupId);
     setAddingToGroupId(null);
     setSelectedToAdd(new Set());
     setTab('groups');
@@ -2770,6 +2778,13 @@ function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
+  // One-shot cloud hydrate. Idempotent (upsertTileGroupFromCloud bails
+  // when a local row already maps to the cloud id), so a re-mount on tab
+  // switch is harmless.
+  useEffect(() => {
+    void hydrateTileGroupsFromCloud();
+  }, []);
+
   const sorted: TileGroup[] = Object.values(tileGroups).sort(
     (a, b) => a.sortIndex - b.sortIndex,
   );
@@ -2805,6 +2820,7 @@ function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => 
               const id = addTileGroup();
               setRenamingId(id);
               setSearch('');
+              void pushNewGroupToCloud(id);
             }}
             className="shrink-0 flex items-center justify-center"
             style={{
@@ -2936,8 +2952,10 @@ function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => 
                       defaultValue={g.name}
                       onClick={(e) => e.stopPropagation()}
                       onBlur={(e) => {
-                        renameTileGroup(g.id, e.currentTarget.value);
+                        const nextName = e.currentTarget.value;
+                        renameTileGroup(g.id, nextName);
                         setRenamingId(null);
+                        void pushGroupRenameToCloud(g.id, nextName.trim());
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -2995,7 +3013,11 @@ function GroupsSection({ onStartAdding }: { onStartAdding: (groupId: string) => 
                   <CardActionButton
                     variant="delete"
                     title="Delete group"
-                    onClick={() => removeTileGroup(g.id)}
+                    onClick={() => {
+                      const cloudId = g.cloudId;
+                      removeTileGroup(g.id);
+                      void pushGroupDeleteToCloud(cloudId);
+                    }}
                   />
                 </div>
               )}
@@ -3090,8 +3112,10 @@ function GroupDetailView({
                 autoFocus
                 defaultValue={group.name}
                 onBlur={(e) => {
-                  renameTileGroup(group.id, e.currentTarget.value);
+                  const nextName = e.currentTarget.value;
+                  renameTileGroup(group.id, nextName);
                   setRenamingHeader(false);
+                  void pushGroupRenameToCloud(group.id, nextName.trim());
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
@@ -3158,8 +3182,10 @@ function GroupDetailView({
           <button
             onClick={() => {
               if (!confirm(`Delete group "${group.name}"? Member objects are not affected.`)) return;
+              const cloudId = group.cloudId;
               removeTileGroup(group.id);
               onBack();
+              void pushGroupDeleteToCloud(cloudId);
             }}
             className="shrink-0 flex items-center justify-center"
             style={{
@@ -3216,7 +3242,10 @@ function GroupDetailView({
                 onFocusAsset={() => { /* keyboard focus not wired in detail view yet */ }}
                 onSelect={() => handleSelectAsset(asset)}
                 onRemoveAsset={() => handleRemoveAsset(asset)}
-                onRemoveFromGroup={() => setTileGroupMember(group.id, asset.id, false)}
+                onRemoveFromGroup={() => {
+                  setTileGroupMember(group.id, asset.id, false);
+                  void pushGroupMembersToCloud(group.id);
+                }}
                 onRenameAsset={(name) => {
                   renameAsset(asset.id, name);
                   if (asset.styles.some((s) => s.cloudId)) {

@@ -293,6 +293,10 @@ export interface TileGroup {
   assetIds: string[];
   /** Sort order among groups (lowest first). */
   sortIndex: number;
+  /** Server-side primary key once persisted. Locally-created groups
+   *  start with cloudId undefined; the post-save setter assigns it so
+   *  subsequent renames/membership-changes can PATCH the same row. */
+  cloudId?: string;
 }
 
 export interface TileCamera {
@@ -599,6 +603,14 @@ export interface TileStore {
   removeTileGroup: (id: string) => void;
   /** Toggle an asset's membership in a group. Idempotent on either side. */
   setTileGroupMember: (groupId: string, assetId: string, member: boolean) => void;
+  /** Stamp the server-side cloud id on a locally-created group after the
+   *  initial POST resolves. Lets subsequent renames/membership changes
+   *  PATCH the same row instead of creating duplicates. */
+  setTileGroupCloudId: (id: string, cloudId: string) => void;
+  /** Hydrate one group from a cloud row. Used by the hydrate effect to
+   *  fold server state into the local store without overwriting anything
+   *  the user has changed locally. */
+  upsertTileGroupFromCloud: (input: { id: string; name: string; assetIds: string[]; sortIndex: number; cloudId: string }) => void;
 
   // ── Playable characters (Characters sub-tab in 2D Tile assets) ──
   /** Map of character id → record. Stored alongside object assets so the
@@ -1787,6 +1799,24 @@ export const useTile = create<TileStore>()(persist((set, get) => ({
       ? [...g.assetIds, assetId]
       : g.assetIds.filter((aid) => aid !== assetId);
     return { tileGroups: { ...s.tileGroups, [groupId]: { ...g, assetIds } } };
+  }),
+  setTileGroupCloudId: (id, cloudId) => set((s) => {
+    const g = s.tileGroups[id];
+    if (!g) return {};
+    return { tileGroups: { ...s.tileGroups, [id]: { ...g, cloudId } } };
+  }),
+  upsertTileGroupFromCloud: ({ id, name, assetIds, sortIndex, cloudId }) => set((s) => {
+    // If a local group already maps to this cloudId, leave it alone — the
+    // user's in-flight changes win until the next mutation pushes them up.
+    for (const g of Object.values(s.tileGroups)) {
+      if (g.cloudId === cloudId) return {};
+    }
+    return {
+      tileGroups: {
+        ...s.tileGroups,
+        [id]: { id, name, assetIds, sortIndex, cloudId },
+      },
+    };
   }),
 
   // ── Playable characters ─────────────────────────────────────────
